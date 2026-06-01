@@ -1,0 +1,1648 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =====================================================
+// MASTER DATA - BATCH 1
+// =====================================================
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum MembershipStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+// =====================================================
+// BRANCHES
+// =====================================================
+
+model Branch {
+  id String @id @default(uuid())
+
+  code String @unique
+  name String
+
+  address String?
+  phone   String?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users                   User[]
+  employees               Employee[]
+  employeeBranchHistories EmployeeBranchHistory[]
+
+  itemPrices            ItemPrice[]
+  warehouses            Warehouse[]
+  invoices              Invoice[]
+  appointments          Appointment[]
+  treatmentSessions     TreatmentSession[]
+  branchCommissionRules BranchCommissionRule[]
+
+  @@map("branches")
+}
+
+// =====================================================
+// USER ROLES
+// =====================================================
+
+model UserRole {
+  id String @id @default(uuid())
+
+  code String @unique
+  name String
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+
+  @@map("user_roles")
+}
+
+// =====================================================
+// USERS
+// =====================================================
+
+model User {
+  id String @id @default(uuid())
+
+  branchId   String?
+  userRoleId String
+
+  name  String
+  email String @unique
+
+  passwordHash String
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branch Branch?  @relation(fields: [branchId], references: [id])
+  role   UserRole @relation(fields: [userRoleId], references: [id])
+
+  @@index([branchId])
+  @@index([userRoleId])
+  @@map("users")
+}
+
+// =====================================================
+// EMPLOYEE ROLES
+// =====================================================
+
+model EmployeeRole {
+  id String @id @default(uuid())
+
+  code String @unique
+  name String
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employees Employee[]
+
+  @@map("employee_roles")
+}
+
+// =====================================================
+// EMPLOYEES
+// =====================================================
+
+model Employee {
+  id String @id @default(uuid())
+
+  branchId String
+  roleId   String
+
+  employeeCode String @unique
+
+  name String
+
+  phone String?
+  email String? @unique
+
+  hireDate DateTime?
+
+  birthDate DateTime?
+
+  address String?
+
+  emergencyContact String?
+
+  commissionEnabled Boolean @default(true)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branch Branch       @relation(fields: [branchId], references: [id])
+  role   EmployeeRole @relation(fields: [roleId], references: [id])
+
+  branchHistories EmployeeBranchHistory[]
+
+  appointmentStaffs     AppointmentStaff[]
+  treatmentAssignments  TreatmentAssignment[]
+  commissionRules       CommissionRule[]
+  commissions           Commission[]
+  attendances           Attendance[]
+  schedules             EmployeeSchedule[]
+  leaves                Leave[]
+  branchCommissionRules BranchCommissionRule[]
+
+  @@index([branchId])
+  @@index([roleId])
+  @@map("employees")
+}
+
+// =====================================================
+// EMPLOYEE BRANCH HISTORIES
+// =====================================================
+
+model EmployeeBranchHistory {
+  id String @id @default(uuid())
+
+  employeeId String
+  branchId   String
+
+  startDate DateTime
+  endDate   DateTime?
+
+  createdAt DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  branch   Branch   @relation(fields: [branchId], references: [id])
+
+  @@index([employeeId])
+  @@index([branchId])
+  @@map("employee_branch_histories")
+}
+
+// =====================================================
+// MEMBERSHIPS
+// =====================================================
+
+model Membership {
+  id String @id @default(uuid())
+
+  name String
+
+  price Decimal @db.Decimal(18, 2)
+
+  durationDays Int
+
+  discountType  DiscountType
+  discountValue Decimal      @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customerMemberships CustomerMembership[]
+  customers           Customer[]
+  membershipHistories MembershipHistory[]
+
+  @@map("memberships")
+}
+
+// =====================================================
+// CUSTOMERS
+// =====================================================
+
+model Customer {
+  id String @id @default(uuid())
+
+  accurateCustomerId Int? @unique
+
+  customerNo String? @unique
+
+  name String
+
+  mobilePhone String?
+  whatsapp    String?
+
+  email String?
+
+  address String?
+
+  city     String?
+  province String?
+
+  birthDate DateTime?
+
+  gender Gender?
+
+  membershipId String?
+
+  notes String?
+
+  lastVisitAt DateTime?
+
+  isActive Boolean @default(true)
+
+  lastSyncAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  membership Membership? @relation(fields: [membershipId], references: [id])
+
+  customerMemberships CustomerMembership[]
+  membershipHistories MembershipHistory[]
+
+  appointments      Appointment[]
+  invoices          Invoice[]
+  treatmentSessions TreatmentSession[]
+  customerNotes     CustomerNote[]
+
+  @@index([membershipId])
+  @@index([name])
+  @@index([mobilePhone])
+  @@map("customers")
+}
+
+// =====================================================
+// CUSTOMER MEMBERSHIPS
+// =====================================================
+
+model CustomerMembership {
+  id String @id @default(uuid())
+
+  customerId   String
+  membershipId String
+
+  startDate DateTime
+  endDate   DateTime
+
+  status MembershipStatus
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  membership Membership @relation(fields: [membershipId], references: [id])
+
+  @@index([customerId])
+  @@index([membershipId])
+  @@map("customer_memberships")
+}
+
+// =====================================================
+// MEMBERSHIP HISTORIES
+// =====================================================
+
+model MembershipHistory {
+  id String @id @default(uuid())
+
+  customerId   String
+  membershipId String
+
+  startDate DateTime
+  endDate   DateTime
+
+  createdBy String?
+
+  createdAt DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  membership Membership @relation(fields: [membershipId], references: [id])
+
+  @@index([customerId])
+  @@index([membershipId])
+  @@map("membership_histories")
+}
+
+// =====================================================
+// ITEM MASTER
+// =====================================================
+
+enum ItemType {
+  INVENTORY
+  SERVICE
+}
+
+// =====================================================
+// ITEM CATEGORIES
+// =====================================================
+
+model ItemCategory {
+  id String @id @default(uuid())
+
+  accurateCategoryId Int? @unique
+
+  name String
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items Item[]
+
+  @@index([name])
+  @@map("item_categories")
+}
+
+// =====================================================
+// UNITS
+// =====================================================
+
+model Unit {
+  id String @id @default(uuid())
+
+  accurateUnitId Int? @unique
+
+  name String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  itemUnits ItemUnit[]
+
+  itemPrices ItemPrice[]
+
+  defaultItems Item[]
+
+  serviceMaterials   ServiceMaterial[]
+  materialUsageItems MaterialUsageItem[]
+  invoiceItems       InvoiceItem[]
+
+  @@index([name])
+  @@map("units")
+}
+
+// =====================================================
+// ITEMS
+// =====================================================
+
+model Item {
+  id String @id @default(uuid())
+
+  categoryId    String?
+  defaultUnitId String?
+
+  accurateItemId Int? @unique
+
+  itemCode String @unique
+
+  name String
+
+  itemType ItemType
+
+  isActive Boolean @default(true)
+
+  lastSyncAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  category ItemCategory? @relation(fields: [categoryId], references: [id])
+
+  defaultUnit Unit? @relation(fields: [defaultUnitId], references: [id])
+
+  itemUnits ItemUnit[]
+
+  itemPrices ItemPrice[]
+
+  inventories         Inventory[]
+  stockMovements      StockMovement[]
+  stockTransferItems  StockTransferItem[]
+  appointmentServices AppointmentService[]
+  invoiceItems        InvoiceItem[]
+  commissionRules     CommissionRule[]
+  commissions         Commission[]
+  treatmentSessions   TreatmentSession[]
+  materialUsages      MaterialUsage[]
+  materialUsageItems  MaterialUsageItem[]
+  serviceMaterials    ServiceMaterial[]    @relation("ServiceMaterials")
+  usedAsMaterial      ServiceMaterial[]    @relation("MaterialItems")
+
+  @@index([itemType])
+  @@index([categoryId])
+  @@index([defaultUnitId])
+  @@index([name])
+  @@map("items")
+}
+
+// =====================================================
+// ITEM UNITS
+// =====================================================
+
+model ItemUnit {
+  id String @id @default(uuid())
+
+  itemId String
+  unitId String
+
+  conversionFactor Decimal @db.Decimal(18, 6)
+
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item Item @relation(fields: [itemId], references: [id])
+
+  unit Unit @relation(fields: [unitId], references: [id])
+
+  @@unique([itemId, unitId])
+  @@index([itemId])
+  @@index([unitId])
+  @@map("item_units")
+}
+
+// =====================================================
+// ITEM PRICES
+// =====================================================
+
+model ItemPrice {
+  id String @id @default(uuid())
+
+  itemId String
+  unitId String
+
+  branchId String?
+
+  sellingPrice Decimal @db.Decimal(18, 2)
+
+  effectiveDate DateTime
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item Item @relation(fields: [itemId], references: [id])
+
+  unit Unit @relation(fields: [unitId], references: [id])
+
+  branch Branch? @relation(fields: [branchId], references: [id])
+
+  @@index([itemId])
+  @@index([unitId])
+  @@index([branchId])
+  @@map("item_prices")
+}
+
+// =====================================================
+// INVENTORY
+// =====================================================
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+  TRANSFER_IN
+  TRANSFER_OUT
+}
+
+enum StockTransferStatus {
+  PENDING
+  IN_TRANSIT
+  RECEIVED
+  CANCELLED
+}
+
+// =====================================================
+// WAREHOUSES
+// =====================================================
+
+model Warehouse {
+  id String @id @default(uuid())
+
+  branchId String @unique
+
+  accurateWarehouseId Int? @unique
+
+  code String @unique
+
+  name String
+
+  isActive Boolean @default(true)
+
+  lastSyncAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  inventories Inventory[]
+
+  stockMovements StockMovement[]
+
+  transferOuts StockTransfer[] @relation("TransferSource")
+
+  transferIns StockTransfer[] @relation("TransferDestination")
+
+  @@index([branchId])
+  @@map("warehouses")
+}
+
+// =====================================================
+// INVENTORIES
+// =====================================================
+
+model Inventory {
+  id String @id @default(uuid())
+
+  warehouseId String
+
+  itemId String
+
+  availableQty Decimal @db.Decimal(18, 6)
+
+  reservedQty Decimal @db.Decimal(18, 6)
+
+  minimumQty Decimal @db.Decimal(18, 6)
+
+  lastSyncAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  item Item @relation(fields: [itemId], references: [id])
+
+  @@unique([warehouseId, itemId])
+  @@index([warehouseId])
+  @@index([itemId])
+  @@map("inventories")
+}
+
+// =====================================================
+// STOCK MOVEMENTS
+// =====================================================
+
+model StockMovement {
+  id String @id @default(uuid())
+
+  warehouseId String
+
+  itemId String
+
+  type StockMovementType
+
+  qty Decimal @db.Decimal(18, 6)
+
+  balanceBefore Decimal @db.Decimal(18, 6)
+
+  balanceAfter Decimal @db.Decimal(18, 6)
+
+  referenceType String?
+
+  referenceId String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  item Item @relation(fields: [itemId], references: [id])
+
+  @@index([warehouseId])
+  @@index([itemId])
+  @@index([referenceType, referenceId])
+  @@map("stock_movements")
+}
+
+// =====================================================
+// STOCK TRANSFERS
+// =====================================================
+
+model StockTransfer {
+  id String @id @default(uuid())
+
+  sourceWarehouseId String
+
+  destinationWarehouseId String
+
+  transferNo String @unique
+
+  status StockTransferStatus
+
+  notes String?
+
+  transferDate DateTime
+
+  createdBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sourceWarehouse Warehouse @relation("TransferSource", fields: [sourceWarehouseId], references: [id])
+
+  destinationWarehouse Warehouse @relation("TransferDestination", fields: [destinationWarehouseId], references: [id])
+
+  items StockTransferItem[]
+
+  @@index([sourceWarehouseId])
+  @@index([destinationWarehouseId])
+  @@map("stock_transfers")
+}
+
+// =====================================================
+// STOCK TRANSFER ITEMS
+// =====================================================
+
+model StockTransferItem {
+  id String @id @default(uuid())
+
+  transferId String
+
+  itemId String
+
+  qty Decimal @db.Decimal(18, 6)
+
+  createdAt DateTime @default(now())
+
+  transfer StockTransfer @relation(fields: [transferId], references: [id])
+
+  item Item @relation(fields: [itemId], references: [id])
+
+  @@index([transferId])
+  @@index([itemId])
+  @@map("stock_transfer_items")
+}
+
+// =====================================================
+// SERVICE BOM
+// =====================================================
+
+model ServiceMaterial {
+  id String @id @default(uuid())
+
+  serviceItemId  String
+  materialItemId String
+
+  unitId String
+
+  qty Decimal @db.Decimal(18, 6)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  serviceItem Item @relation("ServiceMaterials", fields: [serviceItemId], references: [id])
+
+  materialItem Item @relation("MaterialItems", fields: [materialItemId], references: [id])
+
+  unit Unit @relation(fields: [unitId], references: [id])
+
+  @@unique([serviceItemId, materialItemId])
+  @@index([serviceItemId])
+  @@index([materialItemId])
+  @@map("service_materials")
+}
+
+// =====================================================
+// MATERIAL USAGES
+// =====================================================
+
+model MaterialUsage {
+  id String @id @default(uuid())
+
+  treatmentSessionId String
+
+  serviceItemId String
+
+  processedAt DateTime
+
+  createdAt DateTime @default(now())
+
+  serviceItem Item @relation(fields: [serviceItemId], references: [id])
+
+  treatmentSession TreatmentSession @relation(fields: [treatmentSessionId], references: [id])
+
+  usageItems MaterialUsageItem[]
+
+  @@index([treatmentSessionId])
+  @@index([serviceItemId])
+  @@map("material_usages")
+}
+
+// =====================================================
+// MATERIAL USAGE ITEMS
+// =====================================================
+
+model MaterialUsageItem {
+  id String @id @default(uuid())
+
+  materialUsageId String
+
+  materialItemId String
+
+  unitId String
+
+  stockMovementId String?
+
+  qty Decimal @db.Decimal(18, 6)
+
+  createdAt DateTime @default(now())
+
+  materialUsage MaterialUsage @relation(fields: [materialUsageId], references: [id])
+
+  materialItem Item @relation(fields: [materialItemId], references: [id])
+
+  unit Unit @relation(fields: [unitId], references: [id])
+
+  @@index([materialUsageId])
+  @@index([materialItemId])
+  @@map("material_usage_items")
+}
+
+enum AppointmentStatus {
+  BOOKED
+  CONFIRMED
+  CHECK_IN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum DepositStatus {
+  PENDING
+  PAID
+  REFUNDED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  UNPAID
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
+model Appointment {
+  id String @id @default(uuid())
+
+  customerId String
+  branchId   String
+
+  bookingNo String @unique
+
+  bookingDate DateTime
+
+  visitDate DateTime
+
+  startTime DateTime
+  endTime   DateTime
+
+  status AppointmentStatus
+
+  notes String?
+
+  estimatedTotal Decimal? @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  services AppointmentService[]
+
+  staffs AppointmentStaff[]
+
+  deposits Deposit[]
+
+  invoices Invoice[]
+
+  statusHistories AppointmentStatusHistory[]
+
+  treatmentSessions TreatmentSession[]
+
+  @@index([customerId])
+  @@index([branchId])
+  @@index([visitDate])
+  @@map("appointments")
+}
+
+model AppointmentService {
+  id String @id @default(uuid())
+
+  appointmentId String
+
+  serviceItemId String
+
+  durationMinutes Int
+
+  qty Decimal @db.Decimal(18, 2)
+
+  price Decimal @db.Decimal(18, 2)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+
+  serviceItem Item @relation(fields: [serviceItemId], references: [id])
+
+  @@index([appointmentId])
+  @@index([serviceItemId])
+  @@map("appointment_services")
+}
+
+model AppointmentStaff {
+  id String @id @default(uuid())
+
+  appointmentId String
+
+  employeeId String
+
+  isPrimary Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([appointmentId, employeeId])
+  @@index([appointmentId])
+  @@index([employeeId])
+  @@map("appointment_staffs")
+}
+
+model Deposit {
+  id String @id @default(uuid())
+
+  appointmentId String
+
+  paymentMethodId String
+
+  amount Decimal @db.Decimal(18, 2)
+
+  status DepositStatus
+
+  paidAt DateTime?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+
+  paymentMethod PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+
+  invoiceDeposits InvoiceDeposit[]
+
+  @@index([appointmentId])
+  @@index([paymentMethodId])
+  @@map("deposits")
+}
+
+model AppointmentStatusHistory {
+  id String @id @default(uuid())
+
+  appointmentId String
+
+  oldStatus AppointmentStatus?
+
+  newStatus AppointmentStatus
+
+  notes String?
+
+  createdBy String?
+
+  createdAt DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+
+  @@index([appointmentId])
+  @@map("appointment_status_histories")
+}
+
+model PaymentMethod {
+  id String @id @default(uuid())
+
+  code String @unique
+
+  name String
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments Payment[]
+
+  deposits Deposit[]
+
+  @@map("payment_methods")
+}
+
+model Invoice {
+  id String @id @default(uuid())
+
+  customerId String
+
+  branchId String
+
+  appointmentId String?
+
+  accurateInvoiceId Int? @unique
+
+  accurateInvoiceNumber String?
+
+  invoiceNo String @unique
+
+  invoiceDate DateTime
+
+  subtotal Decimal @db.Decimal(18, 2)
+
+  totalDiscount Decimal @default(0) @db.Decimal(18, 2)
+
+  totalDeposit Decimal @default(0) @db.Decimal(18, 2)
+
+  totalTax Decimal @default(0) @db.Decimal(18, 2)
+
+  grandTotal Decimal @db.Decimal(18, 2)
+
+  paidAmount Decimal @default(0) @db.Decimal(18, 2)
+
+  outstandingAmount Decimal @db.Decimal(18, 2)
+
+  status InvoiceStatus
+
+  notes String?
+
+  lastSyncAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+
+  items InvoiceItem[]
+
+  payments Payment[]
+
+  invoiceDeposits InvoiceDeposit[]
+
+  statusHistories InvoiceStatusHistory[]
+
+  treatmentSessions TreatmentSession[]
+
+  commissions Commission[]
+
+  @@index([customerId])
+  @@index([branchId])
+  @@index([appointmentId])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id String @id @default(uuid())
+
+  invoiceId String
+
+  itemId String
+
+  unitId String
+
+  accurateInvoiceDetailId Int?
+
+  qty Decimal @db.Decimal(18, 2)
+
+  price Decimal @db.Decimal(18, 2)
+
+  discount Decimal @default(0) @db.Decimal(18, 2)
+
+  subtotal Decimal @db.Decimal(18, 2)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  item Item @relation(fields: [itemId], references: [id])
+
+  unit Unit @relation(fields: [unitId], references: [id])
+
+  commissions Commission[]
+
+  @@index([invoiceId])
+  @@index([itemId])
+  @@index([unitId])
+  @@map("invoice_items")
+}
+
+model Payment {
+  id String @id @default(uuid())
+
+  invoiceId String
+
+  paymentMethodId String
+
+  paymentNo String @unique
+
+  amount Decimal @db.Decimal(18, 2)
+
+  paymentDate DateTime
+
+  referenceNo String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  paymentMethod PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+
+  @@index([invoiceId])
+  @@index([paymentMethodId])
+  @@map("payments")
+}
+
+model InvoiceDeposit {
+  id String @id @default(uuid())
+
+  invoiceId String
+
+  depositId String
+
+  amountApplied Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  deposit Deposit @relation(fields: [depositId], references: [id])
+
+  @@unique([invoiceId, depositId])
+  @@index([invoiceId])
+  @@index([depositId])
+  @@map("invoice_deposits")
+}
+
+model InvoiceStatusHistory {
+  id String @id @default(uuid())
+
+  invoiceId String
+
+  oldStatus InvoiceStatus?
+
+  newStatus InvoiceStatus
+
+  notes String?
+
+  createdBy String?
+
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_status_histories")
+}
+
+enum CommissionType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+model TreatmentAssignment {
+  id String @id @default(uuid())
+
+  treatmentSessionId String
+
+  employeeId String
+
+  workQty Decimal @db.Decimal(18, 2)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  treatmentSession TreatmentSession @relation(fields: [treatmentSessionId], references: [id])
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  commissions Commission[]
+
+  @@index([treatmentSessionId])
+  @@index([employeeId])
+  @@map("treatment_assignments")
+}
+
+model CommissionRule {
+  id String @id @default(uuid())
+
+  employeeId    String
+  serviceItemId String
+
+  commissionType CommissionType
+
+  commissionValue Decimal @db.Decimal(18, 2)
+
+  effectiveDate DateTime
+  endDate       DateTime?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  serviceItem Item @relation(fields: [serviceItemId], references: [id])
+
+  @@unique([employeeId, serviceItemId, effectiveDate])
+  @@index([employeeId])
+  @@index([serviceItemId])
+  @@map("commission_rules")
+}
+
+model Commission {
+  id String @id @default(uuid())
+
+  invoiceId String
+
+  invoiceItemId String
+
+  treatmentAssignmentId String
+
+  employeeId String
+
+  serviceItemId String
+
+  commissionType CommissionType
+
+  commissionValue Decimal @db.Decimal(18, 2)
+
+  baseAmount Decimal @db.Decimal(18, 2)
+
+  commissionAmount Decimal @db.Decimal(18, 2)
+
+  status CommissionStatus
+
+  approvedBy String?
+
+  approvedAt DateTime?
+
+  paidAt DateTime?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  invoiceItem InvoiceItem @relation(fields: [invoiceItemId], references: [id])
+
+  treatmentAssignment TreatmentAssignment @relation(fields: [treatmentAssignmentId], references: [id])
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  serviceItem Item @relation(fields: [serviceItemId], references: [id])
+
+  @@index([invoiceId])
+  @@index([employeeId])
+  @@index([status])
+  @@map("commissions")
+}
+
+model BranchCommissionRule {
+  id String @id @default(uuid())
+
+  branchId String
+
+  employeeId String
+
+  commissionType CommissionType
+
+  commissionValue Decimal @db.Decimal(18, 2)
+
+  effectiveDate DateTime
+
+  endDate DateTime?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  branch   Branch   @relation(fields: [branchId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@map("branch_commission_rules")
+}
+
+enum AttendanceStatus {
+  CHECK_IN
+  CHECK_OUT
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ScheduleType {
+  WORK
+  OFF
+  LEAVE
+}
+
+enum MediaType {
+  BEFORE
+  AFTER
+}
+
+model Attendance {
+  id String @id @default(uuid())
+
+  employeeId String
+
+  attendanceDate DateTime
+
+  checkInAt DateTime?
+
+  checkOutAt DateTime?
+
+  checkInLatitude  Decimal? @db.Decimal(10, 7)
+  checkInLongitude Decimal? @db.Decimal(10, 7)
+
+  checkOutLatitude  Decimal? @db.Decimal(10, 7)
+  checkOutLongitude Decimal? @db.Decimal(10, 7)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@index([attendanceDate])
+  @@map("attendances")
+}
+
+model EmployeeSchedule {
+  id String @id @default(uuid())
+
+  employeeId String
+
+  scheduleDate DateTime
+
+  startTime DateTime?
+
+  endTime DateTime?
+
+  scheduleType ScheduleType
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, scheduleDate])
+  @@index([employeeId])
+  @@map("employee_schedules")
+}
+
+model Leave {
+  id String @id @default(uuid())
+
+  employeeId String
+
+  startDate DateTime
+
+  endDate DateTime
+
+  reason String?
+
+  status LeaveStatus
+
+  approvedBy String?
+
+  approvedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@index([status])
+  @@map("leaves")
+}
+
+model TreatmentSession {
+  id String @id @default(uuid())
+
+  appointmentId String
+
+  customerId String
+
+  invoiceId String?
+
+  serviceItemId String
+
+  branchId String
+
+  startedAt DateTime?
+
+  completedAt DateTime?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  invoice Invoice? @relation(fields: [invoiceId], references: [id])
+
+  serviceItem Item @relation(fields: [serviceItemId], references: [id])
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  assignments TreatmentAssignment[]
+
+  media TreatmentMedia[]
+
+  materialUsages MaterialUsage[]
+
+  @@index([appointmentId])
+  @@index([customerId])
+  @@index([serviceItemId])
+  @@map("treatment_sessions")
+}
+
+model TreatmentMedia {
+  id String @id @default(uuid())
+
+  treatmentSessionId String
+
+  mediaType MediaType
+
+  fileUrl String
+
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  treatmentSession TreatmentSession @relation(fields: [treatmentSessionId], references: [id])
+
+  @@index([treatmentSessionId])
+  @@map("treatment_media")
+}
+
+model CustomerNote {
+  id String @id @default(uuid())
+
+  customerId String
+
+  note String
+
+  createdBy String?
+
+  createdAt DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@map("customer_notes")
+}
+
+model AuditLog {
+  id String @id @default(uuid())
+
+  userId String?
+
+  module String
+
+  action String
+
+  recordId String?
+
+  oldData Json?
+
+  newData Json?
+
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+
+  @@index([module])
+  @@index([recordId])
+  @@map("audit_logs")
+}
+
+enum SyncDirection {
+  ACCURATE_TO_APP
+  APP_TO_ACCURATE
+}
+
+enum SyncStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model Setting {
+  id String @id @default(uuid())
+
+  key String @unique
+
+  value String
+
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model SyncQueue {
+  id String @id @default(uuid())
+
+  entityType String
+
+  entityId String
+
+  direction SyncDirection
+
+  status SyncStatus
+
+  retryCount Int @default(0)
+
+  payload Json?
+
+  response Json?
+
+  errorMessage String?
+
+  processedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([status])
+  @@index([entityType])
+  @@map("sync_queues")
+}
+
+model SyncLog {
+  id String @id @default(uuid())
+
+  queueId String?
+
+  entityType String
+
+  entityId String?
+
+  requestPayload Json?
+
+  responsePayload Json?
+
+  status SyncStatus
+
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType])
+  @@map("sync_logs")
+}
+
+model BackgroundJob {
+  id String @id @default(uuid())
+
+  jobName String
+
+  status JobStatus
+
+  payload Json?
+
+  startedAt DateTime?
+
+  finishedAt DateTime?
+
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@index([jobName])
+  @@index([status])
+  @@map("background_jobs")
+}
+
+model WebhookLog {
+  id String @id @default(uuid())
+
+  source String
+
+  event String
+
+  payload Json?
+
+  processed Boolean @default(false)
+
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@index([source])
+  @@index([event])
+  @@map("webhook_logs")
+}
+
+model AccurateCredential {
+  id String @id @default(uuid())
+
+  sessionId String?
+
+  databaseId String?
+
+  accessToken String?
+
+  refreshToken String?
+
+  expiredAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("accurate_credentials")
+}
+
+model AccurateMapping {
+  id String @id @default(uuid())
+
+  entityType String
+
+  localId String
+
+  accurateId Int
+
+  lastSyncAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([entityType, localId])
+  @@index([accurateId])
+  @@map("accurate_mappings")
+}
