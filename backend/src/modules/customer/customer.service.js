@@ -9,6 +9,7 @@ const {
   create,
   update,
 } = require("./customer.repository");
+const { pushCustomerToAccurate } = require("./customer.push.service");
 
 const getAll = async ({ page, limit, search, isActive }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -54,7 +55,16 @@ const createCustomer = async (body) => {
     body.birthDate = new Date(body.birthDate);
   }
 
-  return create(body);
+  const customer = await create(body);
+
+  // TODO: move to background sync job
+  try {
+    await pushCustomerToAccurate(customer.id);
+    const synced = await findById(customer.id);
+    return { customer: synced, message: "Customer created and synced to Accurate" };
+  } catch (_err) {
+    return { customer, message: "Customer created but pending Accurate sync" };
+  }
 };
 
 const updateCustomer = async (id, body) => {

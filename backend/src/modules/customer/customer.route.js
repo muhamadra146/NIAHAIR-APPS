@@ -11,6 +11,7 @@ const {
   updateController,
 } = require("./customer.controller");
 const { syncFromAccurateController } = require("./customer.sync.controller");
+const { syncToAccurateController } = require("./customer.push.controller");
 
 const router = Router();
 
@@ -22,5 +23,8 @@ router.get("/", authenticate, getAllController);
 router.get("/:id", authenticate, getByIdController);
 router.post("/", authenticate, validate(createCustomerSchema), createController);
 router.put("/:id", authenticate, validate(updateCustomerSchema), updateController);
+
+// Manual push sync retry — must be after CRUD to keep route order readable
+router.post("/:id/sync/accurate", authenticate, syncToAccurateController);
 
 module.exports = router;

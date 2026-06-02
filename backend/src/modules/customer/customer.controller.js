@@ -21,8 +21,8 @@ const getByIdController = async (req, res, next) => {
 
 const createController = async (req, res, next) => {
   try {
-    const result = await createCustomer(req.body);
-    return created(res, result, "Customer created");
+    const { customer, message } = await createCustomer(req.body);
+    return created(res, customer, message);
   } catch (err) {
     next(err);
   }
