@@ -1,7 +1,7 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
-const { findAll, count, findById, findByItemCode, create, update } = require("./item.repository");
+const { findAll, count, findById, findByItemCode, findCommissionCategoryById, create, update } = require("./item.repository");
 const { pushItemToAccurate } = require("./item.push.service");
 
 const getAll = async ({ page, limit, search, isActive, itemType }) => {
@@ -64,6 +64,11 @@ const updateItem = async (id, body) => {
   if (body.itemCode && body.itemCode !== item.itemCode) {
     const existing = await findByItemCode(body.itemCode);
     if (existing) throw new AppError("Item code already exists", StatusCodes.CONFLICT);
+  }
+
+  if (body.commissionCategoryId !== undefined && body.commissionCategoryId !== null) {
+    const category = await findCommissionCategoryById(body.commissionCategoryId);
+    if (!category) throw new AppError("Commission category not found", StatusCodes.NOT_FOUND);
   }
 
   return update(id, body);

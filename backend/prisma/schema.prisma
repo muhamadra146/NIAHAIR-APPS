@@ -381,6 +381,10 @@ model Unit {
 
   name String
 
+  isActive Boolean @default(true)
+
+  lastSyncAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -405,8 +409,9 @@ model Unit {
 model Item {
   id String @id @default(uuid())
 
-  categoryId    String?
-  defaultUnitId String?
+  categoryId           String?
+  defaultUnitId        String?
+  commissionCategoryId String?
 
   accurateItemId Int? @unique
 
@@ -427,6 +432,8 @@ model Item {
 
   defaultUnit Unit? @relation(fields: [defaultUnitId], references: [id])
 
+  commissionCategory CommissionCategory? @relation(fields: [commissionCategoryId], references: [id])
+
   itemUnits ItemUnit[]
 
   itemPrices ItemPrice[]
@@ -436,7 +443,6 @@ model Item {
   stockTransferItems  StockTransferItem[]
   appointmentServices AppointmentService[]
   invoiceItems        InvoiceItem[]
-  commissionRules     CommissionRule[]
   commissions         Commission[]
   treatmentSessions   TreatmentSession[]
   materialUsages      MaterialUsage[]
@@ -447,6 +453,7 @@ model Item {
   @@index([itemType])
   @@index([categoryId])
   @@index([defaultUnitId])
+  @@index([commissionCategoryId])
   @@index([name])
   @@map("items")
 }
@@ -490,7 +497,8 @@ model ItemPrice {
 
   branchId String?
 
-  sellingPrice Decimal @db.Decimal(18, 2)
+  sellingPrice Decimal  @db.Decimal(18, 2)
+  costPrice    Decimal? @db.Decimal(18, 2)
 
   effectiveDate DateTime
 
@@ -1178,11 +1186,28 @@ model TreatmentAssignment {
   @@map("treatment_assignments")
 }
 
+model CommissionCategory {
+  id String @id @default(uuid())
+
+  code String @unique
+  name String
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items           Item[]
+  commissionRules CommissionRule[]
+
+  @@map("commission_categories")
+}
+
 model CommissionRule {
   id String @id @default(uuid())
 
-  employeeId    String
-  serviceItemId String
+  employeeId           String
+  commissionCategoryId String
 
   commissionType CommissionType
 
@@ -1198,11 +1223,13 @@ model CommissionRule {
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
-  serviceItem Item @relation(fields: [serviceItemId], references: [id])
+  commissionCategory CommissionCategory @relation(fields: [commissionCategoryId], references: [id])
 
-  @@unique([employeeId, serviceItemId, effectiveDate])
+  commissions Commission[]
+
+  @@unique([employeeId, commissionCategoryId, effectiveDate])
   @@index([employeeId])
-  @@index([serviceItemId])
+  @@index([commissionCategoryId])
   @@map("commission_rules")
 }
 
@@ -1218,6 +1245,12 @@ model Commission {
   employeeId String
 
   serviceItemId String
+
+  commissionRuleId String?
+
+  workQty   Decimal? @db.Decimal(18, 2)
+
+  workRatio Decimal? @db.Decimal(18, 2)
 
   commissionType CommissionType
 
@@ -1249,9 +1282,12 @@ model Commission {
 
   serviceItem Item @relation(fields: [serviceItemId], references: [id])
 
+  commissionRule CommissionRule? @relation(fields: [commissionRuleId], references: [id])
+
   @@index([invoiceId])
   @@index([employeeId])
   @@index([status])
+  @@index([commissionRuleId])
   @@map("commissions")
 }
 
