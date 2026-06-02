@@ -1,10 +1,10 @@
 const { success, created } = require("../../common/responses/apiResponse");
-const { getAll, getById, createBranch, updateBranch } = require("./branch.service");
+const { getAll, getById, createEmployeeRole, updateEmployeeRole } = require("./employeeRole.service");
 
 const getAllController = async (req, res, next) => {
   try {
     const result = await getAll(req.query);
-    return success(res, result, "Branches fetched");
+    return success(res, result, "Employee roles fetched");
   } catch (err) {
     next(err);
   }
@@ -13,7 +13,7 @@ const getAllController = async (req, res, next) => {
 const getByIdController = async (req, res, next) => {
   try {
     const result = await getById(req.params.id);
-    return success(res, result, "Branch fetched");
+    return success(res, result, "Employee role fetched");
   } catch (err) {
     next(err);
   }
@@ -21,8 +21,8 @@ const getByIdController = async (req, res, next) => {
 
 const createController = async (req, res, next) => {
   try {
-    const branch = await createBranch(req.body);
-    return created(res, branch, "Branch created");
+    const role = await createEmployeeRole(req.body);
+    return created(res, role, "Employee role created");
   } catch (err) {
     next(err);
   }
@@ -30,8 +30,8 @@ const createController = async (req, res, next) => {
 
 const updateController = async (req, res, next) => {
   try {
-    const result = await updateBranch(req.params.id, req.body);
-    return success(res, result, "Branch updated");
+    const result = await updateEmployeeRole(req.params.id, req.body);
+    return success(res, result, "Employee role updated");
   } catch (err) {
     next(err);
   }

@@ -68,6 +68,29 @@ async function main() {
 
 
     // =========================
+    // EMPLOYEE ROLES
+    // =========================
+
+    const employeeRoles = [
+        { code: "STYLIST",   name: "Stylist" },
+        { code: "THERAPIST", name: "Therapist" },
+        { code: "CASHIER",   name: "Cashier" },
+        { code: "ADMIN",     name: "Admin" },
+        { code: "MANAGER",   name: "Manager" },
+    ];
+
+    for (const role of employeeRoles) {
+        await prisma.employeeRole.upsert({
+            where:  { code: role.code },
+            update: {},
+            create: { code: role.code, name: role.name, isActive: true },
+        });
+    }
+
+    console.log("Employee roles seeded");
+
+
+    // =========================
     // PASSWORD
     // =========================
 

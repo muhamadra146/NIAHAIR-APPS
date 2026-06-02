@@ -13,6 +13,9 @@ const { success } = require("./common/responses/apiResponse");
 const authRouter = require("./modules/auth/auth.route");
 const customerRouter = require("./modules/customer/customer.route");
 const itemRouter = require("./modules/item/item.route");
+const employeeRouter = require("./modules/employee/employee.route");
+const employeeRoleRouter = require("./modules/employeeRole/employeeRole.route");
+const branchRouter = require("./modules/branch/branch.route");
 
 
 const app = express();
@@ -53,6 +56,9 @@ app.get("/health/db", async (req, res) => {
 app.use("/auth", authRouter);
 app.use("/customers", customerRouter);
 app.use("/items", itemRouter);
+app.use("/employees", employeeRouter);
+app.use("/employee-roles", employeeRoleRouter);
+app.use("/branches", branchRouter);
 
 
 // global error handler — must be last
