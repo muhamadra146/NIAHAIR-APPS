@@ -1,13 +1,13 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { accurateRequest } = require("../accurate/accurate.client");
-const { mapAccurateToCustomer } = require("./customer.sync.mapper");
-const { findByAccurateId, createFromAccurate, updateByAccurateId } = require("./customer.sync.repository");
+const { mapAccurateToItem } = require("./item.sync.mapper");
+const { findByAccurateId, createFromAccurate, updateByAccurateId } = require("./item.sync.repository");
 
-const ACCURATE_CUSTOMER_LIST = "/customer/list.do";
-const ACCURATE_FIELDS = "id,name,no,email,mobilePhone,whatsapp,address,city,province,suspended";
+const ACCURATE_ITEM_LIST = "/item/list.do";
+const ACCURATE_FIELDS = "id,name,no,itemType,suspended";
 
-const syncCustomersFromAccurate = async () => {
+const syncItemsFromAccurate = async () => {
   let page = 1;
   let pageCount = 1;
   let accurateRowCount = 0;
@@ -20,17 +20,17 @@ const syncCustomersFromAccurate = async () => {
   let active = 0;
   let inactive = 0;
 
-  // Task 1 — collect every raw ID returned by Accurate across all pages.
+  // Collect every raw ID returned by Accurate across all pages.
   const accurateIds = [];
 
-  // Task 2 — track which IDs have already been processed in this run.
-  // Prevents the same Accurate customer from being written twice when
+  // Track which IDs have already been processed in this run.
+  // Prevents the same Accurate item from being written twice when
   // the API returns duplicate IDs across page boundaries.
   const processedIds = new Set();
 
   do {
     const response = await accurateRequest(
-      `${ACCURATE_CUSTOMER_LIST}?fields=${ACCURATE_FIELDS}&sp.page=${page}`
+      `${ACCURATE_ITEM_LIST}?fields=${ACCURATE_FIELDS}&sp.page=${page}`
     );
 
     if (!response.s) {
@@ -43,15 +43,13 @@ const syncCustomersFromAccurate = async () => {
     pageCount = response.sp?.pageCount ?? 1;
     accurateRowCount = response.sp?.rowCount ?? 0;
 
-    const customers = response.d ?? [];
-    console.log("SYNC ACCURATE CUSTOMER PAGE:", page, "/", pageCount);
-    console.log("FIRST CUSTOMER ID:", customers[0]?.id);
+    const items = response.d ?? [];
+    console.log("SYNC ACCURATE ITEM PAGE:", page, "/", pageCount);
+    console.log("FIRST ITEM ID:", items[0]?.id);
 
-    for (const item of customers) {
-      // Task 1: record raw ID before any guard so totals are honest.
+    for (const item of items) {
       accurateIds.push(item.id);
 
-      // Guard: Accurate returned an item with no id — nothing we can key on.
       if (!item.id) {
         failed++;
         continue;
@@ -59,7 +57,6 @@ const syncCustomersFromAccurate = async () => {
 
       const accurateId = parseInt(item.id, 10);
 
-      // Task 2: duplicate guard — same ID already handled earlier in this run.
       if (processedIds.has(accurateId)) {
         console.log("SKIP DUPLICATE:", accurateId);
         skippedDuplicate++;
@@ -68,7 +65,7 @@ const syncCustomersFromAccurate = async () => {
       processedIds.add(accurateId);
 
       try {
-        const mapped = mapAccurateToCustomer(item);
+        const mapped = mapAccurateToItem(item);
 
         // Track active/inactive before any DB write so counts are honest
         // even if the write fails.
@@ -78,22 +75,20 @@ const syncCustomersFromAccurate = async () => {
           inactive++;
         }
 
-        // Task 3: lookup ONLY by accurateCustomerId.
         const existing = await findByAccurateId(accurateId);
 
         if (existing) {
-          // Row existed before this sync — this is a real update.
           console.log("UPDATE:", accurateId, existing.id);
-          const { accurateCustomerId, ...updateData } = mapped;
+          const { accurateItemId, ...updateData } = mapped;
           await updateByAccurateId(accurateId, updateData);
           updated++;
         } else {
-          // No matching row — this is a real create.
           console.log("CREATE:", accurateId);
           await createFromAccurate(mapped);
           created++;
         }
       } catch (_err) {
+        console.error("ITEM SYNC ERROR:", accurateId, _err.message);
         failed++;
       }
     }
@@ -101,7 +96,7 @@ const syncCustomersFromAccurate = async () => {
     page++;
   } while (page <= pageCount);
 
-  // ── Task 1: duplicate ID analysis ────────────────────────────────────────
+  // Duplicate ID analysis
   const uniqueAccurateIds = new Set(accurateIds.filter(Boolean));
   console.log({
     totalFromAccurate: accurateIds.length,
@@ -115,13 +110,11 @@ const syncCustomersFromAccurate = async () => {
       if (id) frequency[id] = (frequency[id] || 0) + 1;
     }
     const duplicateIds = Object.entries(frequency)
-      .filter(([, count]) => count > 1)
-      .map(([id, count]) => ({ id: Number(id), count }));
+      .filter(([, c]) => c > 1)
+      .map(([id, c]) => ({ id: Number(id), count: c }));
     console.log("DUPLICATE IDs:", duplicateIds);
   }
-  // ─────────────────────────────────────────────────────────────────────────
 
-  // Task 4: final validation log.
   const totalProcessed = created + updated + skippedDuplicate + failed;
   console.log("SYNC COMPLETE", {
     accurateRowCount,
@@ -138,4 +131,4 @@ const syncCustomersFromAccurate = async () => {
   return { created, updated, skippedDuplicate, failed, active, inactive };
 };
 
-module.exports = { syncCustomersFromAccurate };
+module.exports = { syncItemsFromAccurate };

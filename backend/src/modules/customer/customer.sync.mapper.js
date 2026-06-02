@@ -2,6 +2,7 @@
  * Maps an Accurate customer object to local DB shape.
  * Only maps fields that exist in both systems.
  * Fields absent in Accurate are left null.
+ * isActive: Accurate uses `suspended` — true means inactive, false means active.
  */
 const mapAccurateToCustomer = (item) => ({
   // parseInt ensures the value is always a plain integer, never a float or string.
@@ -15,6 +16,7 @@ const mapAccurateToCustomer = (item) => ({
   address: item.address || null,
   city: item.city || null,
   province: item.province || null,
+  isActive: !item.suspended,
   lastSyncAt: new Date(),
 });
 

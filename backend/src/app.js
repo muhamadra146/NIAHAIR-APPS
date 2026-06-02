@@ -12,6 +12,7 @@ const errorHandler = require("./middlewares/error.middleware");
 const { success } = require("./common/responses/apiResponse");
 const authRouter = require("./modules/auth/auth.route");
 const customerRouter = require("./modules/customer/customer.route");
+const itemRouter = require("./modules/item/item.route");
 
 
 const app = express();
@@ -51,6 +52,7 @@ app.get("/health/db", async (req, res) => {
 
 app.use("/auth", authRouter);
 app.use("/customers", customerRouter);
+app.use("/items", itemRouter);
 
 
 // global error handler — must be last
