@@ -1252,7 +1252,7 @@ model Commission {
 
   workQty   Decimal? @db.Decimal(18, 2)
 
-  workRatio Decimal? @db.Decimal(18, 2)
+  workRatio Decimal? @db.Decimal(18, 6)
 
   commissionType CommissionType
 
@@ -1288,6 +1288,7 @@ model Commission {
 
   commissionRule CommissionRule? @relation(fields: [commissionRuleId], references: [id])
 
+  @@unique([treatmentAssignmentId])
   @@index([invoiceId])
   @@index([employeeId])
   @@index([status])
