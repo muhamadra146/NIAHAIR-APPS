@@ -20,7 +20,8 @@ const commissionRuleRouter     = require("./modules/commissionRule/commissionRul
 const commissionCategoryRouter = require("./modules/commissionCategory/commissionCategory.route");
 const unitRouter               = require("./modules/unit/unit.route");
 const treatmentRouter          = require("./modules/treatment/treatment.route");
-const treatmentItemRouter      = require("./modules/treatmentItem/treatmentItem.route");
+const treatmentItemRouter           = require("./modules/treatmentItem/treatmentItem.route");
+const treatmentAssignmentRouter     = require("./modules/treatmentAssignment/treatmentAssignment.route");
 
 
 const app = express();
@@ -69,6 +70,8 @@ app.use("/commission-categories", commissionCategoryRouter);
 app.use("/units",               unitRouter);
 app.use("/treatment-sessions", treatmentRouter);
 app.use("/treatment-items",    treatmentItemRouter);
+app.use("/treatment-items/:itemId/assignments", treatmentAssignmentRouter);
+app.use("/treatment-assignments",              treatmentAssignmentRouter);
 
 
 // global error handler — must be last
