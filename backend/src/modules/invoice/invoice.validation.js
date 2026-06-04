@@ -5,6 +5,7 @@ const createInvoiceSchema = object({
   branchId:            pipe(string(), minLength(1, "branchId is required")),
   appointmentId:       optional(string()),
   treatmentSessionIds: optional(array(string())),
+  depositIds:          optional(array(string())),
   notes:               optional(string()),
   items: pipe(
     array(

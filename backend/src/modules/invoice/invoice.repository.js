@@ -16,6 +16,14 @@ const INCLUDE = {
     },
     orderBy: { createdAt: "asc" },
   },
+  invoiceDeposits: {
+    include: {
+      deposit: {
+        select: { id: true, amount: true, status: true, paidAt: true },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  },
   treatmentSessions: {
     select: { id: true, startedAt: true, completedAt: true, notes: true },
   },
@@ -72,9 +80,22 @@ const findTreatmentSessionsByIds = (ids) =>
     select: { id: true, invoiceId: true },
   });
 
+const findDepositsByIds = (ids) =>
+  prisma.deposit.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id:     true,
+      amount: true,
+      status: true,
+      appointment: { select: { customerId: true } },
+      invoiceDeposits: { select: { amountApplied: true } },
+    },
+  });
+
 // ── Create ────────────────────────────────────────────────────────────
 
-const createWithTransaction = ({ invoiceData, itemsData, sessionIds, userId }) =>
+// depositsData: [{ depositId, amountApplied, newDepositStatus }]
+const createWithTransaction = ({ invoiceData, itemsData, sessionIds, depositsData, userId }) =>
   prisma.$transaction(async (tx) => {
     const invoice = await tx.invoice.create({ data: invoiceData });
 
@@ -91,11 +112,28 @@ const createWithTransaction = ({ invoiceData, itemsData, sessionIds, userId }) =
       });
     }
 
+    if (depositsData && depositsData.length > 0) {
+      await tx.invoiceDeposit.createMany({
+        data: depositsData.map(({ depositId, amountApplied }) => ({
+          invoiceId:     invoice.id,
+          depositId,
+          amountApplied,
+        })),
+      });
+
+      for (const { depositId, newDepositStatus } of depositsData) {
+        await tx.deposit.update({
+          where: { id: depositId },
+          data:  { status: newDepositStatus },
+        });
+      }
+    }
+
     await tx.invoiceStatusHistory.create({
       data: {
         invoiceId: invoice.id,
         oldStatus: null,
-        newStatus: "UNPAID",
+        newStatus: invoiceData.status,
         notes:     "Invoice created",
         createdBy: userId ?? null,
       },
@@ -138,6 +176,7 @@ module.exports = {
   findActivePrice,
   findActivePriceGlobal,
   findTreatmentSessionsByIds,
+  findDepositsByIds,
   createWithTransaction,
   cancelWithTransaction,
 };

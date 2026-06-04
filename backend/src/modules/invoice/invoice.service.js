@@ -14,6 +14,7 @@ const {
   findActivePrice,
   findActivePriceGlobal,
   findTreatmentSessionsByIds,
+  findDepositsByIds,
   createWithTransaction,
   cancelWithTransaction,
 } = require("./invoice.repository");
@@ -69,7 +70,7 @@ const buildInvoiceNo = async () => {
 // ── Create ────────────────────────────────────────────────────────────
 
 const createInvoice = async (body, userId) => {
-  const { customerId, branchId, appointmentId, treatmentSessionIds, items, notes } = body;
+  const { customerId, branchId, appointmentId, treatmentSessionIds, depositIds, items, notes } = body;
 
   const customer = await findCustomerById(customerId);
   if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
@@ -132,7 +133,77 @@ const createInvoice = async (body, userId) => {
   }
 
   const grandTotal = totalSubtotal.sub(totalDiscount);
-  const invoiceNo  = await buildInvoiceNo();
+
+  // ── Validate and apply deposits ───────────────────────────────────────
+  let totalDeposit = D("0");
+  const depositsData = [];
+
+  if (depositIds && depositIds.length > 0) {
+    const deposits = await findDepositsByIds(depositIds);
+
+    // Preserve the order the caller specified
+    for (const depositId of depositIds) {
+      const deposit = deposits.find((d) => d.id === depositId);
+      if (!deposit) {
+        throw new AppError(`Deposit not found: ${depositId}`, StatusCodes.NOT_FOUND);
+      }
+
+      const usable = ["PAID", "PARTIAL_USED"];
+      if (!usable.includes(deposit.status)) {
+        throw new AppError(
+          `Deposit ${depositId} cannot be applied (status: ${deposit.status}). Only PAID and PARTIAL_USED deposits are usable.`,
+          StatusCodes.UNPROCESSABLE_ENTITY
+        );
+      }
+
+      if (deposit.appointment.customerId !== customerId) {
+        throw new AppError(
+          `Deposit ${depositId} belongs to a different customer`,
+          StatusCodes.UNPROCESSABLE_ENTITY
+        );
+      }
+
+      // Calculate remaining balance on this deposit
+      const alreadyUsed = deposit.invoiceDeposits.reduce(
+        (sum, id) => sum.add(D(id.amountApplied)),
+        D("0")
+      );
+      const depositRemaining = D(deposit.amount).sub(alreadyUsed);
+
+      if (depositRemaining.lte(D("0"))) {
+        throw new AppError(
+          `Deposit ${depositId} has no remaining balance`,
+          StatusCodes.UNPROCESSABLE_ENTITY
+        );
+      }
+
+      // Only apply what is still needed to cover the grand total
+      const stillNeeded    = grandTotal.sub(totalDeposit);
+      const amountApplied  = Prisma.Decimal.min(depositRemaining, stillNeeded);
+
+      totalDeposit = totalDeposit.add(amountApplied);
+
+      const newDepositStatus = depositRemaining.sub(amountApplied).gt(D("0"))
+        ? "PARTIAL_USED"
+        : "USED";
+
+      depositsData.push({ depositId, amountApplied, newDepositStatus });
+    }
+  }
+
+  // ── Determine invoice status ──────────────────────────────────────────
+  const outstandingAmount = grandTotal.sub(totalDeposit);
+
+  let invoiceStatus;
+  if (totalDeposit.gte(grandTotal)) {
+    invoiceStatus = "PAID";
+  } else if (totalDeposit.gt(D("0"))) {
+    invoiceStatus = "PARTIAL";
+  } else {
+    invoiceStatus = "UNPAID";
+  }
+
+  const invoiceNo = await buildInvoiceNo();
 
   const invoiceData = {
     customerId,
@@ -142,17 +213,19 @@ const createInvoice = async (body, userId) => {
     invoiceDate:       new Date(),
     subtotal:          totalSubtotal,
     totalDiscount,
+    totalDeposit,
     grandTotal,
     paidAmount:        D("0"),
-    outstandingAmount: grandTotal,
-    status:            "UNPAID",
+    outstandingAmount,
+    status:            invoiceStatus,
     notes:             notes ?? null,
   };
 
   return createWithTransaction({
     invoiceData,
     itemsData,
-    sessionIds: treatmentSessionIds ?? [],
+    sessionIds:   treatmentSessionIds ?? [],
+    depositsData,
     userId,
   });
 };

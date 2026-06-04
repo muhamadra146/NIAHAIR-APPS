@@ -3,16 +3,15 @@ const authenticate = require("../../middlewares/auth.middleware");
 const authorize    = require("../../middlewares/role.middleware");
 const validate     = require("../../middlewares/validate.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
-const { createPaymentSchema } = require("./payment.validation");
+const { createPaymentMethodSchema, updatePaymentMethodSchema } = require("./paymentMethod.validation");
 const {
   getAllController,
   getByIdController,
   createController,
-} = require("./payment.controller");
+  updateController,
+} = require("./paymentMethod.controller");
 
-// mergeParams: true — inherits :invoiceId when mounted at
-// app.use("/invoices/:invoiceId/payments", router)
-const router = Router({ mergeParams: true });
+const router = Router();
 
 router.get("/",    authenticate, getAllController);
 router.get("/:id", authenticate, getByIdController);
@@ -20,9 +19,17 @@ router.get("/:id", authenticate, getByIdController);
 router.post(
   "/",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
-  validate(createPaymentSchema),
+  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER),
+  validate(createPaymentMethodSchema),
   createController
+);
+
+router.patch(
+  "/:id",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER),
+  validate(updatePaymentMethodSchema),
+  updateController
 );
 
 module.exports = router;

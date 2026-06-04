@@ -26,6 +26,8 @@ const commissionRouter              = require("./modules/commission/commission.r
 const invoiceRouter                 = require("./modules/invoice/invoice.route");
 const appointmentRouter             = require("./modules/appointment/appointment.route");
 const depositRouter                 = require("./modules/deposit/deposit.route");
+const paymentMethodRouter           = require("./modules/paymentMethod/paymentMethod.route");
+const paymentRouter                 = require("./modules/payment/payment.route");
 
 
 const app = express();
@@ -81,6 +83,9 @@ app.use("/invoices",                           invoiceRouter);
 app.use("/appointments",                       appointmentRouter);
 app.use("/appointments/:appointmentId/deposits", depositRouter);
 app.use("/deposits",                             depositRouter);
+app.use("/payment-methods",                      paymentMethodRouter);
+app.use("/invoices/:invoiceId/payments",         paymentRouter);
+app.use("/payments",                             paymentRouter);
 
 
 // global error handler — must be last
