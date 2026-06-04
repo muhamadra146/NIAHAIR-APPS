@@ -23,6 +23,8 @@ const treatmentRouter               = require("./modules/treatment/treatment.rou
 const treatmentItemRouter           = require("./modules/treatmentItem/treatmentItem.route");
 const treatmentAssignmentRouter     = require("./modules/treatmentAssignment/treatmentAssignment.route");
 const commissionRouter              = require("./modules/commission/commission.route");
+const invoiceRouter                 = require("./modules/invoice/invoice.route");
+const appointmentRouter             = require("./modules/appointment/appointment.route");
 
 
 const app = express();
@@ -74,6 +76,8 @@ app.use("/treatment-items",    treatmentItemRouter);
 app.use("/treatment-items/:itemId/assignments", treatmentAssignmentRouter);
 app.use("/treatment-assignments",              treatmentAssignmentRouter);
 app.use("/commissions",                        commissionRouter);
+app.use("/invoices",                           invoiceRouter);
+app.use("/appointments",                       appointmentRouter);
 
 
 // global error handler — must be last
