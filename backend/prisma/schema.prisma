@@ -397,6 +397,7 @@ model Unit {
   serviceMaterials   ServiceMaterial[]
   materialUsageItems MaterialUsageItem[]
   invoiceItems       InvoiceItem[]
+  treatmentItems     TreatmentItem[]
 
   @@index([name])
   @@map("units")
@@ -444,8 +445,7 @@ model Item {
   appointmentServices AppointmentService[]
   invoiceItems        InvoiceItem[]
   commissions         Commission[]
-  treatmentSessions   TreatmentSession[]
-  materialUsages      MaterialUsage[]
+  treatmentItems      TreatmentItem[]
   materialUsageItems  MaterialUsageItem[]
   serviceMaterials    ServiceMaterial[]    @relation("ServiceMaterials")
   usedAsMaterial      ServiceMaterial[]    @relation("MaterialItems")
@@ -740,22 +740,17 @@ model ServiceMaterial {
 model MaterialUsage {
   id String @id @default(uuid())
 
-  treatmentSessionId String
-
-  serviceItemId String
+  treatmentItemId String
 
   processedAt DateTime
 
   createdAt DateTime @default(now())
 
-  serviceItem Item @relation(fields: [serviceItemId], references: [id])
-
-  treatmentSession TreatmentSession @relation(fields: [treatmentSessionId], references: [id])
+  treatmentItem TreatmentItem @relation(fields: [treatmentItemId], references: [id])
 
   usageItems MaterialUsageItem[]
 
-  @@index([treatmentSessionId])
-  @@index([serviceItemId])
+  @@index([treatmentItemId])
   @@map("material_usages")
 }
 
@@ -1165,7 +1160,7 @@ enum CommissionStatus {
 model TreatmentAssignment {
   id String @id @default(uuid())
 
-  treatmentSessionId String
+  treatmentItemId String
 
   employeeId String
 
@@ -1175,13 +1170,13 @@ model TreatmentAssignment {
 
   createdAt DateTime @default(now())
 
-  treatmentSession TreatmentSession @relation(fields: [treatmentSessionId], references: [id])
+  treatmentItem TreatmentItem @relation(fields: [treatmentItemId], references: [id])
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
   commissions Commission[]
 
-  @@index([treatmentSessionId])
+  @@index([treatmentItemId])
   @@index([employeeId])
   @@map("treatment_assignments")
 }
@@ -1422,13 +1417,11 @@ model Leave {
 model TreatmentSession {
   id String @id @default(uuid())
 
-  appointmentId String
+  appointmentId String?
 
   customerId String
 
   invoiceId String?
-
-  serviceItemId String
 
   branchId String
 
@@ -1441,26 +1434,61 @@ model TreatmentSession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
 
   customer Customer @relation(fields: [customerId], references: [id])
 
   invoice Invoice? @relation(fields: [invoiceId], references: [id])
 
-  serviceItem Item @relation(fields: [serviceItemId], references: [id])
-
   branch Branch @relation(fields: [branchId], references: [id])
 
-  assignments TreatmentAssignment[]
+  treatmentItems TreatmentItem[]
 
   media TreatmentMedia[]
 
-  materialUsages MaterialUsage[]
-
   @@index([appointmentId])
   @@index([customerId])
-  @@index([serviceItemId])
   @@map("treatment_sessions")
+}
+
+// =====================================================
+// TREATMENT ITEMS
+// =====================================================
+
+model TreatmentItem {
+  id String @id @default(uuid())
+
+  treatmentSessionId String
+
+  itemId String
+
+  unitId String
+
+  qty Decimal @db.Decimal(18, 2)
+
+  priceSnapshot Decimal @db.Decimal(18, 2)
+
+  conversionSnapshot Decimal @db.Decimal(18, 6)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  treatmentSession TreatmentSession @relation(fields: [treatmentSessionId], references: [id])
+
+  item Item @relation(fields: [itemId], references: [id])
+
+  unit Unit @relation(fields: [unitId], references: [id])
+
+  assignments TreatmentAssignment[]
+
+  materialUsages MaterialUsage[]
+
+  @@index([treatmentSessionId])
+  @@index([itemId])
+  @@index([unitId])
+  @@map("treatment_items")
 }
 
 model TreatmentMedia {

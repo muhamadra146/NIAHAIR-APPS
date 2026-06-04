@@ -19,6 +19,7 @@ const branchRouter = require("./modules/branch/branch.route");
 const commissionRuleRouter     = require("./modules/commissionRule/commissionRule.route");
 const commissionCategoryRouter = require("./modules/commissionCategory/commissionCategory.route");
 const unitRouter               = require("./modules/unit/unit.route");
+const treatmentRouter          = require("./modules/treatment/treatment.route");
 
 
 const app = express();
@@ -64,7 +65,8 @@ app.use("/employee-roles", employeeRoleRouter);
 app.use("/branches", branchRouter);
 app.use("/commission-rules",      commissionRuleRouter);
 app.use("/commission-categories", commissionCategoryRouter);
-app.use("/units",                 unitRouter);
+app.use("/units",               unitRouter);
+app.use("/treatment-sessions", treatmentRouter);
 
 
 // global error handler — must be last
