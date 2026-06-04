@@ -1,12 +1,67 @@
 const prisma = require("../../config/prisma");
 
 // ── Transaction helper ────────────────────────────────────────────────
-// Exposes the Prisma transaction runner so the service never imports
-// prisma directly (per architecture rule: only repository accesses Prisma).
 
 const withTransaction = (fn) => prisma.$transaction(fn);
 
-// ── Invoice fetch for generation ──────────────────────────────────────
+// ── Include shape for management reads ───────────────────────────────
+
+const INCLUDE = {
+  employee: {
+    select: { id: true, name: true, employeeCode: true },
+  },
+  treatmentAssignment: {
+    select: { workQty: true },
+  },
+  commissionRule: {
+    select: { id: true },
+  },
+  invoiceItem: {
+    select: { id: true, itemId: true, qty: true, price: true, subtotal: true },
+  },
+};
+
+// ── Management reads ──────────────────────────────────────────────────
+
+const findAll = ({ skip, take, where }) =>
+  prisma.commission.findMany({
+    skip,
+    take,
+    where,
+    orderBy: { createdAt: "desc" },
+    include: INCLUDE,
+  });
+
+const count = (where) => prisma.commission.count({ where });
+
+const findById = (id) =>
+  prisma.commission.findUnique({ where: { id }, include: INCLUDE });
+
+// ── Status transitions ────────────────────────────────────────────────
+
+const approveOne = (id, userId) =>
+  prisma.commission.update({
+    where: { id },
+    data: {
+      status:     "APPROVED",
+      approvedBy: userId,
+      approvedAt: new Date(),
+    },
+    include: INCLUDE,
+  });
+
+const markPaidOne = (id, userId) =>
+  prisma.commission.update({
+    where: { id },
+    data: {
+      status: "PAID",
+      paidBy: userId,
+      paidAt: new Date(),
+    },
+    include: INCLUDE,
+  });
+
+// ── Generator: invoice fetch ──────────────────────────────────────────
 
 const findInvoiceForGeneration = (invoiceId, tx) => {
   const client = tx ?? prisma;
@@ -55,7 +110,7 @@ const findInvoiceForGeneration = (invoiceId, tx) => {
   });
 };
 
-// ── Commission rule lookup for generator ──────────────────────────────
+// ── Generator: commission rule lookup ─────────────────────────────────
 
 const findActiveRuleForGeneration = (employeeId, commissionCategoryId, tx) => {
   const client = tx ?? prisma;
@@ -70,14 +125,14 @@ const findActiveRuleForGeneration = (employeeId, commissionCategoryId, tx) => {
   });
 };
 
-// ── Duplicate guard ───────────────────────────────────────────────────
+// ── Generator: duplicate guard ────────────────────────────────────────
 
 const countByInvoice = (invoiceId, tx) => {
   const client = tx ?? prisma;
   return client.commission.count({ where: { invoiceId } });
 };
 
-// ── Bulk insert ───────────────────────────────────────────────────────
+// ── Generator: bulk insert ────────────────────────────────────────────
 
 const bulkCreate = (dataArray, tx) => {
   const client = tx ?? prisma;
@@ -85,6 +140,13 @@ const bulkCreate = (dataArray, tx) => {
 };
 
 module.exports = {
+  // management
+  findAll,
+  count,
+  findById,
+  approveOne,
+  markPaidOne,
+  // generator
   withTransaction,
   findInvoiceForGeneration,
   findActiveRuleForGeneration,

@@ -1270,6 +1270,8 @@ model Commission {
 
   approvedAt DateTime?
 
+  paidBy String?
+
   paidAt DateTime?
 
   notes String?

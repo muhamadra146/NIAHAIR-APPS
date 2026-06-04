@@ -1,7 +1,15 @@
 const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
+const { paginate, paginationMeta } = require("../../utils/pagination");
 const {
+  // management
+  findAll,
+  count,
+  findById,
+  approveOne,
+  markPaidOne,
+  // generator
   withTransaction,
   findInvoiceForGeneration,
   findActiveRuleForGeneration,
@@ -13,17 +21,70 @@ const {
 
 const D = (v) => new Prisma.Decimal(String(v));
 
+// ── Management ────────────────────────────────────────────────────────
+
+const listCommissions = async ({ page, limit, employeeId, status, startDate, endDate }) => {
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const where = {};
+
+  if (employeeId) where.employeeId = employeeId;
+  if (status)     where.status     = status;
+
+  if (startDate || endDate) {
+    where.createdAt = {};
+    if (startDate) where.createdAt.gte = new Date(startDate);
+    if (endDate)   where.createdAt.lte = new Date(endDate);
+  }
+
+  const [commissions, total] = await Promise.all([
+    findAll({ skip, take, where }),
+    count(where),
+  ]);
+
+  return { data: commissions, meta: paginationMeta(total, pageNum, limitNum) };
+};
+
+const getCommissionById = async (id) => {
+  const commission = await findById(id);
+  if (!commission) throw new AppError("Commission not found", StatusCodes.NOT_FOUND);
+  return commission;
+};
+
+const approveCommission = async (id, userId) => {
+  const commission = await findById(id);
+  if (!commission) throw new AppError("Commission not found", StatusCodes.NOT_FOUND);
+
+  if (commission.status !== "PENDING") {
+    throw new AppError(
+      `Cannot approve: status is ${commission.status}, expected PENDING`,
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
+  return approveOne(id, userId);
+};
+
+const markCommissionPaid = async (id, userId) => {
+  const commission = await findById(id);
+  if (!commission) throw new AppError("Commission not found", StatusCodes.NOT_FOUND);
+
+  if (commission.status !== "APPROVED") {
+    throw new AppError(
+      `Cannot mark paid: status is ${commission.status}, expected APPROVED`,
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
+  return markPaidOne(id, userId);
+};
+
 // ── Generator ─────────────────────────────────────────────────────────
 
 const generateCommission = (invoiceId) =>
   withTransaction(async (tx) => {
-    // 1 — Invoice must exist
     const invoice = await findInvoiceForGeneration(invoiceId, tx);
     if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
 
-    // 2 — Duplicate guard inside the transaction
-    // Concurrent requests both pass here only if they entered the transaction
-    // simultaneously, which the DB serialises. The second will see count > 0.
     const existing = await countByInvoice(invoiceId, tx);
     if (existing > 0) {
       throw new AppError(
@@ -32,7 +93,6 @@ const generateCommission = (invoiceId) =>
       );
     }
 
-    // 3 — Walk the hierarchy: sessions → treatment items → assignments
     const rows = [];
 
     for (const session of invoice.treatmentSessions) {
@@ -94,10 +154,14 @@ const generateCommission = (invoiceId) =>
 
     if (rows.length === 0) return { created: 0 };
 
-    // 4 — Persist inside the same transaction that ran the duplicate check
     await bulkCreate(rows, tx);
-
     return { created: rows.length };
   });
 
-module.exports = { generateCommission };
+module.exports = {
+  listCommissions,
+  getCommissionById,
+  approveCommission,
+  markCommissionPaid,
+  generateCommission,
+};
