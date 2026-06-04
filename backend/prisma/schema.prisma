@@ -1150,6 +1150,11 @@ enum CommissionType {
   FIXED_AMOUNT
 }
 
+enum CommissionBase {
+  BEFORE_DISCOUNT
+  AFTER_DISCOUNT
+}
+
 enum CommissionStatus {
   PENDING
   APPROVED
@@ -1208,6 +1213,8 @@ model CommissionRule {
 
   commissionValue Decimal @db.Decimal(18, 2)
 
+  commissionBase CommissionBase @default(AFTER_DISCOUNT)
+
   effectiveDate DateTime
   endDate       DateTime?
 
@@ -1233,7 +1240,7 @@ model Commission {
 
   invoiceId String
 
-  invoiceItemId String
+  invoiceItemId String?
 
   treatmentAssignmentId String
 
@@ -1250,6 +1257,8 @@ model Commission {
   commissionType CommissionType
 
   commissionValue Decimal @db.Decimal(18, 2)
+
+  commissionBase CommissionBase
 
   baseAmount Decimal @db.Decimal(18, 2)
 
@@ -1269,7 +1278,7 @@ model Commission {
 
   invoice Invoice @relation(fields: [invoiceId], references: [id])
 
-  invoiceItem InvoiceItem @relation(fields: [invoiceItemId], references: [id])
+  invoiceItem InvoiceItem? @relation(fields: [invoiceItemId], references: [id])
 
   treatmentAssignment TreatmentAssignment @relation(fields: [treatmentAssignmentId], references: [id])
 
