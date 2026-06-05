@@ -2,11 +2,12 @@ const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
-const { generateCommission } = require("../commission/commission.service");
+const { handleInvoicePaid } = require("../invoice/invoice.workflow");
 const {
   findAll,
   count,
   findById,
+  findPaymentById,
   countToday,
   findInvoiceForPayment,
   findPaymentMethodById,
@@ -116,12 +117,12 @@ const createPayment = async (
     userId,
   });
 
-  // Commission only when invoice transitions to PAID and has treatment sessions
-  if (newStatus === "PAID" && invoice.treatmentSessions.length > 0) {
-    await generateCommission(invoiceId);
+  if (newStatus === "PAID") {
+    await handleInvoicePaid(invoiceId, userId);
   }
 
-  return payment;
+  // Fresh read — reflects final invoice status after all side-effects commit
+  return findPaymentById(payment.id);
 };
 
 module.exports = { listPayments, getPaymentById, createPayment };

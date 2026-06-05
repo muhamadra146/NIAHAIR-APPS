@@ -24,13 +24,12 @@ const findInvoiceForPayment = (id) =>
   prisma.invoice.findUnique({
     where: { id },
     select: {
-      id:               true,
-      status:           true,
-      paidAmount:       true,
+      id:                true,
+      status:            true,
+      paidAmount:        true,
       outstandingAmount: true,
-      grandTotal:       true,
-      totalDeposit:     true,
-      treatmentSessions: { select: { id: true } },
+      grandTotal:        true,
+      totalDeposit:      true,
     },
   });
 
@@ -38,6 +37,77 @@ const findPaymentMethodById = (id) =>
   prisma.paymentMethod.findUnique({
     where: { id },
     select: { id: true, name: true, isActive: true },
+  });
+
+// Fetch invoice with relations needed for post-payment completion
+const findInvoiceWithRelations = (id) =>
+  prisma.invoice.findUnique({
+    where: { id },
+    select: {
+      id:            true,
+      appointmentId: true,
+      treatmentSessions: {
+        select: { id: true, completedAt: true },
+      },
+      appointment: {
+        select: { id: true, status: true },
+      },
+    },
+  });
+
+// Complete sessions + appointment in one atomic operation
+const completeInvoiceRelations = ({ sessionIds, appointmentId, oldAppointmentStatus, userId }) =>
+  prisma.$transaction(async (tx) => {
+    if (sessionIds.length > 0) {
+      await tx.treatmentSession.updateMany({
+        where: { id: { in: sessionIds } },
+        data:  { completedAt: new Date() },
+      });
+    }
+
+    if (appointmentId && oldAppointmentStatus) {
+      await tx.appointment.update({
+        where: { id: appointmentId },
+        data:  { status: "COMPLETED" },
+      });
+
+      await tx.appointmentStatusHistory.create({
+        data: {
+          appointmentId,
+          oldStatus:  oldAppointmentStatus,
+          newStatus:  "COMPLETED",
+          notes:      "Auto completed after invoice paid",
+          createdBy:  userId ?? null,
+        },
+      });
+    }
+  });
+
+// Fresh read after all side-effects commit — richer invoice fields than INCLUDE
+const findPaymentById = (id) =>
+  prisma.payment.findUnique({
+    where: { id },
+    select: {
+      id:          true,
+      paymentNo:   true,
+      amount:      true,
+      paymentDate: true,
+      referenceNo: true,
+      notes:       true,
+      invoice: {
+        select: {
+          id:                true,
+          invoiceNo:         true,
+          status:            true,
+          grandTotal:        true,
+          paidAmount:        true,
+          outstandingAmount: true,
+        },
+      },
+      paymentMethod: {
+        select: { id: true, name: true, code: true },
+      },
+    },
   });
 
 // ── Create (atomic) ───────────────────────────────────────────────────
@@ -82,8 +152,11 @@ module.exports = {
   findAll,
   count,
   findById,
+  findPaymentById,
   countToday,
   findInvoiceForPayment,
   findPaymentMethodById,
+  findInvoiceWithRelations,
+  completeInvoiceRelations,
   createWithTransaction,
 };

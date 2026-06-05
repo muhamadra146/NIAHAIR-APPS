@@ -617,6 +617,8 @@ model StockMovement {
 
   itemId String
 
+  invoiceItemId String?
+
   type StockMovementType
 
   qty Decimal @db.Decimal(18, 6)
@@ -637,8 +639,12 @@ model StockMovement {
 
   item Item @relation(fields: [itemId], references: [id])
 
+  invoiceItem InvoiceItem? @relation(fields: [invoiceItemId], references: [id])
+
+  @@unique([referenceType, referenceId, invoiceItemId])
   @@index([warehouseId])
   @@index([itemId])
+  @@index([invoiceItemId])
   @@index([referenceType, referenceId])
   @@map("stock_movements")
 }
@@ -1072,7 +1078,8 @@ model InvoiceItem {
 
   unit Unit @relation(fields: [unitId], references: [id])
 
-  commissions Commission[]
+  commissions    Commission[]
+  stockMovements StockMovement[]
 
   @@index([invoiceId])
   @@index([itemId])

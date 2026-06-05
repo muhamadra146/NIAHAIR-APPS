@@ -2,6 +2,7 @@ const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const { handleInvoicePaid }        = require("./invoice.workflow");
 const {
   findAll,
   count,
@@ -221,13 +222,20 @@ const createInvoice = async (body, userId) => {
     notes:             notes ?? null,
   };
 
-  return createWithTransaction({
+  const invoice = await createWithTransaction({
     invoiceData,
     itemsData,
     sessionIds:   treatmentSessionIds ?? [],
     depositsData,
     userId,
   });
+
+  // Deposit fully covered the invoice — trigger same workflow as payment path
+  if (invoice.status === "PAID") {
+    await handleInvoicePaid(invoice.id, userId);
+  }
+
+  return invoice;
 };
 
 // ── Cancel ────────────────────────────────────────────────────────────
