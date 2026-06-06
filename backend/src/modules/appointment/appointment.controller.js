@@ -27,7 +27,11 @@ const getByIdController = async (req, res, next) => {
 
 const createController = async (req, res, next) => {
   try {
-    const result = await createAppointment(req.body, req.user.id);
+    const result = await createAppointment(
+      { ...req.body, branchId: req.branchId },
+      req.user.id,
+      req.user.employeeId ?? null
+    );
     return created(res, result, "Appointment created");
   } catch (err) {
     next(err);

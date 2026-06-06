@@ -2,10 +2,12 @@ const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { accurateRequest } = require("../accurate/accurate.client");
 const { mapAccurateToCustomer } = require("./customer.sync.mapper");
-const { findByAccurateId, createFromAccurate, updateByAccurateId } = require("./customer.sync.repository");
+const { findByAccurateId, createFromAccurate, updateByAccurateId, deactivateMissingFromAccurate } = require("./customer.sync.repository");
 
-const ACCURATE_CUSTOMER_LIST = "/customer/list.do";
-const ACCURATE_FIELDS = "id,name,no,email,mobilePhone,whatsapp,address,city,province,suspended";
+const ACCURATE_CUSTOMER_LIST   = "/customer/list.do";
+const ACCURATE_CUSTOMER_DETAIL = (id) => `/customer/detail.do?id=${id}`;
+// list.do only provides IDs for pagination — detail.do is the authoritative source.
+const ACCURATE_FIELDS = "id";
 
 const syncCustomersFromAccurate = async () => {
   let page = 1;
@@ -68,7 +70,16 @@ const syncCustomersFromAccurate = async () => {
       processedIds.add(accurateId);
 
       try {
-        const mapped = mapAccurateToCustomer(item);
+        // list.do does not return full customer detail (customerNo, address, etc.).
+        // Fetch the authoritative record from detail.do before mapping.
+        const detailRes = await accurateRequest(ACCURATE_CUSTOMER_DETAIL(accurateId));
+        if (!detailRes.s || !detailRes.d) {
+          console.error(`[accurate customer sync] detail.do failed id=${accurateId}`, detailRes);
+          failed++;
+          continue;
+        }
+
+        const mapped = mapAccurateToCustomer(detailRes.d);
 
         // Track active/inactive before any DB write so counts are honest
         // even if the write fails.
@@ -82,9 +93,14 @@ const syncCustomersFromAccurate = async () => {
         const existing = await findByAccurateId(accurateId);
 
         if (existing) {
-          // Row existed before this sync — this is a real update.
+          // Accurate owns all fields except birthDate, gender, membershipId.
+          // - accurateCustomerId: the lookup key — never re-written.
+          // - syncSource: preserve LOCAL for website-created customers; do not
+          //   let an Accurate sync overwrite it to ACCURATE.
+          // birthDate, gender, membershipId are absent from the mapper, so
+          // updateData is already safe to apply in full.
+          const { accurateCustomerId, syncSource, ...updateData } = mapped;
           console.log("UPDATE:", accurateId, existing.id);
-          const { accurateCustomerId, ...updateData } = mapped;
           await updateByAccurateId(accurateId, updateData);
           updated++;
         } else {
@@ -94,6 +110,7 @@ const syncCustomersFromAccurate = async () => {
           created++;
         }
       } catch (_err) {
+        console.error(`[accurate customer sync] error processing id=${accurateId}`, _err.message);
         failed++;
       }
     }
@@ -102,7 +119,7 @@ const syncCustomersFromAccurate = async () => {
   } while (page <= pageCount);
 
   // ── Task 1: duplicate ID analysis ────────────────────────────────────────
-  const uniqueAccurateIds = new Set(accurateIds.filter(Boolean));
+  const uniqueAccurateIds = new Set(accurateIds.filter(Boolean).map(Number));
   console.log({
     totalFromAccurate: accurateIds.length,
     uniqueFromAccurate: uniqueAccurateIds.size,
@@ -121,6 +138,19 @@ const syncCustomersFromAccurate = async () => {
   }
   // ─────────────────────────────────────────────────────────────────────────
 
+  // ── Task 5: soft-delete customers that are no longer in Accurate ──────────
+  // Guard: skip deactivation if the list is empty — an unexpectedly empty
+  // Accurate response must not mass-deactivate all local customers.
+  let deactivated = 0;
+  if (uniqueAccurateIds.size > 0) {
+    const result = await deactivateMissingFromAccurate(Array.from(uniqueAccurateIds));
+    deactivated = result.count;
+    if (deactivated > 0) {
+      console.log("DEACTIVATED (no longer in Accurate):", deactivated);
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Task 4: final validation log.
   const totalProcessed = created + updated + skippedDuplicate + failed;
   console.log("SYNC COMPLETE", {
@@ -132,10 +162,11 @@ const syncCustomersFromAccurate = async () => {
     failed,
     active,
     inactive,
+    deactivated,
     totalProcessed,
   });
 
-  return { created, updated, skippedDuplicate, failed, active, inactive };
+  return { created, updated, skippedDuplicate, failed, active, inactive, deactivated };
 };
 
 module.exports = { syncCustomersFromAccurate };

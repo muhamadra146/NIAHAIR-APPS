@@ -7,7 +7,6 @@ const {
   findById,
   findByEmployeeCode,
   findByEmail,
-  findBranchById,
   findRoleById,
   create,
   update,
@@ -49,9 +48,6 @@ const getById = async (id) => {
 };
 
 const createEmployee = async (body) => {
-  const branch = await findBranchById(body.branchId);
-  if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
-
   const role = await findRoleById(body.roleId);
   if (!role) throw new AppError("Employee role not found", StatusCodes.NOT_FOUND);
 
@@ -74,11 +70,6 @@ const createEmployee = async (body) => {
 const updateEmployee = async (id, body) => {
   const employee = await findById(id);
   if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
-
-  if (body.branchId && body.branchId !== employee.branchId) {
-    const branch = await findBranchById(body.branchId);
-    if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
-  }
 
   if (body.roleId && body.roleId !== employee.roleId) {
     const role = await findRoleById(body.roleId);

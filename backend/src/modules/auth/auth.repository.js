@@ -1,28 +1,52 @@
 const prisma = require("../../config/prisma");
 
-const findUserByEmail = (email) => {
-  return prisma.user.findUnique({
+const EMPLOYEE_BRANCH_SELECT = {
+  select: {
+    id:        true,
+    isPrimary: true,
+    isActive:  true,
+    branch:    { select: { id: true, code: true, name: true } },
+  },
+  where: { isActive: true },
+  orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+};
+
+const findUserByEmail = (email) =>
+  prisma.user.findUnique({
     where: { email },
     include: {
       role: true,
-      branch: { select: { id: true, code: true, name: true } },
+      employee: {
+        select: {
+          id:               true,
+          name:             true,
+          employeeCode:     true,
+          role:             { select: { code: true, name: true } },
+          employeeBranches: EMPLOYEE_BRANCH_SELECT,
+        },
+      },
     },
   });
-};
 
-const findUserById = (id) => {
-  return prisma.user.findUnique({
+const findUserById = (id) =>
+  prisma.user.findUnique({
     where: { id },
     select: {
-      id: true,
-      email: true,
-      name: true,
-      branchId: true,
-      isActive: true,
-      role: { select: { id: true, code: true, name: true } },
-      branch: { select: { id: true, code: true, name: true } },
+      id:         true,
+      email:      true,
+      employeeId: true,
+      isActive:   true,
+      role:     { select: { id: true, code: true, name: true } },
+      employee: {
+        select: {
+          id:               true,
+          name:             true,
+          employeeCode:     true,
+          role:             { select: { code: true, name: true } },
+          employeeBranches: EMPLOYEE_BRANCH_SELECT,
+        },
+      },
     },
   });
-};
 
 module.exports = { findUserByEmail, findUserById };

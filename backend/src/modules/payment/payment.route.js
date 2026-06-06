@@ -1,7 +1,8 @@
 const { Router }   = require("express");
-const authenticate = require("../../middlewares/auth.middleware");
-const authorize    = require("../../middlewares/role.middleware");
-const validate     = require("../../middlewares/validate.middleware");
+const authenticate  = require("../../middlewares/auth.middleware");
+const authorize     = require("../../middlewares/role.middleware");
+const validate      = require("../../middlewares/validate.middleware");
+const requireBranch = require("../../middlewares/branch.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
 const { createPaymentSchema } = require("./payment.validation");
 const {
@@ -20,6 +21,7 @@ router.get("/:id", authenticate, getByIdController);
 router.post(
   "/",
   authenticate,
+  requireBranch,
   authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
   validate(createPaymentSchema),
   createController

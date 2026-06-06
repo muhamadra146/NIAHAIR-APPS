@@ -6,7 +6,6 @@ const APPOINTMENT_STATUSES = [
 
 const createAppointmentSchema = object({
   customerId:     pipe(string(), minLength(1, "customerId is required")),
-  branchId:       pipe(string(), minLength(1, "branchId is required")),
   visitDate:      pipe(string(), minLength(1, "visitDate is required")),
   startTime:      pipe(string(), minLength(1, "startTime is required")),
   endTime:        pipe(string(), minLength(1, "endTime is required")),

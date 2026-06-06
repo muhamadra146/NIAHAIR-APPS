@@ -2,7 +2,7 @@ const { object, string, array, optional, pipe, minLength, number, minValue } = r
 
 const createInvoiceSchema = object({
   customerId:          pipe(string(), minLength(1, "customerId is required")),
-  branchId:            pipe(string(), minLength(1, "branchId is required")),
+  branchId:            optional(string()),   // deprecated: injected from X-Branch-Id header
   appointmentId:       optional(string()),
   treatmentSessionIds: optional(array(string())),
   depositIds:          optional(array(string())),

@@ -29,6 +29,10 @@ const depositRouter                 = require("./modules/deposit/deposit.route")
 const paymentMethodRouter           = require("./modules/paymentMethod/paymentMethod.route");
 const paymentRouter                 = require("./modules/payment/payment.route");
 const inventoryRouter               = require("./modules/inventory/inventory.route");
+const warehouseRouter               = require("./modules/warehouse/warehouse.route");
+const userRouter                    = require("./modules/user/user.route");
+const userRoleRouter                = require("./modules/userRole/userRole.route");
+const syncQueueRouter               = require("./modules/syncQueue/syncQueue.route");
 
 
 const app = express();
@@ -88,14 +92,21 @@ app.use("/payment-methods",                      paymentMethodRouter);
 app.use("/invoices/:invoiceId/payments",         paymentRouter);
 app.use("/payments",                             paymentRouter);
 app.use("/inventory",                            inventoryRouter);
+app.use("/warehouses",                           warehouseRouter);
+app.use("/users",                                userRouter);
+app.use("/user-roles",                           userRoleRouter);
+app.use("/sync-queues",                          syncQueueRouter);
 
 
 // global error handler — must be last
 app.use(errorHandler);
 
 
+const { startWorkers } = require("./workers");
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
     console.log(`Server running on ${PORT}`);
+    startWorkers();
 });

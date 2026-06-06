@@ -70,7 +70,12 @@ const generateStockMovement = async (invoiceId) => {
     if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
 
     const warehouse = await findWarehouseByBranchId(invoice.branchId);
-    if (!warehouse) return { created: 0 };  // branch has no warehouse — skip silently
+    if (!warehouse) {
+      throw new AppError(
+        `Branch ${invoice.branchId} has no mapped warehouse — sync warehouses from Accurate and map via PUT /warehouses/:id/branch`,
+        StatusCodes.UNPROCESSABLE_ENTITY
+      );
+    }
 
     let created = 0;
 

@@ -29,7 +29,12 @@ const createController = async (req, res, next) => {
   try {
     // appointmentId comes from the parent route param
     // (mergeParams: true ensures it is available here)
-    const result = await createDeposit({ appointmentId: req.params.appointmentId, ...req.body });
+    const result = await createDeposit({
+      appointmentId:      req.params.appointmentId,
+      ...req.body,
+      branchId:            req.branchId,
+      createdByEmployeeId: req.user.employeeId ?? null,
+    });
     return created(res, result, "Deposit created");
   } catch (err) {
     next(err);

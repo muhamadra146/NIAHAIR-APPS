@@ -2,6 +2,7 @@ const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const { createSyncJob } = require("../syncQueue/syncQueue.service");
 const {
   findAll,
   count,
@@ -63,7 +64,7 @@ const getDepositById = async (id) => {
 
 // ── Create ────────────────────────────────────────────────────────────
 
-const createDeposit = async ({ appointmentId, paymentMethodId, amount, paidAt, notes }) => {
+const createDeposit = async ({ appointmentId, paymentMethodId, amount, paidAt, notes, branchId, createdByEmployeeId }) => {
   if (!appointmentId) {
     throw new AppError("appointmentId is required", StatusCodes.BAD_REQUEST);
   }
@@ -80,10 +81,19 @@ const createDeposit = async ({ appointmentId, paymentMethodId, amount, paidAt, n
   const deposit = await create({
     appointmentId,
     paymentMethodId,
+    branchId,
+    createdByEmployeeId: createdByEmployeeId ?? null,
     amount:  D(amount),
     status:  "PAID",
     paidAt:  paidAt ? new Date(paidAt) : new Date(),
     notes:   notes ?? null,
+  });
+
+  // Queue Accurate push — worker picks it up asynchronously
+  await createSyncJob({
+    entityType: "DEPOSIT",
+    entityId:   deposit.id,
+    direction:  "APP_TO_ACCURATE",
   });
 
   return withComputed(deposit);

@@ -23,8 +23,12 @@ const getByIdController = async (req, res, next) => {
 
 const createController = async (req, res, next) => {
   try {
-    const invoiceId = req.params.invoiceId;
-    const result = await createPayment({ invoiceId, ...req.body }, req.user.id);
+    const result = await createPayment({
+      invoiceId:           req.params.invoiceId,
+      ...req.body,
+      branchId:            req.branchId,
+      createdByEmployeeId: req.user.employeeId ?? null,
+    }, req.user.id);
     return created(res, result, "Payment created");
   } catch (err) {
     next(err);

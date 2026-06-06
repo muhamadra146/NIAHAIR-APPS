@@ -26,7 +26,7 @@ const getByIdController = async (req, res, next) => {
 
 const createController = async (req, res, next) => {
   try {
-    const result = await createInvoice(req.body, req.user.id);
+    const result = await createInvoice(req.body, req.user.id, req.branchId, req.user.employeeId ?? null);
     return created(res, result, "Invoice created");
   } catch (err) {
     next(err);

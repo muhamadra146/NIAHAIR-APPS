@@ -1,5 +1,6 @@
 const { success } = require("../../common/responses/apiResponse");
 const { listStockMovements, listInventories } = require("./inventory.service");
+const { syncInventoryFromAccurate }           = require("./inventory.sync.service");
 
 const getMovementsController = async (req, res, next) => {
   try {
@@ -19,4 +20,11 @@ const getInventoriesController = async (req, res, next) => {
   }
 };
 
-module.exports = { getMovementsController, getInventoriesController };
+const syncController = async (req, res, next) => {
+  try {
+    const result = await syncInventoryFromAccurate();
+    return success(res, result, "Inventory synced from Accurate");
+  } catch (err) { next(err); }
+};
+
+module.exports = { getMovementsController, getInventoriesController, syncController };

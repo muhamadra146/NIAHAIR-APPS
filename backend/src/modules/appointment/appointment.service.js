@@ -77,7 +77,7 @@ const getAppointmentById = async (id) => {
 
 // ── Create ────────────────────────────────────────────────────────────
 
-const createAppointment = async (body, userId) => {
+const createAppointment = async (body, userId, createdByEmployeeId = null) => {
   const { customerId, branchId, visitDate, startTime, endTime, notes, estimatedTotal } = body;
 
   const customer = await findCustomerById(customerId);
@@ -92,13 +92,14 @@ const createAppointment = async (body, userId) => {
     customerId,
     branchId,
     bookingNo,
-    bookingDate:    new Date(),
-    visitDate:      new Date(visitDate),
-    startTime:      new Date(startTime),
-    endTime:        new Date(endTime),
-    status:         "BOOKED",
-    notes:          notes ?? null,
-    estimatedTotal: estimatedTotal !== undefined ? String(estimatedTotal) : null,
+    bookingDate:         new Date(),
+    visitDate:           new Date(visitDate),
+    startTime:           new Date(startTime),
+    endTime:             new Date(endTime),
+    status:              "BOOKED",
+    notes:               notes ?? null,
+    estimatedTotal:      estimatedTotal !== undefined ? String(estimatedTotal) : null,
+    createdByEmployeeId: createdByEmployeeId ?? null,
   };
 
   return createWithTransaction({ appointmentData, userId });

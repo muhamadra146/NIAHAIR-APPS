@@ -1,8 +1,10 @@
 const prisma = require("../../config/prisma");
 
 const INCLUDE = {
-  invoice:       { select: { id: true, invoiceNo: true, status: true, grandTotal: true } },
-  paymentMethod: { select: { id: true, name: true, code: true } },
+  invoice:           { select: { id: true, invoiceNo: true, status: true, grandTotal: true } },
+  paymentMethod:     { select: { id: true, name: true, code: true } },
+  branch:            { select: { id: true, code: true, name: true } },
+  createdByEmployee: { select: { id: true, employeeCode: true, name: true } },
 };
 
 // ── List / single ─────────────────────────────────────────────────────
@@ -26,6 +28,7 @@ const findInvoiceForPayment = (id) =>
     select: {
       id:                true,
       status:            true,
+      branchId:          true,
       paidAmount:        true,
       outstandingAmount: true,
       grandTotal:        true,

@@ -11,12 +11,14 @@ const {
   updateController,
 } = require("./customer.controller");
 const { syncFromAccurateController } = require("./customer.sync.controller");
-const { syncToAccurateController } = require("./customer.push.controller");
+const { syncToAccurateController, repairCustomerNoController, retryCustomerSyncController } = require("./customer.push.controller");
 
 const router = Router();
 
 // Sync — must be declared before /:id routes to prevent "sync" matching as an id param
-router.post("/sync/accurate", authenticate, authorize(ROLES.SUPER_ADMIN), syncFromAccurateController);
+router.post("/sync/accurate",        authenticate, authorize(ROLES.SUPER_ADMIN), syncFromAccurateController);
+router.post("/repair/customer-no",   authenticate, authorize(ROLES.SUPER_ADMIN), repairCustomerNoController);
+router.post("/retry/accurate-sync",  authenticate, authorize(ROLES.SUPER_ADMIN), retryCustomerSyncController);
 
 // CRUD
 router.get("/", authenticate, getAllController);

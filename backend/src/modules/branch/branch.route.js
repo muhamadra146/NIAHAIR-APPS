@@ -10,12 +10,7 @@ const {
   createController,
   updateController,
 } = require("./branch.controller");
-const { syncFromAccurateController } = require("./branch.sync.controller");
-
 const router = Router();
-
-// Static routes first — prevents "sync" from being captured as :id
-router.post("/sync/accurate", authenticate, authorize(ROLES.SUPER_ADMIN), syncFromAccurateController);
 
 // CRUD routes
 router.get("/", authenticate, getAllController);

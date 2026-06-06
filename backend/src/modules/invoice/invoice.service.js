@@ -3,6 +3,7 @@ const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { handleInvoicePaid }        = require("./invoice.workflow");
+const { createSyncJob }            = require("../syncQueue/syncQueue.service");
 const {
   findAll,
   count,
@@ -70,8 +71,8 @@ const buildInvoiceNo = async () => {
 
 // ── Create ────────────────────────────────────────────────────────────
 
-const createInvoice = async (body, userId) => {
-  const { customerId, branchId, appointmentId, treatmentSessionIds, depositIds, items, notes } = body;
+const createInvoice = async (body, userId, branchId, createdByEmployeeId = null) => {
+  const { customerId, appointmentId, treatmentSessionIds, depositIds, items, notes } = body;
 
   const customer = await findCustomerById(customerId);
   if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
@@ -209,17 +210,18 @@ const createInvoice = async (body, userId) => {
   const invoiceData = {
     customerId,
     branchId,
-    appointmentId:     appointmentId ?? null,
+    appointmentId:       appointmentId ?? null,
     invoiceNo,
-    invoiceDate:       new Date(),
-    subtotal:          totalSubtotal,
+    invoiceDate:         new Date(),
+    subtotal:            totalSubtotal,
     totalDiscount,
     totalDeposit,
     grandTotal,
-    paidAmount:        D("0"),
+    paidAmount:          D("0"),
     outstandingAmount,
-    status:            invoiceStatus,
-    notes:             notes ?? null,
+    status:              invoiceStatus,
+    notes:               notes ?? null,
+    createdByEmployeeId: createdByEmployeeId ?? null,
   };
 
   const invoice = await createWithTransaction({
@@ -234,6 +236,13 @@ const createInvoice = async (body, userId) => {
   if (invoice.status === "PAID") {
     await handleInvoicePaid(invoice.id, userId);
   }
+
+  // Queue Accurate push — worker picks it up asynchronously
+  await createSyncJob({
+    entityType: "INVOICE",
+    entityId:   invoice.id,
+    direction:  "APP_TO_ACCURATE",
+  });
 
   return invoice;
 };

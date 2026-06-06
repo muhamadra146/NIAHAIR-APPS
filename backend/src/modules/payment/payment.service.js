@@ -62,7 +62,7 @@ const getPaymentById = async (id) => {
 // ── Create ────────────────────────────────────────────────────────────
 
 const createPayment = async (
-  { invoiceId, paymentMethodId, amount, paymentDate, referenceNo, notes },
+  { invoiceId, paymentMethodId, amount, paymentDate, referenceNo, notes, branchId, createdByEmployeeId },
   userId
 ) => {
   if (!invoiceId) {
@@ -77,6 +77,14 @@ const createPayment = async (
   }
   if (invoice.status === "PAID") {
     throw new AppError("Invoice is already fully paid", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
+  // Branch must match invoice — prevents cross-branch payment
+  if (branchId && invoice.branchId !== branchId) {
+    throw new AppError(
+      `Branch mismatch: payment branch does not match invoice branch`,
+      StatusCodes.FORBIDDEN
+    );
   }
 
   const paymentMethod = await findPaymentMethodById(paymentMethodId);
@@ -101,10 +109,12 @@ const createPayment = async (
     invoiceId,
     paymentMethodId,
     paymentNo,
-    amount:      D(amount),
-    paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
-    referenceNo: referenceNo ?? null,
-    notes:       notes       ?? null,
+    amount:              D(amount),
+    paymentDate:         paymentDate ? new Date(paymentDate) : new Date(),
+    referenceNo:         referenceNo ?? null,
+    notes:               notes       ?? null,
+    branchId:            branchId ?? invoice.branchId,
+    createdByEmployeeId: createdByEmployeeId ?? null,
   };
 
   const payment = await createWithTransaction({

@@ -3,10 +3,12 @@ const prisma = require("../../config/prisma");
 const INCLUDE = {
   appointment: {
     include: {
-      customer: { select: { id: true, name: true, customerNo: true, mobilePhone: true } },
+      customer: { select: { id: true, name: true, customerNo: true, mobilePhone: true, accurateCustomerId: true } },
     },
   },
-  paymentMethod: { select: { id: true, name: true, code: true } },
+  paymentMethod:     { select: { id: true, name: true, code: true } },
+  branch:            { select: { id: true, code: true, name: true } },
+  createdByEmployee: { select: { id: true, employeeCode: true, name: true } },
   invoiceDeposits: {
     include: {
       invoice: { select: { id: true, invoiceNo: true, status: true, grandTotal: true } },

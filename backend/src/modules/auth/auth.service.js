@@ -17,11 +17,10 @@ const login = async ({ email, password }) => {
   }
 
   const payload = {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    roleCode: user.role.code,
-    branchId: user.branchId,
+    id:         user.id,
+    email:      user.email,
+    roleCode:   user.role.code,
+    employeeId: user.employeeId,
   };
 
   const token = jwt.sign(payload, process.env.JWT_SECRET, {
@@ -32,7 +31,9 @@ const login = async ({ email, password }) => {
     token,
     user: {
       ...payload,
-      branch: user.branch,
+      role:     user.role,
+      employee: user.employee,
+      branches: user.employee?.employeeBranches ?? [],
     },
   };
 };
@@ -45,13 +46,13 @@ const getMe = async (userId) => {
   }
 
   return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    roleCode: user.role.code,
-    branchId: user.branchId,
-    role: user.role,
-    branch: user.branch,
+    id:         user.id,
+    email:      user.email,
+    roleCode:   user.role.code,
+    employeeId: user.employeeId,
+    role:       user.role,
+    employee:   user.employee,
+    branches:   user.employee?.employeeBranches ?? [],
   };
 };
 

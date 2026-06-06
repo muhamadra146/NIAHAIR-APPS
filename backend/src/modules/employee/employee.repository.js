@@ -1,27 +1,16 @@
 const prisma = require("../../config/prisma");
 
+const INCLUDE = {
+  role: { select: { id: true, code: true, name: true } },
+};
+
 const findAll = ({ skip, take, where }) =>
-  prisma.employee.findMany({
-    skip,
-    take,
-    where,
-    orderBy: { createdAt: "desc" },
-    include: {
-      branch: { select: { id: true, name: true } },
-      role: { select: { id: true, code: true, name: true } },
-    },
-  });
+  prisma.employee.findMany({ skip, take, where, orderBy: { createdAt: "desc" }, include: INCLUDE });
 
 const count = (where) => prisma.employee.count({ where });
 
 const findById = (id) =>
-  prisma.employee.findUnique({
-    where: { id },
-    include: {
-      branch: { select: { id: true, name: true } },
-      role: { select: { id: true, code: true, name: true } },
-    },
-  });
+  prisma.employee.findUnique({ where: { id }, include: INCLUDE });
 
 const findByEmployeeCode = (employeeCode) =>
   prisma.employee.findUnique({ where: { employeeCode } });
@@ -29,43 +18,35 @@ const findByEmployeeCode = (employeeCode) =>
 const findByEmail = (email) =>
   prisma.employee.findUnique({ where: { email } });
 
-const findBranchById = (id) =>
-  prisma.branch.findUnique({ where: { id }, select: { id: true } });
-
 const findRoleById = (id) =>
   prisma.employeeRole.findUnique({ where: { id }, select: { id: true } });
 
 const create = (data) => {
-  const { branchId, roleId, ...employeeData } = data;
-
+  const { roleId, ...employeeData } = data;
   return prisma.employee.create({
     data: {
       ...employeeData,
-      branch: { connect: { id: branchId } },
-      role:   { connect: { id: roleId } },
+      role: { connect: { id: roleId } },
     },
-    include: {
-      branch: { select: { id: true, name: true } },
-      role: { select: { id: true, code: true, name: true } },
-    },
+    include: INCLUDE,
   });
 };
 
 const update = (id, data) => {
-  const { branchId, roleId, ...rest } = data;
-
+  const { roleId, ...rest } = data;
   return prisma.employee.update({
     where: { id },
     data: {
       ...rest,
-      ...(branchId && { branch: { connect: { id: branchId } } }),
       ...(roleId && { role: { connect: { id: roleId } } }),
     },
-    include: {
-      branch: { select: { id: true, name: true } },
-      role: { select: { id: true, code: true, name: true } },
-    },
+    include: INCLUDE,
   });
 };
 
-module.exports = { findAll, count, findById, findByEmployeeCode, findByEmail, findBranchById, findRoleById, create, update };
+module.exports = {
+  findAll, count, findById,
+  findByEmployeeCode, findByEmail,
+  findRoleById,
+  create, update,
+};

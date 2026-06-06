@@ -1,8 +1,9 @@
 const prisma = require("../../config/prisma");
 
 const INCLUDE = {
-  customer: { select: { id: true, name: true, customerNo: true } },
-  branch:   { select: { id: true, name: true, code: true } },
+  customer:          { select: { id: true, name: true, customerNo: true } },
+  branch:            { select: { id: true, code: true, name: true } },
+  createdByEmployee: { select: { id: true, employeeCode: true, name: true } },
   items: {
     include: {
       item: { select: { id: true, name: true, itemCode: true, itemType: true } },

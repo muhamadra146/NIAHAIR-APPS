@@ -9,9 +9,9 @@ const {
   create,
   update,
 } = require("./customer.repository");
-const { pushCustomerToAccurate } = require("./customer.push.service");
+const { createSyncJob } = require("../syncQueue/syncQueue.service");
 
-const getAll = async ({ page, limit, search, isActive }) => {
+const getAll = async ({ page, limit, search, isActive, syncStatus }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
@@ -27,6 +27,8 @@ const getAll = async ({ page, limit, search, isActive }) => {
   if (isActive !== undefined && isActive !== "") {
     where.isActive = isActive === "true" || isActive === true;
   }
+
+  if (syncStatus) where.syncStatus = syncStatus;
 
   const [customers, total] = await Promise.all([
     findAll({ skip, take, where }),
@@ -57,14 +59,14 @@ const createCustomer = async (body) => {
 
   const customer = await create(body);
 
-  // TODO: move to background sync job
-  try {
-    await pushCustomerToAccurate(customer.id);
-    const synced = await findById(customer.id);
-    return { customer: synced, message: "Customer created and synced to Accurate" };
-  } catch (_err) {
-    return { customer, message: "Customer created but pending Accurate sync" };
-  }
+  // Queue Accurate push — worker picks it up asynchronously
+  await createSyncJob({
+    entityType: "CUSTOMER",
+    entityId:   customer.id,
+    direction:  "APP_TO_ACCURATE",
+  });
+
+  return { customer, message: "Customer created, sync queued" };
 };
 
 const updateCustomer = async (id, body) => {

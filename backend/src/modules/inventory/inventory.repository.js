@@ -2,12 +2,12 @@ const prisma = require("../../config/prisma");
 
 const MOVEMENT_INCLUDE = {
   item:      { select: { id: true, name: true, itemCode: true, itemType: true } },
-  warehouse: { select: { id: true, name: true, code: true } },
+  warehouse: { select: { id: true, name: true } },
 };
 
 const INVENTORY_INCLUDE = {
   item:      { select: { id: true, name: true, itemCode: true, itemType: true } },
-  warehouse: { select: { id: true, name: true, code: true } },
+  warehouse: { select: { id: true, name: true } },
 };
 
 // ── Stock movements ───────────────────────────────────────────────────
@@ -64,7 +64,7 @@ const findInvoiceForStockMovement = (invoiceId) =>
 const findWarehouseByBranchId = (branchId) =>
   prisma.warehouse.findFirst({
     where:  { branchId, isActive: true },
-    select: { id: true, branchId: true },
+    select: { id: true, branchId: true, accurateWarehouseId: true },
   });
 
 module.exports = {
