@@ -1,5 +1,4 @@
-const { generateCommission }       = require("../commission/commission.service");
-const { generateStockMovement }    = require("../inventory/inventory.service");
+const { generateCommission } = require("../commission/commission.service");
 const {
   findInvoiceWithRelations,
   completeInvoiceRelations,
@@ -34,11 +33,11 @@ const completeInvoiceWorkflow = async (invoiceId, userId) => {
   }
 };
 
-// Order: sessions/appointment → commission → stock
+// Order: sessions/appointment → commission
+// Stock movement is generated at invoice creation — not here
 const handleInvoicePaid = async (invoiceId, userId) => {
   await completeInvoiceWorkflow(invoiceId, userId);
   await generateCommission(invoiceId);
-  await generateStockMovement(invoiceId);
 };
 
 module.exports = { handleInvoicePaid };

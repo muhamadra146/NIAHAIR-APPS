@@ -4,6 +4,7 @@ const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { handleInvoicePaid }        = require("./invoice.workflow");
 const { createSyncJob }            = require("../syncQueue/syncQueue.service");
+const { generateStockMovement }    = require("../inventory/inventory.service");
 const {
   findAll,
   count,
@@ -231,6 +232,9 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
     depositsData,
     userId,
   });
+
+  // Stock OUT on invoice creation — physical goods are consumed at this point
+  await generateStockMovement(invoice.id);
 
   // Deposit fully covered the invoice — trigger same workflow as payment path
   if (invoice.status === "PAID") {
