@@ -2,6 +2,7 @@ const { findPending, markProcessing, markSuccess, markFailed } = require("../mod
 const { pushCustomerToAccurate }  = require("../modules/customer/customer.push.service");
 const { syncDepositToAccurate }   = require("../modules/deposit/deposit.sync.service");
 const { syncInvoiceToAccurate }   = require("../modules/invoice/invoice.sync.service");
+const { syncPaymentToAccurate }   = require("../modules/payment/payment.sync.service");
 
 // ── Overlap guard — prevents concurrent execution ─────────────────────
 let running = false;
@@ -31,7 +32,11 @@ const HANDLERS = {
       await syncInvoiceToAccurate(job.entityId);
     }
   },
-  PAYMENT:    async (job) => { /* Phase 10G.2 */ },
+  PAYMENT: async (job) => {
+    if (job.direction === "APP_TO_ACCURATE") {
+      await syncPaymentToAccurate(job.entityId);
+    }
+  },
 };
 
 // ── Main processor ────────────────────────────────────────────────────

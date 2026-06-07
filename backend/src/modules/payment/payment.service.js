@@ -3,6 +3,7 @@ const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { handleInvoicePaid } = require("../invoice/invoice.workflow");
+const { createSyncJob }    = require("../syncQueue/syncQueue.service");
 const {
   findAll,
   count,
@@ -130,6 +131,13 @@ const createPayment = async (
   if (newStatus === "PAID") {
     await handleInvoicePaid(invoiceId, userId);
   }
+
+  // Queue Accurate push — worker picks it up asynchronously
+  await createSyncJob({
+    entityType: "PAYMENT",
+    entityId:   payment.id,
+    direction:  "APP_TO_ACCURATE",
+  });
 
   // Fresh read — reflects final invoice status after all side-effects commit
   return findPaymentById(payment.id);
