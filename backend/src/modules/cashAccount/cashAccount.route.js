@@ -3,16 +3,20 @@ const authenticate = require("../../middlewares/auth.middleware");
 const authorize    = require("../../middlewares/role.middleware");
 const validate     = require("../../middlewares/validate.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
-const { createPaymentMethodSchema, updatePaymentMethodSchema } = require("./paymentMethod.validation");
+const { createCashAccountSchema, updateCashAccountSchema } = require("./cashAccount.validation");
 const {
   getAllController,
   getByIdController,
   createController,
   updateController,
   deleteController,
-} = require("./paymentMethod.controller");
+  syncController,
+} = require("./cashAccount.controller");
 
 const router = Router();
+
+// Accurate sync — declared before /:id to avoid route shadowing
+router.post("/sync/accurate", authenticate, authorize(ROLES.SUPER_ADMIN), syncController);
 
 router.get("/",    authenticate, getAllController);
 router.get("/:id", authenticate, getByIdController);
@@ -21,7 +25,7 @@ router.post(
   "/",
   authenticate,
   authorize(ROLES.SUPER_ADMIN),
-  validate(createPaymentMethodSchema),
+  validate(createCashAccountSchema),
   createController
 );
 
@@ -29,7 +33,7 @@ router.put(
   "/:id",
   authenticate,
   authorize(ROLES.SUPER_ADMIN),
-  validate(updatePaymentMethodSchema),
+  validate(updateCashAccountSchema),
   updateController
 );
 

@@ -4,6 +4,7 @@ const {
   getPaymentMethodById,
   createPaymentMethod,
   updatePaymentMethod,
+  deletePaymentMethod,
 } = require("./paymentMethod.service");
 
 const getAllController = async (req, res, next) => {
@@ -42,4 +43,13 @@ const updateController = async (req, res, next) => {
   }
 };
 
-module.exports = { getAllController, getByIdController, createController, updateController };
+const deleteController = async (req, res, next) => {
+  try {
+    const result = await deletePaymentMethod(req.params.id);
+    return success(res, result, "Payment method deactivated");
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getAllController, getByIdController, createController, updateController, deleteController };

@@ -31,7 +31,11 @@ const createPaymentMethod = async (body) => {
   const existing = await findByCode(code);
   if (existing) throw new AppError("Payment method code already exists", StatusCodes.CONFLICT);
 
-  return create({ code, name: body.name });
+  return create({
+    code,
+    name:          body.name,
+    cashAccountId: body.cashAccountId ?? null,
+  });
 };
 
 const updatePaymentMethod = async (id, body) => {
@@ -39,8 +43,18 @@ const updatePaymentMethod = async (id, body) => {
   if (!pm) throw new AppError("Payment method not found", StatusCodes.NOT_FOUND);
 
   const data = {};
-  if (body.name     !== undefined) data.name     = body.name;
-  if (body.isActive !== undefined) data.isActive = body.isActive;
+  if (body.name          !== undefined) data.name          = body.name;
+  if (body.isActive      !== undefined) data.isActive      = body.isActive;
+  if (body.cashAccountId !== undefined) data.cashAccountId = body.cashAccountId ?? null;
+
+  if (body.code !== undefined) {
+    const code = body.code.toUpperCase();
+    const existing = await findByCode(code);
+    if (existing && existing.id !== id) {
+      throw new AppError("Payment method code already exists", StatusCodes.CONFLICT);
+    }
+    data.code = code;
+  }
 
   if (Object.keys(data).length === 0) {
     throw new AppError("No updatable fields provided", StatusCodes.UNPROCESSABLE_ENTITY);
@@ -49,4 +63,10 @@ const updatePaymentMethod = async (id, body) => {
   return update(id, data);
 };
 
-module.exports = { listPaymentMethods, getPaymentMethodById, createPaymentMethod, updatePaymentMethod };
+const deletePaymentMethod = async (id) => {
+  const pm = await findById(id);
+  if (!pm) throw new AppError("Payment method not found", StatusCodes.NOT_FOUND);
+  return update(id, { isActive: false });
+};
+
+module.exports = { listPaymentMethods, getPaymentMethodById, createPaymentMethod, updatePaymentMethod, deletePaymentMethod };

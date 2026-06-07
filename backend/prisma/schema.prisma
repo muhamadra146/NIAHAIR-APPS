@@ -1018,10 +1018,31 @@ model AppointmentStatusHistory {
   @@map("appointment_status_histories")
 }
 
+model CashAccount {
+  id String @id @default(uuid())
+
+  name String
+
+  code String @unique
+
+  accurateAccountId Int? @unique
+
+  accurateAccountNo String?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  paymentMethods PaymentMethod[]
+
+  @@map("cash_accounts")
+}
+
 model PaymentMethod {
   id String @id @default(uuid())
 
-  accuratePaymentMethodId Int?
+  cashAccountId String?
 
   code String @unique
 
@@ -1032,10 +1053,13 @@ model PaymentMethod {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  cashAccount CashAccount? @relation(fields: [cashAccountId], references: [id])
+
   payments Payment[]
 
   deposits Deposit[]
 
+  @@index([cashAccountId])
   @@map("payment_methods")
 }
 
