@@ -14,9 +14,19 @@ const formatDate = (date) => {
   return `${dd}/${mm}/${d.getFullYear()}`;
 };
 
+const buildDescription = (payment) => {
+  const lines = [
+    `Payment ${payment.paymentNo}`,
+    `Invoice ${payment.invoice.invoiceNo}`,
+  ];
+  if (payment.invoice.notes) lines.push(payment.invoice.notes);
+  return lines.join("\n");
+};
+
 const mapPaymentToAccurate = (payment) => ({
   customerNo:    payment.invoice.customer.customerNo,
   transDate:     formatDate(payment.paymentDate),
+  description:   buildDescription(payment),
   bankId:        payment.paymentMethod.cashAccount.accurateAccountId,
   paymentMethod: "BANK_TRANSFER",
   chequeAmount:  Number(payment.amount),

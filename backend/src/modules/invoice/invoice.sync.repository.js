@@ -10,6 +10,8 @@ const findInvoiceForSync = (id) =>
       notes:             true,
       branchId:          true,
       accurateInvoiceId: true,
+      taxable:           true,
+      inclusiveTax:      true,
       customer: {
         select: {
           customerNo:         true,
@@ -22,6 +24,7 @@ const findInvoiceForSync = (id) =>
           qty:      true,
           price:    true,
           discount: true,
+          taxable:  true,
           item: {
             select: {
               id:             true,

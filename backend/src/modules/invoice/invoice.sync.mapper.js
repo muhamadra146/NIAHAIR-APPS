@@ -32,13 +32,22 @@ const mapInvoiceToAccurate = (invoice, warehouse) => {
       entry.warehouseId = warehouse.accurateWarehouseId;
     }
 
+    // Tax line — only when the item is individually marked taxable
+    if (line.taxable === true) {
+      entry.tax1Name = "PPN";
+    }
+
     return entry;
   });
 
   const payload = {
     customerNo:  invoice.customer.customerNo,
     transDate:   formatDate(invoice.invoiceDate),
-    description: invoice.notes ?? `Invoice ${invoice.invoiceNo}`,
+    description: invoice.notes
+      ? `Invoice ${invoice.invoiceNo}\n${invoice.notes}`
+      : `Invoice ${invoice.invoiceNo}`,
+    taxable:     invoice.taxable,
+    inclusiveTax: invoice.inclusiveTax,
     detailItem,
   };
 

@@ -1098,6 +1098,12 @@ model Invoice {
 
   notes String?
 
+  taxable      Boolean   @default(false)
+
+  inclusiveTax Boolean   @default(false)
+
+  taxDate      DateTime?
+
   lastSyncAt DateTime?
 
   createdByEmployeeId String?
@@ -1147,6 +1153,12 @@ model InvoiceItem {
   discount Decimal @default(0) @db.Decimal(18, 2)
 
   subtotal Decimal @db.Decimal(18, 2)
+
+  taxable  Boolean   @default(false)
+
+  taxName  String?
+
+  taxRate  Decimal   @default(0) @db.Decimal(18, 2)
 
   notes String?
 

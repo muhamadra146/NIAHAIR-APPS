@@ -5,12 +5,15 @@ const findPaymentForSync = (id) =>
     where: { id },
     select: {
       id:                true,
+      paymentNo:         true,
       amount:            true,
       paymentDate:       true,
       accurateReceiptId: true,
       invoice: {
         select: {
           id:                    true,
+          invoiceNo:             true,
+          notes:                 true,
           accurateInvoiceId:     true,
           accurateInvoiceNumber: true,
           customer: {

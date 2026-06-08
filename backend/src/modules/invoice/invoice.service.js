@@ -73,7 +73,8 @@ const buildInvoiceNo = async () => {
 // ── Create ────────────────────────────────────────────────────────────
 
 const createInvoice = async (body, userId, branchId, createdByEmployeeId = null) => {
-  const { customerId, appointmentId, treatmentSessionIds, depositIds, items, notes } = body;
+  const { customerId, appointmentId, treatmentSessionIds, depositIds, items, notes,
+          taxable = false, inclusiveTax = false } = body;
 
   const customer = await findCustomerById(customerId);
   if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
@@ -96,9 +97,10 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   }
 
   // Resolve price and build line items
-  const itemsData    = [];
-  let totalSubtotal  = D("0");
-  let totalDiscount  = D("0");
+  const itemsData   = [];
+  let totalSubtotal = D("0");
+  let totalDiscount = D("0");
+  let totalTax      = D("0");
 
   for (const line of items) {
     const item = await findItemById(line.itemId);
@@ -124,18 +126,45 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
       );
     }
 
-    const price    = D(priceRecord.sellingPrice);
-    const qty      = D(line.qty);
-    const discount = D(line.discountAmount ?? 0);
-    const subtotal = price.mul(qty).sub(discount);
+    const price     = D(priceRecord.sellingPrice);
+    const qty       = D(line.qty);
+    const discount  = D(line.discountAmount ?? 0);
+    const grossLine = price.mul(qty).sub(discount);
 
-    totalSubtotal = totalSubtotal.add(price.mul(qty));
+    const lineTaxable = taxable && (line.taxable ?? false);
+
+    let lineSubtotal, itemTax;
+    if (!lineTaxable) {
+      lineSubtotal = grossLine;
+      itemTax      = D("0");
+    } else if (inclusiveTax) {
+      // Price already contains tax; extract DPP
+      lineSubtotal = grossLine.div(D("1.11")).toDecimalPlaces(2);
+      itemTax      = grossLine.sub(lineSubtotal);
+    } else {
+      // Tax added on top of DPP
+      lineSubtotal = grossLine;
+      itemTax      = grossLine.mul(D("0.11")).toDecimalPlaces(2);
+    }
+
+    totalSubtotal = totalSubtotal.add(lineSubtotal);
     totalDiscount = totalDiscount.add(discount);
+    totalTax      = totalTax.add(itemTax);
 
-    itemsData.push({ itemId: line.itemId, unitId: line.unitId, qty, price, discount, subtotal });
+    itemsData.push({
+      itemId:   line.itemId,
+      unitId:   line.unitId,
+      qty,
+      price,
+      discount,
+      subtotal: lineSubtotal,
+      taxable:  lineTaxable,
+      taxName:  lineTaxable ? "PPN" : null,
+      taxRate:  lineTaxable ? D("11") : D("0"),
+    });
   }
 
-  const grandTotal = totalSubtotal.sub(totalDiscount);
+  const grandTotal = totalSubtotal.add(totalTax);
 
   // ── Validate and apply deposits ───────────────────────────────────────
   let totalDeposit = D("0");
@@ -216,6 +245,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
     invoiceDate:         new Date(),
     subtotal:            totalSubtotal,
     totalDiscount,
+    totalTax,
     totalDeposit,
     grandTotal,
     paidAmount:          D("0"),
@@ -223,6 +253,8 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
     status:              invoiceStatus,
     notes:               notes ?? null,
     createdByEmployeeId: createdByEmployeeId ?? null,
+    taxable,
+    inclusiveTax,
   };
 
   const invoice = await createWithTransaction({

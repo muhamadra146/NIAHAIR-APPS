@@ -1,4 +1,4 @@
-const { object, string, array, optional, pipe, minLength, number, minValue } = require("valibot");
+const { object, string, array, boolean, optional, pipe, minLength, number, minValue } = require("valibot");
 
 const createInvoiceSchema = object({
   customerId:          pipe(string(), minLength(1, "customerId is required")),
@@ -7,6 +7,8 @@ const createInvoiceSchema = object({
   treatmentSessionIds: optional(array(string())),
   depositIds:          optional(array(string())),
   notes:               optional(string()),
+  taxable:             optional(boolean()),
+  inclusiveTax:        optional(boolean()),
   items: pipe(
     array(
       object({
@@ -14,6 +16,7 @@ const createInvoiceSchema = object({
         unitId:         pipe(string(), minLength(1, "unitId is required")),
         qty:            pipe(number(), minValue(0.01, "qty must be greater than 0")),
         discountAmount: optional(number()),
+        taxable:        optional(boolean()),
       })
     ),
     minLength(1, "At least one item is required")
