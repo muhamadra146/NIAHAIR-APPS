@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── Base ───────────────────────────────────── */
+    --background:      0 0% 100%;           /* white */
+    --foreground:      340 12% 12%;         /* warm near-black */
+
+    --card:            0 0% 100%;
+    --card-foreground: 340 12% 12%;
+
+    --border:          340 28% 88%;         /* soft rose-beige */
+    --input:           340 28% 88%;
+    --ring:            340 52% 60%;
+    --radius:          0.5rem;
+
+    /* ── Primary – dusty rose ───────────────────── */
+    --primary:            340 52% 60%;      /* #C4677C */
+    --primary-foreground: 0 0% 100%;        /* white text on pink */
+
+    /* ── Secondary – blush ──────────────────────── */
+    --secondary:            345 55% 96%;    /* #FCEEF2 */
+    --secondary-foreground: 340 12% 22%;
+
+    /* ── Muted ──────────────────────────────────── */
+    --muted:            345 40% 96%;
+    --muted-foreground: 340 10% 52%;
+
+    /* ── Accent ─────────────────────────────────── */
+    --accent:            345 55% 95%;
+    --accent-foreground: 340 12% 22%;
+
+    /* ── Destructive (keep functional red) ─────── */
+    --destructive:            0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* ── Sidebar – white + pink accents ─────────── */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 340 12% 18%;
+    --sidebar-primary:    340 52% 60%;      /* active item bg */
+    --sidebar-accent:     345 55% 96%;      /* hover bg */
+    --sidebar-border:     340 28% 90%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
