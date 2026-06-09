@@ -8,6 +8,7 @@ const findPaymentForSync = (id) =>
       paymentNo:         true,
       amount:            true,
       paymentDate:       true,
+      notes:             true,
       accurateReceiptId: true,
       invoice: {
         select: {

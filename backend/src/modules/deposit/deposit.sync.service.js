@@ -16,7 +16,7 @@ const syncDepositToAccurate = async (depositId) => {
     return { skipped: true, reason: "Already synced" };
   }
 
-  const customer = deposit.appointment?.customer;
+  const customer = deposit.customer;
   // accurateCustomerId confirms the customer record exists in Accurate;
   // customerNo is required for the payload. If either is missing the CUSTOMER
   // queue is likely still pending — throw so SyncQueue retries this job later.
@@ -25,6 +25,8 @@ const syncDepositToAccurate = async (depositId) => {
   }
 
   const payload = mapDepositToAccurate(deposit);
+
+  console.log("[deposit sync payload]", JSON.stringify(payload));
 
   // Use accurateRequest — owns auth headers and base URL.
   // Endpoint is relative; accurate.client prepends env.accurate.baseUrl.

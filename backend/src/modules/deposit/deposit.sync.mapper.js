@@ -1,5 +1,5 @@
 /**
- * Maps a local Deposit (with appointment + customer) to an Accurate
+ * Maps a local Deposit (with customer + optional appointment) to an Accurate
  * sales down payment payload. Pure data transformation — no DB, no API.
  */
 
@@ -11,12 +11,14 @@ const formatDate = (date) => {
 };
 
 const mapDepositToAccurate = (deposit) => ({
-  customerNo:       deposit.appointment.customer.customerNo,
-  transDate:        formatDate(deposit.paidAt),
+  customerNo:       deposit.customer.customerNo,
+  transDate:        formatDate(deposit.createdAt),
   salesDownPayment: true,
   invoiceDp:        true,
   inputDownPayment: Number(deposit.amount),
-  description:      `Deposit ${deposit.appointment.bookingNo}`,
+  description:      deposit.appointment?.bookingNo
+    ? `Deposit ${deposit.appointment.bookingNo}`
+    : `Deposit ${deposit.customer.customerNo ?? deposit.id}`,
 });
 
 module.exports = { mapDepositToAccurate };

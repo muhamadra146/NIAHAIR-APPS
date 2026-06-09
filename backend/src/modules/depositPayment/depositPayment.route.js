@@ -1,0 +1,29 @@
+const { Router }   = require("express");
+const authenticate  = require("../../middlewares/auth.middleware");
+const authorize     = require("../../middlewares/role.middleware");
+const validate      = require("../../middlewares/validate.middleware");
+const { ROLES }    = require("../../common/constants/role.constant");
+const { createDepositPaymentSchema } = require("./depositPayment.validation");
+const {
+  getAllController,
+  getByDepositController,
+  getByIdController,
+  createController,
+} = require("./depositPayment.controller");
+
+// mergeParams: true — inherits :depositId when mounted at
+// app.use("/deposits/:depositId/payments", router)
+const router = Router({ mergeParams: true });
+
+router.get("/",    authenticate, getByDepositController);
+router.get("/:id", authenticate, getByIdController);
+
+router.post(
+  "/",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  validate(createDepositPaymentSchema),
+  createController
+);
+
+module.exports = router;

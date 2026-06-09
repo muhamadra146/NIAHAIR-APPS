@@ -1,6 +1,5 @@
 const prisma = require("../../config/prisma");
 
-// Minimal select — only fields needed for Accurate sync payload and guards.
 const findDepositForSync = (id) =>
   prisma.deposit.findUnique({
     where: { id },
@@ -8,18 +7,18 @@ const findDepositForSync = (id) =>
       id:                    true,
       amount:                true,
       paidAt:                true,
+      createdAt:             true,
       notes:                 true,
       accurateDepositId:     true,
-      appointment: {
+      customer: {
         select: {
-          bookingNo: true,
-          customer: {
-            select: {
-              customerNo:         true,
-              accurateCustomerId: true,
-            },
-          },
+          customerNo:         true,
+          accurateCustomerId: true,
+          name:               true,
         },
+      },
+      appointment: {
+        select: { bookingNo: true },
       },
     },
   });

@@ -85,11 +85,36 @@ const findDepositsByIds = (ids) =>
   prisma.deposit.findMany({
     where: { id: { in: ids } },
     select: {
-      id:     true,
-      amount: true,
-      status: true,
-      appointment: { select: { customerId: true } },
+      id:         true,
+      amount:     true,
+      status:     true,
+      customerId: true,
       invoiceDeposits: { select: { amountApplied: true } },
+    },
+  });
+
+const findDepositForApply = (id) =>
+  prisma.deposit.findUnique({
+    where: { id },
+    select: {
+      id:         true,
+      amount:     true,
+      status:     true,
+      customerId: true,
+      invoiceDeposits: { select: { amountApplied: true } },
+    },
+  });
+
+const findInvoiceForDepositApply = (id) =>
+  prisma.invoice.findUnique({
+    where: { id },
+    select: {
+      id:               true,
+      status:           true,
+      customerId:       true,
+      grandTotal:       true,
+      totalDeposit:     true,
+      outstandingAmount: true,
     },
   });
 
@@ -143,6 +168,45 @@ const createWithTransaction = ({ invoiceData, itemsData, sessionIds, depositsDat
     return tx.invoice.findUnique({ where: { id: invoice.id }, include: INCLUDE });
   });
 
+// ── Apply deposit to existing invoice ────────────────────────────────
+
+const applyDepositWithTransaction = ({
+  invoiceId, depositId, amountApplied,
+  newDepositStatus, newTotalDeposit, newOutstanding, newInvoiceStatus,
+  oldInvoiceStatus, userId,
+}) =>
+  prisma.$transaction(async (tx) => {
+    await tx.invoiceDeposit.create({
+      data: { invoiceId, depositId, amountApplied },
+    });
+
+    await tx.deposit.update({
+      where: { id: depositId },
+      data:  { status: newDepositStatus },
+    });
+
+    await tx.invoice.update({
+      where: { id: invoiceId },
+      data:  {
+        totalDeposit:      newTotalDeposit,
+        outstandingAmount: newOutstanding,
+        status:            newInvoiceStatus,
+      },
+    });
+
+    await tx.invoiceStatusHistory.create({
+      data: {
+        invoiceId,
+        oldStatus: oldInvoiceStatus,
+        newStatus: newInvoiceStatus,
+        notes:     `Deposit applied: ${amountApplied}`,
+        createdBy: userId ?? null,
+      },
+    });
+
+    return tx.invoice.findUnique({ where: { id: invoiceId }, include: INCLUDE });
+  });
+
 // ── Cancel ────────────────────────────────────────────────────────────
 
 const cancelWithTransaction = ({ invoice, userId }) =>
@@ -178,6 +242,9 @@ module.exports = {
   findActivePriceGlobal,
   findTreatmentSessionsByIds,
   findDepositsByIds,
+  findDepositForApply,
+  findInvoiceForDepositApply,
   createWithTransaction,
+  applyDepositWithTransaction,
   cancelWithTransaction,
 };

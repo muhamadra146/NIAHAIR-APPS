@@ -4,13 +4,14 @@ const authorize     = require("../../middlewares/role.middleware");
 const validate      = require("../../middlewares/validate.middleware");
 const requireBranch = require("../../middlewares/branch.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
-const { createDepositSchema } = require("./deposit.validation");
+const { createDepositSchema, linkAppointmentSchema } = require("./deposit.validation");
 const {
   getAllController,
   getByIdController,
   createController,
   refundController,
   cancelController,
+  linkAppointmentController,
 } = require("./deposit.controller");
 
 // mergeParams: true — inherits :appointmentId when mounted at
@@ -20,7 +21,6 @@ const router = Router({ mergeParams: true });
 router.get("/",    authenticate, getAllController);
 router.get("/:id", authenticate, getByIdController);
 
-// POST / is only meaningful via POST /appointments/:appointmentId/deposits
 router.post(
   "/",
   authenticate,
@@ -28,6 +28,14 @@ router.post(
   authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER, ROLES.STAFF),
   validate(createDepositSchema),
   createController
+);
+
+router.patch(
+  "/:id/link-appointment",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  validate(linkAppointmentSchema),
+  linkAppointmentController
 );
 
 router.patch(

@@ -18,7 +18,10 @@ const {
   findActivePriceGlobal,
   findTreatmentSessionsByIds,
   findDepositsByIds,
+  findDepositForApply,
+  findInvoiceForDepositApply,
   createWithTransaction,
+  applyDepositWithTransaction,
   cancelWithTransaction,
 } = require("./invoice.repository");
 
@@ -73,7 +76,7 @@ const buildInvoiceNo = async () => {
 // ── Create ────────────────────────────────────────────────────────────
 
 const createInvoice = async (body, userId, branchId, createdByEmployeeId = null) => {
-  const { customerId, appointmentId, treatmentSessionIds, depositIds, items, notes,
+  const { customerId, appointmentId, treatmentSessionIds, deposits = [], items, notes,
           taxable = false, inclusiveTax = false } = body;
 
   const customer = await findCustomerById(customerId);
@@ -170,12 +173,11 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   let totalDeposit = D("0");
   const depositsData = [];
 
-  if (depositIds && depositIds.length > 0) {
-    const deposits = await findDepositsByIds(depositIds);
+  if (deposits.length > 0) {
+    const depositRecords = await findDepositsByIds(deposits.map((d) => d.depositId));
 
-    // Preserve the order the caller specified
-    for (const depositId of depositIds) {
-      const deposit = deposits.find((d) => d.id === depositId);
+    for (const { depositId, amount } of deposits) {
+      const deposit = depositRecords.find((d) => d.id === depositId);
       if (!deposit) {
         throw new AppError(`Deposit not found: ${depositId}`, StatusCodes.NOT_FOUND);
       }
@@ -183,19 +185,18 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
       const usable = ["PAID", "PARTIAL_USED"];
       if (!usable.includes(deposit.status)) {
         throw new AppError(
-          `Deposit ${depositId} cannot be applied (status: ${deposit.status}). Only PAID and PARTIAL_USED deposits are usable.`,
+          `Deposit ${depositId} cannot be applied (status: ${deposit.status}). Must be PAID or PARTIAL_USED.`,
           StatusCodes.UNPROCESSABLE_ENTITY
         );
       }
 
-      if (deposit.appointment.customerId !== customerId) {
+      if (deposit.customerId !== customerId) {
         throw new AppError(
           `Deposit ${depositId} belongs to a different customer`,
           StatusCodes.UNPROCESSABLE_ENTITY
         );
       }
 
-      // Calculate remaining balance on this deposit
       const alreadyUsed = deposit.invoiceDeposits.reduce(
         (sum, id) => sum.add(D(id.amountApplied)),
         D("0")
@@ -209,17 +210,29 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
         );
       }
 
-      // Only apply what is still needed to cover the grand total
-      const stillNeeded    = grandTotal.sub(totalDeposit);
-      const amountApplied  = Prisma.Decimal.min(depositRemaining, stillNeeded);
+      const amountToApply = D(amount);
+      const stillNeeded   = grandTotal.sub(totalDeposit);
 
-      totalDeposit = totalDeposit.add(amountApplied);
+      if (amountToApply.gt(depositRemaining)) {
+        throw new AppError(
+          `Deposit ${depositId}: amount (${amountToApply}) exceeds remaining balance (${depositRemaining})`,
+          StatusCodes.UNPROCESSABLE_ENTITY
+        );
+      }
+      if (amountToApply.gt(stillNeeded)) {
+        throw new AppError(
+          `Deposit ${depositId}: amount (${amountToApply}) exceeds invoice outstanding (${stillNeeded})`,
+          StatusCodes.UNPROCESSABLE_ENTITY
+        );
+      }
 
-      const newDepositStatus = depositRemaining.sub(amountApplied).gt(D("0"))
+      totalDeposit = totalDeposit.add(amountToApply);
+
+      const newDepositStatus = depositRemaining.sub(amountToApply).gt(D("0"))
         ? "PARTIAL_USED"
         : "USED";
 
-      depositsData.push({ depositId, amountApplied, newDepositStatus });
+      depositsData.push({ depositId, amountApplied: amountToApply, newDepositStatus });
     }
   }
 
@@ -283,6 +296,84 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   return invoice;
 };
 
+// ── Apply deposit to existing invoice ────────────────────────────────
+
+const applyDepositToInvoice = async (invoiceId, { depositId, amount }, userId) => {
+  const invoice = await findInvoiceForDepositApply(invoiceId);
+  if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+
+  if (["PAID", "CANCELLED"].includes(invoice.status)) {
+    throw new AppError(
+      `Cannot apply deposit to invoice with status ${invoice.status}`,
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
+  const deposit = await findDepositForApply(depositId);
+  if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
+
+  const usable = ["PAID", "PARTIAL_USED"];
+  if (!usable.includes(deposit.status)) {
+    throw new AppError(
+      `Deposit cannot be applied (status: ${deposit.status}). Must be PAID or PARTIAL_USED.`,
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
+  if (deposit.customerId !== invoice.customerId) {
+    throw new AppError("Deposit belongs to a different customer", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
+  const alreadyUsed = deposit.invoiceDeposits.reduce(
+    (sum, id) => sum.add(D(id.amountApplied)),
+    D("0")
+  );
+  const depositRemaining  = D(deposit.amount).sub(alreadyUsed);
+  const outstandingAmount = D(invoice.outstandingAmount);
+  const amountToApply     = D(amount);
+
+  if (amountToApply.lte(D("0"))) {
+    throw new AppError("Amount must be greater than 0", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+  if (amountToApply.gt(depositRemaining)) {
+    throw new AppError(
+      `Amount (${amountToApply}) exceeds deposit remaining balance (${depositRemaining})`,
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+  if (amountToApply.gt(outstandingAmount)) {
+    throw new AppError(
+      `Amount (${amountToApply}) exceeds invoice outstanding amount (${outstandingAmount})`,
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
+  const newDepositStatus  = depositRemaining.sub(amountToApply).gt(D("0")) ? "PARTIAL_USED" : "USED";
+  const newTotalDeposit   = D(invoice.totalDeposit).add(amountToApply);
+  const newOutstanding    = outstandingAmount.sub(amountToApply);
+  const newInvoiceStatus  = newOutstanding.lte(D("0")) ? "PAID" : "PARTIAL";
+
+  const updated = await applyDepositWithTransaction({
+    invoiceId,
+    depositId,
+    amountApplied:    amountToApply,
+    newDepositStatus,
+    newTotalDeposit,
+    newOutstanding,
+    newInvoiceStatus,
+    oldInvoiceStatus: invoice.status,
+    userId,
+  });
+
+  if (newInvoiceStatus === "PAID") {
+    await handleInvoicePaid(invoiceId, userId);
+  }
+
+  await createSyncJob({ entityType: "INVOICE", entityId: invoiceId, direction: "APP_TO_ACCURATE" });
+
+  return updated;
+};
+
 // ── Cancel ────────────────────────────────────────────────────────────
 
 const cancelInvoice = async (id, userId) => {
@@ -299,4 +390,4 @@ const cancelInvoice = async (id, userId) => {
   return cancelWithTransaction({ invoice, userId });
 };
 
-module.exports = { listInvoices, getInvoiceById, createInvoice, cancelInvoice };
+module.exports = { listInvoices, getInvoiceById, createInvoice, applyDepositToInvoice, cancelInvoice };

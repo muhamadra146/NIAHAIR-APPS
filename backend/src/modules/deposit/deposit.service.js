@@ -7,10 +7,11 @@ const {
   findAll,
   count,
   findById,
+  findCustomerById,
   findAppointmentById,
-  findPaymentMethodById,
   create,
   updateStatus,
+  updateAppointmentLink,
 } = require("./deposit.repository");
 
 const D = (v) => new Prisma.Decimal(String(v));
@@ -30,10 +31,11 @@ const withComputed = (deposit) => {
 
 // ── List ──────────────────────────────────────────────────────────────
 
-const listDeposits = async ({ page, limit, appointmentId, status, startDate, endDate }) => {
+const listDeposits = async ({ page, limit, customerId, appointmentId, status, startDate, endDate }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
+  if (customerId)    where.customerId    = customerId;
   if (appointmentId) where.appointmentId = appointmentId;
   if (status)        where.status        = status;
 
@@ -49,8 +51,8 @@ const listDeposits = async ({ page, limit, appointmentId, status, startDate, end
   ]);
 
   return {
-    data:  deposits.map(withComputed),
-    meta:  paginationMeta(total, pageNum, limitNum),
+    data: deposits.map(withComputed),
+    meta: paginationMeta(total, pageNum, limitNum),
   };
 };
 
@@ -64,32 +66,32 @@ const getDepositById = async (id) => {
 
 // ── Create ────────────────────────────────────────────────────────────
 
-const createDeposit = async ({ appointmentId, paymentMethodId, amount, paidAt, notes, branchId, createdByEmployeeId }) => {
-  if (!appointmentId) {
-    throw new AppError("appointmentId is required", StatusCodes.BAD_REQUEST);
-  }
+const createDeposit = async ({ customerId, appointmentId, amount, notes, branchId, createdByEmployeeId }) => {
+  const customer = await findCustomerById(customerId);
+  if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
 
-  const appointment = await findAppointmentById(appointmentId);
-  if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
-
-  const paymentMethod = await findPaymentMethodById(paymentMethodId);
-  if (!paymentMethod) throw new AppError("Payment method not found", StatusCodes.NOT_FOUND);
-  if (!paymentMethod.isActive) {
-    throw new AppError("Payment method is not active", StatusCodes.UNPROCESSABLE_ENTITY);
+  if (appointmentId) {
+    const appointment = await findAppointmentById(appointmentId);
+    if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+    if (appointment.customerId !== customerId) {
+      throw new AppError(
+        "Appointment does not belong to the specified customer",
+        StatusCodes.UNPROCESSABLE_ENTITY
+      );
+    }
   }
 
   const deposit = await create({
-    appointmentId,
-    paymentMethodId,
+    customerId,
+    appointmentId: appointmentId ?? null,
     branchId,
     createdByEmployeeId: createdByEmployeeId ?? null,
-    amount:  D(amount),
-    status:  "PAID",
-    paidAt:  paidAt ? new Date(paidAt) : new Date(),
-    notes:   notes ?? null,
+    amount: D(amount),
+    status: "UNPAID",
+    paidAt: null,
+    notes:  notes ?? null,
   });
 
-  // Queue Accurate push — worker picks it up asynchronously
   await createSyncJob({
     entityType: "DEPOSIT",
     entityId:   deposit.id,
@@ -123,10 +125,10 @@ const cancelDeposit = async (id) => {
   const deposit = await findById(id);
   if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
 
-  const cancellable = ["PENDING", "PAID"];
+  const cancellable = ["PENDING", "UNPAID", "PAID"];
   if (!cancellable.includes(deposit.status)) {
     throw new AppError(
-      `Cannot cancel deposit with status ${deposit.status}. Only PENDING and PAID can be cancelled.`,
+      `Cannot cancel deposit with status ${deposit.status}. Only PENDING, UNPAID and PAID can be cancelled.`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
@@ -135,4 +137,24 @@ const cancelDeposit = async (id) => {
   return withComputed(updated);
 };
 
-module.exports = { listDeposits, getDepositById, createDeposit, refundDeposit, cancelDeposit };
+// ── Link appointment ──────────────────────────────────────────────────
+
+const linkAppointmentToDeposit = async (id, appointmentId) => {
+  const deposit = await findById(id);
+  if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
+
+  const appointment = await findAppointmentById(appointmentId);
+  if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+
+  if (appointment.customerId !== deposit.customerId) {
+    throw new AppError(
+      "Appointment does not belong to the same customer as this deposit",
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
+  const updated = await updateAppointmentLink(id, appointmentId);
+  return withComputed(updated);
+};
+
+module.exports = { listDeposits, getDepositById, createDeposit, refundDeposit, cancelDeposit, linkAppointmentToDeposit };

@@ -5,7 +5,10 @@ const createInvoiceSchema = object({
   branchId:            optional(string()),   // deprecated: injected from X-Branch-Id header
   appointmentId:       optional(string()),
   treatmentSessionIds: optional(array(string())),
-  depositIds:          optional(array(string())),
+  deposits:            optional(array(object({
+    depositId: pipe(string(), minLength(1, "depositId is required")),
+    amount:    pipe(number(), minValue(0.01, "deposit amount must be greater than 0")),
+  }))),
   notes:               optional(string()),
   taxable:             optional(boolean()),
   inclusiveTax:        optional(boolean()),
@@ -23,4 +26,9 @@ const createInvoiceSchema = object({
   ),
 });
 
-module.exports = { createInvoiceSchema };
+const applyDepositSchema = object({
+  depositId: pipe(string(), minLength(1, "depositId is required")),
+  amount:    pipe(number(), minValue(0.01, "amount must be greater than 0")),
+});
+
+module.exports = { createInvoiceSchema, applyDepositSchema };

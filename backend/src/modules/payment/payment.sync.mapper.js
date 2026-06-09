@@ -19,7 +19,8 @@ const buildDescription = (payment) => {
     `Payment ${payment.paymentNo}`,
     `Invoice ${payment.invoice.invoiceNo}`,
   ];
-  if (payment.invoice.notes) lines.push(payment.invoice.notes);
+  if (payment.invoice.notes) lines.push(`Invoice:\n${payment.invoice.notes}`);
+  if (payment.notes)         lines.push(`Payment:\n${payment.notes}`);
   return lines.join("\n");
 };
 

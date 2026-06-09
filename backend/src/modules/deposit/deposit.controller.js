@@ -5,6 +5,7 @@ const {
   createDeposit,
   refundDeposit,
   cancelDeposit,
+  linkAppointmentToDeposit,
 } = require("./deposit.service");
 
 const getAllController = async (req, res, next) => {
@@ -27,11 +28,10 @@ const getByIdController = async (req, res, next) => {
 
 const createController = async (req, res, next) => {
   try {
-    // appointmentId comes from the parent route param
-    // (mergeParams: true ensures it is available here)
+    // Route param wins over body for appointmentId (nested route pattern)
     const result = await createDeposit({
-      appointmentId:      req.params.appointmentId,
       ...req.body,
+      appointmentId:       req.params.appointmentId ?? req.body.appointmentId ?? null,
       branchId:            req.branchId,
       createdByEmployeeId: req.user.employeeId ?? null,
     });
@@ -59,10 +59,20 @@ const cancelController = async (req, res, next) => {
   }
 };
 
+const linkAppointmentController = async (req, res, next) => {
+  try {
+    const result = await linkAppointmentToDeposit(req.params.id, req.body.appointmentId);
+    return success(res, result, "Appointment linked to deposit");
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getAllController,
   getByIdController,
   createController,
   refundController,
   cancelController,
+  linkAppointmentController,
 };

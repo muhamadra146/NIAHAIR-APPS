@@ -1,12 +1,12 @@
 const prisma = require("../../config/prisma");
 
 const INCLUDE = {
-  appointment: {
-    include: {
-      customer: { select: { id: true, name: true, customerNo: true, mobilePhone: true, accurateCustomerId: true } },
-    },
+  customer: {
+    select: { id: true, name: true, customerNo: true, mobilePhone: true, accurateCustomerId: true },
   },
-  paymentMethod:     { select: { id: true, name: true, code: true } },
+  appointment: {
+    select: { id: true, bookingNo: true, visitDate: true, status: true },
+  },
   branch:            { select: { id: true, code: true, name: true } },
   createdByEmployee: { select: { id: true, employeeCode: true, name: true } },
   invoiceDeposits: {
@@ -28,11 +28,11 @@ const findById = (id) =>
 
 // ── Lookup helpers ────────────────────────────────────────────────────
 
-const findAppointmentById = (id) =>
-  prisma.appointment.findUnique({ where: { id }, select: { id: true, status: true } });
+const findCustomerById = (id) =>
+  prisma.customer.findUnique({ where: { id }, select: { id: true, isActive: true } });
 
-const findPaymentMethodById = (id) =>
-  prisma.paymentMethod.findUnique({ where: { id }, select: { id: true, name: true, isActive: true } });
+const findAppointmentById = (id) =>
+  prisma.appointment.findUnique({ where: { id }, select: { id: true, customerId: true } });
 
 // ── Write ─────────────────────────────────────────────────────────────
 
@@ -42,12 +42,16 @@ const create = (data) =>
 const updateStatus = (id, status) =>
   prisma.deposit.update({ where: { id }, data: { status }, include: INCLUDE });
 
+const updateAppointmentLink = (id, appointmentId) =>
+  prisma.deposit.update({ where: { id }, data: { appointmentId }, include: INCLUDE });
+
 module.exports = {
   findAll,
   count,
   findById,
+  findCustomerById,
   findAppointmentById,
-  findPaymentMethodById,
   create,
   updateStatus,
+  updateAppointmentLink,
 };

@@ -34,6 +34,7 @@ const warehouseRouter               = require("./modules/warehouse/warehouse.rou
 const userRouter                    = require("./modules/user/user.route");
 const userRoleRouter                = require("./modules/userRole/userRole.route");
 const syncQueueRouter               = require("./modules/syncQueue/syncQueue.route");
+const depositPaymentRouter          = require("./modules/depositPayment/depositPayment.route");
 
 
 const app = express();
@@ -98,6 +99,8 @@ app.use("/warehouses",                           warehouseRouter);
 app.use("/users",                                userRouter);
 app.use("/user-roles",                           userRoleRouter);
 app.use("/sync-queues",                          syncQueueRouter);
+app.use("/deposits/:depositId/payments",         depositPaymentRouter);
+app.use("/deposit-payments",                     depositPaymentRouter);
 
 
 // global error handler — must be last
