@@ -47,7 +47,7 @@ const findBranchById = (id) =>
 
 // ── Create ────────────────────────────────────────────────────────────
 
-const createWithTransaction = ({ appointmentData, userId }) =>
+const createWithTransaction = ({ appointmentData, services = [], userId }) =>
   prisma.$transaction(async (tx) => {
     const appointment = await tx.appointment.create({ data: appointmentData });
 
@@ -60,6 +60,19 @@ const createWithTransaction = ({ appointmentData, userId }) =>
         createdBy:     userId ?? null,
       },
     });
+
+    if (services.length > 0) {
+      await tx.appointmentService.createMany({
+        data: services.map((s) => ({
+          appointmentId:   appointment.id,
+          serviceItemId:   s.serviceItemId,
+          qty:             s.qty,
+          price:           s.price,
+          durationMinutes: s.durationMinutes ?? 0,
+          notes:           s.notes ?? null,
+        })),
+      });
+    }
 
     return tx.appointment.findUnique({ where: { id: appointment.id }, include: INCLUDE });
   });

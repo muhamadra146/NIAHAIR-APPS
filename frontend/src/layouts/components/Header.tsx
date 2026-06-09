@@ -1,5 +1,5 @@
-import { Menu } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { Menu, ChevronsUpDown } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { useLayout } from "@/contexts/LayoutContext";
 import { sidebarNav } from "@/layouts/config/sidebarNav";
@@ -27,8 +27,11 @@ export function Header() {
   const { user, branchId } = useAuthStore();
   const { toggleSidebar }  = useLayout();
   const pageTitle          = usePageTitle();
+  const navigate           = useNavigate();
 
-  const displayName = user?.employee?.name ?? user?.email ?? "";
+  const displayName  = user?.employee?.name ?? user?.email ?? "";
+  const activeBranch = user?.branches.find((b) => b.id === branchId);
+  const canSwitch    = (user?.branches.length ?? 0) > 1;
 
   return (
     <header className="flex h-14 shrink-0 items-center border-b border-border bg-card px-4 sm:h-16 sm:px-6">
@@ -53,13 +56,20 @@ export function Header() {
         />
       </div>
 
-      {/* Desktop left: page title */}
+      {/* Desktop left: page title + branch badge */}
       <div className="hidden flex-1 items-center gap-3 lg:flex">
         <span className="text-sm font-semibold text-foreground">{pageTitle}</span>
-        {branchId && (
-          <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-            {branchId}
-          </span>
+        {activeBranch && (
+          <button
+            onClick={() => canSwitch && navigate("/branch-select")}
+            className={`inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary transition-colors ${
+              canSwitch ? "cursor-pointer hover:bg-primary/20" : "cursor-default"
+            }`}
+            title={canSwitch ? "Click to switch branch" : undefined}
+          >
+            {activeBranch.name}
+            {canSwitch && <ChevronsUpDown className="h-3 w-3" />}
+          </button>
         )}
       </div>
 

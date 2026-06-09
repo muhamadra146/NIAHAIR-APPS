@@ -4,13 +4,14 @@ import {
   CalendarDays,
   Receipt,
   Wallet,
-  CreditCard,
   Users,
   Package,
   UserCog,
   ClipboardList,
   BarChart3,
   Settings,
+  Scissors,
+  BadgeDollarSign,
   type LucideIcon,
 } from "lucide-react";
 
@@ -64,8 +65,7 @@ export const sidebarNav: NavItem[] = [
     icon:  Receipt,
     roles: POS_ROLES,
     children: [
-      { label: "Invoices",  href: "/invoices",  roles: POS_ROLES },
-      { label: "Payments",  href: "/payments",  roles: POS_ROLES },
+      { label: "Invoices", href: "/invoices", roles: POS_ROLES },
     ],
   },
   {
@@ -75,10 +75,16 @@ export const sidebarNav: NavItem[] = [
     roles: POS_ROLES,
   },
   {
-    label: "Payment Methods",
-    href:  "/payment-methods",
-    icon:  CreditCard,
-    roles: MANAGEMENT_ROLES,
+    label: "Treatments",
+    href:  "/treatments",
+    icon:  Scissors,
+    roles: [...MANAGEMENT_ROLES, "CASHIER", "STYLIST", "STAFF"],
+  },
+  {
+    label: "Commissions",
+    href:  "/commissions",
+    icon:  BadgeDollarSign,
+    roles: [...MANAGEMENT_ROLES, "FINANCE"],
   },
   {
     label: "Customers",

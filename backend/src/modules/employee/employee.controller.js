@@ -1,5 +1,5 @@
 const { success, created } = require("../../common/responses/apiResponse");
-const { getAll, getById, createEmployee, updateEmployee } = require("./employee.service");
+const { getAll, getById, createEmployee, updateEmployee, updateEmployeeBranches } = require("./employee.service");
 
 const getAllController = async (req, res, next) => {
   try {
@@ -37,4 +37,13 @@ const updateController = async (req, res, next) => {
   }
 };
 
-module.exports = { getAllController, getByIdController, createController, updateController };
+const updateBranchesController = async (req, res, next) => {
+  try {
+    const result = await updateEmployeeBranches(req.params.id, req.body.branchIds);
+    return success(res, result, "Employee branches updated");
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getAllController, getByIdController, createController, updateController, updateBranchesController };

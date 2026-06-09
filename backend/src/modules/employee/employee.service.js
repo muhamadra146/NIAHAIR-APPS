@@ -10,6 +10,7 @@ const {
   findRoleById,
   create,
   update,
+  updateBranches,
 } = require("./employee.repository");
 
 const getAll = async ({ page, limit, search, isActive }) => {
@@ -92,4 +93,10 @@ const updateEmployee = async (id, body) => {
   return update(id, body);
 };
 
-module.exports = { getAll, getById, createEmployee, updateEmployee };
+const updateEmployeeBranches = async (id, branchIds) => {
+  const employee = await findById(id);
+  if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+  return updateBranches(id, branchIds);
+};
+
+module.exports = { getAll, getById, createEmployee, updateEmployee, updateEmployeeBranches };

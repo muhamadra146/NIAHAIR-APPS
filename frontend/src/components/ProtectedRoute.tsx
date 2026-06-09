@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
-  const { token, user } = useAuthStore();
+  const { token, user, branchId } = useAuthStore();
   const location = useLocation();
 
   if (!token || !user) {
@@ -16,6 +16,15 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
 
   if (allowedRoles && !allowedRoles.includes(user.roleCode)) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  // If user has branches but none selected, require branch selection
+  if (
+    user.branches.length > 0 &&
+    !branchId &&
+    location.pathname !== "/branch-select"
+  ) {
+    return <Navigate to="/branch-select" replace />;
   }
 
   return <Outlet />;

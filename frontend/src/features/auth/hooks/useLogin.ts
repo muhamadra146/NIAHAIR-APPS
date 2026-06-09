@@ -14,14 +14,21 @@ async function loginRequest(credentials: LoginCredentials): Promise<LoginRespons
 }
 
 export function useLogin() {
-  const navigate  = useNavigate();
-  const { login } = useAuthStore();
+  const navigate              = useNavigate();
+  const { login, setBranch }  = useAuthStore();
 
   return useMutation({
     mutationFn: loginRequest,
     onSuccess: ({ token, user }) => {
       login(token, user);
-      navigate("/dashboard", { replace: true });
+      if (user.branches.length === 1) {
+        setBranch(user.branches[0].id);
+        navigate("/dashboard", { replace: true });
+      } else if (user.branches.length > 1) {
+        navigate("/branch-select", { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
+      }
     },
   });
 }

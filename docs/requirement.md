@@ -1,628 +1,594 @@
 # REQUIREMENTS.md
+> Aligned to prisma/schema.prisma
+> Last updated: June 2026
+
+---
 
 # Customer Management
 
 ## Multi Staff Assignment
 
-Satu treatment dapat dikerjakan oleh lebih dari satu karyawan.
+One TreatmentItem can be handled by more than one employee via TreatmentAssignment.
 
-Contoh:
+Example:
 
-Pasang Rambut 120 Helai
+Hair Extension — 120 strands total
 
-Stylist A = 70 Helai
-Stylist B = 50 Helai
+Stylist A = 70 strands (workQty: 70)
+Stylist B = 50 strands (workQty: 50)
 
-Komisi dihitung berdasarkan porsi pekerjaan masing-masing.
+Commission is calculated based on each employee's workQty proportion (workRatio).
 
 ## Customer Source
 
-Customer dapat dibuat dari:
-- Accurate Online
-- Website
+Customers can be created from:
+- Website (syncSource: LOCAL)
+- Accurate Online (syncSource: ACCURATE)
 
-Jika customer dibuat dari website:
-1. Customer dibuat di website
-2. Customer otomatis dibuat ke Accurate
-3. Accurate ID disimpan ke database website
+If created from website:
+1. Customer saved locally (syncStatus: PENDING)
+2. SyncQueue created (direction: APP_TO_ACCURATE)
+3. Worker syncs to Accurate
+4. accurateCustomerId saved back to customer record
+5. syncStatus updated to SYNCED
 
-Jika customer dibuat di Accurate:
-1. Customer disinkronkan ke website
+If created from Accurate:
+1. SyncQueue created (direction: ACCURATE_TO_APP)
+2. Worker upserts customer locally
 
 ## Customer Information
 
-Customer memiliki:
+Customer stores:
+- name
+- customerNo
+- mobilePhone
+- email
+- address, city, province
+- birthDate
+- gender (MALE | FEMALE)
+- membershipId (active membership reference)
+- notes
+- lastVisitAt
+- syncSource, syncStatus, syncError, lastSyncAt
 
-* Nama
-* Nomor Customer
-* Telepon
-* Email
-* Alamat
-* Tanggal Lahir
-* Membership
-* Riwayat Treatment
-* Catatan Customer
+Note: No separate whatsapp field. mobilePhone is the single phone contact field.
 
 ## Customer Branch
 
-Customer dapat melakukan booking dan transaksi di cabang manapun.
+Customers are NOT tied to a specific branch.
 
-Customer tidak terikat ke satu cabang tertentu.
-
-Branch memiliki:
-
-- Code
-- Name
-- Address
-- Phone
-- Status Active
+A customer can book and transact at any branch.
 
 ## Customer Treatment History
 
-Setiap treatment harus tersimpan sebagai riwayat.
+Every treatment session is stored as a TreatmentSession record.
 
-Riwayat berisi:
-
-* Tanggal
-* Cabang
-* Stylist
-* Service
-* Invoice
-* Catatan
+History includes:
+- Date (createdAt / completedAt)
+- Branch (branchId)
+- Staff (via TreatmentAssignments → employees)
+- Services (TreatmentItems → items)
+- Invoice (invoiceId)
+- Notes
 
 ## Customer Gallery
 
-Setiap treatment dapat memiliki:
+Each TreatmentSession can have multiple TreatmentMedia records.
 
-* Foto Before
-* Foto After
+Media types: BEFORE, AFTER
 
-Foto disimpan berdasarkan sesi treatment.
+Files stored in Object Storage. Only fileUrl stored in database.
 
-Satu customer dapat memiliki banyak sesi treatment.
+## Customer Notes
 
-# Customer Notes
+Customer can have many CustomerNote records.
 
-Customer dapat memiliki banyak catatan.
+Notes are created with createdBy (stored as String, e.g. user ID or name — not a FK to employees).
 
-Catatan dapat dibuat oleh:
+Notes cannot be deleted. No soft-delete on customer_notes.
 
-- Stylist
-- Manager
-
-Catatan tidak boleh dihapus.
+---
 
 # Membership
 
 ## Membership Rules
 
-Customer hanya dapat memiliki satu membership aktif.
+A customer can only have one active membership at a time.
+Active membership is referenced via customer.membershipId.
+Membership status tracked in CustomerMembership (ACTIVE | EXPIRED | CANCELLED).
 
-Membership memiliki:
+Membership has:
+- name
+- price
+- durationDays
+- discountType (PERCENTAGE | FIXED_AMOUNT)
+- discountValue
 
-* Nama Membership
-* Harga
-* Masa Berlaku
-* diskon
-
-Membership dapat memberikan:
-
-- Diskon Persentase
-- Diskon Nominal
-- Benefit Lain
-
-Membership discount diterapkan otomatis saat invoice dibuat.
+Membership discount is applied automatically when an invoice is created
+if the customer has an active CustomerMembership.
 
 ## Membership Expiration
 
-Membership memiliki tanggal mulai dan tanggal berakhir.
+CustomerMembership has startDate and endDate.
 
-Membership dapat diperpanjang.
+When membership expires: status → EXPIRED.
+When renewed: old status → EXPIRED, new CustomerMembership created (status: ACTIVE).
+Customer.membershipId updated to new membership.
 
-# Membership History
+## Membership History
 
-Semua perubahan membership harus memiliki histori.
+All membership changes recorded in MembershipHistory:
+- customerId
+- membershipId
+- startDate
+- endDate
+- createdBy (String)
+- createdAt
 
-Histori mencatat:
-
-- Membership Lama
-- Membership Baru
-- Tanggal Mulai
-- Tanggal Berakhir
-- User
+---
 
 # Product Management
 
-Product & Service Management
-Item Source
+## Item Source
 
-Semua item berasal dari Accurate Online.
+All items originate from Accurate Online.
 
-Website tidak membuat item secara manual.
+Website does NOT create items manually.
 
-Item akan disinkronkan secara otomatis dari Accurate.
+Items are synced automatically from Accurate via SyncQueue worker.
 
-Item Types
+## Item Types
 
-Item dapat berupa:
+Items can be:
+- INVENTORY (physical products with stock)
+- SERVICE (treatments, no stock tracking)
 
-INVENTORY
-SERVICE
+Example INVENTORY: Keratin Liquid, Shampoo, Hair Serum, Hair Mask
+Example SERVICE: Keratin Premium, Hair Botox, Smoothing, Hair Coloring
 
-Contoh INVENTORY:
+Inventory records (inventories table) are only created for items where itemType = INVENTORY.
+SERVICE items must NOT appear in the inventories table.
 
-Keratin Liquid
-Shampoo
-Hair Serum
-Hair Mask
+## Item Information
 
-Contoh SERVICE:
+Each synced item stores:
+- accurateItemId (from Accurate)
+- itemCode (unique)
+- name
+- itemType (INVENTORY | SERVICE)
+- categoryId → ItemCategory
+- defaultUnitId → Unit
+- commissionCategoryId → CommissionCategory (for commission rule lookup)
+- isActive
+- lastSyncAt
 
-Keratin Premium
-Hair Botox
-Smoothing
-Hair Coloring
-Item Information
+## Unit Management
 
-Inventory hanya dapat dibuat untuk item dengan itemType = INVENTORY.
+Units follow Accurate data and are stored in the units table.
 
-Item dengan itemType = SERVICE tidak memiliki stok dan tidak boleh muncul pada tabel inventories.
+ItemUnit records store per-item unit conversions with conversionFactor.
 
-Setiap item yang disinkronkan dari Accurate harus menyimpan:
+Example:
+- Keratin Liquid default unit: ml
+- 1000 ml = 1 Liter (conversionFactor: 1000)
 
-Accurate Item ID
-Item Code
-Item Name
-Item Type
-Category
-Brand
-Default Unit
-Selling Price
-Cost Price
-Status Active
-Unit Management
+## Item Sync
 
-Satuan mengikuti data dari Accurate.
+Items modified in Accurate are updated locally via sync worker.
 
-Website harus menyimpan:
+Customer and transaction records must NOT modify item master data.
 
-Unit
-item_units
-conversion_factor
+---
 
-Contoh:
+# Service Materials (BOM)
 
-Keratin Liquid
+## Service Material Definition
 
-Default Unit:
+Service materials are defined on the website (not synced from Accurate).
 
-ml
+Each SERVICE item can have a list of INVENTORY items as materials (ServiceMaterial).
 
-Unit Conversion:
-
-1000 ml = 1 Liter
-1 Liter = 1 Botol
-
-Contoh:
-
-Shampoo
-
-Default Unit:
-
-Botol
-
-Unit Conversion:
-
-12 Botol = 1 Dus
-Item Sync
-
-Item yang diubah di Accurate harus diperbarui di Website melalui proses sinkronisasi.
-
-Customer dan transaksi tidak boleh mengubah data item yang berasal dari Accurate.
-
-Service Materials (BOM)
-Service Material
-
-Service dapat memiliki daftar bahan baku yang digunakan.
-
-Daftar bahan baku dibuat dan dikelola di Website.
-
-Contoh:
-
-Service:
-Keratin Premium
-
+Example:
+Service: Keratin Premium
 Materials:
+- Keratin Liquid — 50 ml
+- Clarifying Shampoo — 20 ml
+- Hair Serum — 10 ml
 
-Keratin Liquid 50 ml
-Clarifying Shampoo 20 ml
-Hair Serum 10 ml
-Service Material Rules
+## Service Material Rules
 
-Satu service dapat memiliki banyak bahan baku.
+- One service can have many materials
+- One material can be used by many services
+- unique(serviceItemId, materialItemId) constraint enforced
+- All materials must be INVENTORY items
 
-Satu bahan baku dapat digunakan oleh banyak service.
+## Automatic Stock Deduction
 
-Semua bahan baku harus berasal dari item INVENTORY yang disinkronkan dari Accurate.
+Triggered when Invoice reaches PAID status.
 
-Automatic Stock Deduction
+Flow:
+1. Get TreatmentSessions linked to Invoice
+2. For each TreatmentItem in each session
+3. Read ServiceMaterials for that service
+4. Create MaterialUsage (linked to TreatmentItem)
+5. For each material: create MaterialUsageItem + StockMovement (OUT) + update Inventory
 
-Saat service selesai:
-
-Sistem harus:
-
-- Membaca daftar bahan baku service
-- Mengurangi stok bahan baku
-- Membuat stock movement
-- Menyimpan histori pengurangan stok
-
-Stock movement dapat berasal dari:
-
-Service Usage
-Product Sale
-Stock Adjustment
-Stock Transfer
-Purchase
-Return
-Inventory Source
-
-Stok yang digunakan website berasal dari data item Accurate yang telah disinkronkan ke database lokal.
-
-Website tidak membaca stok langsung ke Accurate pada setiap transaksi.
+---
 
 # Treatment Session
 
-Setiap treatment menghasilkan satu treatment session.
+Each treatment generates one TreatmentSession.
 
-Treatment session menyimpan:
+TreatmentSession stores:
+- customerId
+- appointmentId (optional — walk-in sessions have no appointment)
+- invoiceId (optional — linked when invoice is created)
+- branchId
+- startedAt, completedAt
+- notes
 
-- Customer
-- Stylist
-- Service
-- Invoice
-- Notes
-- Before Photo
-- After Photo
+TreatmentItems (services performed) are children of TreatmentSession.
 
-## Stock Deduction
+TreatmentAssignments (staff + workQty) are children of TreatmentItem.
 
-Saat service selesai:
+Media (before/after photos) stored as TreatmentMedia records.
 
-stok bahan baku harus berkurang otomatis.
+---
 
 # Booking System
 
 ## Appointment
 
-Booking memiliki:
-
-* Customer
-* Cabang
-* Stylist
-* Tanggal
-* Jam Mulai
-* Jam Selesai
-* Service
+Appointment stores:
+- customerId
+- branchId
+- bookingNo (auto-generated, unique)
+- bookingDate (when booking was made)
+- visitDate, startTime, endTime
+- status
+- estimatedTotal
+- notes
 
 ## Appointment Status
 
-* BOOKED
-* CONFIRMED
-* CHECK_IN
-* IN_PROGRESS
-* COMPLETED
-* CANCELLED
-* NO_SHOW
+BOOKED → CONFIRMED → CHECK_IN → IN_PROGRESS → COMPLETED
+
+Or: any active status → CANCELLED
+Or: any active status → NO_SHOW
+
+Each status transition recorded in AppointmentStatusHistory.
+
+## Staff Assignment
+
+Multiple staff can be assigned per appointment via AppointmentStaff.
+
+One staff is marked isPrimary = true (lead stylist).
+
+There is no role field on AppointmentStaff. Staff role is derived from
+employee.roleId → EmployeeRole (STYLIST, ASSISTANT, COLORIST, etc).
+
+Staff schedule overlap validation must be performed before creating AppointmentStaff.
+An employee cannot have two appointments at the same date/time.
 
 ## Booking Deposit
 
-Booking dapat memiliki DP.
+Deposit is optional at booking time.
 
-DP dikelola oleh Website.
+Deposit (status: PAID) is applied to Invoice via InvoiceDeposit when invoice is created.
 
-DP merupakan bagian dari pembayaran invoice.
+Invoice grandTotal = full service amount (not reduced by deposit at Accurate level).
 
-Saat treatment selesai:
+Deposit is recorded as a separate payment in Accurate.
 
-1. Website membuat invoice.
-2. Invoice dikirim ke Accurate dengan nilai penuh.
-3. DP dicatat sebagai pembayaran invoice.
-4. Sisa pembayaran dicatat saat pelunasan.
+Example:
+- Total Invoice: Rp 1.000.000
+- Deposit Applied: Rp 300.000 (totalDeposit on invoice)
+- Outstanding: Rp 700.000
+- Accurate Invoice: Rp 1.000.000 (full amount)
+- DP synced as separate payment to Accurate
 
-Contoh:
-
-Total Invoice: Rp1.000.000
-DP: Rp300.000
-Pelunasan: Rp700.000
-
-Invoice Accurate tetap Rp1.000.000.
+---
 
 # Media Storage
 
-Sistem menyimpan:
+Before/After photos stored in Object Storage (S3-compatible).
 
-- Before Photo
-- After Photo
+Only fileUrl stored in TreatmentMedia.database
 
-File disimpan di Object Storage.
+One TreatmentSession can have multiple media items (multiple BEFORE, multiple AFTER).
 
-Database hanya menyimpan URL file.
+---
 
 # POS
 
 ## Invoice
 
-Invoice dibuat dari website.
+Invoice created on website first, then synced to Accurate.
 
-Invoice otomatis dikirim ke Accurate.
+Invoice statuses: DRAFT → UNPAID → PARTIAL → PAID → CANCELLED
 
-Invoice yang sudah dibuat dapat:
+Cancelled invoice must:
+- Reverse StockMovements (create offsetting movements)
+- Cancel associated Commissions (status → REJECTED)
+- Handle Payment reversals
+- Update InvoiceStatusHistory
 
-- Draft
-- Paid
-- Cancelled
+## Invoice Items
 
-Invoice yang dibatalkan harus:
+Invoice can contain any combination of INVENTORY and SERVICE items.
 
-- Membalik stock movement
-- Membatalkan komisi
-- Membatalkan payment
-
-## Invoice Item
-
-Invoice dapat berisi:
-
-* INVENTORY
-* SERVICE
-
-Dalam satu invoice dapat terdapat lebih dari satu item.
+Each InvoiceItem stores: qty, price, discount, subtotal, unitId.
 
 ## Discount
 
-Diskon dapat berupa:
+Discount applied at InvoiceItem level (item.discount field).
 
-* Nominal
-* Persentase
+Invoice.totalDiscount = sum of all item discounts.
 
-## Voucher
+Can be:
+- Fixed amount (FIXED_AMOUNT)
+- Percentage (calculated and stored as fixed amount on item)
 
-Voucher dapat berupa:
+## Payment Methods
 
-* Nominal
-* Persentase
+Available methods: CASH, TRANSFER, QRIS, DEBIT, CREDIT_CARD (managed in PaymentMethod table).
 
-## Payment Method
+Multiple payments per invoice are supported (partial payments).
 
-* Cash
-* Transfer
-* QRIS
-* Debit Card
-* Credit Card
+---
 
 # Multi Branch
 
 ## Branch
 
-Sistem mendukung multi cabang.
+System supports multi-branch operations.
 
 ## Stock
 
-Setiap cabang memiliki stok masing-masing.
+Each branch has its own Warehouse with separate Inventory records.
 
-## Transfer Stock
+Stock movements are always tied to a specific warehouse.
 
-Transfer stok antar cabang harus didukung.
+## Stock Transfer
 
-Transfer stok langsung diproses. tanpa perlu approval manager
+Transfer stock between branches.
 
-Transfer harus mencatat:
+Transfer statuses: PENDING → IN_TRANSIT → RECEIVED → CANCELLED
 
-* Cabang Asal
-* Cabang Tujuan
-* Produk
-* Qty
-* User
+StockMovements (TRANSFER_OUT + TRANSFER_IN) are created only when status reaches RECEIVED.
 
-Transfer Status
+No manager approval required to progress transfer status.
+Any authorized user can update transfer status.
 
-- PENDING
-- IN_TRANSIT
-- RECEIVED
-- CANCELLED
+Transfer records:
+- sourceWarehouseId
+- destinationWarehouseId
+- transferNo (unique)
+- transferDate
+- createdBy (String)
+- StockTransferItems (item + qty per line)
+
+---
 
 # Employee
 
-## Employee Type
+## Employee Data
+
+Employee stores:
+- employeeCode (unique)
+- roleId → EmployeeRole (STYLIST, ASSISTANT, COLORIST, CUSTOMER_SERVICE, MANAGER)
+- name, phone, email, address
+- hireDate, birthDate
+- emergencyContact
+- commissionEnabled
+- isActive
+
+Employee branch access controlled via EmployeeBranch (not a direct branchId on employee).
+
+## User Account
+
+An employee may optionally have a linked User account (User.employeeId).
+
+User role (UserRole) is separate from EmployeeRole.
+
+---
 
 # Authorization
 
-## Roles
+## User Roles (for system access)
 
-- Super Admin
-- Owner
-- Manager
-- Kasir
-- Stylist
+- SUPER_ADMIN
+- OWNER
+- MANAGER
+- CS
+- STYLIST
+- ASSISTANT
+- COLORIST
+- FINANCE
+
+(Managed in user_roles table via UserRole.code)
+
+## Employee Roles (for operational assignment)
+
+- STYLIST
+- ASSISTANT
+- COLORIST
+- CUSTOMER_SERVICE
+- MANAGER
+
+(Managed in employee_roles table via EmployeeRole.code)
 
 ## Permissions
 
-Permission diatur berdasarkan role.
+Role-based permission enforced in middleware.
 
-Contoh:
+Example:
+- CS: Create Invoice, View Customer
+- STYLIST: View Schedule, View Customer History, Check In Attendance
+- MANAGER: Manage Booking, Manage Employee, Approve Commission
+- OWNER: View All Reports
+- FINANCE: Pay Commission, View Financial Reports
 
-Kasir:
-- Create Invoice
-- View Customer
-
-Stylist:
-- View Schedule
-- View Customer History
-
-Manager:
-- Manage Booking
-- Manage Employee
-
-Owner:
-- View All Reports
-
-## Employee Data
-
-* Nama
-* Telepon
-* Jabatan
-* Cabang
-* Status Aktif
+---
 
 # Attendance
-Attendance menggunakan:
-- GPS
 
-Attendance menyimpan:
+Attendance uses GPS (latitude/longitude) for check-in and check-out.
 
-- Latitude
-- Longitude
-- Timestamp
+One Attendance record per employee per attendanceDate.
 
-## Check In
+Records:
+- checkInAt (UTC DateTime)
+- checkOutAt (UTC DateTime)
+- checkInLatitude, checkInLongitude
+- checkOutLatitude, checkOutLongitude
+- notes
 
-Karyawan dapat melakukan check in.
-
-## Check Out
-
-Karyawan dapat melakukan check out.
-
-## Attendance Record
-
-Attendance menyimpan:
-
-* Tanggal
-* Jam Masuk
-* Jam Keluar
+---
 
 # Schedule
 
 ## Work Schedule
 
-Stylist memiliki jadwal kerja.
+EmployeeSchedule has one record per employee per date (unique constraint).
 
-Appointment tidak boleh overlap untuk stylist yang sama.
+scheduleType: WORK | OFF | LEAVE
 
-Sistem harus melakukan validasi jadwal sebelum booking dibuat.
+Appointment booking must validate that assigned staff has scheduleType = WORK
+(or no schedule conflict) for the appointment date/time.
 
-## Day Off
+## Staff Overlap Validation
 
-Stylist memiliki hari libur.
+Before creating AppointmentStaff, system must check that the employee
+has no other IN_PROGRESS or CONFIRMED appointments overlapping the same time window.
+
+---
 
 # Leave
 
-Stylist dapat mengajukan cuti.
+Employee submits Leave request (status: PENDING).
 
-Leave memiliki status:
+Manager approves (APPROVED) or rejects (REJECTED).
 
-- PENDING
-- APPROVED
-- REJECTED
+Approved leave can optionally generate EmployeeSchedule entries with scheduleType = LEAVE.
 
-Leave mencatat:
+Leave records: employeeId, startDate, endDate, reason, status, approvedBy (String), approvedAt.
 
-- Employee
-- Start Date
-- End Date
-- Reason
-- Approver
+---
 
 # Commission
 
 ## Commission Calculation
 
-Komisi dapat berupa:
+Commission is calculated AFTER invoice reaches PAID status.
 
-- Persentase dari nilai service
-- Nominal tetap per service
+Commission rule is defined per: employee + commissionCategory (NOT per employee + service item).
 
-Komisi ditentukan berdasarkan:
+Items are grouped into CommissionCategories. Each item has a commissionCategoryId.
 
-- Karyawan
-- Service/Treatment
+CommissionRule fields:
+- commissionType: PERCENTAGE | FIXED_AMOUNT
+- commissionValue: rate or fixed amount
+- commissionBase: BEFORE_DISCOUNT | AFTER_DISCOUNT
+- effectiveDate, endDate (date-ranged rules)
 
-Setiap karyawan dapat memiliki aturan komisi yang berbeda untuk setiap service.
+Multi-staff commission:
+- workRatio = employee's workQty / total workQty for that TreatmentItem
+- baseAmount = invoiceItem price (adjusted per commissionBase) × workRatio
+- commissionAmount = baseAmount × commissionValue (for PERCENTAGE)
 
-Contoh:
+## Commission Snapshot
 
-Stylist A
+When commission is created, all values are snapshotted:
+- commissionType
+- commissionValue
+- commissionBase
+- baseAmount
+- commissionAmount
+- workQty, workRatio
 
-- Keratin = 4%
-- Cutting = Rp150.000
-
-Stylist B
-
-- Keratin = 5%
-- Cutting = Rp150.000
-
-## Commission snapshot
-Saat komisi dibuat, sistem menyimpan snapshot nilai komisi.
-
-Perubahan rule komisi tidak mengubah komisi historis.
+Changing a CommissionRule after the fact does NOT change historical commissions.
 
 ## Commission Status
 
-* PENDING
-* APPROVED
-* PAID
+PENDING → APPROVED → PAID
+
+Or: PENDING / APPROVED → REJECTED
+
+## Branch-Level Commission (Manager / CS)
+
+BranchCommissionRule stores per-employee + per-branch commission configuration
+(commissionType, commissionValue, effectiveDate).
+
+This is used for Manager and CS roles who earn commission based on branch revenue.
+
+Calculation is handled at the service/application layer — there is no
+separate branch_commissions table in the database.
+
+---
 
 # Audit Log
 
-Sistem harus mencatat:
+AuditLog must be created for:
+- create, update, soft-delete on: Customer, Employee, Item, Invoice, Payment, Commission
+- Appointment status changes
+- Invoice status changes
+- Commission approval/payment
+- Stock adjustments
 
-- User
-- Action
-- Module
-- Record
-- Timestamp
+AuditLog stores:
+- userId (String from JWT context)
+- module
+- action
+- recordId
+- oldData (JSON snapshot)
+- newData (JSON snapshot)
+- ipAddress
+- createdAt
+
+---
 
 # Accurate Integration
 
-# Sync Queue
+## Sync Queue
 
-Semua proses sinkronisasi Accurate menggunakan queue.
+All Accurate sync operations go through SyncQueue.
 
-Status:
+SyncQueue fields: entityType, entityId, direction, status, retryCount, payload, response, errorMessage.
 
-- PENDING
-- PROCESSING
-- SUCCESS
-- FAILED
+Status flow: PENDING → PROCESSING → SUCCESS / FAILED
 
-Sistem harus dapat retry jika sinkronisasi gagal.
+System must retry FAILED items. Max retry configurable.
+
+SyncLog records full request/response payloads for debugging.
 
 ## Customer Sync
 
-Customer disinkronkan dari Accurate ke Website.
+Bidirectional. Website ↔ Accurate.
 
 ## Product Sync
 
-Product disinkronkan dari Accurate ke Website.
+Accurate → Website only. Accurate is source of truth for items.
 
 ## Invoice Sync
 
-Invoice dibuat di Website.
-
-Invoice otomatis dibuat di Accurate.
+Website → Accurate. Invoice created locally first, then queued for Accurate.
 
 ## Payment Settlement
 
-Pembayaran invoice di Website harus tercermin di Accurate.
+Payment created locally → queued → synced to Accurate as receipt.
+
+---
 
 # Dashboard
 
-Dashboard menampilkan:
-
-* Omzet Harian
-* Omzet Bulanan
-* Penjualan per Cabang
-* Service Terlaris
-* Produk Terlaris
-* Customer Baru
-* Membership Aktif
-* Stok Menipis
-* Komisi Stylist
+Dashboard displays:
+- Daily / Monthly Revenue
+- Revenue per Branch
+- Top Services
+- Top Products
+- New Customers
+- Active Memberships
+- Low Stock alerts (Inventory.availableQty < minimumQty)
+- Commission by Stylist (pending + approved + paid)
+- Attendance summary

@@ -1,22 +1,36 @@
-const { object, string, optional, pipe, minLength, picklist, number, minValue } = require("valibot");
+const {
+  object, string, optional, pipe, minLength, regex,
+  picklist, number, minValue, array,
+} = require("valibot");
 
 const APPOINTMENT_STATUSES = [
   "BOOKED", "CONFIRMED", "CHECK_IN", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW",
 ];
 
+// HH:MM — matches 00:00 through 23:59
+const HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const serviceLineSchema = object({
+  itemId: pipe(string(), minLength(1, "itemId is required")),
+  qty:    pipe(number(), minValue(1,  "qty must be >= 1")),
+  price:  pipe(number(), minValue(0,  "price must be >= 0")),
+  notes:  optional(string()),
+});
+
 const createAppointmentSchema = object({
-  customerId:     pipe(string(), minLength(1, "customerId is required")),
-  visitDate:      pipe(string(), minLength(1, "visitDate is required")),
-  startTime:      pipe(string(), minLength(1, "startTime is required")),
-  endTime:        pipe(string(), minLength(1, "endTime is required")),
+  customerId:     pipe(string(), minLength(1,   "customerId is required")),
+  visitDate:      pipe(string(), minLength(1,   "visitDate is required")),
+  startTime:      pipe(string(), regex(HH_MM,  "startTime must be HH:MM (e.g. 09:00)")),
+  endTime:        pipe(string(), regex(HH_MM,  "endTime must be HH:MM (e.g. 12:00)")),
   notes:          optional(string()),
   estimatedTotal: optional(pipe(number(), minValue(0, "estimatedTotal must be >= 0"))),
+  services:       optional(array(serviceLineSchema)),
 });
 
 const updateAppointmentSchema = object({
   visitDate:      optional(string()),
-  startTime:      optional(string()),
-  endTime:        optional(string()),
+  startTime:      optional(pipe(string(), regex(HH_MM, "startTime must be HH:MM (e.g. 09:00)"))),
+  endTime:        optional(pipe(string(), regex(HH_MM, "endTime must be HH:MM (e.g. 12:00)"))),
   notes:          optional(string()),
   estimatedTotal: optional(pipe(number(), minValue(0, "estimatedTotal must be >= 0"))),
 });

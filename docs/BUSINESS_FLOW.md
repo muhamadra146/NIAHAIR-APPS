@@ -1,4 +1,8 @@
 # BUSINESS_FLOW.md
+> Aligned to prisma/schema.prisma
+> Last updated: June 2026
+
+---
 
 # 1. Customer Flow
 
@@ -6,25 +10,31 @@
 
 User
 ↓
-Input Customer
+Input Customer Data
 ↓
-Save Customer
+Save Customer (syncSource: LOCAL, syncStatus: PENDING)
 ↓
-Create Customer To Accurate
+Create SyncQueue (entityType: CUSTOMER, direction: APP_TO_ACCURATE)
 ↓
-Save Accurate ID
+Background Worker picks up queue
 ↓
-Customer Active
+Call Accurate API → create customer
+↓
+Save accurateCustomerId to customer
+↓
+Update syncStatus: SYNCED
 
 ## Customer Sync From Accurate
 
-Accurate
+Accurate Webhook / Scheduled Pull
 ↓
-Sync Queue
+Create SyncQueue (direction: ACCURATE_TO_APP)
 ↓
-Website Database
+Worker processes queue
 ↓
-Customer Updated
+Upsert Customer in local DB (match by accurateCustomerId)
+↓
+Update lastSyncAt
 
 ---
 
@@ -32,75 +42,69 @@ Customer Updated
 
 Customer
 ↓
-Pilih Cabang
+Select Branch
 ↓
-Pilih Service
+Select Service(s) → AppointmentService
 ↓
-Pilih Tanggal
+Select Date & Time
 ↓
-Pilih Jam
+Validate Staff Schedule (no overlap on same date/time)
 ↓
-Validasi Jadwal Staff
+Assign Staff → AppointmentStaff (isPrimary for lead stylist)
 ↓
-Pilih Staff
+Input Deposit / DP (Optional) → Deposit (status: PENDING)
 ↓
-Input DP (Optional)
+Create Appointment (status: BOOKED)
 ↓
-Create Appointment
-↓
-Status = BOOKED
+Create AppointmentStatusHistory (null → BOOKED)
 
-## Appointment Confirmation
+## Appointment Status Flow
 
 BOOKED
 ↓
-CONFIRMED
+CONFIRMED (staff confirmed)
 ↓
-CHECK_IN
+CHECK_IN (customer arrives)
 ↓
-IN_PROGRESS
+IN_PROGRESS (treatment started)
 ↓
-COMPLETED
+COMPLETED (treatment done)
 
-Atau
+Or:
 
-BOOKED
+BOOKED / CONFIRMED
 ↓
 CANCELLED
 
-Atau
+Or:
 
-BOOKED
+BOOKED / CONFIRMED
 ↓
 NO_SHOW
+
+Each transition creates AppointmentStatusHistory record.
 
 ---
 
 # 3. Treatment Flow
 
-Customer Check In
+Appointment reaches CHECK_IN or IN_PROGRESS
 ↓
-Treatment Dimulai
+Create TreatmentSession (linked to appointment, customer, branch)
 ↓
-Assign Stylist
+Create TreatmentItems (one per service, with priceSnapshot + conversionSnapshot)
 ↓
-Assign Assistant
+Create TreatmentAssignments per TreatmentItem
+  - Each assignment: employee + workQty
+  - Multiple employees can be assigned to one TreatmentItem
 ↓
-Assign Colorist
+Treatment Completed
 ↓
-Input Work Qty
+Update TreatmentSession.completedAt
 ↓
-Treatment Selesai
+Upload Before/After Photos → TreatmentMedia (mediaType: BEFORE | AFTER)
 ↓
-Create Treatment Session
-↓
-Upload Before Photo
-↓
-Upload After Photo
-↓
-Save Treatment Notes
-↓
-Treatment History Updated
+Save treatment notes on TreatmentSession
 
 ---
 
@@ -108,252 +112,300 @@ Treatment History Updated
 
 Customer
 ↓
-Select Product
-↓
-Select Service
+Select Items (INVENTORY) and/or Services (SERVICE)
 ↓
 Apply Membership Discount
-↓
-Apply Voucher
+  - Check customer.membershipId → active CustomerMembership
+  - Apply discountType (PERCENTAGE | FIXED_AMOUNT) to eligible items
 ↓
 Generate Invoice
+  - status: DRAFT → UNPAID
+  - subtotal, totalDiscount, grandTotal, outstandingAmount calculated
 ↓
-Payment
+Record Payments → Payment records
 ↓
-Invoice Paid
+Update Invoice paidAmount and outstandingAmount
+↓
+Invoice Status:
+  - paidAmount = 0 → UNPAID
+  - 0 < paidAmount < grandTotal → PARTIAL
+  - paidAmount >= grandTotal → PAID
+↓
+On PAID: trigger post-payment processing (see flows 6, 7, 12)
 
 ---
 
 # 5. Deposit Flow
 
-Booking
+Appointment Created
 ↓
-DP Dibayar
+Customer pays DP
 ↓
-Save Deposit
+Create Deposit (appointmentId, paymentMethodId, amount, status: PAID)
 
-Total Invoice
+When Invoice is Created from Appointment
 ↓
-Kurangi Deposit
+Invoice grandTotal = full service amount
 ↓
-Hitung Outstanding Amount
+Apply deposit(s) via InvoiceDeposit (amountApplied)
 ↓
-Invoice Status
+Invoice.totalDeposit = sum of applied deposits
+↓
+Invoice.outstandingAmount = grandTotal - totalDeposit - paidAmount (from payments)
+↓
+Invoice status: UNPAID / PARTIAL / PAID
 
-UNPAID
-atau
-PARTIAL
-atau
-PAID
-
-Sync To Accurate
-
-Invoice Full Amount
+When Customer Pays Remainder
 ↓
-DP Payment
+Create Payment record
 ↓
-Final Payment
+Update Invoice paidAmount + outstandingAmount
+↓
+Deposit status updated: PAID → PARTIAL_USED / USED
+
+Sync To Accurate:
+  - Invoice syncs at full grandTotal
+  - DP recorded as payment in Accurate separately
 
 ---
 
-# 6. Service Material Flow
+# 6. Service Material Flow (Stock Deduction from Treatment)
 
-Treatment Selesai
+Invoice reaches PAID status
 ↓
-Create Treatment Session
+For each TreatmentSession linked to Invoice
 ↓
-Get Service Materials
+For each TreatmentItem in TreatmentSession
 ↓
-Generate Material Usage
+Read ServiceMaterials for that service item (BOM)
 ↓
-Create Material Usage Items
+Create MaterialUsage (linked to TreatmentItem)
 ↓
-Create Stock Movement
+For each material:
+  - Create MaterialUsageItem (materialItemId, unitId, qty)
+  - Get Warehouse for branch
+  - Create StockMovement (type: OUT, referenceType: "MATERIAL_USAGE")
+  - Update Inventory.availableQty
 ↓
-Update Inventory
+Stock deducted per branch warehouse
 
+---
 
 # 7. Product Sales Flow
 
-Product Sold
+Product (itemType: INVENTORY) added to Invoice
 ↓
-Create Invoice Item
+Invoice PAID
 ↓
-Reduce Inventory
-↓
-Create Stock Movement
+For each InvoiceItem with itemType = INVENTORY:
+  - Get Warehouse for branch
+  - Create StockMovement (type: OUT, referenceType: "INVOICE", referenceId: invoiceId)
+  - Update Inventory.availableQty
 
 ---
 
 # 8. Membership Flow
 
-Customer Purchase Membership
+Customer Purchases Membership
 ↓
-Membership Active
+Create CustomerMembership (status: ACTIVE, startDate, endDate = startDate + durationDays)
 ↓
-Set Start Date
+Create MembershipHistory record
 ↓
-Set End Date
+Update Customer.membershipId
 
-Saat Invoice Dibuat
-
-Check Membership
+When Invoice Created
 ↓
-Apply Membership Discount
+Check active CustomerMembership for customer
 ↓
-Generate Invoice
+If active: apply Membership.discountType + discountValue
+↓
+Record discount in InvoiceItem.discount and Invoice.totalDiscount
 
-Saat Membership Diperpanjang
-
-Membership History Created
+When Membership Renewed
+↓
+Set old CustomerMembership status: EXPIRED
+↓
+Create new CustomerMembership (status: ACTIVE)
+↓
+Create MembershipHistory record
+↓
+Update Customer.membershipId to new membership
 
 ---
 
 # 9. Stock Transfer Flow
 
-Branch A
+User creates transfer request
 ↓
-Create Transfer
+Create StockTransfer (status: PENDING)
 ↓
-Status = PENDING
-↓
-Status = IN_TRANSIT
-↓
-Status = RECEIVED
+Create StockTransferItems
 
-Saat RECEIVED
+Status: PENDING
+↓
+Dispatch confirmed
+↓
+Status: IN_TRANSIT
+↓
+Destination branch receives
+↓
+Status: RECEIVED
+↓
+On RECEIVED:
+  - Create StockMovement (type: TRANSFER_OUT) for source warehouse
+  - Update source Inventory.availableQty (reduce)
+  - Create StockMovement (type: TRANSFER_IN) for destination warehouse
+  - Update destination Inventory.availableQty (increase)
 
-Branch A Stock Reduced
+Or:
+
+Status: PENDING / IN_TRANSIT
 ↓
-Branch B Stock Added
-↓
-Stock Movement Created
+CANCELLED (no stock movement created)
+
+Note: No manager approval step — any authorized user can progress transfer status.
 
 ---
 
 # 10. Attendance Flow
 
-Employee
+Employee Check In
 ↓
-Check In
+Create or update Attendance record for attendanceDate
 ↓
-Capture GPS
+Save checkInAt (UTC)
 ↓
-Save Attendance
+Save checkInLatitude + checkInLongitude (GPS)
 
-Employee
+Employee Check Out
 ↓
-Check Out
+Update same Attendance record
 ↓
-Capture GPS
+Save checkOutAt (UTC)
 ↓
-Save Attendance
+Save checkOutLatitude + checkOutLongitude (GPS)
+
+One Attendance record per employee per day.
 
 ---
 
 # 11. Leave Flow
 
-Employee
+Employee Submits Leave
 ↓
-Submit Leave Request
+Create Leave (status: PENDING)
+
+Manager Reviews
 ↓
-Status = PENDING
-
-Manager
+APPROVED: update status, approvedBy (String), approvedAt
 ↓
-Approve
+REJECTED: update status, approvedBy, approvedAt
 
-Status = APPROVED
-
-Atau
-
-Manager
+On APPROVED:
 ↓
-Reject
-
-Status = REJECTED
+Optionally create EmployeeSchedule entries (scheduleType: LEAVE) for leave period
 
 ---
 
 # 12. Commission Flow
 
-Invoice PAID
+Invoice reaches PAID status
 ↓
-Get Treatment Session
+Get TreatmentSessions linked to Invoice
 ↓
-Get Treatment Assignments
+For each TreatmentSession → TreatmentItems
 ↓
-Get Commission Rules
+For each TreatmentItem → TreatmentAssignments
 ↓
-Calculate Commission
-↓
-Create Commission
-↓
-Status = PENDING
+For each TreatmentAssignment:
+  - Get Employee
+  - Get serviceItem from TreatmentItem
+  - Get serviceItem.commissionCategoryId
+  - Find active CommissionRule for (employeeId + commissionCategoryId)
+    matching effectiveDate <= invoiceDate <= endDate
+  - If no rule found: skip or use default
+  - Calculate:
+    - workRatio = assignment.workQty / sum(all workQty for same TreatmentItem)
+    - baseAmount = invoiceItem price * workRatio (AFTER_DISCOUNT or BEFORE_DISCOUNT per rule)
+    - commissionAmount = baseAmount * commissionValue (PERCENTAGE) OR fixed commissionValue (FIXED_AMOUNT)
+  - Snapshot all values
+  - Create Commission (status: PENDING)
 
 Manager Review
 ↓
-APPROVED
+Commission status: PENDING → APPROVED or REJECTED
 
-Finance
+Finance Pays
 ↓
-PAID
+Commission status: APPROVED → PAID
+↓
+Update paidBy (String), paidAt
+
+Note: commissionRule is per employee + commissionCategory (NOT per employee + service item).
+Items are assigned to categories, and rules are defined at the category level.
+There is NO separate branch_commissions table. Branch-level commissions
+(for Manager/CS roles) use BranchCommissionRule and are calculated at the service layer.
 
 ---
 
 # 13. Accurate Sync Flow
 
-Customer Sync
-Accurate
-↓
-Queue
-↓
-Website
+## Customer (Bidirectional)
 
-Product Sync
-Accurate
-↓
-Queue
-↓
-Website
+Website → Accurate:
+  Website creates/updates customer
+  → SyncQueue (direction: APP_TO_ACCURATE, status: PENDING)
+  → Worker → Accurate API
+  → Save accurateCustomerId
+  → SyncQueue status: SUCCESS
 
-Invoice Sync
-Website
-↓
-Queue
-↓
-Accurate
+Accurate → Website:
+  SyncQueue (direction: ACCURATE_TO_APP)
+  → Worker → fetch from Accurate
+  → Upsert local customer
 
-Payment Sync
-Website
-↓
-Queue
-↓
-Accurate
+## Product / Unit / Category Sync (Accurate → Website only)
+  Accurate is source of truth for items
+  → SyncQueue (direction: ACCURATE_TO_APP)
+  → Worker syncs Item, Unit, ItemCategory, ItemPrice
 
-Jika Gagal
+## Invoice Sync (Website → Accurate)
+  Invoice created on website
+  → SyncQueue (direction: APP_TO_ACCURATE)
+  → Worker → POST to Accurate
+  → Save accurateInvoiceId + accurateInvoiceNumber
+  → Update Invoice.lastSyncAt
 
-FAILED
-↓
-Retry Queue
-↓
-SUCCESS
+## Payment Sync (Website → Accurate)
+  Payment created on website
+  → SyncQueue (direction: APP_TO_ACCURATE)
+  → Worker → POST receipt to Accurate
+  → Save accurateReceiptId + accurateReceiptNumber
+
+## On Failure
+  SyncQueue status: FAILED
+  retryCount incremented
+  SyncLog records full request + response payload
+  Retry job re-queues FAILED items up to max retry limit
 
 ---
 
-# 14. Audit Flow
+# 14. Audit Log Flow
 
-User Action
+Any of these actions:
+- Create / Update / Delete (soft) on key entities
+- Payment recorded
+- Commission approved/paid
+- Appointment status changed
+- Invoice status changed
 ↓
-Create Audit Log
-
-Audit Log Menyimpan
-
-* User
-* Module
-* Action
-* Record
-* Timestamp
-
-```
-```
+Create AuditLog:
+  - userId (String, from JWT context)
+  - module (e.g. "INVOICE", "CUSTOMER", "COMMISSION")
+  - action (e.g. "CREATE", "UPDATE", "STATUS_CHANGE", "PAYMENT")
+  - recordId (ID of affected record)
+  - oldData (Json snapshot before change)
+  - newData (Json snapshot after change)
+  - ipAddress
+  - createdAt

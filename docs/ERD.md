@@ -1,178 +1,152 @@
 # ERD.md
+> Source of truth: prisma/schema.prisma
+> Last updated: June 2026
+
+---
 
 # MASTER DATA
 
 ## branches
 
-PK:
-
-* id
+PK: id
 
 Fields:
+- code (unique)
+- name
+- address
+- city
+- province
+- phone
+- isActive
 
-* code
-* name
-* address
-* phone
-* is_active
+Relations:
+- branch has many employeeBranchHistories
+- branch has many employeeBranches
+- branch has many itemPrices
+- branch has many warehouses
+- branch has many invoices
+- branch has many appointments
+- branch has many treatmentSessions
+- branch has many branchCommissionRules
 
 ---
 
 ## user_roles
 
-PK:
-
-* id
+PK: id
 
 Fields:
+- code (unique)
+- name
+- isActive
 
-* code
-* name
-* is_active
+Relations:
+- userRole has many users
 
 ---
 
 ## users
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* branch_id
-* user_role_id
-* employee_id (nullable)
+- userRoleId → user_roles
+- employeeId (nullable, unique) → employees
 
 Fields:
+- name
+- email (unique)
+- passwordHash
+- isActive
 
-* name
-* email
-* password_hash
-* is_active
-
-## employees
-
-PK:
-
-* id
-
-FK:
-
-* branch_id
-* role_id
-
-Fields:
-
-* employee_code
-
-* name
-
-* phone
-
-* email
-
-* hire_date
-
-* birth_date
-
-* address
-
-* emergency_contact
-
-* commission_enabled
-
-* is_active
-
-* created_at
-* updated_at
-
-Constraints:
-
-* employee_code harus unik
-
-Relasi:
-
-* employee memiliki satu role
-
-* employee memiliki banyak attendance
-
-* employee memiliki banyak schedule
-
-* employee memiliki banyak leave
-
-* employee memiliki banyak commission_rule
-
-* employee memiliki banyak commission
+Note: users has NO direct branchId. Branch access is controlled via employee → employeeBranches.
 
 ---
 
-## employee_role
-PK:
-* id
+## employee_roles
+
+PK: id
 
 Fields:
+- code (unique)
+- name
+- isActive
 
-* code
-* name
+Relations:
+- employeeRole has many employees
 
-* is_active
+---
 
-* created_at
-* updated_at
+## employees
+
+PK: id
+
+FK:
+- roleId → employee_roles
+
+Fields:
+- employeeCode (unique)
+- name
+- phone
+- email (unique, nullable)
+- hireDate
+- birthDate
+- address
+- emergencyContact
+- commissionEnabled (default: true)
+- isActive
+
+Note: employees has NO direct branchId. Branch assignment is via employee_branches junction table.
+
+Relations:
+- employee has one role (EmployeeRole)
+- employee has many branchHistories (EmployeeBranchHistory)
+- employee has many employeeBranches (EmployeeBranch)
+- employee has one user (optional)
+- employee has many appointmentStaffs
+- employee has many treatmentAssignments
+- employee has many commissionRules
+- employee has many commissions
+- employee has many attendances
+- employee has many schedules
+- employee has many leaves
+- employee has many branchCommissionRules
 
 ---
 
 ## employee_branch_histories
 
-PK:
-* id
+PK: id
 
 FK:
-* employee_id
-* branch_id
+- employeeId → employees
+- branchId → branches
 
 Fields:
+- startDate
+- endDate (nullable)
+- createdAt
 
-* start_date
-* end_date
+---
 
-* created_at
+## employee_branches
 
-## customers
+PK: id
 
-PK:
-* id
+FK:
+- employeeId → employees
+- branchId → branches
 
 Fields:
+- isPrimary (default: false)
+- isActive (default: true)
+- createdAt
+- updatedAt
 
-* accurate_customer_id
-* customer_no
-* name
-* mobile_phone
-* whatsapp
-* email
-* address
-* city
-* province
-* birth_date
-* gender
-* membership_id
-* notes
-* last_visit_at
-* is_active
-* last_sync_at
-* created_at
-* updated_at
+Constraints:
+- unique(employeeId, branchId)
 
-Relasi:
-
-* customer memiliki banyak appointment
-* customer memiliki banyak invoice
-* customer memiliki banyak catatan customer
-* customer memiliki banyak sesi treatment
-* customer memiliki banyak riwayat membership
-* customer memiliki satu membership aktif
+Purpose: Controls which branches an employee can access/operate in.
 
 ---
 
@@ -180,1412 +154,1006 @@ Relasi:
 
 ## memberships
 
-PK:
-
-* id
+PK: id
 
 Fields:
+- name
+- price (Decimal 18,2)
+- durationDays
+- discountType (PERCENTAGE | FIXED_AMOUNT)
+- discountValue (Decimal 18,2)
 
-* name
-* price
-* duration_days
-* discount_type
-* discount_value
+Relations:
+- membership has many customerMemberships
+- membership has many customers (active membership ref)
+- membership has many membershipHistories
 
 ---
 
 ## customer_memberships
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* customer_id
-* membership_id
+- customerId → customers
+- membershipId → memberships
 
 Fields:
-
-* start_date
-* end_date
-* status
+- startDate
+- endDate
+- status (ACTIVE | EXPIRED | CANCELLED)
+- createdAt
+- updatedAt
 
 ---
 
 ## membership_histories
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* customer_id
-* membership_id
+- customerId → customers
+- membershipId → memberships
 
 Fields:
-
-* start_date
-* end_date
-* created_by
+- startDate
+- endDate
+- createdBy (String?, not FK)
+- createdAt
 
 ---
 
-# CUSTOMER CRM
+# CUSTOMERS
+
+## customers
+
+PK: id
+
+FK:
+- membershipId (nullable) → memberships
+
+Fields:
+- accurateCustomerId (Int?, unique)
+- customerNo (unique, nullable)
+- name
+- mobilePhone
+- email
+- address
+- city
+- province
+- birthDate
+- gender (MALE | FEMALE, nullable)
+- notes
+- lastVisitAt
+- isActive
+- syncSource (LOCAL | ACCURATE, default: LOCAL)
+- syncStatus (PENDING | SYNCED | FAILED, default: PENDING)
+- syncError
+- lastSyncAttemptAt
+- lastSyncAt
+- createdAt
+- updatedAt
+
+Note: Customer has NO whatsapp field in schema.
+
+Relations:
+- customer has many customerMemberships
+- customer has many membershipHistories
+- customer has many appointments
+- customer has many invoices
+- customer has many treatmentSessions
+- customer has many customerNotes
+
+---
 
 ## customer_notes
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* customer_id
-* employee_id
+- customerId → customers
 
 Fields:
+- note
+- createdBy (String?, NOT a FK to employees — stores name/id as string only)
+- createdAt
 
-* note
+Note: No employee_id FK. Notes cannot be deleted (soft-delete not applicable — no isActive field).
 
 ---
-
-## treatment_sessions
-
-PK:
-
-* id
-
-FK:
-
-* customer_id
-* employee_id
-* invoice_id
-* appointment_id
-* service_item_id
-
-Fields:
-
-* treatment_date
-* notes
-
----
-
-## treatment_media
-
-PK:
-
-* id
-
-FK:
-
-* treatment_session_id
-
-Fields:
-
-* media_type
-
-* file_url
-
-* notes
-
-* created_at
-
-Enum:
-
-* media_type
-
-  * BEFORE
-  * AFTER
 
 # ITEM MASTER
-## items
 
 ## item_categories
-
-item_categories
 
 PK: id
 
 Fields:
+- accurateCategoryId (Int?, unique)
+- name
+- isActive
+- createdAt
+- updatedAt
 
-accurate_category_id
-nama
-status_aktif
-dibuat_pada
-diperbarui_pada
-
-Relasi:
-
-kategori memiliki banyak item
+Relations:
+- category has many items
 
 ---
 
 ## units
 
-PK:
-
-id
+PK: id
 
 Fields:
+- accurateUnitId (Int?, unique)
+- name
+- isActive
+- lastSyncAt
+- createdAt
+- updatedAt
 
-accurate_unit_id
-nama
-dibuat_pada
-diperbarui_pada
-
-Constraints:
-
-* accurate_unit_id harus unik
-
-Relasi:
-
-unit digunakan oleh banyak item_units
-unit digunakan oleh banyak item_prices
+Relations:
+- unit used by many itemUnits
+- unit used by many itemPrices
+- unit used by many serviceMaterials
+- unit used by many materialUsageItems
+- unit used by many invoiceItems
+- unit used by many treatmentItems
 
 ---
 
 ## items
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* category_id
-* default_unit_id
+- categoryId (nullable) → item_categories
+- defaultUnitId (nullable) → units
+- commissionCategoryId (nullable) → commission_categories
 
 Fields:
+- accurateItemId (Int?, unique)
+- itemCode (unique)
+- name
+- itemType (INVENTORY | SERVICE)
+- isActive
+- lastSyncAt
+- createdAt
+- updatedAt
 
-* accurate_item_id
-* item_code
-
-* nama
-
-* item_type
-
-  Nilai:
-  - INVENTORY
-  - SERVICE
-
-* status_aktif
-
-* terakhir_sinkronisasi
-
-* dibuat_pada
-* diperbarui_pada
-
-Constraints:
-
-* accurate_item_id harus unik
-* item_code harus unik
-
-Relasi:
-
-* item memiliki satu kategori
-
-* item memiliki satu unit default
-
-* item memiliki banyak item_units
-
-* item memiliki banyak item_prices
-
-* item memiliki banyak inventory
-
-* item dapat digunakan sebagai service_material
-
-* item dapat digunakan pada invoice_item
+Relations:
+- item has many itemUnits
+- item has many itemPrices
+- item has many inventories (only INVENTORY type)
+- item has many stockMovements
+- item has many stockTransferItems
+- item has many appointmentServices
+- item has many invoiceItems
+- item has many commissions (as serviceItem)
+- item has many treatmentItems
+- item has many serviceMaterials (as serviceItem)
+- item has many serviceMaterials (as materialItem)
+- item has many materialUsageItems
 
 ---
 
 ## item_units
 
-PK:
-
-id
+PK: id
 
 FK:
-
-item_id
-unit_id
+- itemId → items
+- unitId → units
 
 Fields:
-
-conversion_factor
-is_default
-dibuat_pada
-diperbarui_pada
+- conversionFactor (Decimal 18,6)
+- isDefault (default: false)
+- createdAt
+- updatedAt
 
 Constraints:
-
-* kombinasi item_id + unit_id harus unik
-
-Relasi:
-
-item memiliki banyak satuan
-
-Contoh:
-
-PCS = 1
-BOX = 25
-BOX BESAR = 50
-BOX SUPER = 100
-box container = 1000
+- unique(itemId, unitId)
 
 ---
-
 
 ## item_prices
 
-PK:
-
-id
+PK: id
 
 FK:
-- item_id
-- unit_id
-- branch_id
+- itemId → items
+- unitId → units
+- branchId (nullable) → branches
 
 Fields:
-
-harga_jual
-tanggal_efektif
-status_aktif
-dibuat_pada
-diperbarui_pada
-
-Constraints:
-
-* kombinasi item_id + unit_id + branch_id harus unik
-* hanya boleh ada satu harga aktif
-* untuk kombinasi:
-* item_id + unit_id + branch_id
-
-Relasi:
-
-item memiliki banyak harga
-
-Contoh:
-
-barang A
-
-pcs = 1.276.500
-box = 1.831.500
-box besar = 2.386.500
-box super = 2.997.000
-box container = 3.496.500
-
+- sellingPrice (Decimal 18,2)
+- costPrice (Decimal 18,2, nullable)
+- effectiveDate
+- isActive
+- createdAt
+- updatedAt
 
 ---
-
 
 # INVENTORY
 
 ## warehouses
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* branch_id
+- branchId (nullable, unique) → branches
 
 Fields:
+- accurateWarehouseId (Int?, unique)
+- name
+- isActive
+- lastSyncAt
+- createdAt
+- updatedAt
 
-* accurate_warehouse_id
-
-* kode
-
-* nama
-
-* status_aktif
-
-* terakhir_sinkronisasi
-
-* dibuat_pada
-
-* diperbarui_pada
-
-Constraints:
-
-* accurate_warehouse_id harus unik
-* branch_id harus unik
-
-Relasi:
-
-* warehouse dimiliki satu cabang
-
-* warehouse memiliki banyak inventory
-
-* warehouse memiliki banyak stock_movements
-
-* warehouse memiliki banyak stock_transfers_keluar
-
-* warehouse memiliki banyak stock_transfers_masuk
+Relations:
+- warehouse has many inventories
+- warehouse has many stockMovements
+- warehouse has many transferOuts (StockTransfer as source)
+- warehouse has many transferIns (StockTransfer as destination)
 
 ---
 
 ## inventories
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* warehouse_id
-* item_id
+- warehouseId → warehouses
+- itemId → items
 
 Fields:
-
-* qty_tersedia
-
-* qty_dipesan
-
-* qty_minimum
-
-* terakhir_sinkronisasi
-
-* dibuat_pada
-
-* diperbarui_pada
+- availableQty (Decimal 18,6)
+- reservedQty (Decimal 18,6)
+- minimumQty (Decimal 18,6)
+- lastSyncAt
+- createdAt
+- updatedAt
 
 Constraints:
-
-* kombinasi warehouse_id + item_id harus unik
-
-Relasi:
-
-* inventory dimiliki satu warehouse
-
-* inventory dimiliki satu item
+- unique(warehouseId, itemId)
 
 ---
 
 ## stock_movements
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* warehouse_id
-* item_id
+- warehouseId → warehouses
+- itemId → items
+- invoiceItemId (nullable) → invoice_items
 
 Fields:
+- type (IN | OUT | ADJUSTMENT | TRANSFER_IN | TRANSFER_OUT)
+- qty (Decimal 18,6)
+- balanceBefore (Decimal 18,6)
+- balanceAfter (Decimal 18,6)
+- referenceType (String?, e.g. "INVOICE", "TRANSFER")
+- referenceId (String?, ID of the reference record)
+- notes
+- createdAt
 
-* tipe
-
-* qty
-
-* saldo_sebelum
-
-* saldo_sesudah
-
-* referensi_tipe
-
-* referensi_id
-
-* catatan
-
-* dibuat_pada
-
-Enum:
-
-* tipe
-
-  * IN
-  * OUT
-  * ADJUSTMENT
-  * TRANSFER_IN
-  * TRANSFER_OUT
-
-Relasi:
-
-* stock movement dimiliki satu warehouse
-
-* stock movement dimiliki satu item
+Constraints:
+- unique(referenceType, referenceId, invoiceItemId)
 
 ---
 
 ## stock_transfers
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* warehouse_asal_id
-* warehouse_tujuan_id
+- sourceWarehouseId → warehouses
+- destinationWarehouseId → warehouses
 
 Fields:
+- transferNo (unique)
+- status (PENDING | IN_TRANSIT | RECEIVED | CANCELLED)
+- notes
+- transferDate
+- createdBy (String?, not FK)
+- createdAt
+- updatedAt
 
-* nomor_transfer
+Relations:
+- stockTransfer has many items (StockTransferItem)
 
-* status
-
-* catatan
-
-* tanggal_transfer
-
-* dibuat_oleh
-
-* dibuat_pada
-
-* diperbarui_pada
-
-Enum:
-
-* status
-
-  * DRAFT
-  * SENT
-  * RECEIVED
-  * CANCELLED
-
-Relasi:
-
-* transfer memiliki banyak stock_transfer_items
+Note: Status enum is PENDING → IN_TRANSIT → RECEIVED → CANCELLED.
+NOT: DRAFT/SENT. ERD.md previously had wrong enum values.
 
 ---
 
 ## stock_transfer_items
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* transfer_id
-* item_id
+- transferId → stock_transfers
+- itemId → items
 
 Fields:
+- qty (Decimal 18,6)
+- createdAt
 
-* qty
-
-* dibuat_pada
-
-Relasi:
-
-* transfer memiliki banyak item
-
-* item dapat muncul di banyak transfer
+---
 
 # SERVICE MATERIALS (BOM)
 
 ## service_materials
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* service_item_id
-* material_item_id
-* unit_id
+- serviceItemId → items (itemType = SERVICE)
+- materialItemId → items (itemType = INVENTORY)
+- unitId → units
 
 Fields:
-
-* qty
-
-* status_aktif
-
-* dibuat_pada
-
-* diperbarui_pada
+- qty (Decimal 18,6)
+- isActive
+- createdAt
+- updatedAt
 
 Constraints:
-
-* kombinasi service_item_id + material_item_id harus unik
-
-Relasi:
-
-* service memiliki banyak bahan baku
-
-* bahan baku dapat digunakan oleh banyak service
-
-Contoh:
-
-Keratin Premium
-
-* Keratin Liquid 50 ml
-* Shampoo 20 ml
-* Serum 10 ml
-
-Hair Botox
-
-* Botox Cream 40 ml
-* Shampoo 20 ml
+- unique(serviceItemId, materialItemId)
 
 ---
 
 ## material_usages
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* treatment_session_id
-* service_item_id
+- treatmentItemId → treatment_items
 
 Fields:
+- processedAt
+- createdAt
 
-* diproses_pada
+Note: FK is treatmentItemId, NOT treatmentSessionId+serviceItemId as some older docs stated.
 
-* dibuat_pada
+Relations:
+- materialUsage has many usageItems (MaterialUsageItem)
 
-Relasi:
-
-* material usage dimiliki satu treatment session
-
-* material usage memiliki banyak material_usage_items
+---
 
 ## material_usage_items
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* material_usage_id
-* material_item_id
-* stock_movement_id
+- materialUsageId → material_usages
+- materialItemId → items
+- unitId → units
 
 Fields:
+- stockMovementId (String?, not a FK — reference only)
+- qty (Decimal 18,6)
+- createdAt
 
-* qty
-
-* unit_id
-
-* dibuat_pada
-
-Relasi:
-
-* usage memiliki banyak bahan yang dipakai
-
-* setiap penggunaan menghasilkan stock movement
-
+---
 
 # APPOINTMENT / BOOKING
 
 ## appointments
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* customer_id
-* branch_id
+- customerId → customers
+- branchId → branches
 
 Fields:
+- bookingNo (unique)
+- bookingDate
+- visitDate
+- startTime
+- endTime
+- status (BOOKED | CONFIRMED | CHECK_IN | IN_PROGRESS | COMPLETED | CANCELLED | NO_SHOW)
+- notes
+- estimatedTotal (Decimal 18,2, nullable)
+- createdAt
+- updatedAt
 
-* nomor_booking
+Relations:
+- appointment has many services (AppointmentService)
+- appointment has many staffs (AppointmentStaff)
+- appointment has many deposits
+- appointment has many invoices
+- appointment has many statusHistories
+- appointment has many treatmentSessions
 
-* tanggal_booking
+---
 
-* tanggal_kunjungan
+## appointment_services
 
-* jam_mulai
+PK: id
 
-* jam_selesai
+FK:
+- appointmentId → appointments
+- serviceItemId → items
 
-* status
-
-* catatan
-
-* total_estimasi
-
-* dibuat_pada
-
-* diperbarui_pada
-
-Enum:
-
-* status
-
-  * BOOKED
-  * CONFIRMED
-  * CHECK_IN
-  * IN_PROGRESS
-  * COMPLETED
-  * CANCELLED
-  * NO_SHOW
-
-Constraints:
-
-* nomor_booking harus unik
-* Staff tidak boleh overlap
-* pada tanggal dan jam yang sama.
-
-Relasi:
-
-appointment memiliki satu customer
-
-appointment memiliki satu cabang
-
-appointment memiliki banyak appointment_services
-
-appointment memiliki banyak appointment_staffs
-
-appointment memiliki banyak deposits
-
-appointment memiliki banyak appointment_status_histories
-
-appointment dapat menghasilkan invoice
+Fields:
+- durationMinutes
+- qty (Decimal 18,2)
+- price (Decimal 18,2)
+- notes
+- createdAt
+- updatedAt
 
 ---
 
 ## appointment_staffs
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* appointment_id
-* employee_id
+- appointmentId → appointments
+- employeeId → employees
 
 Fields:
-
-* is_primary
-
-* created_at
+- isPrimary (default: false)
+- createdAt
 
 Constraints:
+- unique(appointmentId, employeeId)
 
-kombinasi appointment_id + employee_id harus unik
-
-Enum:
-
-* role
-
-  * STYLIST
-  * ASSISTANT
-  * COLORIST
-
-Relasi:
-
-* appointment memiliki banyak staff
-
-* employee dapat menangani banyak appointment
-
-## appointment_services
-
-PK:
-
-PK:
-
-* id
-
-FK:
-
-* appointment_id
-
-* service_item_id
-
-Fields:
-
-* durasi_menit
-
-* qty
-
-* harga
-
-* catatan
-
-* dibuat_pada
-
-* diperbarui_pada
-
-Relasi:
-
-* appointment memiliki banyak service
-
-* service dapat digunakan pada banyak appointment
-
-Contoh:
-
-Booking A
-
-* Keratin Premium
-* Hair Spa
+Note: There is NO role field (STYLIST/ASSISTANT/COLORIST) on this model.
+Staff role is determined by employee.roleId → employee_roles.
 
 ---
 
 ## deposits
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* appointment_id
+- appointmentId → appointments
+- paymentMethodId → payment_methods
 
 Fields:
+- amount (Decimal 18,2)
+- status (PENDING | PAID | PARTIAL_USED | USED | REFUNDED | CANCELLED)
+- paidAt (nullable)
+- accurateInvoiceId (Int?, unique)
+- accurateInvoiceNumber (nullable)
+- lastSyncAt (nullable)
+- notes
+- createdAt
+- updatedAt
 
-* jumlah
+Relations:
+- deposit has many invoiceDeposits
 
-* metode_pembayaran
-
-* status
-
-* dibayar_pada
-
-* catatan
-
-* dibuat_pada
-
-* diperbarui_pada
-
-Enum:
-
-* status
-
-  * PENDING
-  * PAID
-  * REFUNDED
-  * CANCELLED
-
-Relasi:
-
-* appointment memiliki banyak deposit
-
-Catatan:
-
-Deposit menjadi bagian dari pembayaran invoice.
+Note: Deposit status enum has 6 values: PENDING, PAID, PARTIAL_USED, USED, REFUNDED, CANCELLED.
+Older docs were missing PARTIAL_USED and USED.
 
 ---
 
 ## appointment_status_histories
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* appointment_id
+- appointmentId → appointments
 
 Fields:
+- oldStatus (AppointmentStatus?, nullable)
+- newStatus (AppointmentStatus)
+- notes
+- createdBy (String?, not FK)
+- createdAt
 
-* status_lama
-
-* status_baru
-
-* catatan
-
-* dibuat_oleh
-
-* dibuat_pada
-
-Relasi:
-
-* appointment memiliki banyak riwayat status
+---
 
 # INVOICE & PAYMENT
 
 ## payment_methods
 
-PK:
-
-* id
+PK: id
 
 Fields:
-
-* code
-
-* name
-
-* is_active
-
-* created_at
-
-* updated_at
-
-Contoh:
-
-* CASH
-* TRANSFER
-* QRIS
-* DEBIT
-* CREDIT_CARD
+- accuratePaymentMethodId (Int?, nullable)
+- code (unique)
+- name
+- isActive
+- createdAt
+- updatedAt
 
 ---
 
 ## invoices
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* customer_id
-* branch_id
-* appointment_id
+- customerId → customers
+- branchId → branches
+- appointmentId (nullable) → appointments
 
 Fields:
+- accurateInvoiceId (Int?, unique)
+- accurateInvoiceNumber (nullable)
+- invoiceNo (unique)
+- invoiceDate
+- subtotal (Decimal 18,2)
+- totalDiscount (Decimal 18,2, default: 0)
+- totalDeposit (Decimal 18,2, default: 0)
+- totalTax (Decimal 18,2, default: 0)
+- grandTotal (Decimal 18,2)
+- paidAmount (Decimal 18,2, default: 0)
+- outstandingAmount (Decimal 18,2)
+- status (DRAFT | UNPAID | PARTIAL | PAID | CANCELLED)
+- notes
+- lastSyncAt
+- createdAt
+- updatedAt
 
-* accurate_invoice_id
-
-* accurate_invoice_number
-
-* invoice_no
-
-* invoice_date
-
-* subtotal
-
-* total_discount
-
-* total_deposit
-
-* total_tax
-
-* grand_total
-
-* paid_amount
-
-* outstanding_amount
-
-* status
-
-* notes
-
-* last_sync_at
-
-* created_at
-
-* updated_at
-
-Enum:
-
-* status
-
-  * DRAFT
-  * UNPAID
-  * PARTIAL
-  * PAID
-  * CANCELLED
-
-Constraints:
-
-* invoice_no harus unik
-
-* accurate_invoice_id harus unik
-
-Relasi:
-
-* invoice dimiliki satu customer
-
-* invoice dimiliki satu cabang
-
-* invoice berasal dari satu appointment
-
-* invoice memiliki banyak invoice_items
-
-* invoice memiliki banyak payments
-
-* invoice memiliki banyak invoice_status_histories
+Relations:
+- invoice has many invoiceItems
+- invoice has many payments
+- invoice has many invoiceDeposits
+- invoice has many statusHistories
+- invoice has many treatmentSessions
+- invoice has many commissions
 
 ---
 
 ## invoice_items
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* invoice_id
-
-* item_id
-
-* unit_id
+- invoiceId → invoices
+- itemId → items
+- unitId → units
 
 Fields:
+- accurateInvoiceDetailId (Int?, nullable)
+- qty (Decimal 18,2)
+- price (Decimal 18,2)
+- discount (Decimal 18,2, default: 0)
+- subtotal (Decimal 18,2)
+- notes
+- createdAt
+- updatedAt
 
-* accurate_invoice_detail_id
-
-* qty
-
-* price
-
-* discount
-
-* subtotal
-
-* notes
-
-* created_at
-
-* updated_at
-
-Relasi:
-
-* invoice memiliki banyak item
-
-* item dapat muncul pada banyak invoice
-
-Catatan:
-
-Item dapat berupa:
-
-* INVENTORY
-* SERVICE
+Relations:
+- invoiceItem has many commissions
+- invoiceItem has many stockMovements
 
 ---
 
 ## payments
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* invoice_id
-
-* payment_method_id
+- invoiceId → invoices
+- paymentMethodId → payment_methods
 
 Fields:
+- paymentNo (unique)
+- amount (Decimal 18,2)
+- paymentDate
+- referenceNo (nullable)
+- notes
+- accurateReceiptId (Int?, unique)
+- accurateReceiptNumber (nullable)
+- lastSyncAt
+- createdAt
+- updatedAt
 
-* payment_no
+---
 
-* amount
+## invoice_deposits
 
-* payment_date
+PK: id
 
-* reference_no
+FK:
+- invoiceId → invoices
+- depositId → deposits
 
-* notes
-
-* created_at
-
-* updated_at
+Fields:
+- amountApplied (Decimal 18,2)
+- createdAt
 
 Constraints:
-
-* payment_no harus unik
-
-Relasi:
-
-* invoice memiliki banyak pembayaran
-
-* payment menggunakan satu metode pembayaran
-
-Contoh:
-
-Invoice Rp1.500.000
-
-Pembayaran 1
-QRIS
-Rp500.000
-
-Pembayaran 2
-Cash
-Rp1.000.000
-
-Status Invoice:
-PAID
+- unique(invoiceId, depositId)
 
 ---
 
 ## invoice_status_histories
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* invoice_id
-
-Fields:
-
-* old_status
-
-* new_status
-
-* notes
-
-* created_by
-
-* created_at
-
-Relasi:
-
-* invoice memiliki banyak riwayat status
-
-Contoh:
-
-DRAFT
-→ UNPAID
-
-UNPAID
-→ PARTIAL
-
-PARTIAL
-→ PAID
-
-# ATTENDANCE
-
-## attendances
-
-PK:
-
-* id
-
-FK:
-
-* employee_id
+- invoiceId → invoices
 
 Fields:
-
-* check_in
-* check_out
-* latitude
-* longitude
-
----
-
-# SCHEDULE
-
-## employee_schedules
-
-PK:
-
-* id
-
-FK:
-
-* employee_id
-
-Fields:
-
-* work_date
-* start_time
-* end_time
-
----
-
-## leaves
-
-PK:
-
-* id
-
-FK:
-
-* employee_id
-
-Fields:
-
-* start_date
-* end_date
-* reason
-* status
-* approver_id
+- oldStatus (InvoiceStatus?, nullable)
+- newStatus (InvoiceStatus)
+- notes
+- createdBy (String?, not FK)
+- createdAt
 
 ---
 
 # COMMISSION
 
-## commission_rules
+## commission_categories
 
-PK:
-
-* id
-
-FK:
-
-* employee_id
-* service_item_id
+PK: id
 
 Fields:
+- code (unique)
+- name
+- isActive
+- createdAt
+- updatedAt
 
-* commission_type
+Relations:
+- commissionCategory has many items (items.commissionCategoryId)
+- commissionCategory has many commissionRules
 
-* commission_value
+---
 
-* effective_date
+## commission_rules
 
-* end_date
+PK: id
 
-* is_active
+FK:
+- employeeId → employees
+- commissionCategoryId → commission_categories
 
-* created_at
-* updated_at
-
-Enum:
-
-* commission_type
-
-  * PERCENTAGE
-  * FIXED_AMOUNT
+Fields:
+- commissionType (PERCENTAGE | FIXED_AMOUNT)
+- commissionValue (Decimal 18,2)
+- commissionBase (BEFORE_DISCOUNT | AFTER_DISCOUNT, default: AFTER_DISCOUNT)
+- effectiveDate
+- endDate (nullable)
+- isActive
+- createdAt
+- updatedAt
 
 Constraints:
+- unique(employeeId, commissionCategoryId, effectiveDate)
 
-* kombinasi employee_id + service_item_id + effective_date harus unik
+Note: CommissionRule is per employee + commissionCATEGORY, NOT per employee + service item.
+Items are grouped into commission categories. This is a key design decision.
 
-Relasi:
-
-* karyawan memiliki banyak aturan komisi
-
-* service memiliki banyak aturan komisi
+---
 
 ## commissions
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* employee_id
-
-* invoice_id
-
-* invoice_item_id
-
-* treatment_assignment_id
-
-* commission_rule_id
+- invoiceId → invoices
+- invoiceItemId (nullable) → invoice_items
+- treatmentAssignmentId → treatment_assignments (unique)
+- employeeId → employees
+- serviceItemId → items
+- commissionRuleId (nullable) → commission_rules
 
 Fields:
+- workQty (Decimal 18,2, nullable)
+- workRatio (Decimal 18,6, nullable)
+- commissionType (PERCENTAGE | FIXED_AMOUNT)
+- commissionValue (Decimal 18,2)
+- commissionBase (BEFORE_DISCOUNT | AFTER_DISCOUNT)
+- baseAmount (Decimal 18,2)
+- commissionAmount (Decimal 18,2)
+- status (PENDING | APPROVED | REJECTED | PAID)
+- approvedBy (String?, not FK)
+- approvedAt (nullable)
+- paidBy (String?, not FK)
+- paidAt (nullable)
+- notes
+- createdAt
 
-* service_amount
+Constraints:
+- unique(treatmentAssignmentId) — one commission per treatment assignment
 
-* work_qty
-
-* work_ratio
-
-* commission_type
-
-* commission_value
-
-* commission_amount
-
-* status
-
-* calculated_at
-
-* paid_at
-
-* created_at
-
-* updated_at
-
-Enum:
-
-* status
-
-  * PENDING
-  * APPROVED
-  * PAID
-  * CANCELLED
-
-Relasi:
-
-* komisi dimiliki satu karyawan
-
-* komisi berasal dari satu invoice item
-
-* komisi berasal dari satu assignment pekerjaan
-
-Contoh:
-
-Color
-
-Harga:
-Rp1.000.000
-
-Colorist A
-
-5%
-
-Komisi:
-Rp50.000
+Note: CommissionStatus has 4 values: PENDING, APPROVED, REJECTED, PAID.
+Older docs were missing REJECTED.
 
 ---
 
-Pasang Rambut
+## treatment_assignments
 
-Harga:
-Rp5.000.000
+PK: id
 
-Stylist A
+FK:
+- treatmentItemId → treatment_items
+- employeeId → employees
 
-70 / 120 Helai
+Fields:
+- workQty (Decimal 18,2)
+- notes
+- createdAt
 
-3%
-
-Komisi:
-Rp87.500
-
----
-
-Stylist B
-
-50 / 120 Helai
-
-5%
-
-Komisi:
-Rp104.167
+Relations:
+- treatmentAssignment has many commissions
 
 ---
 
 ## branch_commission_rules
 
-PK:
-
-* id
+PK: id
 
 FK:
-
-* branch_id
+- branchId → branches
+- employeeId → employees
 
 Fields:
+- commissionType (PERCENTAGE | FIXED_AMOUNT)
+- commissionValue (Decimal 18,2)
+- effectiveDate
+- endDate (nullable)
+- isActive
+- createdAt
 
-* role
-
-* commission_percent
-
-* effective_date
-
-* is_active
-
-* created_at
-
-* updated_at
-
-Enum:
-
-* role
-
-  * MANAGER
-  * CUSTOMER_SERVICE
-
-Relasi:
-
-* cabang memiliki banyak aturan komisi global
-
-Contoh:
-
-Manager = 1%
-
-Customer Service = 0.5%
-
-Berdasarkan omzet cabang.
+Note: BranchCommissionRule is per employee+branch, NOT per role.
+There is NO separate branch_commissions aggregate table in the schema.
+Branch-level commission calculation must be done at application layer.
 
 ---
 
-## branch_commissions
+# ATTENDANCE & HR
 
-PK:
+## attendances
 
-* id
+PK: id
 
 FK:
-
-* employee_id
-
-* branch_id
+- employeeId → employees
 
 Fields:
-
-* period_month
-
-* period_year
-
-* attendance_days
-
-* branch_revenue
-
-* commission_percent
-
-* commission_amount
-
-* status
-
-* calculated_at
-
-* paid_at
-
-* created_at
-
-* updated_at
-
-Enum:
-
-* status
-
-  * PENDING
-  * APPROVED
-  * PAID
-  * CANCELLED
-
-Relasi:
-
-* komisi global dimiliki satu karyawan
-
-* komisi dihitung berdasarkan omzet cabang
-
-Catatan:
-
-Komisi hanya dihitung jika karyawan hadir pada periode tersebut.
-
-# ACCURATE
-
-## sync_queues
-
-PK:
-
-* id
-
-Fields:
-
-* module
-* status
-* payload
-* retry_count
+- attendanceDate
+- checkInAt (nullable)
+- checkOutAt (nullable)
+- checkInLatitude (Decimal 10,7, nullable)
+- checkInLongitude (Decimal 10,7, nullable)
+- checkOutLatitude (Decimal 10,7, nullable)
+- checkOutLongitude (Decimal 10,7, nullable)
+- notes
+- createdAt
+- updatedAt
 
 ---
 
-# AUDIT
+## employee_schedules
+
+PK: id
+
+FK:
+- employeeId → employees
+
+Fields:
+- scheduleDate
+- startTime (nullable)
+- endTime (nullable)
+- scheduleType (WORK | OFF | LEAVE)
+- notes
+- createdAt
+- updatedAt
+
+Constraints:
+- unique(employeeId, scheduleDate)
+
+---
+
+## leaves
+
+PK: id
+
+FK:
+- employeeId → employees
+
+Fields:
+- startDate
+- endDate
+- reason (nullable)
+- status (PENDING | APPROVED | REJECTED)
+- approvedBy (String?, not FK)
+- approvedAt (nullable)
+- createdAt
+- updatedAt
+
+---
+
+# TREATMENT
+
+## treatment_sessions
+
+PK: id
+
+FK:
+- appointmentId (nullable) → appointments
+- customerId → customers
+- invoiceId (nullable) → invoices
+- branchId → branches
+
+Fields:
+- startedAt (nullable)
+- completedAt (nullable)
+- notes
+- createdAt
+- updatedAt
+
+Relations:
+- treatmentSession has many treatmentItems
+- treatmentSession has many media (TreatmentMedia)
+
+---
+
+## treatment_items
+
+PK: id
+
+FK:
+- treatmentSessionId → treatment_sessions
+- itemId → items
+- unitId → units
+
+Fields:
+- qty (Decimal 18,2)
+- priceSnapshot (Decimal 18,2)
+- conversionSnapshot (Decimal 18,6)
+- notes
+- createdAt
+- updatedAt
+
+Relations:
+- treatmentItem has many assignments (TreatmentAssignment)
+- treatmentItem has many materialUsages
+
+---
+
+## treatment_media
+
+PK: id
+
+FK:
+- treatmentSessionId → treatment_sessions
+
+Fields:
+- mediaType (BEFORE | AFTER)
+- fileUrl
+- notes
+- createdAt
+
+---
+
+# SYSTEM & AUDIT
 
 ## audit_logs
 
-PK:
-
-* id
-
-FK:
-
-* user_id
+PK: id
 
 Fields:
+- userId (String?, not FK)
+- module
+- action
+- recordId (nullable)
+- oldData (Json?, nullable)
+- newData (Json?, nullable)
+- ipAddress (nullable)
+- createdAt
 
-* module
-* action
-* record_id
-* created_at
+---
 
-```
-```
+## settings
+
+PK: id
+
+Fields:
+- key (unique)
+- value
+- description (nullable)
+- createdAt
+- updatedAt
+
+---
+
+# ACCURATE INTEGRATION
+
+## sync_queues
+
+PK: id
+
+Fields:
+- entityType
+- entityId
+- direction (ACCURATE_TO_APP | APP_TO_ACCURATE)
+- status (PENDING | PROCESSING | SUCCESS | FAILED)
+- retryCount (default: 0)
+- payload (Json?, nullable)
+- response (Json?, nullable)
+- errorMessage (nullable)
+- processedAt (nullable)
+- createdAt
+
+---
+
+## sync_logs
+
+PK: id
+
+Fields:
+- queueId (String?, not FK)
+- entityType
+- entityId (nullable)
+- requestPayload (Json?, nullable)
+- responsePayload (Json?, nullable)
+- status (PENDING | PROCESSING | SUCCESS | FAILED)
+- errorMessage (nullable)
+- createdAt
+
+---
+
+## accurate_credentials
+
+PK: id
+
+Fields:
+- sessionId (nullable)
+- databaseId (nullable)
+- accessToken (nullable)
+- refreshToken (nullable)
+- expiredAt (nullable)
+- createdAt
+- updatedAt
+
+---
+
+## accurate_mappings
+
+PK: id
+
+Fields:
+- entityType
+- localId
+- accurateId (Int)
+- lastSyncAt (nullable)
+- createdAt
+
+Constraints:
+- unique(entityType, localId)
+
+---
+
+## background_jobs
+
+PK: id
+
+Fields:
+- jobName
+- status (PENDING | RUNNING | SUCCESS | FAILED)
+- payload (Json?, nullable)
+- startedAt (nullable)
+- finishedAt (nullable)
+- errorMessage (nullable)
+- createdAt
+
+---
+
+## webhook_logs
+
+PK: id
+
+Fields:
+- source
+- event
+- payload (Json?, nullable)
+- processed (default: false)
+- errorMessage (nullable)
+- createdAt

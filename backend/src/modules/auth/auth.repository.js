@@ -1,14 +1,9 @@
 const prisma = require("../../config/prisma");
 
-const EMPLOYEE_BRANCH_SELECT = {
-  select: {
-    id:        true,
-    isPrimary: true,
-    isActive:  true,
-    branch:    { select: { id: true, code: true, name: true } },
-  },
-  where: { isActive: true },
+const EMPLOYEE_BRANCH_INCLUDE = {
+  where:   { isActive: true },
   orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+  include: { branch: true },
 };
 
 const findUserByEmail = (email) =>
@@ -17,12 +12,9 @@ const findUserByEmail = (email) =>
     include: {
       role: true,
       employee: {
-        select: {
-          id:               true,
-          name:             true,
-          employeeCode:     true,
-          role:             { select: { code: true, name: true } },
-          employeeBranches: EMPLOYEE_BRANCH_SELECT,
+        include: {
+          role:             true,
+          employeeBranches: EMPLOYEE_BRANCH_INCLUDE,
         },
       },
     },
@@ -38,15 +30,18 @@ const findUserById = (id) =>
       isActive:   true,
       role:     { select: { id: true, code: true, name: true } },
       employee: {
-        select: {
-          id:               true,
-          name:             true,
-          employeeCode:     true,
-          role:             { select: { code: true, name: true } },
-          employeeBranches: EMPLOYEE_BRANCH_SELECT,
+        include: {
+          role:             true,
+          employeeBranches: EMPLOYEE_BRANCH_INCLUDE,
         },
       },
     },
   });
 
-module.exports = { findUserByEmail, findUserById };
+const findAllBranches = () =>
+  prisma.branch.findMany({
+    select:  { id: true, code: true, name: true },
+    orderBy: { code: "asc" },
+  });
+
+module.exports = { findUserByEmail, findUserById, findAllBranches };

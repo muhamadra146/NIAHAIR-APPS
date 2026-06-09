@@ -2,7 +2,8 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
-const { findUserByEmail, findUserById } = require("./auth.repository");
+const { findUserByEmail, findUserById, findAllBranches } = require("./auth.repository");
+const { ROLES } = require("../../common/constants/role.constant");
 
 const login = async ({ email, password }) => {
   const user = await findUserByEmail(email);
@@ -27,13 +28,17 @@ const login = async ({ email, password }) => {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
 
+  const branches = user.role.code === ROLES.SUPER_ADMIN
+    ? await findAllBranches()
+    : (user.employee?.employeeBranches?.map((eb) => eb.branch) ?? []);
+
   return {
     token,
     user: {
       ...payload,
       role:     user.role,
       employee: user.employee,
-      branches: user.employee?.employeeBranches ?? [],
+      branches,
     },
   };
 };
@@ -52,7 +57,9 @@ const getMe = async (userId) => {
     employeeId: user.employeeId,
     role:       user.role,
     employee:   user.employee,
-    branches:   user.employee?.employeeBranches ?? [],
+    branches: user.role.code === ROLES.SUPER_ADMIN
+      ? await findAllBranches()
+      : (user.employee?.employeeBranches?.map((eb) => eb.branch) ?? []),
   };
 };
 

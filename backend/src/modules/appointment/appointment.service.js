@@ -64,7 +64,7 @@ const listAppointments = async ({ page, limit, customerId, branchId, status, sta
     count(where),
   ]);
 
-  return { data, meta: paginationMeta(total, pageNum, limitNum) };
+  return { appointments: data, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
 // ── Single ────────────────────────────────────────────────────────────
@@ -75,10 +75,18 @@ const getAppointmentById = async (id) => {
   return appointment;
 };
 
+// ── DateTime helpers ──────────────────────────────────────────────────
+//
+// Frontend sends visitDate as "YYYY-MM-DD" and startTime/endTime as "HH:MM".
+// We combine them here so the DB stores a proper DateTime.
+
+const combineDatetime = (dateStr, timeStr) =>
+  new Date(`${dateStr.split("T")[0]}T${timeStr}:00`);
+
 // ── Create ────────────────────────────────────────────────────────────
 
 const createAppointment = async (body, userId, createdByEmployeeId = null) => {
-  const { customerId, branchId, visitDate, startTime, endTime, notes, estimatedTotal } = body;
+  const { customerId, branchId, visitDate, startTime, endTime, notes, estimatedTotal, services = [] } = body;
 
   const customer = await findCustomerById(customerId);
   if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
@@ -88,21 +96,35 @@ const createAppointment = async (body, userId, createdByEmployeeId = null) => {
 
   const bookingNo = await buildBookingNo();
 
+  // Auto-calculate estimatedTotal from services when provided
+  const computedTotal = services.length > 0
+    ? String(services.reduce((sum, s) => sum + Number(s.qty) * Number(s.price), 0))
+    : estimatedTotal !== undefined ? String(estimatedTotal) : null;
+
   const appointmentData = {
     customerId,
     branchId,
     bookingNo,
     bookingDate:         new Date(),
     visitDate:           new Date(visitDate),
-    startTime:           new Date(startTime),
-    endTime:             new Date(endTime),
+    startTime:           combineDatetime(visitDate, startTime),
+    endTime:             combineDatetime(visitDate, endTime),
     status:              "BOOKED",
     notes:               notes ?? null,
-    estimatedTotal:      estimatedTotal !== undefined ? String(estimatedTotal) : null,
+    estimatedTotal:      computedTotal,
     createdByEmployeeId: createdByEmployeeId ?? null,
   };
 
-  return createWithTransaction({ appointmentData, userId });
+  // Map frontend { itemId } → repository { serviceItemId }
+  const mappedServices = services.map((s) => ({
+    serviceItemId:   s.itemId,
+    qty:             s.qty,
+    price:           s.price,
+    durationMinutes: s.durationMinutes ?? 0,
+    notes:           s.notes ?? null,
+  }));
+
+  return createWithTransaction({ appointmentData, services: mappedServices, userId });
 };
 
 // ── Update fields ─────────────────────────────────────────────────────
@@ -125,10 +147,15 @@ const updateAppointmentById = async (id, body, userId) => {
     throw new AppError("No fields to update", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
+  // Use the new visitDate if provided, otherwise keep the existing one as base for time combination
+  const baseDateStr = visitDate
+    ? visitDate.split("T")[0]
+    : appointment.visitDate.toISOString().split("T")[0];
+
   const data = {};
-  if (visitDate      !== undefined) data.visitDate      = new Date(visitDate);
-  if (startTime      !== undefined) data.startTime      = new Date(startTime);
-  if (endTime        !== undefined) data.endTime        = new Date(endTime);
+  if (visitDate      !== undefined) data.visitDate = new Date(visitDate);
+  if (startTime      !== undefined) data.startTime = combineDatetime(baseDateStr, startTime);
+  if (endTime        !== undefined) data.endTime   = combineDatetime(baseDateStr, endTime);
   if (notes          !== undefined) data.notes          = notes;
   if (estimatedTotal !== undefined) data.estimatedTotal = String(estimatedTotal);
 

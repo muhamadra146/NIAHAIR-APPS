@@ -2,6 +2,11 @@ const prisma = require("../../config/prisma");
 
 const INCLUDE = {
   role: { select: { id: true, code: true, name: true } },
+  employeeBranches: {
+    where:   { isActive: true },
+    orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+    include: { branch: { select: { id: true, code: true, name: true } } },
+  },
 };
 
 const findAll = ({ skip, take, where }) =>
@@ -44,9 +49,25 @@ const update = (id, data) => {
   });
 };
 
+const updateBranches = (employeeId, branchIds) =>
+  prisma.$transaction(async (tx) => {
+    await tx.employeeBranch.deleteMany({ where: { employeeId } });
+    if (branchIds.length > 0) {
+      await tx.employeeBranch.createMany({
+        data: branchIds.map((branchId, index) => ({
+          employeeId,
+          branchId,
+          isPrimary: index === 0,
+          isActive:  true,
+        })),
+      });
+    }
+    return tx.employee.findUnique({ where: { id: employeeId }, include: INCLUDE });
+  });
+
 module.exports = {
   findAll, count, findById,
   findByEmployeeCode, findByEmail,
   findRoleById,
-  create, update,
+  create, update, updateBranches,
 };
