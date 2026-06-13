@@ -15,6 +15,7 @@ const {
   createController,
   updateController,
   changeStatusController,
+  deleteController,
 } = require("./appointment.controller");
 
 const router = Router();
@@ -37,6 +38,13 @@ router.patch(
   authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
   validate(updateAppointmentSchema),
   updateController
+);
+
+router.delete(
+  "/:id",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER),
+  deleteController
 );
 
 // /:id/status must be declared after /:id — different path depth, no conflict

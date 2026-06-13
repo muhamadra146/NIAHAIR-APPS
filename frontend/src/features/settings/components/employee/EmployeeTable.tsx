@@ -34,7 +34,7 @@ function MobileCardList({ employees, onEdit }: { employees: Employee[]; onEdit: 
     <div className="divide-y divide-border md:hidden">
       {employees.map((emp) => (
         <div key={emp.id} className="px-4 py-4">
-          {/* Row 1: code + name */}
+          {/* Row 1: code + name + action */}
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               {emp.employeeCode && (
@@ -47,24 +47,28 @@ function MobileCardList({ employees, onEdit }: { employees: Employee[]; onEdit: 
             </Button>
           </div>
 
-          {/* Row 2: role + branch badges */}
+          {/* Row 2: role */}
           <div className="mt-2 flex flex-wrap gap-1">
             <Badge variant="secondary" className="text-xs">{emp.role.name}</Badge>
-            {emp.employeeBranches.map((eb) => (
-              <Badge key={eb.id} variant="outline" className="text-xs">{eb.branch.name}</Badge>
-            ))}
           </div>
 
-          {/* Row 3: phone / email */}
+          {/* Row 3: home branch + access branches */}
           <div className="mt-2 space-y-0.5">
+            {emp.homeBranch && (
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground/70">Home: </span>
+                {emp.homeBranch.name}
+              </p>
+            )}
+            {emp.employeeBranches.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground/70">Access: </span>
+                {emp.employeeBranches.map((eb) => eb.branch.name).join(", ")}
+              </p>
+            )}
             {emp.phone && (
               <p className="text-xs text-muted-foreground">
                 <span className="font-medium text-foreground/70">Phone: </span>{emp.phone}
-              </p>
-            )}
-            {emp.email && (
-              <p className="text-xs text-muted-foreground">
-                <span className="font-medium text-foreground/70">Email: </span>{emp.email}
               </p>
             )}
           </div>
@@ -83,10 +87,9 @@ function DesktopTable({ employees, onEdit }: { employees: Employee[]; onEdit: (e
           <tr className="border-b border-border bg-muted/50">
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Code</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Phone</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Email</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Employee Role</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Branches</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Role</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Home Branch</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Access Branches</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actions</th>
           </tr>
         </thead>
@@ -94,11 +97,18 @@ function DesktopTable({ employees, onEdit }: { employees: Employee[]; onEdit: (e
           {employees.map((emp) => (
             <tr key={emp.id} className="border-b border-border transition-colors hover:bg-muted/30">
               <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{emp.employeeCode ?? "—"}</td>
-              <td className="px-4 py-3 font-medium">{emp.name}</td>
-              <td className="px-4 py-3 text-muted-foreground">{emp.phone ?? "—"}</td>
-              <td className="px-4 py-3 text-muted-foreground">{emp.email ?? "—"}</td>
+              <td className="px-4 py-3">
+                <p className="font-medium">{emp.name}</p>
+                {emp.email && <p className="text-xs text-muted-foreground">{emp.email}</p>}
+              </td>
               <td className="px-4 py-3">
                 <Badge variant="secondary">{emp.role.name}</Badge>
+              </td>
+              <td className="px-4 py-3">
+                {emp.homeBranch
+                  ? <Badge variant="outline" className="text-xs font-normal">{emp.homeBranch.code}</Badge>
+                  : <span className="text-muted-foreground">—</span>
+                }
               </td>
               <td className="px-4 py-3">
                 <div className="flex flex-wrap gap-1">

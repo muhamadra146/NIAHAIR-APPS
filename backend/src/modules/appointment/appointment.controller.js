@@ -5,6 +5,7 @@ const {
   createAppointment,
   updateAppointmentById,
   changeAppointmentStatus,
+  deleteAppointmentById,
 } = require("./appointment.service");
 
 const getAllController = async (req, res, next) => {
@@ -56,10 +57,20 @@ const changeStatusController = async (req, res, next) => {
   }
 };
 
+const deleteController = async (req, res, next) => {
+  try {
+    await deleteAppointmentById(req.params.id);
+    return success(res, null, "Appointment deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getAllController,
   getByIdController,
   createController,
   updateController,
   changeStatusController,
+  deleteController,
 };

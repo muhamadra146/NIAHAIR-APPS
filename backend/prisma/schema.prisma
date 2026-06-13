@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // =====================================================
@@ -41,11 +42,16 @@ model Branch {
   province String?
   phone    String?
 
+  latitude     Decimal? @db.Decimal(10, 8)
+  longitude    Decimal? @db.Decimal(11, 8)
+  radiusMeters Int      @default(100)
+
   isActive Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  homeEmployees           Employee[]              @relation("EmployeeHomeBranch")
   employeeBranchHistories EmployeeBranchHistory[]
   employeeBranches        EmployeeBranch[]
 
@@ -57,6 +63,10 @@ model Branch {
   payments              Payment[]
   treatmentSessions     TreatmentSession[]
   branchCommissionRules BranchCommissionRule[]
+  staffSchedules        StaffSchedule[]
+  attendances           Attendance[]
+  loans                 Loan[]
+  payrolls              Payroll[]
 
   @@map("branches")
 }
@@ -135,7 +145,8 @@ model EmployeeRole {
 model Employee {
   id String @id @default(uuid())
 
-  roleId String
+  roleId       String
+  homeBranchId String?
 
   employeeCode String @unique
 
@@ -159,7 +170,8 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  role EmployeeRole @relation(fields: [roleId], references: [id])
+  role       EmployeeRole @relation(fields: [roleId], references: [id])
+  homeBranch Branch?      @relation("EmployeeHomeBranch", fields: [homeBranchId], references: [id])
 
   branchHistories  EmployeeBranchHistory[]
   employeeBranches EmployeeBranch[]
@@ -178,8 +190,13 @@ model Employee {
   schedules             EmployeeSchedule[]
   leaves                Leave[]
   branchCommissionRules BranchCommissionRule[]
+  staffSchedules        StaffSchedule[]
+  salarySettings        EmployeeSalarySettings[]
+  loans                 Loan[]
+  payrolls              Payroll[]
 
   @@index([roleId])
+  @@index([homeBranchId])
   @@map("employees")
 }
 
@@ -845,6 +862,16 @@ enum AppointmentStatus {
   NO_SHOW
 }
 
+enum AppointmentType {
+  SALON
+  HOME_SERVICE
+}
+
+enum AppointmentPhotoType {
+  REFERENCE
+  HAIR_CURRENT
+}
+
 enum DepositStatus {
   PENDING
   UNPAID
@@ -881,6 +908,9 @@ model Appointment {
 
   status AppointmentStatus
 
+  type             AppointmentType @default(SALON)
+  homeServiceAddress String?
+
   notes String?
 
   estimatedTotal Decimal? @db.Decimal(18, 2)
@@ -906,11 +936,28 @@ model Appointment {
 
   treatmentSessions TreatmentSession[]
 
+  photos AppointmentPhoto[]
+
   @@index([customerId])
   @@index([branchId])
   @@index([visitDate])
   @@index([createdByEmployeeId])
   @@map("appointments")
+}
+
+model AppointmentPhoto {
+  id            String               @id @default(uuid())
+  appointmentId String
+  url           String
+  publicId      String
+  type          AppointmentPhotoType @default(REFERENCE)
+  notes         String?
+  createdAt     DateTime             @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+  @@map("appointment_photos")
 }
 
 model AppointmentService {
@@ -1017,6 +1064,9 @@ model DepositPayment {
 
   referenceNo String?
   notes       String?
+
+  transferProofUrl      String?
+  transferProofPublicId String?
 
   paidAt    DateTime
   createdAt DateTime @default(now())
@@ -1473,8 +1523,11 @@ model BranchCommissionRule {
 }
 
 enum AttendanceStatus {
-  CHECK_IN
-  CHECK_OUT
+  PRESENT
+  LATE
+  ABSENT
+  HALF_DAY
+  EARLY_LEAVE
 }
 
 enum LeaveStatus {
@@ -1497,29 +1550,41 @@ enum MediaType {
 model Attendance {
   id String @id @default(uuid())
 
-  employeeId String
+  staffScheduleId String @unique
+  employeeId      String
+  branchId        String
+  workDate        DateTime @db.Date
 
-  attendanceDate DateTime
-
-  checkInAt DateTime?
-
+  checkInAt  DateTime?
   checkOutAt DateTime?
 
-  checkInLatitude  Decimal? @db.Decimal(10, 7)
-  checkInLongitude Decimal? @db.Decimal(10, 7)
-
+  checkInLatitude   Decimal? @db.Decimal(10, 7)
+  checkInLongitude  Decimal? @db.Decimal(10, 7)
   checkOutLatitude  Decimal? @db.Decimal(10, 7)
   checkOutLongitude Decimal? @db.Decimal(10, 7)
+
+  checkInPhotoUrl  String?
+  checkOutPhotoUrl String?
+
+  status AttendanceStatus @default(ABSENT)
+
+  lateMinutes       Int @default(0)
+  earlyLeaveMinutes Int @default(0)
+  overtimeMinutes   Int @default(0)
+  isHolidayWork     Boolean @default(false)
 
   notes String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  employee Employee @relation(fields: [employeeId], references: [id])
+  staffSchedule StaffSchedule @relation(fields: [staffScheduleId], references: [id])
+  employee      Employee      @relation(fields: [employeeId], references: [id])
+  branch        Branch        @relation(fields: [branchId], references: [id])
 
   @@index([employeeId])
-  @@index([attendanceDate])
+  @@index([branchId, workDate])
+  @@index([workDate])
   @@map("attendances")
 }
 
@@ -1897,4 +1962,239 @@ model AccurateMapping {
   @@unique([entityType, localId])
   @@index([accurateId])
   @@map("accurate_mappings")
+}
+
+// =====================================================
+// SHIFTS & STAFF SCHEDULES (ROSTER)
+// =====================================================
+
+enum ScheduleStatus {
+  WORKING
+  OFF
+  LEAVE
+}
+
+model Shift {
+  id String @id @default(uuid())
+
+  code      String  @unique
+  name      String
+  startTime String?
+  endTime   String?
+  color     String?
+
+  isWorking Boolean @default(true)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  staffSchedules StaffSchedule[]
+
+  @@map("shifts")
+}
+
+model StaffSchedule {
+  id String @id @default(uuid())
+
+  employeeId String
+  branchId   String
+  shiftId    String?
+
+  workDate DateTime
+
+  status ScheduleStatus @default(WORKING)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  branch   Branch   @relation(fields: [branchId], references: [id])
+  shift    Shift?   @relation(fields: [shiftId], references: [id])
+
+  attendance Attendance?
+
+  @@unique([employeeId, branchId, workDate])
+  @@index([branchId, workDate])
+  @@map("staff_schedules")
+}
+
+// =====================================================
+// EMPLOYEE SALARY SETTINGS (with history)
+// =====================================================
+
+model EmployeeSalarySettings {
+  id String @id @default(uuid())
+
+  employeeId String
+
+  baseSalary                   Decimal @db.Decimal(18, 2)
+  mealAllowancePerDay          Decimal @db.Decimal(18, 2) @default(0)
+  transportAllowance           Decimal @db.Decimal(18, 2) @default(0)
+  overtimeRatePerHour          Decimal @db.Decimal(18, 2) @default(0)
+  holidayOvertimeRate          Decimal @db.Decimal(18, 2) @default(0)
+  lateDeductionPerMinute       Decimal @db.Decimal(18, 2) @default(0)
+  absentDeductionPerDay        Decimal @db.Decimal(18, 2) @default(0)
+  earlyLeaveDeductionPerMinute Decimal @db.Decimal(18, 2) @default(0)
+  bpjsJhtPercent               Decimal @db.Decimal(5, 2)  @default(2)
+  bpjsJpPercent                Decimal @db.Decimal(5, 2)  @default(1)
+
+  effectiveDate DateTime
+  endDate       DateTime?
+
+  isActive Boolean @default(true)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@index([effectiveDate])
+  @@map("employee_salary_settings")
+}
+
+// =====================================================
+// LOANS (Kasbon)
+// =====================================================
+
+enum LoanStatus {
+  ACTIVE
+  PAID_OFF
+  CANCELLED
+}
+
+model Loan {
+  id String @id @default(uuid())
+
+  employeeId String
+  branchId   String
+
+  loanNo String @unique
+
+  totalAmount      Decimal @db.Decimal(18, 2)
+  remainingAmount  Decimal @db.Decimal(18, 2)
+  monthlyDeduction Decimal @db.Decimal(18, 2)
+
+  startDate DateTime
+  endDate   DateTime?
+
+  status LoanStatus @default(ACTIVE)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee   Employee        @relation(fields: [employeeId], references: [id])
+  branch     Branch          @relation(fields: [branchId], references: [id])
+  repayments LoanRepayment[]
+
+  @@index([employeeId])
+  @@index([branchId])
+  @@index([status])
+  @@map("loans")
+}
+
+model LoanRepayment {
+  id String @id @default(uuid())
+
+  loanId    String
+  payrollId String?
+
+  amount Decimal @db.Decimal(18, 2)
+
+  paidAt DateTime
+
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  loan    Loan     @relation(fields: [loanId], references: [id])
+  payroll Payroll? @relation(fields: [payrollId], references: [id])
+
+  @@index([loanId])
+  @@index([payrollId])
+  @@map("loan_repayments")
+}
+
+// =====================================================
+// PAYROLL
+// =====================================================
+
+enum PayrollStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PAID
+}
+
+enum PayrollItemType {
+  INCOME
+  DEDUCTION
+}
+
+model Payroll {
+  id String @id @default(uuid())
+
+  employeeId String
+  branchId   String
+
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+
+  status PayrollStatus @default(DRAFT)
+
+  grossIncome     Decimal @db.Decimal(18, 2) @default(0)
+  totalDeductions Decimal @db.Decimal(18, 2) @default(0)
+  netSalary       Decimal @db.Decimal(18, 2) @default(0)
+
+  approvedBy String?
+  approvedAt DateTime?
+
+  paidAt DateTime?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  branch   Branch   @relation(fields: [branchId], references: [id])
+
+  items      PayrollItem[]
+  repayments LoanRepayment[]
+
+  @@unique([employeeId, periodStart])
+  @@index([employeeId])
+  @@index([branchId])
+  @@index([status])
+  @@map("payrolls")
+}
+
+model PayrollItem {
+  id String @id @default(uuid())
+
+  payrollId String
+
+  type     PayrollItemType
+  category String
+  label    String
+
+  amount   Decimal  @db.Decimal(18, 2)
+  quantity Decimal? @db.Decimal(10, 2)
+  rate     Decimal? @db.Decimal(18, 2)
+
+  isAuto Boolean @default(true)
+
+  notes String?
+
+  payroll Payroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+
+  @@index([payrollId])
+  @@map("payroll_items")
 }

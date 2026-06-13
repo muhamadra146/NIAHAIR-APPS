@@ -1,5 +1,6 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
+const prisma          = require("../../config/prisma");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const {
   findAll,
@@ -10,8 +11,10 @@ const {
   findBranchById,
   createWithTransaction,
   updateAppointment,
+  updateWithStaff,
   changeStatusWithTransaction,
 } = require("./appointment.repository");
+const { getAvailableStaff } = require("../staffSchedule/staffSchedule.service");
 
 // ── Status transition rules ───────────────────────────────────────────
 //
@@ -86,7 +89,11 @@ const combineDatetime = (dateStr, timeStr) =>
 // ── Create ────────────────────────────────────────────────────────────
 
 const createAppointment = async (body, userId, createdByEmployeeId = null) => {
-  const { customerId, branchId, visitDate, startTime, endTime, notes, estimatedTotal, services = [] } = body;
+  const {
+    customerId, branchId, visitDate, startTime, endTime,
+    type = "SALON", homeServiceAddress,
+    notes, estimatedTotal, services = [], staffIds = [],
+  } = body;
 
   const customer = await findCustomerById(customerId);
   if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
@@ -94,12 +101,27 @@ const createAppointment = async (body, userId, createdByEmployeeId = null) => {
   const branch = await findBranchById(branchId);
   if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
 
+  if (staffIds.length > 0) {
+    const available    = await getAvailableStaff({ date: visitDate, branchId, startTime, endTime });
+    const availableSet = new Set(available.map((s) => s.employeeId));
+    const unavailable  = staffIds.filter((id) => !availableSet.has(id));
+    if (unavailable.length > 0) {
+      throw new AppError("Staff not available at selected time", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+  }
+
   const bookingNo = await buildBookingNo();
 
   // Auto-calculate estimatedTotal from services when provided
   const computedTotal = services.length > 0
     ? String(services.reduce((sum, s) => sum + Number(s.qty) * Number(s.price), 0))
     : estimatedTotal !== undefined ? String(estimatedTotal) : null;
+
+  // Auto-fill address from customer if HS and no address provided
+  let resolvedAddress = homeServiceAddress ?? null;
+  if (type === "HOME_SERVICE" && !resolvedAddress && customer.address) {
+    resolvedAddress = customer.address;
+  }
 
   const appointmentData = {
     customerId,
@@ -110,6 +132,8 @@ const createAppointment = async (body, userId, createdByEmployeeId = null) => {
     startTime:           combineDatetime(visitDate, startTime),
     endTime:             combineDatetime(visitDate, endTime),
     status:              "BOOKED",
+    type:                type ?? "SALON",
+    homeServiceAddress:  resolvedAddress,
     notes:               notes ?? null,
     estimatedTotal:      computedTotal,
     createdByEmployeeId: createdByEmployeeId ?? null,
@@ -124,10 +148,13 @@ const createAppointment = async (body, userId, createdByEmployeeId = null) => {
     notes:           s.notes ?? null,
   }));
 
-  return createWithTransaction({ appointmentData, services: mappedServices, userId });
+  return createWithTransaction({ appointmentData, services: mappedServices, staffIds, userId });
 };
 
 // ── Update fields ─────────────────────────────────────────────────────
+
+const pad    = (n)  => String(n).padStart(2, "0");
+const toHHMM = (dt) => `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
 
 const updateAppointmentById = async (id, body, userId) => {
   const appointment = await findById(id);
@@ -137,14 +164,37 @@ const updateAppointmentById = async (id, body, userId) => {
     throw new AppError("Cannot modify a cancelled appointment", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
-  const { visitDate, startTime, endTime, notes, estimatedTotal } = body;
+  const { visitDate, startTime, endTime, type, homeServiceAddress, notes, estimatedTotal, staffIds } = body;
 
-  const hasUpdate = visitDate !== undefined || startTime !== undefined ||
-                    endTime   !== undefined || notes     !== undefined ||
-                    estimatedTotal !== undefined;
+  const hasUpdate = visitDate !== undefined || startTime  !== undefined ||
+                    endTime   !== undefined || notes      !== undefined ||
+                    estimatedTotal !== undefined || staffIds !== undefined ||
+                    type !== undefined || homeServiceAddress !== undefined;
 
   if (!hasUpdate) {
     throw new AppError("No fields to update", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
+  // Validate staff availability when staffIds are being set
+  if (staffIds !== undefined && staffIds.length > 0) {
+    const effectiveDateStr = visitDate
+      ? visitDate.split("T")[0]
+      : appointment.visitDate.toISOString().split("T")[0];
+    const effectiveStart = startTime ?? toHHMM(appointment.startTime);
+    const effectiveEnd   = endTime   ?? toHHMM(appointment.endTime);
+
+    const available    = await getAvailableStaff({
+      date:                 effectiveDateStr,
+      branchId:             appointment.branchId,
+      startTime:            effectiveStart,
+      endTime:              effectiveEnd,
+      excludeAppointmentId: id,
+    });
+    const availableSet = new Set(available.map((s) => s.employeeId));
+    const unavailable  = staffIds.filter((empId) => !availableSet.has(empId));
+    if (unavailable.length > 0) {
+      throw new AppError("Staff not available at selected time", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
   }
 
   // Use the new visitDate if provided, otherwise keep the existing one as base for time combination
@@ -153,13 +203,15 @@ const updateAppointmentById = async (id, body, userId) => {
     : appointment.visitDate.toISOString().split("T")[0];
 
   const data = {};
-  if (visitDate      !== undefined) data.visitDate = new Date(visitDate);
-  if (startTime      !== undefined) data.startTime = combineDatetime(baseDateStr, startTime);
-  if (endTime        !== undefined) data.endTime   = combineDatetime(baseDateStr, endTime);
-  if (notes          !== undefined) data.notes          = notes;
-  if (estimatedTotal !== undefined) data.estimatedTotal = String(estimatedTotal);
+  if (visitDate           !== undefined) data.visitDate           = new Date(visitDate);
+  if (startTime           !== undefined) data.startTime           = combineDatetime(baseDateStr, startTime);
+  if (endTime             !== undefined) data.endTime             = combineDatetime(baseDateStr, endTime);
+  if (notes               !== undefined) data.notes               = notes;
+  if (estimatedTotal      !== undefined) data.estimatedTotal      = String(estimatedTotal);
+  if (type                !== undefined) data.type                = type;
+  if (homeServiceAddress  !== undefined) data.homeServiceAddress  = homeServiceAddress;
 
-  return updateAppointment(id, data);
+  return updateWithStaff(id, data, staffIds);
 };
 
 // ── Change status ─────────────────────────────────────────────────────
@@ -189,10 +241,26 @@ const changeAppointmentStatus = async (id, body, userId) => {
   return changeStatusWithTransaction({ appointment, newStatus, notes, userId });
 };
 
+const deleteAppointmentById = async (id) => {
+  const appointment = await findById(id);
+  if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+
+  await prisma.$transaction([
+    prisma.appointmentStaff.deleteMany({ where: { appointmentId: id } }),
+    prisma.appointmentService.deleteMany({ where: { appointmentId: id } }),
+    prisma.appointmentStatusHistory.deleteMany({ where: { appointmentId: id } }),
+    prisma.deposit.updateMany({ where: { appointmentId: id }, data: { appointmentId: null } }),
+    prisma.invoice.updateMany({ where: { appointmentId: id }, data: { appointmentId: null } }),
+    prisma.treatmentSession.updateMany({ where: { appointmentId: id }, data: { appointmentId: null } }),
+    prisma.appointment.delete({ where: { id } }),
+  ]);
+};
+
 module.exports = {
   listAppointments,
   getAppointmentById,
   createAppointment,
   updateAppointmentById,
   changeAppointmentStatus,
+  deleteAppointmentById,
 };

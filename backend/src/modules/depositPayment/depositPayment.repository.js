@@ -11,6 +11,8 @@ const SELECT = {
   lastSyncAt:            true,
   referenceNo:           true,
   notes:                 true,
+  transferProofUrl:      true,
+  transferProofPublicId: true,
   paidAt:                true,
   createdAt:             true,
   updatedAt:             true,

@@ -7,6 +7,8 @@ export type AppointmentStatus =
   | "CANCELLED"
   | "NO_SHOW";
 
+export type AppointmentType = "SALON" | "HOME_SERVICE";
+
 export interface AppointmentCustomer {
   id:          string;
   name:        string;
@@ -24,6 +26,7 @@ export interface AppointmentEmployee {
   id:           string;
   employeeCode: string;
   name:         string;
+  role?:        { id: string; code: string; name: string };
 }
 
 export interface AppointmentServiceItem {
@@ -69,6 +72,8 @@ export interface Appointment {
   startTime:           string;
   endTime:             string;
   status:              AppointmentStatus;
+  type:                AppointmentType;
+  homeServiceAddress:  string | null;
   notes:               string | null;
   estimatedTotal:      string | null;
   createdByEmployeeId: string | null;
@@ -81,15 +86,17 @@ export interface Appointment {
   staffs:              AppointmentStaff[];
   statusHistories:     AppointmentStatusHistory[];
   treatmentSessions:   TreatmentSessionRef[];
+  photos?:             { id: string; url: string; type: string; notes: string | null; createdAt: string }[];
 }
 
 export interface AppointmentListParams {
-  page?:      number;
-  limit?:     number;
-  status?:    AppointmentStatus | "";
+  page?:       number;
+  limit?:      number;
+  branchId?:   string;
+  status?:     AppointmentStatus | "";
   customerId?: string;
-  startDate?: string;
-  endDate?:   string;
+  startDate?:  string;
+  endDate?:    string;
 }
 
 export interface ServiceInput {
@@ -99,22 +106,37 @@ export interface ServiceInput {
   notes?: string;
 }
 
+export interface AvailableStaff {
+  employeeId: string;
+  name:       string;
+  role:       { id: string; code: string; name: string };
+  shiftCode:  string | null;
+  startTime:  string | null;
+  endTime:    string | null;
+}
+
 export interface CreateAppointmentInput {
-  customerId:      string;
-  visitDate:       string;      // YYYY-MM-DD
-  startTime:       string;      // HH:MM
-  endTime:         string;      // HH:MM
-  notes?:          string;
-  estimatedTotal?: number;
-  services?:       ServiceInput[];
+  customerId:         string;
+  visitDate:          string;      // YYYY-MM-DD
+  startTime:          string;      // HH:MM
+  endTime:            string;      // HH:MM
+  type?:              AppointmentType;
+  homeServiceAddress?: string;
+  notes?:             string;
+  estimatedTotal?:    number;
+  services?:          ServiceInput[];
+  staffIds?:          string[];
 }
 
 export interface UpdateAppointmentInput {
-  visitDate?:      string;
-  startTime?:      string;
-  endTime?:        string;
-  notes?:          string;
-  estimatedTotal?: number;
+  visitDate?:          string;
+  startTime?:          string;
+  endTime?:            string;
+  type?:               AppointmentType;
+  homeServiceAddress?: string;
+  notes?:              string;
+  estimatedTotal?:     number;
+  staffIds?:           string[];
 }
 
 export interface ChangeStatusInput {

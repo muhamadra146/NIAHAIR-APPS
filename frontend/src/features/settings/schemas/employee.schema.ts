@@ -6,6 +6,7 @@ export const employeeSchema = z.object({
   employeeCode: z.string().optional().or(z.literal("")),
   phone:        z.string().optional().or(z.literal("")),
   email:        z.string().email("Invalid email").optional().or(z.literal("")),
+  homeBranchId: z.string().optional().or(z.literal("")),
   branchIds:    z.array(z.string()).optional().default([]),
 });
 

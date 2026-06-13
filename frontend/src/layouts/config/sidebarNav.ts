@@ -2,6 +2,7 @@ import type { UserRole } from "@/types/auth";
 import {
   LayoutDashboard,
   CalendarDays,
+  KanbanSquare,
   Receipt,
   Wallet,
   Users,
@@ -12,6 +13,9 @@ import {
   Settings,
   Scissors,
   BadgeDollarSign,
+  CalendarRange,
+  DollarSign,
+  Banknote,
   type LucideIcon,
 } from "lucide-react";
 
@@ -60,6 +64,12 @@ export const sidebarNav: NavItem[] = [
     roles: [...MANAGEMENT_ROLES, "CASHIER", "STYLIST", "STAFF"],
   },
   {
+    label: "Booking Harian",
+    href:  "/booking-harian",
+    icon:  KanbanSquare,
+    roles: [...MANAGEMENT_ROLES, "CASHIER", "STYLIST", "STAFF"],
+  },
+  {
     label: "POS",
     href:  "/invoices",
     icon:  Receipt,
@@ -99,16 +109,34 @@ export const sidebarNav: NavItem[] = [
     roles: MANAGEMENT_ROLES,
   },
   {
+    label: "Kasbon",
+    href:  "/loans",
+    icon:  Banknote,
+    roles: MANAGEMENT_ROLES,
+  },
+  {
     label: "Employees",
     href:  "/employees",
     icon:  UserCog,
     roles: MANAGEMENT_ROLES,
   },
   {
+    label: "Schedule",
+    href:  "/schedule",
+    icon:  CalendarRange,
+    roles: [...MANAGEMENT_ROLES, "STYLIST", "STAFF"],
+  },
+  {
     label: "Attendance",
     href:  "/attendance",
     icon:  ClipboardList,
     roles: [...MANAGEMENT_ROLES, "STYLIST", "STAFF"],
+  },
+  {
+    label: "Payroll",
+    href:  "/payroll",
+    icon:  DollarSign,
+    roles: [...MANAGEMENT_ROLES, "FINANCE"],
   },
   {
     label: "Reports",

@@ -5,6 +5,7 @@ import {
   createAppointment,
   updateAppointment,
   changeAppointmentStatus,
+  deleteAppointment,
 } from "../api/appointment.api";
 import type {
   AppointmentListParams,
@@ -24,6 +25,7 @@ export const useAppointment = (id: string) =>
     queryKey: ["appointments", id],
     queryFn:  () => fetchAppointment(id),
     enabled:  Boolean(id),
+    staleTime: 0,
   });
 
 export const useCreateAppointment = () => {
@@ -39,8 +41,8 @@ export const useUpdateAppointment = (id: string) => {
   return useMutation({
     mutationFn: (input: UpdateAppointmentInput) => updateAppointment(id, input),
     onSuccess:  (data) => {
-      qc.invalidateQueries({ queryKey: ["appointments"] });
       qc.setQueryData(["appointments", id], data);
+      qc.invalidateQueries({ queryKey: ["appointments"] });
     },
   });
 };
@@ -50,8 +52,16 @@ export const useChangeAppointmentStatus = (id: string) => {
   return useMutation({
     mutationFn: (input: ChangeStatusInput) => changeAppointmentStatus(id, input),
     onSuccess:  (data) => {
-      qc.invalidateQueries({ queryKey: ["appointments"] });
       qc.setQueryData(["appointments", id], data);
+      qc.invalidateQueries({ queryKey: ["appointments"] });
     },
+  });
+};
+
+export const useDeleteAppointment = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteAppointment(id),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ["appointments"] }); },
   });
 };

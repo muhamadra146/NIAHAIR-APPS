@@ -22,6 +22,7 @@ const {
   findInvoiceForDepositApply,
   createWithTransaction,
   applyDepositWithTransaction,
+  updateWithTransaction,
   cancelWithTransaction,
 } = require("./invoice.repository");
 
@@ -29,13 +30,14 @@ const D = (v) => new Prisma.Decimal(String(v));
 
 // ── List ──────────────────────────────────────────────────────────────
 
-const listInvoices = async ({ page, limit, customerId, branchId, status, startDate, endDate }) => {
+const listInvoices = async ({ page, limit, customerId, branchId, status, appointmentId, startDate, endDate }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
-  if (customerId) where.customerId = customerId;
-  if (branchId)   where.branchId   = branchId;
-  if (status)     where.status     = status;
+  if (customerId)   where.customerId   = customerId;
+  if (branchId)     where.branchId     = branchId;
+  if (status)       where.status       = status;
+  if (appointmentId) where.appointmentId = appointmentId;
 
   if (startDate || endDate) {
     where.invoiceDate = {};
@@ -117,19 +119,23 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
       );
     }
 
-    // Branch-specific price first, fall back to global price
-    let priceRecord = await findActivePrice({ itemId: line.itemId, unitId: line.unitId, branchId });
-    if (!priceRecord) {
-      priceRecord = await findActivePriceGlobal({ itemId: line.itemId, unitId: line.unitId });
+    // Use override price if provided by client, otherwise resolve from ItemPrice
+    let price;
+    if (line.price !== undefined && line.price !== null) {
+      price = D(line.price);
+    } else {
+      let priceRecord = await findActivePrice({ itemId: line.itemId, unitId: line.unitId, branchId });
+      if (!priceRecord) {
+        priceRecord = await findActivePriceGlobal({ itemId: line.itemId, unitId: line.unitId });
+      }
+      if (!priceRecord) {
+        throw new AppError(
+          `No active price found for item ${item.itemCode}`,
+          StatusCodes.UNPROCESSABLE_ENTITY
+        );
+      }
+      price = D(priceRecord.sellingPrice);
     }
-    if (!priceRecord) {
-      throw new AppError(
-        `No active price found for item ${item.itemCode}`,
-        StatusCodes.UNPROCESSABLE_ENTITY
-      );
-    }
-
-    const price     = D(priceRecord.sellingPrice);
     const qty       = D(line.qty);
     const discount  = D(line.discountAmount ?? 0);
     const grossLine = price.mul(qty).sub(discount);
@@ -242,8 +248,6 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   let invoiceStatus;
   if (totalDeposit.gte(grandTotal)) {
     invoiceStatus = "PAID";
-  } else if (totalDeposit.gt(D("0"))) {
-    invoiceStatus = "PARTIAL";
   } else {
     invoiceStatus = "UNPAID";
   }
@@ -294,6 +298,122 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   });
 
   return invoice;
+};
+
+// ── Update ────────────────────────────────────────────────────────────
+
+const updateInvoice = async (id, body, userId) => {
+  const existing = await findById(id);
+  if (!existing) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+  if (existing.status === "CANCELLED") {
+    throw new AppError("Cannot edit a cancelled invoice", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+  if (existing.status === "PAID") {
+    throw new AppError("Cannot edit a paid invoice", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
+  const { items, notes, taxable = false, inclusiveTax = false } = body;
+  const branchId = existing.branchId;
+
+  // Re-resolve prices and build new line items (same logic as createInvoice)
+  const itemsData   = [];
+  let totalSubtotal = D("0");
+  let totalDiscount = D("0");
+  let totalTax      = D("0");
+
+  for (const line of items) {
+    const item = await findItemById(line.itemId);
+    if (!item) throw new AppError(`Item not found: ${line.itemId}`, StatusCodes.NOT_FOUND);
+
+    const itemUnit = await findItemUnit({ itemId: line.itemId, unitId: line.unitId });
+    if (!itemUnit) {
+      throw new AppError(`Unit is not valid for item ${item.itemCode}`, StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+
+    let price;
+    if (line.price !== undefined && line.price !== null) {
+      price = D(line.price);
+    } else {
+      let priceRecord = await findActivePrice({ itemId: line.itemId, unitId: line.unitId, branchId });
+      if (!priceRecord) priceRecord = await findActivePriceGlobal({ itemId: line.itemId, unitId: line.unitId });
+      if (!priceRecord) {
+        throw new AppError(`No active price found for item ${item.itemCode}`, StatusCodes.UNPROCESSABLE_ENTITY);
+      }
+      price = D(priceRecord.sellingPrice);
+    }
+
+    const qty       = D(line.qty);
+    const discount  = D(line.discountAmount ?? 0);
+    const grossLine = price.mul(qty).sub(discount);
+    const lineTaxable = taxable && (line.taxable ?? false);
+
+    let lineSubtotal, itemTax;
+    if (!lineTaxable) {
+      lineSubtotal = grossLine;
+      itemTax      = D("0");
+    } else if (inclusiveTax) {
+      lineSubtotal = grossLine.div(D("1.11")).toDecimalPlaces(2);
+      itemTax      = grossLine.sub(lineSubtotal);
+    } else {
+      lineSubtotal = grossLine;
+      itemTax      = grossLine.mul(D("0.11")).toDecimalPlaces(2);
+    }
+
+    totalSubtotal = totalSubtotal.add(lineSubtotal);
+    totalDiscount = totalDiscount.add(discount);
+    totalTax      = totalTax.add(itemTax);
+
+    itemsData.push({
+      itemId:   line.itemId,
+      unitId:   line.unitId,
+      qty,
+      price,
+      discount,
+      subtotal: lineSubtotal,
+      taxable:  lineTaxable,
+      taxName:  lineTaxable ? "PPN" : null,
+      taxRate:  lineTaxable ? D("11") : D("0"),
+    });
+  }
+
+  const grandTotal = totalSubtotal.add(totalTax);
+
+  // Keep existing deposits and payments; recalculate outstanding
+  const existingTotalDeposit = D(existing.totalDeposit);
+  const existingPaidAmount   = D(existing.paidAmount);
+  const newOutstanding       = grandTotal.sub(existingTotalDeposit).sub(existingPaidAmount);
+  const safeOutstanding      = newOutstanding.lte(D("0")) ? D("0") : newOutstanding;
+
+  const newStatus = safeOutstanding.lte(D("0")) ? "PAID" : "UNPAID";
+
+  const invoiceData = {
+    subtotal:          totalSubtotal,
+    totalDiscount,
+    totalTax,
+    grandTotal,
+    outstandingAmount: safeOutstanding,
+    status:            newStatus,
+    notes:             notes ?? null,
+    taxable,
+    inclusiveTax,
+  };
+
+  const updated = await updateWithTransaction({
+    invoiceId: id,
+    invoiceData,
+    itemsData,
+    oldStatus: existing.status,
+    userId,
+  });
+
+  // Re-sync to Accurate
+  await createSyncJob({ entityType: "INVOICE", entityId: id, direction: "APP_TO_ACCURATE" });
+
+  if (newStatus === "PAID" && existing.status !== "PAID") {
+    await handleInvoicePaid(id, userId);
+  }
+
+  return updated;
 };
 
 // ── Apply deposit to existing invoice ────────────────────────────────
@@ -351,7 +471,7 @@ const applyDepositToInvoice = async (invoiceId, { depositId, amount }, userId) =
   const newDepositStatus  = depositRemaining.sub(amountToApply).gt(D("0")) ? "PARTIAL_USED" : "USED";
   const newTotalDeposit   = D(invoice.totalDeposit).add(amountToApply);
   const newOutstanding    = outstandingAmount.sub(amountToApply);
-  const newInvoiceStatus  = newOutstanding.lte(D("0")) ? "PAID" : "PARTIAL";
+  const newInvoiceStatus  = newOutstanding.lte(D("0")) ? "PAID" : "UNPAID";
 
   const updated = await applyDepositWithTransaction({
     invoiceId,
@@ -390,4 +510,4 @@ const cancelInvoice = async (id, userId) => {
   return cancelWithTransaction({ invoice, userId });
 };
 
-module.exports = { listInvoices, getInvoiceById, createInvoice, applyDepositToInvoice, cancelInvoice };
+module.exports = { listInvoices, getInvoiceById, createInvoice, updateInvoice, applyDepositToInvoice, cancelInvoice };

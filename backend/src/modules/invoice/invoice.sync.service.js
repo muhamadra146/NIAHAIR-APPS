@@ -15,10 +15,7 @@ const syncInvoiceToAccurate = async (invoiceId) => {
   const invoice = await findInvoiceForSync(invoiceId);
   if (!invoice) throw new Error(`Invoice not found: ${invoiceId}`);
 
-  // Idempotency — skip if already pushed to Accurate
-  if (invoice.accurateInvoiceId) {
-    return { skipped: true, reason: "Already synced" };
-  }
+  const isUpdate = !!invoice.accurateInvoiceId;
 
   // Validate customer sync
   if (!invoice.customer?.accurateCustomerId || !invoice.customer?.customerNo) {
@@ -52,7 +49,21 @@ const syncInvoiceToAccurate = async (invoiceId) => {
     }
   }
 
-  const payload = mapInvoiceToAccurate(invoice, warehouse);
+  // On UPDATE: fetch current Accurate item IDs via a minimal save (read-like)
+  // so we can delete ALL existing items before adding fresh ones.
+  // This is the only reliable way — DB accurateInvoiceDetailId becomes stale
+  // when invoice items are deleted and recreated during an edit.
+  let currentAccurateItemIds = [];
+  if (isUpdate) {
+    const currentResp = await accurateRequest(ACCURATE_INVOICE_SAVE, {
+      method: "POST",
+      body:   { id: invoice.accurateInvoiceId },
+    });
+    currentAccurateItemIds = (currentResp.r?.detailItem ?? []).map((i) => i.id);
+    console.log(`[invoice sync] current Accurate items: ${currentAccurateItemIds.join(",")}`);
+  }
+
+  const payload = mapInvoiceToAccurate(invoice, warehouse, isUpdate ? invoice.accurateInvoiceId : null, currentAccurateItemIds);
 
   const response = await accurateRequest(ACCURATE_INVOICE_SAVE, {
     method: "POST",
@@ -73,21 +84,21 @@ const syncInvoiceToAccurate = async (invoiceId) => {
     accurateInvoiceNumber: accurateNumber,
   });
 
-  // Save per-line Accurate detail IDs if the API returns them
-  const detailItems = response.r.detailItem ?? [];
-  for (let i = 0; i < detailItems.length; i++) {
+  // Save per-line Accurate detail IDs — only for newly added items (no _status DELETE)
+  const addedItems = (response.r.detailItem ?? []).filter((i) => i._status !== "DELETE");
+  for (let i = 0; i < addedItems.length; i++) {
     const line = invoice.items[i];
-    if (line && detailItems[i]?.id) {
-      await markInvoiceItemSynced(line.id, detailItems[i].id);
+    if (line && addedItems[i]?.id) {
+      await markInvoiceItemSynced(line.id, addedItems[i].id);
     }
   }
 
   console.log(
-    `[invoice sync] success invoiceId=${invoiceId}` +
+    `[invoice sync] ${isUpdate ? "update" : "create"} invoiceId=${invoiceId}` +
     ` accurateId=${accurateId} number=${accurateNumber}`
   );
 
-  return { synced: true, accurateId, accurateNumber };
+  return { synced: true, accurateId, accurateNumber, isUpdate };
 };
 
 module.exports = { syncInvoiceToAccurate };

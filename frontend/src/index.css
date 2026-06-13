@@ -5,52 +5,97 @@
 @layer base {
   :root {
     /* ── Base ───────────────────────────────────── */
-    --background:      0 0% 100%;           /* white */
-    --foreground:      340 12% 12%;         /* warm near-black */
+    --background:      340 18% 96%;          /* warm blush-gray — not pure white */
+    --foreground:      340 12% 12%;
 
-    --card:            0 0% 100%;
+    --card:            0 0% 100%;            /* white cards pop against bg */
     --card-foreground: 340 12% 12%;
 
-    --border:          340 28% 88%;         /* soft rose-beige */
-    --input:           340 28% 88%;
+    --border:          340 22% 90%;
+    --input:           340 22% 90%;
     --ring:            340 52% 60%;
-    --radius:          0.5rem;
+    --radius:          0.75rem;              /* slightly more rounded globally */
 
     /* ── Primary – dusty rose ───────────────────── */
-    --primary:            340 52% 60%;      /* #C4677C */
-    --primary-foreground: 0 0% 100%;        /* white text on pink */
+    --primary:            340 52% 60%;
+    --primary-foreground: 0 0% 100%;
 
-    /* ── Secondary – blush ──────────────────────── */
-    --secondary:            345 55% 96%;    /* #FCEEF2 */
+    /* ── Secondary ──────────────────────────────── */
+    --secondary:            345 55% 96%;
     --secondary-foreground: 340 12% 22%;
 
     /* ── Muted ──────────────────────────────────── */
-    --muted:            345 40% 96%;
+    --muted:            345 30% 94%;
     --muted-foreground: 340 10% 52%;
 
     /* ── Accent ─────────────────────────────────── */
-    --accent:            345 55% 95%;
+    --accent:            345 50% 95%;
     --accent-foreground: 340 12% 22%;
 
-    /* ── Destructive (keep functional red) ─────── */
+    /* ── Destructive ────────────────────────────── */
     --destructive:            0 84.2% 60.2%;
     --destructive-foreground: 0 0% 100%;
 
-    /* ── Sidebar – white + pink accents ─────────── */
+    /* ── Sidebar ────────────────────────────────── */
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 340 12% 18%;
-    --sidebar-primary:    340 52% 60%;      /* active item bg */
-    --sidebar-accent:     345 55% 96%;      /* hover bg */
-    --sidebar-border:     340 28% 90%;
+    --sidebar-primary:    340 52% 60%;
+    --sidebar-accent:     345 55% 96%;
+    --sidebar-border:     340 22% 92%;
   }
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+  * { @apply border-border; }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+
+  /* ── Scrollbar ─────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply rounded-full bg-border; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-muted-foreground/30; }
+
+  /* ── Table base ────────────────────────────────── */
+  tbody tr {
+    transition: background-color 0.15s ease;
+  }
 }
+
+/* ── Animations ─────────────────────────────────────── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes slide-right {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fade-up    { animation: fade-up    0.4s cubic-bezier(.22,.68,0,1.2) both; }
+.animate-fade-in    { animation: fade-in    0.3s ease both; }
+.animate-scale-in   { animation: scale-in  0.35s cubic-bezier(.22,.68,0,1.2) both; }
+.animate-slide-right{ animation: slide-right 0.35s ease both; }
+
+.delay-0   { animation-delay:   0ms; }
+.delay-50  { animation-delay:  50ms; }
+.delay-75  { animation-delay:  75ms; }
+.delay-100 { animation-delay: 100ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-250 { animation-delay: 250ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-350 { animation-delay: 350ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }

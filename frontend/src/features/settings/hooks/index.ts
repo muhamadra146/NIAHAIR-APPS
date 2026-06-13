@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchShifts, createShift, updateShift } from "@/features/schedule/api/shift.api";
 import {
   fetchEmployees, fetchEmployee, createEmployee, updateEmployee, updateEmployeeBranches,
 } from "../api/employee.api";
@@ -16,6 +17,8 @@ import {
 import {
   fetchWarehouses, syncWarehouses, updateWarehouseBranch, updateWarehouseAccurate,
 } from "../api/warehouse.api";
+import { fetchSalarySettings, createSalarySetting, updateSalarySetting } from "../api/salary.api";
+import { fetchLoansByEmployee, fetchLoans, createLoan, updateLoan, cancelLoan, addRepayment } from "../api/loan.api";
 import type {
   EmployeeListParams, EmployeeRoleListParams, UserListParams, BranchListParams,
   PaymentMethodListParams, CashAccountListParams, WarehouseListParams,
@@ -26,6 +29,9 @@ import type {
   CreatePaymentMethodInput, UpdatePaymentMethodInput,
   CreateCashAccountInput, UpdateCashAccountInput,
   UpdateWarehouseBranchInput, UpdateWarehouseAccurateInput,
+  CreateShiftInput, UpdateShiftInput,
+  CreateSalaryInput, UpdateSalaryInput,
+  LoanListParams, CreateLoanInput, UpdateLoanInput, AddRepaymentInput,
 } from "../types";
 
 // ── Employees ─────────────────────────────────────────────────────────
@@ -238,5 +244,104 @@ export const useUpdateWarehouseAccurate = (id: string) => {
   return useMutation({
     mutationFn: (input: UpdateWarehouseAccurateInput) => updateWarehouseAccurate(id, input),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["warehouses"] }); },
+  });
+};
+
+// ── Shifts ────────────────────────────────────────────────────────────────────
+export const useShiftMasters = () =>
+  useQuery({ queryKey: ["shifts"], queryFn: fetchShifts, staleTime: 5 * 60 * 1000 });
+
+export const useCreateShift = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateShiftInput) => createShift(input),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ["shifts"] }); },
+  });
+};
+
+export const useUpdateShift = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateShiftInput) => updateShift(id, input),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ["shifts"] }); },
+  });
+};
+
+// ── Salary Settings ───────────────────────────────────────────────────────────
+export const useSalarySettings = (employeeId: string) =>
+  useQuery({
+    queryKey: ["salarySettings", employeeId],
+    queryFn:  () => fetchSalarySettings(employeeId),
+    enabled:  Boolean(employeeId),
+  });
+
+export const useCreateSalarySetting = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateSalaryInput) => createSalarySetting(input),
+    onSuccess:  (_, vars) => { qc.invalidateQueries({ queryKey: ["salarySettings", vars.employeeId] }); },
+  });
+};
+
+export const useUpdateSalarySetting = (id: string, employeeId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateSalaryInput) => updateSalarySetting(id, input),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ["salarySettings", employeeId] }); },
+  });
+};
+
+// ── Loans (Kasbon) ────────────────────────────────────────────────────────────
+export const useLoans = (params: LoanListParams = {}) =>
+  useQuery({ queryKey: ["loans", params], queryFn: () => fetchLoans(params) });
+
+export const useLoansByEmployee = (employeeId: string) =>
+  useQuery({
+    queryKey: ["loans", "employee", employeeId],
+    queryFn:  () => fetchLoansByEmployee(employeeId),
+    enabled:  Boolean(employeeId),
+  });
+
+export const useCreateLoan = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateLoanInput) => createLoan(input),
+    onSuccess:  (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["loans", "employee", vars.employeeId] });
+      qc.invalidateQueries({ queryKey: ["loans"] });
+    },
+  });
+};
+
+export const useUpdateLoan = (id: string, employeeId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateLoanInput) => updateLoan(id, input),
+    onSuccess:  () => {
+      qc.invalidateQueries({ queryKey: ["loans", "employee", employeeId] });
+      qc.invalidateQueries({ queryKey: ["loans"] });
+    },
+  });
+};
+
+export const useCancelLoan = (employeeId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => cancelLoan(id),
+    onSuccess:  () => {
+      qc.invalidateQueries({ queryKey: ["loans", "employee", employeeId] });
+      qc.invalidateQueries({ queryKey: ["loans"] });
+    },
+  });
+};
+
+export const useAddRepayment = (loanId: string, employeeId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AddRepaymentInput) => addRepayment(loanId, input),
+    onSuccess:  () => {
+      qc.invalidateQueries({ queryKey: ["loans", "employee", employeeId] });
+      qc.invalidateQueries({ queryKey: ["loans"] });
+    },
   });
 };

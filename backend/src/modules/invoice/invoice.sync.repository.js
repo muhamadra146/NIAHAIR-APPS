@@ -20,11 +20,12 @@ const findInvoiceForSync = (id) =>
       },
       items: {
         select: {
-          id:       true,
-          qty:      true,
-          price:    true,
-          discount: true,
-          taxable:  true,
+          id:                      true,
+          qty:                     true,
+          price:                   true,
+          discount:                true,
+          taxable:                 true,
+          accurateInvoiceDetailId: true,
           item: {
             select: {
               id:             true,

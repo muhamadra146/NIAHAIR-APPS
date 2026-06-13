@@ -18,12 +18,13 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // If user has branches but none selected, require branch selection
-  if (
-    user.branches.length > 0 &&
-    !branchId &&
-    location.pathname !== "/branch-select"
-  ) {
+  // No branches at all → must stay on /branch-select (shows "contact admin" screen)
+  if (user.branches.length === 0 && location.pathname !== "/branch-select") {
+    return <Navigate to="/branch-select" replace />;
+  }
+
+  // Has branches but none selected → require branch selection
+  if (user.branches.length > 0 && !branchId && location.pathname !== "/branch-select") {
     return <Navigate to="/branch-select" replace />;
   }
 

@@ -1,7 +1,8 @@
 const prisma = require("../../config/prisma");
 
 const INCLUDE = {
-  role: { select: { id: true, code: true, name: true } },
+  role:       { select: { id: true, code: true, name: true } },
+  homeBranch: { select: { id: true, code: true, name: true } },
   employeeBranches: {
     where:   { isActive: true },
     orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
@@ -27,23 +28,30 @@ const findRoleById = (id) =>
   prisma.employeeRole.findUnique({ where: { id }, select: { id: true } });
 
 const create = (data) => {
-  const { roleId, ...employeeData } = data;
+  const { roleId, homeBranchId, ...rest } = data;
   return prisma.employee.create({
     data: {
-      ...employeeData,
+      ...rest,
       role: { connect: { id: roleId } },
+      ...(homeBranchId && { homeBranch: { connect: { id: homeBranchId } } }),
     },
     include: INCLUDE,
   });
 };
 
 const update = (id, data) => {
-  const { roleId, ...rest } = data;
+  const { roleId, homeBranchId, ...rest } = data;
+
+  let homeBranchWrite;
+  if (homeBranchId)          homeBranchWrite = { connect: { id: homeBranchId } };
+  else if (homeBranchId === null) homeBranchWrite = { disconnect: true };
+
   return prisma.employee.update({
     where: { id },
     data: {
       ...rest,
-      ...(roleId && { role: { connect: { id: roleId } } }),
+      ...(roleId        && { role:       { connect: { id: roleId } } }),
+      ...(homeBranchWrite && { homeBranch: homeBranchWrite }),
     },
     include: INCLUDE,
   });

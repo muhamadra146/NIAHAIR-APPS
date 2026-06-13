@@ -1,25 +1,33 @@
 import { createContext, useContext, useState } from "react";
 
 interface LayoutContextValue {
-  sidebarOpen:   boolean;
-  toggleSidebar: () => void;
-  closeSidebar:  () => void;
+  sidebarOpen:      boolean;
+  sidebarCollapsed: boolean;
+  toggleSidebar:    () => void;
+  closeSidebar:     () => void;
+  toggleCollapsed:  () => void;
 }
 
 const LayoutContext = createContext<LayoutContextValue>({
-  sidebarOpen:   false,
-  toggleSidebar: () => {},
-  closeSidebar:  () => {},
+  sidebarOpen:      false,
+  sidebarCollapsed: false,
+  toggleSidebar:    () => {},
+  closeSidebar:     () => {},
+  toggleCollapsed:  () => {},
 });
 
 export function LayoutProvider({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen,      setSidebarOpen]      = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   return (
     <LayoutContext.Provider
       value={{
         sidebarOpen,
-        toggleSidebar: () => setSidebarOpen((v) => !v),
-        closeSidebar:  () => setSidebarOpen(false),
+        sidebarCollapsed,
+        toggleSidebar:   () => setSidebarOpen((v) => !v),
+        closeSidebar:    () => setSidebarOpen(false),
+        toggleCollapsed: () => setSidebarCollapsed((v) => !v),
       }}
     >
       {children}

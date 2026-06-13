@@ -23,12 +23,13 @@ const D = (v) => new Prisma.Decimal(String(v));
 
 // ── Management ────────────────────────────────────────────────────────
 
-const listCommissions = async ({ page, limit, employeeId, status, startDate, endDate }) => {
+const listCommissions = async ({ page, limit, employeeId, status, branchId, startDate, endDate }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
   const where = {};
 
   if (employeeId) where.employeeId = employeeId;
   if (status)     where.status     = status;
+  if (branchId)   where.invoice    = { branchId };
 
   if (startDate || endDate) {
     where.createdAt = {};

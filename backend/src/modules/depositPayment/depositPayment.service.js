@@ -58,7 +58,7 @@ const getPaymentsByDeposit = async (depositId) => findByDepositId(depositId);
 
 // ── Create ────────────────────────────────────────────────────────────
 
-const createDepositPayment = async ({ depositId, paymentMethodId, referenceNo, notes }) => {
+const createDepositPayment = async ({ depositId, paymentMethodId, paidAt: paidAtInput, referenceNo, notes, transferProofUrl, transferProofPublicId }) => {
   const deposit = await findDepositForPayment(depositId);
   if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
 
@@ -78,17 +78,19 @@ const createDepositPayment = async ({ depositId, paymentMethodId, referenceNo, n
   }
 
   const paymentNo = await buildPaymentNo();
-  const paidAt    = new Date();
+  const paidAt    = paidAtInput ? new Date(paidAtInput) : new Date();
 
   // Payment amount always equals the deposit amount — never partial
   const created = await create({
     depositId,
     paymentMethodId,
     paymentNo,
-    amount:      D(deposit.amount),
+    amount:                D(deposit.amount),
     paidAt,
-    referenceNo: referenceNo ?? null,
-    notes:       notes       ?? null,
+    referenceNo:           referenceNo           ?? null,
+    notes:                 notes                 ?? null,
+    transferProofUrl:      transferProofUrl      ?? null,
+    transferProofPublicId: transferProofPublicId ?? null,
   });
 
   // Immediately mark deposit as PAID

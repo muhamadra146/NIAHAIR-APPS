@@ -31,13 +31,14 @@ const withComputed = (deposit) => {
 
 // ── List ──────────────────────────────────────────────────────────────
 
-const listDeposits = async ({ page, limit, customerId, appointmentId, status, startDate, endDate }) => {
+const listDeposits = async ({ page, limit, customerId, appointmentId, status, branchId, startDate, endDate }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
   if (customerId)    where.customerId    = customerId;
   if (appointmentId) where.appointmentId = appointmentId;
   if (status)        where.status        = status;
+  if (branchId)      where.branchId      = branchId;
 
   if (startDate || endDate) {
     where.createdAt = {};

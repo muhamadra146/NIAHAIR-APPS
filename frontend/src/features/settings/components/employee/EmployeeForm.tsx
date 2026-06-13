@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { AlertTriangle } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -23,7 +24,7 @@ interface Props {
 }
 
 export function EmployeeForm({ open, onOpenChange, onSubmit, isPending, defaultValues, error, nextCode }: Props) {
-  const { data: rolesData }    = useAllEmployeeRoles();
+  const { data: rolesData }     = useAllEmployeeRoles();
   const { data: branches = [] } = useAllBranches();
 
   const roles = rolesData?.data ?? [];
@@ -45,6 +46,7 @@ export function EmployeeForm({ open, onOpenChange, onSubmit, isPending, defaultV
       employeeCode: defaultValues?.employeeCode ?? "",
       phone:        defaultValues?.phone ?? "",
       email:        defaultValues?.email ?? "",
+      homeBranchId: defaultValues?.homeBranchId ?? "",
       branchIds:    existingBranchIds,
     },
   });
@@ -58,12 +60,19 @@ export function EmployeeForm({ open, onOpenChange, onSubmit, isPending, defaultV
         employeeCode: defaultValues ? (defaultValues.employeeCode ?? "") : (nextCode ?? ""),
         phone:        defaultValues?.phone ?? "",
         email:        defaultValues?.email ?? "",
+        homeBranchId: defaultValues?.homeBranchId ?? "",
         branchIds:    bIds,
       });
     }
   }, [open, defaultValues, nextCode, reset]);
 
   const selectedBranchIds = watch("branchIds") ?? [];
+  const homeBranchId      = watch("homeBranchId") ?? "";
+
+  const homeBranchNotInAccess =
+    homeBranchId !== "" &&
+    selectedBranchIds.length > 0 &&
+    !selectedBranchIds.includes(homeBranchId);
 
   function toggleBranch(branchId: string) {
     const next = selectedBranchIds.includes(branchId)
@@ -145,10 +154,36 @@ export function EmployeeForm({ open, onOpenChange, onSubmit, isPending, defaultV
                 {errors.roleId && <p className="text-xs text-destructive">{errors.roleId.message}</p>}
               </div>
 
+              {/* Home Branch */}
+              {branches.length > 0 && (
+                <div className="sm:col-span-2 space-y-1.5">
+                  <Label htmlFor="emp-home-branch">Home Branch</Label>
+                  <select
+                    id="emp-home-branch"
+                    {...register("homeBranchId")}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="">— None —</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Employee's origin branch for payroll and cost allocation.
+                  </p>
+                  {homeBranchNotInAccess && (
+                    <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>Home branch is not included in branch access. Add it below if needed.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Branch Access */}
               {branches.length > 0 && (
                 <div className="sm:col-span-2 space-y-2">
-                  <Label>Branch Access</Label>
+                  <Label>Can Work At</Label>
                   <div className="rounded-md border border-input p-3 space-y-2">
                     {branches.map((branch) => {
                       const checked = selectedBranchIds.includes(branch.id);

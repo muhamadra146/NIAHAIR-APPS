@@ -37,8 +37,10 @@ const getByIdController = async (req, res, next) => {
 const createController = async (req, res, next) => {
   try {
     const result = await createDepositPayment({
-      depositId: req.params.depositId,
+      depositId:             req.params.depositId,
       ...req.body,
+      transferProofUrl:      req.file?.path     ?? null,
+      transferProofPublicId: req.file?.filename ?? null,
     });
     return created(res, result, "Deposit payment created");
   } catch (err) {

@@ -7,8 +7,10 @@ interface PageContainerProps {
 
 export function PageContainer({ children, className }: PageContainerProps) {
   return (
-    <div className={cn("w-full px-4 py-4 sm:px-6 sm:py-6", className)}>
-      {children}
+    <div className={cn("mx-auto w-full max-w-screen-xl px-5 py-6 sm:px-8 sm:py-8", className)}>
+      <div className="animate-fade-up delay-0">
+        {children}
+      </div>
     </div>
   );
 }

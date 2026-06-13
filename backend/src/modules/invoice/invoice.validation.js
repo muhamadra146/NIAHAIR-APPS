@@ -18,6 +18,7 @@ const createInvoiceSchema = object({
         itemId:         pipe(string(), minLength(1, "itemId is required")),
         unitId:         pipe(string(), minLength(1, "unitId is required")),
         qty:            pipe(number(), minValue(0.01, "qty must be greater than 0")),
+        price:          optional(number()),
         discountAmount: optional(number()),
         taxable:        optional(boolean()),
       })
@@ -31,4 +32,23 @@ const applyDepositSchema = object({
   amount:    pipe(number(), minValue(0.01, "amount must be greater than 0")),
 });
 
-module.exports = { createInvoiceSchema, applyDepositSchema };
+const updateInvoiceSchema = object({
+  items: pipe(
+    array(
+      object({
+        itemId:         pipe(string(), minLength(1, "itemId is required")),
+        unitId:         pipe(string(), minLength(1, "unitId is required")),
+        qty:            pipe(number(), minValue(0.01, "qty must be greater than 0")),
+        price:          optional(number()),
+        discountAmount: optional(number()),
+        taxable:        optional(boolean()),
+      })
+    ),
+    minLength(1, "At least one item is required")
+  ),
+  notes:        optional(string()),
+  taxable:      optional(boolean()),
+  inclusiveTax: optional(boolean()),
+});
+
+module.exports = { createInvoiceSchema, applyDepositSchema, updateInvoiceSchema };

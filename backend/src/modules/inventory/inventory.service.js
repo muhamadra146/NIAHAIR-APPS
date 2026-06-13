@@ -17,7 +17,7 @@ const D = (v) => new Prisma.Decimal(String(v));
 
 // ── List stock movements ──────────────────────────────────────────────
 
-const listStockMovements = async ({ page, limit, referenceType, referenceId, itemId, warehouseId, type }) => {
+const listStockMovements = async ({ page, limit, referenceType, referenceId, itemId, warehouseId, branchId, type }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
@@ -25,6 +25,7 @@ const listStockMovements = async ({ page, limit, referenceType, referenceId, ite
   if (referenceId)   where.referenceId   = referenceId;
   if (itemId)        where.itemId        = itemId;
   if (warehouseId)   where.warehouseId   = warehouseId;
+  if (branchId)      where.warehouse     = { branchId };
   if (type)          where.type          = type;
 
   const [data, total] = await Promise.all([
@@ -37,11 +38,12 @@ const listStockMovements = async ({ page, limit, referenceType, referenceId, ite
 
 // ── List inventory balances ───────────────────────────────────────────
 
-const listInventories = async ({ page, limit, warehouseId, itemId }) => {
+const listInventories = async ({ page, limit, warehouseId, branchId, itemId }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
   if (warehouseId) where.warehouseId = warehouseId;
+  if (branchId)    where.warehouse   = { branchId };
   if (itemId)      where.itemId      = itemId;
 
   const [data, total] = await Promise.all([

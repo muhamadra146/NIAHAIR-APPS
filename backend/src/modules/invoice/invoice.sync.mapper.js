@@ -17,8 +17,14 @@ const formatDate = (date) => {
 };
 
 // warehouse: { accurateWarehouseId: Int } — pass null for service-only invoices
-const mapInvoiceToAccurate = (invoice, warehouse) => {
-  const detailItem = invoice.items.map((line) => {
+// accurateId: Int — pass to UPDATE an existing Accurate invoice, null to CREATE
+// currentAccurateItemIds: Int[] — Accurate line item IDs to delete before re-adding
+const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccurateItemIds = []) => {
+  // On UPDATE: delete ALL current Accurate line items (fetched live from Accurate in service),
+  // then add all current items fresh. "Replace all" strategy — reliable regardless of DB state.
+  const deleteEntries = currentAccurateItemIds.map((id) => ({ id, _status: "DELETE" }));
+
+  const addEntries = invoice.items.map((line) => {
     const entry = {
       itemNo:         line.item.itemCode,
       itemUnitName:   line.unit.name,
@@ -40,7 +46,10 @@ const mapInvoiceToAccurate = (invoice, warehouse) => {
     return entry;
   });
 
+  const detailItem = [...deleteEntries, ...addEntries];
+
   const payload = {
+    ...(accurateId ? { id: accurateId } : {}),
     customerNo:  invoice.customer.customerNo,
     transDate:   formatDate(invoice.invoiceDate),
     description: invoice.notes
@@ -51,15 +60,18 @@ const mapInvoiceToAccurate = (invoice, warehouse) => {
     detailItem,
   };
 
-  // Apply synced down payments — Accurate field: detailDownPayment
-  // invoiceId = Accurate's internal ID of the down payment (SID) invoice
-  const detailDownPayment = (invoice.invoiceDeposits ?? []).map((row) => ({
-    invoiceId:     Number(row.deposit.accurateDepositId),
-    paymentAmount: Number(row.amountApplied),
-  }));
+  // Apply synced down payments — only on CREATE (not UPDATE).
+  // On update, Accurate already has the deposit link from initial creation;
+  // re-sending it would double-apply and exceed the deposit amount.
+  if (!accurateId) {
+    const detailDownPayment = (invoice.invoiceDeposits ?? []).map((row) => ({
+      invoiceId:     Number(row.deposit.accurateDepositId),
+      paymentAmount: Number(row.amountApplied),
+    }));
 
-  if (detailDownPayment.length > 0) {
-    payload.detailDownPayment = detailDownPayment;
+    if (detailDownPayment.length > 0) {
+      payload.detailDownPayment = detailDownPayment;
+    }
   }
 
   return payload;

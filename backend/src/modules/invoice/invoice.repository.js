@@ -207,6 +207,35 @@ const applyDepositWithTransaction = ({
     return tx.invoice.findUnique({ where: { id: invoiceId }, include: INCLUDE });
   });
 
+// ── Update items ─────────────────────────────────────────────────────
+
+const updateWithTransaction = ({ invoiceId, invoiceData, itemsData, oldStatus, userId }) =>
+  prisma.$transaction(async (tx) => {
+    // Replace all line items
+    await tx.invoiceItem.deleteMany({ where: { invoiceId } });
+    if (itemsData.length > 0) {
+      await tx.invoiceItem.createMany({
+        data: itemsData.map((d) => ({ ...d, invoiceId })),
+      });
+    }
+
+    await tx.invoice.update({ where: { id: invoiceId }, data: invoiceData });
+
+    if (oldStatus !== invoiceData.status) {
+      await tx.invoiceStatusHistory.create({
+        data: {
+          invoiceId,
+          oldStatus,
+          newStatus: invoiceData.status,
+          notes:     "Invoice updated",
+          createdBy: userId ?? null,
+        },
+      });
+    }
+
+    return tx.invoice.findUnique({ where: { id: invoiceId }, include: INCLUDE });
+  });
+
 // ── Cancel ────────────────────────────────────────────────────────────
 
 const cancelWithTransaction = ({ invoice, userId }) =>
@@ -246,5 +275,6 @@ module.exports = {
   findInvoiceForDepositApply,
   createWithTransaction,
   applyDepositWithTransaction,
+  updateWithTransaction,
   cancelWithTransaction,
 };

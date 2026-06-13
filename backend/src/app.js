@@ -25,6 +25,7 @@ const treatmentAssignmentRouter     = require("./modules/treatmentAssignment/tre
 const commissionRouter              = require("./modules/commission/commission.route");
 const invoiceRouter                 = require("./modules/invoice/invoice.route");
 const appointmentRouter             = require("./modules/appointment/appointment.route");
+const appointmentPhotoRouter        = require("./modules/appointmentPhoto/appointmentPhoto.route");
 const depositRouter                 = require("./modules/deposit/deposit.route");
 const paymentMethodRouter           = require("./modules/paymentMethod/paymentMethod.route");
 const cashAccountRouter             = require("./modules/cashAccount/cashAccount.route");
@@ -35,6 +36,13 @@ const userRouter                    = require("./modules/user/user.route");
 const userRoleRouter                = require("./modules/userRole/userRole.route");
 const syncQueueRouter               = require("./modules/syncQueue/syncQueue.route");
 const depositPaymentRouter          = require("./modules/depositPayment/depositPayment.route");
+const shiftRouter                   = require("./modules/shift/shift.route");
+const staffScheduleRouter           = require("./modules/staffSchedule/staffSchedule.route");
+const attendanceRouter              = require("./modules/attendance/attendance.route");
+const salaryRouter                  = require("./modules/salary/salary.route");
+const loanRouter                    = require("./modules/loan/loan.route");
+const payrollRouter                 = require("./modules/payroll/payroll.route");
+const reportRouter                  = require("./modules/report/report.route");
 
 
 const app = express();
@@ -88,6 +96,7 @@ app.use("/treatment-assignments",              treatmentAssignmentRouter);
 app.use("/commissions",                        commissionRouter);
 app.use("/invoices",                           invoiceRouter);
 app.use("/appointments",                       appointmentRouter);
+app.use("/appointments/:appointmentId/photos", appointmentPhotoRouter);
 app.use("/appointments/:appointmentId/deposits", depositRouter);
 app.use("/deposits",                             depositRouter);
 app.use("/payment-methods",                      paymentMethodRouter);
@@ -101,6 +110,13 @@ app.use("/user-roles",                           userRoleRouter);
 app.use("/sync-queues",                          syncQueueRouter);
 app.use("/deposits/:depositId/payments",         depositPaymentRouter);
 app.use("/deposit-payments",                     depositPaymentRouter);
+app.use("/shifts",                               shiftRouter);
+app.use("/staff-schedules",                      staffScheduleRouter);
+app.use("/attendance",                           attendanceRouter);
+app.use("/salary-settings",                      salaryRouter);
+app.use("/loans",                                loanRouter);
+app.use("/payroll",                              payrollRouter);
+app.use("/reports",                              reportRouter);
 
 
 // global error handler — must be last

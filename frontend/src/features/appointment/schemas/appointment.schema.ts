@@ -11,21 +11,26 @@ const serviceLineSchema = z.object({
 });
 
 export const createAppointmentSchema = z.object({
-  customerId:     z.string().min(1, "Customer is required"),
-  visitDate:      z.string().min(1, "Visit date is required"),
-  startTime:      z.string().regex(timeRegex, "Enter time as HH:MM (e.g. 09:00)"),
-  endTime:        z.string().regex(timeRegex, "Enter time as HH:MM (e.g. 12:00)"),
-  notes:          z.string().optional().or(z.literal("")),
-  estimatedTotal: z.coerce.number().min(0).optional(),
-  services:       z.array(serviceLineSchema).optional(),
+  customerId:          z.string().min(1, "Customer is required"),
+  visitDate:           z.string().min(1, "Visit date is required"),
+  startTime:           z.string().regex(timeRegex, "Enter time as HH:MM (e.g. 09:00)"),
+  endTime:             z.string().regex(timeRegex, "Enter time as HH:MM (e.g. 12:00)"),
+  type:                z.enum(["SALON", "HOME_SERVICE"]).default("SALON"),
+  homeServiceAddress:  z.string().optional().or(z.literal("")),
+  notes:               z.string().optional().or(z.literal("")),
+  estimatedTotal:      z.coerce.number().min(0).optional(),
+  services:            z.array(serviceLineSchema).optional(),
+  staffIds:            z.array(z.string()).optional(),
 });
 
 export const updateAppointmentSchema = z.object({
-  visitDate:      z.string().optional().or(z.literal("")),
-  startTime:      z.string().regex(timeRegex, "Enter time as HH:MM").optional().or(z.literal("")),
-  endTime:        z.string().regex(timeRegex, "Enter time as HH:MM").optional().or(z.literal("")),
-  notes:          z.string().optional().or(z.literal("")),
-  estimatedTotal: z.coerce.number().min(0).optional(),
+  visitDate:           z.string().optional().or(z.literal("")),
+  startTime:           z.string().regex(timeRegex, "Enter time as HH:MM").optional().or(z.literal("")),
+  endTime:             z.string().regex(timeRegex, "Enter time as HH:MM").optional().or(z.literal("")),
+  type:                z.enum(["SALON", "HOME_SERVICE"]).optional(),
+  homeServiceAddress:  z.string().optional().or(z.literal("")),
+  notes:               z.string().optional().or(z.literal("")),
+  estimatedTotal:      z.coerce.number().min(0).optional(),
 });
 
 export const changeStatusSchema = z.object({

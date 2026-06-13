@@ -17,22 +17,30 @@ const serviceLineSchema = object({
   notes:  optional(string()),
 });
 
+const APPOINTMENT_TYPES = ["SALON", "HOME_SERVICE"];
+
 const createAppointmentSchema = object({
-  customerId:     pipe(string(), minLength(1,   "customerId is required")),
-  visitDate:      pipe(string(), minLength(1,   "visitDate is required")),
-  startTime:      pipe(string(), regex(HH_MM,  "startTime must be HH:MM (e.g. 09:00)")),
-  endTime:        pipe(string(), regex(HH_MM,  "endTime must be HH:MM (e.g. 12:00)")),
-  notes:          optional(string()),
-  estimatedTotal: optional(pipe(number(), minValue(0, "estimatedTotal must be >= 0"))),
-  services:       optional(array(serviceLineSchema)),
+  customerId:          pipe(string(), minLength(1, "customerId is required")),
+  visitDate:           pipe(string(), minLength(1, "visitDate is required")),
+  startTime:           pipe(string(), regex(HH_MM, "startTime must be HH:MM (e.g. 09:00)")),
+  endTime:             pipe(string(), regex(HH_MM, "endTime must be HH:MM (e.g. 12:00)")),
+  type:                optional(picklist(APPOINTMENT_TYPES, "Invalid appointment type")),
+  homeServiceAddress:  optional(string()),
+  notes:               optional(string()),
+  estimatedTotal:      optional(pipe(number(), minValue(0, "estimatedTotal must be >= 0"))),
+  services:            optional(array(serviceLineSchema)),
+  staffIds:            optional(array(pipe(string(), minLength(1, "staffId is required")))),
 });
 
 const updateAppointmentSchema = object({
-  visitDate:      optional(string()),
-  startTime:      optional(pipe(string(), regex(HH_MM, "startTime must be HH:MM (e.g. 09:00)"))),
-  endTime:        optional(pipe(string(), regex(HH_MM, "endTime must be HH:MM (e.g. 12:00)"))),
-  notes:          optional(string()),
-  estimatedTotal: optional(pipe(number(), minValue(0, "estimatedTotal must be >= 0"))),
+  visitDate:           optional(string()),
+  startTime:           optional(pipe(string(), regex(HH_MM, "startTime must be HH:MM (e.g. 09:00)"))),
+  endTime:             optional(pipe(string(), regex(HH_MM, "endTime must be HH:MM (e.g. 12:00)"))),
+  type:                optional(picklist(APPOINTMENT_TYPES, "Invalid appointment type")),
+  homeServiceAddress:  optional(string()),
+  notes:               optional(string()),
+  estimatedTotal:      optional(pipe(number(), minValue(0, "estimatedTotal must be >= 0"))),
+  staffIds:            optional(array(pipe(string(), minLength(1, "staffId is required")))),
 });
 
 const changeStatusSchema = object({

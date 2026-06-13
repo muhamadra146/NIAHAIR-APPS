@@ -12,7 +12,12 @@ const INCLUDE = {
   },
   staffs: {
     include: {
-      employee: { select: { id: true, name: true, employeeCode: true } },
+      employee: {
+        select: {
+          id: true, name: true, employeeCode: true,
+          role: { select: { id: true, code: true, name: true } },
+        },
+      },
     },
     orderBy: { createdAt: "asc" },
   },
@@ -21,6 +26,9 @@ const INCLUDE = {
   },
   treatmentSessions: {
     select: { id: true, startedAt: true, completedAt: true, notes: true },
+  },
+  photos: {
+    orderBy: { createdAt: "asc" },
   },
 };
 
@@ -40,14 +48,14 @@ const countToday = (startOfDay) =>
 // ── Lookup helpers ────────────────────────────────────────────────────
 
 const findCustomerById = (id) =>
-  prisma.customer.findUnique({ where: { id }, select: { id: true, name: true } });
+  prisma.customer.findUnique({ where: { id }, select: { id: true, name: true, address: true } });
 
 const findBranchById = (id) =>
   prisma.branch.findUnique({ where: { id }, select: { id: true, name: true } });
 
 // ── Create ────────────────────────────────────────────────────────────
 
-const createWithTransaction = ({ appointmentData, services = [], userId }) =>
+const createWithTransaction = ({ appointmentData, services = [], staffIds = [], userId }) =>
   prisma.$transaction(async (tx) => {
     const appointment = await tx.appointment.create({ data: appointmentData });
 
@@ -74,6 +82,15 @@ const createWithTransaction = ({ appointmentData, services = [], userId }) =>
       });
     }
 
+    if (staffIds.length > 0) {
+      await tx.appointmentStaff.createMany({
+        data: staffIds.map((employeeId) => ({
+          appointmentId: appointment.id,
+          employeeId,
+        })),
+      });
+    }
+
     return tx.appointment.findUnique({ where: { id: appointment.id }, include: INCLUDE });
   });
 
@@ -81,6 +98,23 @@ const createWithTransaction = ({ appointmentData, services = [], userId }) =>
 
 const updateAppointment = (id, data) =>
   prisma.appointment.update({ where: { id }, data, include: INCLUDE });
+
+// staffIds = undefined → leave staff untouched; [] → clear all; [...] → replace
+const updateWithStaff = (id, data, staffIds) =>
+  prisma.$transaction(async (tx) => {
+    await tx.appointment.update({ where: { id }, data });
+
+    if (staffIds !== undefined) {
+      await tx.appointmentStaff.deleteMany({ where: { appointmentId: id } });
+      if (staffIds.length > 0) {
+        await tx.appointmentStaff.createMany({
+          data: staffIds.map((employeeId) => ({ appointmentId: id, employeeId })),
+        });
+      }
+    }
+
+    return tx.appointment.findUnique({ where: { id }, include: INCLUDE });
+  });
 
 // ── Change status ─────────────────────────────────────────────────────
 
@@ -113,5 +147,6 @@ module.exports = {
   findBranchById,
   createWithTransaction,
   updateAppointment,
+  updateWithStaff,
   changeStatusWithTransaction,
 };

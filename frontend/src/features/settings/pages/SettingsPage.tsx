@@ -15,6 +15,7 @@ import {
   usePaymentMethods, useCreatePaymentMethod, useUpdatePaymentMethod, useDeletePaymentMethod,
   useCashAccounts, useUpdateCashAccount, useDeleteCashAccount, useSyncCashAccounts,
   useWarehouses, useSyncWarehouses, useUpdateWarehouseBranch, useUpdateWarehouseAccurate,
+  useShiftMasters, useCreateShift, useUpdateShift,
 } from "../hooks";
 
 import { EmployeeTable }     from "../components/employee/EmployeeTable";
@@ -32,15 +33,20 @@ import { CashAccountForm }    from "../components/cashAccount/CashAccountForm";
 import { WarehouseTable }     from "../components/warehouse/WarehouseTable";
 import { WarehouseForm }      from "../components/warehouse/WarehouseForm";
 import type { WarehouseFormValues } from "../components/warehouse/WarehouseForm";
+import { ShiftTable }         from "../components/shift/ShiftTable";
+import { ShiftForm }          from "../components/shift/ShiftForm";
+import { SalaryTab }          from "../components/salary/SalaryTab";
+import { LoanTab }            from "../components/loan/LoanTab";
 import { AccuratePanel }      from "../accurate/AccuratePanel";
 
-import type { Employee, EmployeeRole, User, Branch, PaymentMethod, CashAccount, Warehouse } from "../types";
+import type { Employee, EmployeeRole, User, Branch, PaymentMethod, CashAccount, Warehouse, ShiftMaster } from "../types";
 import type { EmployeeFormValues } from "../schemas/employee.schema";
 import type { EmployeeRoleFormValues } from "../schemas/employeeRole.schema";
 import type { CreateUserFormValues, UpdateUserFormValues, ResetPasswordFormValues } from "../schemas/user.schema";
 import type { BranchFormValues } from "../schemas/branch.schema";
 import type { PaymentMethodFormValues } from "../schemas/paymentMethod.schema";
 import type { CashAccountFormValues } from "../schemas/cashAccount.schema";
+import type { ShiftFormValues } from "../schemas/shift.schema";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Tab 1 — Employee Management
@@ -100,7 +106,8 @@ function EmployeeTab() {
   async function handleEmpSubmit(values: EmployeeFormValues) {
     setEmpError(null);
     try {
-      const branchIds = values.branchIds ?? [];
+      const branchIds    = values.branchIds ?? [];
+      const homeBranchId = values.homeBranchId || null;
       if (editEmp) {
         await updateEmpMut.mutateAsync({
           name:         values.name,
@@ -108,6 +115,7 @@ function EmployeeTab() {
           employeeCode: values.employeeCode || undefined,
           phone:        values.phone || undefined,
           email:        values.email || undefined,
+          homeBranchId,
         });
         await updateBranchMut.mutateAsync({ branchIds });
       } else {
@@ -117,6 +125,7 @@ function EmployeeTab() {
           employeeCode: values.employeeCode || undefined,
           phone:        values.phone || undefined,
           email:        values.email || undefined,
+          homeBranchId: homeBranchId ?? undefined,
         });
         if (branchIds.length > 0) {
           const { updateEmployeeBranches } = await import("../api/employee.api");
@@ -696,6 +705,73 @@ function WarehouseTab() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Tab 7 — Shift Master
+// ────────────────────────────────────────────────────────────────────────────
+function ShiftTab() {
+  const [formOpen, setFormOpen]   = useState(false);
+  const [editShift, setEdit]      = useState<ShiftMaster | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const { data: shifts = [], isLoading } = useShiftMasters();
+  const createMut = useCreateShift();
+  const updateMut = useUpdateShift(editShift?.id ?? "");
+
+  function openCreate() { setEdit(null); setFormError(null); setFormOpen(true); }
+  function openEdit(s: ShiftMaster) { setEdit(s); setFormError(null); setFormOpen(true); }
+
+  async function handleSubmit(values: ShiftFormValues) {
+    setFormError(null);
+    try {
+      const payload = {
+        code:      values.code,
+        name:      values.name,
+        startTime: values.startTime || undefined,
+        endTime:   values.endTime || undefined,
+        color:     values.color || undefined,
+        isWorking: values.isWorking,
+      };
+      if (editShift) {
+        await updateMut.mutateAsync({ ...payload, isActive: values.isActive });
+      } else {
+        await createMut.mutateAsync(payload);
+      }
+      setFormOpen(false);
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "Gagal menyimpan shift");
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold">Master Shift</h2>
+          <p className="text-sm text-muted-foreground">Kelola jam kerja dan jenis shift karyawan</p>
+        </div>
+        <Button size="sm" onClick={openCreate}>
+          <Plus className="mr-2 h-4 w-4" />Tambah Shift
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <ShiftTable shifts={shifts} isLoading={isLoading} onEdit={openEdit} />
+        </CardContent>
+      </Card>
+
+      <ShiftForm
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        onSubmit={handleSubmit}
+        isPending={createMut.isPending || updateMut.isPending}
+        defaultValues={editShift}
+        error={formError}
+      />
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Main SettingsPage
 // ────────────────────────────────────────────────────────────────────────────
 const TABS = [
@@ -705,6 +781,9 @@ const TABS = [
   { value: "payment-methods", label: "Payment Method" },
   { value: "cash-accounts",   label: "Cash Account" },
   { value: "warehouses",      label: "Warehouse" },
+  { value: "shifts",          label: "Master Shift" },
+  { value: "salary",          label: "Setting Gaji" },
+  { value: "loans",           label: "Kasbon" },
   { value: "accurate",        label: "Accurate" },
 ] as const;
 
@@ -751,6 +830,9 @@ export function SettingsPage() {
         <TabsContent value="payment-methods" className="mt-6"><PaymentMethodTab /></TabsContent>
         <TabsContent value="cash-accounts"   className="mt-6"><CashAccountTab /></TabsContent>
         <TabsContent value="warehouses"      className="mt-6"><WarehouseTab /></TabsContent>
+        <TabsContent value="shifts"          className="mt-6"><ShiftTab /></TabsContent>
+        <TabsContent value="salary"          className="mt-6"><SalaryTab /></TabsContent>
+        <TabsContent value="loans"           className="mt-6"><LoanTab /></TabsContent>
         <TabsContent value="accurate"        className="mt-6"><AccuratePanel /></TabsContent>
       </Tabs>
     </PageContainer>

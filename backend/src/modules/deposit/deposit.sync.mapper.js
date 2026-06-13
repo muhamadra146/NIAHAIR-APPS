@@ -16,9 +16,12 @@ const mapDepositToAccurate = (deposit) => ({
   salesDownPayment: true,
   invoiceDp:        true,
   inputDownPayment: Number(deposit.amount),
-  description:      deposit.appointment?.bookingNo
-    ? `Deposit ${deposit.appointment.bookingNo}`
-    : `Deposit ${deposit.customer.customerNo ?? deposit.id}`,
+  description:      (() => {
+    const base = deposit.appointment?.bookingNo
+      ? `Deposit ${deposit.appointment.bookingNo}`
+      : `Deposit ${deposit.customer.customerNo ?? deposit.id}`;
+    return deposit.notes ? `${base}\n${deposit.notes}` : base;
+  })(),
 });
 
 module.exports = { mapDepositToAccurate };

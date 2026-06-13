@@ -34,10 +34,12 @@ export interface Employee {
   phone:            string | null;
   email:            string | null;
   roleId:           string;
+  homeBranchId:     string | null;
   isActive:         boolean;
   createdAt:        string;
   updatedAt:        string;
   role:             Pick<EmployeeRole, "id" | "code" | "name">;
+  homeBranch:       Pick<Branch, "id" | "code" | "name"> | null;
   employeeBranches: EmployeeBranchItem[];
 }
 
@@ -90,6 +92,137 @@ export interface Warehouse {
   branch:              Pick<Branch, "id" | "code" | "name"> | null;
 }
 
+// ── Shift (master data) ───────────────────────────────────────────────────────
+export interface ShiftMaster {
+  id:        string;
+  code:      string;
+  name:      string;
+  startTime: string | null;
+  endTime:   string | null;
+  color:     string | null;
+  isWorking: boolean;
+  isActive:  boolean;
+  isUsed:    boolean;
+}
+export interface CreateShiftInput {
+  code:       string;
+  name:       string;
+  startTime?: string;
+  endTime?:   string;
+  color?:     string;
+  isWorking?: boolean;
+}
+export type UpdateShiftInput = Partial<CreateShiftInput> & { isActive?: boolean };
+
+// ── Salary Settings ───────────────────────────────────────────────────
+export interface SalarySetting {
+  id:                           string;
+  employeeId:                   string;
+  baseSalary:                   number;
+  mealAllowancePerDay:          number;
+  transportAllowance:           number;
+  overtimeRatePerHour:          number;
+  holidayOvertimeRate:          number;
+  lateDeductionPerMinute:       number;
+  absentDeductionPerDay:        number;
+  earlyLeaveDeductionPerMinute: number;
+  bpjsJhtPercent:               number;
+  bpjsJpPercent:                number;
+  effectiveDate:                string;
+  endDate:                      string | null;
+  isActive:                     boolean;
+  notes:                        string | null;
+  createdAt:                    string;
+  updatedAt:                    string;
+}
+
+export interface CreateSalaryInput {
+  employeeId:                   string;
+  baseSalary:                   number;
+  mealAllowancePerDay?:         number;
+  transportAllowance?:          number;
+  overtimeRatePerHour?:         number;
+  holidayOvertimeRate?:         number;
+  lateDeductionPerMinute?:      number;
+  absentDeductionPerDay?:       number;
+  earlyLeaveDeductionPerMinute?: number;
+  bpjsJhtPercent?:              number;
+  bpjsJpPercent?:               number;
+  effectiveDate:                string;
+  endDate?:                     string;
+  isActive?:                    boolean;
+  notes?:                       string;
+}
+export type UpdateSalaryInput = Partial<Omit<CreateSalaryInput, "employeeId">>;
+
+// ── Loan (Kasbon) ─────────────────────────────────────────────────────
+export type LoanStatus = "ACTIVE" | "PAID_OFF" | "CANCELLED";
+
+export interface LoanRepayment {
+  id:        string;
+  loanId:    string;
+  payrollId: string | null;
+  amount:    number;
+  paidAt:    string;
+  notes:     string | null;
+  createdAt: string;
+}
+
+export interface Loan {
+  id:               string;
+  employeeId:       string;
+  branchId:         string;
+  loanNo:           string;
+  totalAmount:      number;
+  remainingAmount:  number;
+  monthlyDeduction: number;
+  startDate:        string;
+  endDate:          string | null;
+  status:           LoanStatus;
+  notes:            string | null;
+  createdAt:        string;
+  updatedAt:        string;
+  employee: {
+    id:           string;
+    name:         string;
+    employeeCode: string | null;
+    role:         { id: string; code: string; name: string };
+  };
+  branch: { id: string; code: string; name: string };
+  repayments: LoanRepayment[];
+}
+
+export interface CreateLoanInput {
+  employeeId:       string;
+  branchId:         string;
+  totalAmount:      number;
+  monthlyDeduction: number;
+  startDate:        string;
+  endDate?:         string;
+  notes?:           string;
+}
+
+export interface UpdateLoanInput {
+  monthlyDeduction?: number;
+  endDate?:          string;
+  notes?:            string;
+}
+
+export interface AddRepaymentInput {
+  amount:    number;
+  paidAt:    string;
+  notes?:    string;
+  payrollId?: string;
+}
+
+export interface LoanListParams {
+  page?:       number;
+  limit?:      number;
+  employeeId?: string;
+  branchId?:   string;
+  status?:     LoanStatus;
+}
+
 // ── List params ───────────────────────────────────────────────────────
 export interface EmployeeListParams   { page?: number; limit?: number; search?: string; isActive?: boolean }
 export interface EmployeeRoleListParams { page?: number; limit?: number; search?: string }
@@ -106,6 +239,7 @@ export interface CreateEmployeeInput {
   employeeCode?: string;
   phone?:        string;
   email?:        string;
+  homeBranchId?: string | null;
 }
 export type UpdateEmployeeInput = Partial<CreateEmployeeInput> & { isActive?: boolean };
 export interface UpdateEmployeeBranchesInput { branchIds: string[] }

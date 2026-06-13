@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
+import { useAuthStore } from "@/stores/authStore";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAppointments, useCreateAppointment } from "../hooks";
 import { AppointmentTable } from "../components/AppointmentTable";
-import { AppointmentCreateForm } from "../components/AppointmentForm";
+import { AppointmentCreateForm, type PendingPhoto } from "../components/AppointmentForm";
+import { uploadAppointmentPhoto } from "../api/appointment.api";
 import { STATUS_LABEL } from "../components/AppointmentStatusBadge";
 import type { AppointmentStatus } from "../types";
 import type { CreateAppointmentFormValues } from "../schemas/appointment.schema";
@@ -17,6 +19,7 @@ const ALL_STATUSES: AppointmentStatus[] = [
 ];
 
 export function AppointmentListPage() {
+  const { branchId } = useAuthStore();
   const [page, setPage]         = useState(1);
   const [status, setStatus]     = useState<AppointmentStatus | "">("");
   const [startDate, setStart]   = useState("");
@@ -24,29 +27,37 @@ export function AppointmentListPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const { data, isLoading } = useAppointments({ page, limit: 20, status: status || undefined, startDate: startDate || undefined, endDate: endDate || undefined });
+  const { data, isLoading } = useAppointments({ page, limit: 20, branchId: branchId ?? undefined, status: status || undefined, startDate: startDate || undefined, endDate: endDate || undefined });
   const createMutation = useCreateAppointment();
 
   const appointments = data?.appointments ?? [];
   const meta         = data?.meta;
   const totalPages   = meta?.totalPages ?? 1;
 
-  async function handleCreate(values: CreateAppointmentFormValues) {
+  async function handleCreate(values: CreateAppointmentFormValues, photos: PendingPhoto[]) {
     setFormError(null);
     try {
-      await createMutation.mutateAsync({
-        customerId:     values.customerId,
-        visitDate:      values.visitDate,
-        startTime:      values.startTime,
-        endTime:        values.endTime,
-        notes:          values.notes || undefined,
-        estimatedTotal: (values.services?.length ?? 0) > 0 ? undefined : values.estimatedTotal,
-        services:       values.services?.map((s) => ({
+      const appointment = await createMutation.mutateAsync({
+        customerId:         values.customerId,
+        visitDate:          values.visitDate,
+        startTime:          values.startTime,
+        endTime:            values.endTime,
+        type:               values.type,
+        homeServiceAddress: values.homeServiceAddress || undefined,
+        notes:              values.notes || undefined,
+        estimatedTotal:     (values.services?.length ?? 0) > 0 ? undefined : values.estimatedTotal,
+        services:           values.services?.map((s) => ({
           itemId: s.itemId,
           qty:    Number(s.qty),
           price:  Number(s.price),
         })),
+        staffIds: values.staffIds?.length ? values.staffIds : undefined,
       });
+      if (photos.length > 0 && appointment?.id) {
+        await Promise.all(
+          photos.map((p) => uploadAppointmentPhoto(appointment.id, p.file, p.type).catch(() => {}))
+        );
+      }
       setFormOpen(false);
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Failed to create appointment");

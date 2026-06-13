@@ -1,8 +1,9 @@
-const { Router }   = require("express");
-const authenticate  = require("../../middlewares/auth.middleware");
-const authorize     = require("../../middlewares/role.middleware");
-const validate      = require("../../middlewares/validate.middleware");
-const { ROLES }    = require("../../common/constants/role.constant");
+const { Router }      = require("express");
+const authenticate    = require("../../middlewares/auth.middleware");
+const authorize       = require("../../middlewares/role.middleware");
+const validate        = require("../../middlewares/validate.middleware");
+const uploadDeposit   = require("../../middlewares/depositUpload.middleware");
+const { ROLES }       = require("../../common/constants/role.constant");
 const { createDepositPaymentSchema } = require("./depositPayment.validation");
 const {
   getAllController,
@@ -22,6 +23,7 @@ router.post(
   "/",
   authenticate,
   authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  uploadDeposit.single("transferProof"), // multer sebelum validate agar FormData ter-parse
   validate(createDepositPaymentSchema),
   createController
 );

@@ -1,4 +1,4 @@
-const { object, string, pipe, email, optional, boolean, minLength, array } = require("valibot");
+const { object, string, pipe, email, optional, nullable, boolean, minLength, array } = require("valibot");
 
 const createEmployeeSchema = object({
   name:              pipe(string(), minLength(1, "Name is required")),
@@ -11,6 +11,7 @@ const createEmployeeSchema = object({
   address:           optional(string()),
   emergencyContact:  optional(string()),
   commissionEnabled: optional(boolean()),
+  homeBranchId:      optional(nullable(string())),
 });
 
 const updateEmployeeSchema = object({
@@ -25,6 +26,7 @@ const updateEmployeeSchema = object({
   emergencyContact:  optional(string()),
   commissionEnabled: optional(boolean()),
   isActive:          optional(boolean()),
+  homeBranchId:      optional(nullable(string())),
 });
 
 const updateEmployeeBranchesSchema = object({

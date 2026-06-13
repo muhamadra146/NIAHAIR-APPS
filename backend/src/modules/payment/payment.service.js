@@ -104,7 +104,7 @@ const createPayment = async (
     D(invoice.grandTotal).sub(D(invoice.totalDeposit)).sub(newPaidAmount)
   );
 
-  const newStatus = outstandingAmount.lte(D("0")) ? "PAID" : "PARTIAL";
+  const newStatus = outstandingAmount.lte(D("0")) ? "PAID" : "UNPAID";
 
   const paymentData = {
     invoiceId,

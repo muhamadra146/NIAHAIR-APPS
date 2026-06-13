@@ -3,6 +3,7 @@ const {
   listInvoices,
   getInvoiceById,
   createInvoice,
+  updateInvoice,
   applyDepositToInvoice,
   cancelInvoice,
 } = require("./invoice.service");
@@ -34,6 +35,15 @@ const createController = async (req, res, next) => {
   }
 };
 
+const updateController = async (req, res, next) => {
+  try {
+    const result = await updateInvoice(req.params.id, req.body, req.user.id);
+    return success(res, result, "Invoice updated");
+  } catch (err) {
+    next(err);
+  }
+};
+
 const cancelController = async (req, res, next) => {
   try {
     const result = await cancelInvoice(req.params.id, req.user.id);
@@ -52,4 +62,4 @@ const applyDepositController = async (req, res, next) => {
   }
 };
 
-module.exports = { getAllController, getByIdController, createController, applyDepositController, cancelController };
+module.exports = { getAllController, getByIdController, createController, updateController, applyDepositController, cancelController };

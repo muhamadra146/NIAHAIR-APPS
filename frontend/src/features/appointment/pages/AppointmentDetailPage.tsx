@@ -28,11 +28,13 @@ export function AppointmentDetailPage() {
     setEditError(null);
     try {
       await updateMutation.mutateAsync({
-        visitDate:      values.visitDate || undefined,
-        startTime:      values.startTime || undefined,
-        endTime:        values.endTime   || undefined,
-        notes:          values.notes     || undefined,
-        estimatedTotal: values.estimatedTotal,
+        visitDate:          values.visitDate          || undefined,
+        startTime:          values.startTime          || undefined,
+        endTime:            values.endTime            || undefined,
+        type:               values.type,
+        homeServiceAddress: values.homeServiceAddress || undefined,
+        notes:              values.notes              || undefined,
+        estimatedTotal:     values.estimatedTotal,
       });
       setEditOpen(false);
     } catch (err: unknown) {
