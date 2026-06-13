@@ -4,6 +4,7 @@ const {
   getDepositPaymentById,
   getPaymentsByDeposit,
   createDepositPayment,
+  deleteDepositPayment,
 } = require("./depositPayment.service");
 
 const getAllController = async (req, res, next) => {
@@ -48,4 +49,11 @@ const createController = async (req, res, next) => {
   }
 };
 
-module.exports = { getAllController, getByDepositController, getByIdController, createController };
+const deleteController = async (req, res, next) => {
+  try {
+    const result = await deleteDepositPayment(req.params.id);
+    return success(res, result, "Deposit payment deleted");
+  } catch (err) { next(err); }
+};
+
+module.exports = { getAllController, getByDepositController, getByIdController, createController, deleteController };

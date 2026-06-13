@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Plus, Search, ArrowRight, Eye } from "lucide-react";
+import { Plus, Search, ArrowRight, Eye, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,41 +12,74 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useAuthStore } from "@/stores/authStore";
 import { fetchCustomers } from "@/features/customer/api/customer.api";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import { useDeposits, useCreateDeposit } from "../hooks";
+import { useDeposits, useCreateDeposit, useDeleteDeposit } from "../hooks";
 import type { DepositStatus, Deposit } from "../types";
 
-const ACTIVE_STATUSES: DepositStatus[] = ["PAID", "PARTIAL_USED", "USED"];
+const ALL_STATUSES: DepositStatus[] = ["UNPAID", "PAID", "PARTIAL_USED", "USED"];
 
 const STATUS_LABEL: Record<string, string> = {
+  UNPAID:       "Belum Dibayar",
   PAID:         "Aktif",
   PARTIAL_USED: "Sebagian Terpakai",
   USED:         "Habis",
 };
 
 const STATUS_COLOR: Record<string, string> = {
+  UNPAID:       "text-yellow-600 border-yellow-300",
   PAID:         "text-green-600 border-green-300",
-  PARTIAL_USED: "text-yellow-600 border-yellow-300",
+  PARTIAL_USED: "text-blue-600 border-blue-300",
   USED:         "text-muted-foreground",
 };
 
+const CAN_DELETE: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
+
 export function DepositListPage() {
-  const { branchId } = useAuthStore();
+  const { branchId, user } = useAuthStore();
   const navigate = useNavigate();
   const [page, setPage]         = useState(1);
   const [status, setStatus]     = useState<string>("");
   const [startDate, setStart]   = useState("");
   const [endDate, setEnd]       = useState("");
+  const [custSearch, setCustSearch]   = useState("");
+  const [custResults, setCustResults] = useState<{ id: string; name: string }[]>([]);
+  const [selectedCust, setSelectedCust] = useState<{ id: string; name: string } | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Deposit | null>(null);
+  const filterTimerRef = useRef<ReturnType<typeof setTimeout>>();
   // Post-create dialog state
   const [createdDeposit, setCreatedDeposit] = useState<{ id: string; name: string; amount: string; date: string } | null>(null);
 
+  const deleteMutation = useDeleteDeposit();
+  const canDelete = user ? CAN_DELETE.includes(user.roleCode) : false;
+
   const { data, isLoading } = useDeposits({
     page, limit: 20,
-    branchId:  branchId  || undefined,
-    status:    status    || undefined,
-    startDate: startDate || undefined,
-    endDate:   endDate   || undefined,
+    branchId:   branchId              || undefined,
+    status:     status                || undefined,
+    startDate:  startDate             || undefined,
+    endDate:    endDate               || undefined,
+    customerId: selectedCust?.id      || undefined,
   });
+
+  function handleCustSearch(e: React.ChangeEvent<HTMLInputElement>) {
+    const q = e.target.value;
+    setCustSearch(q);
+    setSelectedCust(null);
+    setPage(1);
+    clearTimeout(filterTimerRef.current);
+    if (q.length < 2) { setCustResults([]); return; }
+    filterTimerRef.current = setTimeout(async () => {
+      const res = await fetchCustomers({ search: q, limit: 8 });
+      setCustResults((res.data as unknown as { id: string; name: string }[]) ?? []);
+    }, 300);
+  }
+
+  function clearCust() {
+    setSelectedCust(null);
+    setCustSearch("");
+    setCustResults([]);
+    setPage(1);
+  }
   const createMutation = useCreateDeposit();
 
   const deposits   = data?.data ?? [];
@@ -72,16 +105,48 @@ export function DepositListPage() {
         <Card>
           <CardHeader className="pb-3 pt-4">
             <div className="flex flex-wrap gap-3">
+              {/* Customer search */}
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">Customer</Label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    value={selectedCust ? selectedCust.name : custSearch}
+                    onChange={handleCustSearch}
+                    onClick={() => { if (selectedCust) clearCust(); }}
+                    placeholder="Cari customer..."
+                    className="h-9 pl-8 w-44"
+                  />
+                  {!selectedCust && custResults.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full rounded-md border border-input bg-background shadow-md">
+                      {custResults.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => { setSelectedCust(c); setCustSearch(""); setCustResults([]); setPage(1); }}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-muted/50"
+                        >
+                          {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Status */}
               <div className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">Status</Label>
                 <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}
                   className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <option value="">Semua</option>
-                  {ACTIVE_STATUSES.map((s) => (
+                  {ALL_STATUSES.map((s) => (
                     <option key={s} value={s}>{STATUS_LABEL[s]}</option>
                   ))}
                 </select>
               </div>
+
+              {/* Date range */}
               <div className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">Dari</Label>
                 <Input type="date" value={startDate} onChange={(e) => { setStart(e.target.value); setPage(1); }} className="h-9 w-36" />
@@ -90,9 +155,10 @@ export function DepositListPage() {
                 <Label className="text-xs text-muted-foreground">Sampai</Label>
                 <Input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className="h-9 w-36" />
               </div>
-              {(status || startDate || endDate) && (
+
+              {(selectedCust || status || startDate || endDate) && (
                 <div className="flex items-end">
-                  <Button variant="ghost" size="sm" onClick={() => { setStatus(""); setStart(""); setEnd(""); setPage(1); }} className="h-9 text-xs">Reset</Button>
+                  <Button variant="ghost" size="sm" onClick={() => { clearCust(); setStatus(""); setStart(""); setEnd(""); setPage(1); }} className="h-9 text-xs">Reset</Button>
                 </div>
               )}
             </div>
@@ -118,7 +184,7 @@ export function DepositListPage() {
                   </thead>
                   <tbody>
                     {deposits.map((d) => (
-                      <DepositRow key={d.id} deposit={d} />
+                      <DepositRow key={d.id} deposit={d} canDelete={canDelete} onDelete={() => setDeleteTarget(d)} />
                     ))}
                   </tbody>
                 </table>
@@ -154,6 +220,36 @@ export function DepositListPage() {
         isPending={createMutation.isPending}
       />
 
+      {/* Konfirmasi hapus */}
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Hapus Deposit</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            Yakin ingin menghapus deposit{" "}
+            <span className="font-medium text-foreground">{deleteTarget?.customer?.name}</span>
+            {" "}sebesar{" "}
+            <span className="font-medium text-foreground">{formatCurrency(deleteTarget?.amount ?? "0")}</span>?
+            Tindakan ini tidak dapat dibatalkan.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Batal</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={async () => {
+                if (!deleteTarget) return;
+                await deleteMutation.mutateAsync(deleteTarget.id);
+                setDeleteTarget(null);
+              }}
+            >
+              {deleteMutation.isPending ? "Menghapus…" : "Hapus"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Post-create: lanjut ke pembayaran? */}
       <Dialog open={!!createdDeposit} onOpenChange={(v) => { if (!v) setCreatedDeposit(null); }}>
         <DialogContent className="sm:max-w-sm">
@@ -188,9 +284,14 @@ export function DepositListPage() {
   );
 }
 
-function DepositRow({ deposit }: { deposit: import("../types").Deposit }) {
+function DepositRow({ deposit, canDelete, onDelete }: {
+  deposit:   import("../types").Deposit;
+  canDelete: boolean;
+  onDelete:  () => void;
+}) {
   const statusLabel = STATUS_LABEL[deposit.status];
   const statusColor = STATUS_COLOR[deposit.status];
+  const deletable   = canDelete && deposit.status === "UNPAID";
 
   return (
     <tr className="border-b border-border transition-colors hover:bg-muted/30">
@@ -218,13 +319,25 @@ function DepositRow({ deposit }: { deposit: import("../types").Deposit }) {
         )}
       </td>
       <td className="px-4 py-3">
-        <Link
-          to={`/deposits/${deposit.id}`}
-          className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title="Lihat detail"
-        >
-          <Eye className="h-4 w-4" />
-        </Link>
+        <div className="flex items-center gap-1">
+          <Link
+            to={`/deposits/${deposit.id}`}
+            className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            title="Lihat detail"
+          >
+            <Eye className="h-4 w-4" />
+          </Link>
+          {deletable && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+              title="Hapus deposit"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </td>
     </tr>
   );

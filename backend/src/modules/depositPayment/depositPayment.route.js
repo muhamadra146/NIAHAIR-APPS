@@ -10,14 +10,22 @@ const {
   getByDepositController,
   getByIdController,
   createController,
+  deleteController,
 } = require("./depositPayment.controller");
 
 // mergeParams: true — inherits :depositId when mounted at
 // app.use("/deposits/:depositId/payments", router)
 const router = Router({ mergeParams: true });
 
-router.get("/",    authenticate, getByDepositController);
+router.get("/",    authenticate, getAllController);
 router.get("/:id", authenticate, getByIdController);
+
+router.delete(
+  "/:id",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER),
+  deleteController
+);
 
 router.post(
   "/",

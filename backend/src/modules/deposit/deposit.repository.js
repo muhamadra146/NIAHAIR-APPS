@@ -42,6 +42,12 @@ const create = (data) =>
 const updateStatus = (id, status) =>
   prisma.deposit.update({ where: { id }, data: { status }, include: INCLUDE });
 
+const updateDeposit = (id, data) =>
+  prisma.deposit.update({ where: { id }, data, include: INCLUDE });
+
+const removeDeposit = (id) =>
+  prisma.deposit.delete({ where: { id } });
+
 const updateAppointmentLink = (id, appointmentId) =>
   prisma.deposit.update({ where: { id }, data: { appointmentId }, include: INCLUDE });
 
@@ -53,5 +59,7 @@ module.exports = {
   findAppointmentById,
   create,
   updateStatus,
+  updateDeposit,
+  removeDeposit,
   updateAppointmentLink,
 };

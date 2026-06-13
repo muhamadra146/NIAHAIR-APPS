@@ -3,6 +3,8 @@ const {
   listDeposits,
   getDepositById,
   createDeposit,
+  editDeposit,
+  deleteDeposit,
   refundDeposit,
   cancelDeposit,
   linkAppointmentToDeposit,
@@ -41,6 +43,24 @@ const createController = async (req, res, next) => {
   }
 };
 
+const updateController = async (req, res, next) => {
+  try {
+    const result = await editDeposit(req.params.id, req.body);
+    return success(res, result, "Deposit updated");
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteController = async (req, res, next) => {
+  try {
+    const result = await deleteDeposit(req.params.id);
+    return success(res, result, "Deposit deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
 const refundController = async (req, res, next) => {
   try {
     const result = await refundDeposit(req.params.id);
@@ -72,6 +92,8 @@ module.exports = {
   getAllController,
   getByIdController,
   createController,
+  updateController,
+  deleteController,
   refundController,
   cancelController,
   linkAppointmentController,

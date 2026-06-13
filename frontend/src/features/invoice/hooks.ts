@@ -11,11 +11,15 @@ import {
   fetchDeposits,
   fetchDeposit,
   createDeposit,
+  updateDeposit,
+  deleteDeposit,
   refundDeposit,
   cancelDeposit,
   fetchCustomerAvailableDeposits,
   fetchDepositPayments,
   createDepositPayment,
+  deleteDepositPayment,
+  fetchAllDepositPayments,
 } from "./api";
 import type {
   InvoiceListParams,
@@ -24,8 +28,10 @@ import type {
   AddPaymentInput,
   ApplyDepositInput,
   CreateDepositInput,
+  UpdateDepositInput,
   CreateDepositPaymentInput,
 } from "./types";
+import type { DepositPaymentListParams } from "./api";
 
 // ── Invoices ──────────────────────────────────────────────────────────────────
 
@@ -155,6 +161,30 @@ export function useCreateDeposit() {
   });
 }
 
+export function useUpdateDeposit(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateDepositInput) => updateDeposit(id, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["deposits"] });
+      toast.success("Deposit diperbarui");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useDeleteDeposit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteDeposit(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["deposits"] });
+      toast.success("Deposit dihapus");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
 export function useRefundDeposit(id: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -186,6 +216,26 @@ export function useDepositPayments(depositId: string) {
     queryKey: ["deposit-payments", depositId],
     queryFn:  () => fetchDepositPayments(depositId),
     enabled:  !!depositId,
+  });
+}
+
+export function useDeleteDepositPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteDepositPayment(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["deposit-payments"] });
+      qc.invalidateQueries({ queryKey: ["deposits"] });
+      toast.success("Pembayaran deposit dihapus");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useAllDepositPayments(params: DepositPaymentListParams = {}) {
+  return useQuery({
+    queryKey: ["deposit-payments", "all", params],
+    queryFn:  () => fetchAllDepositPayments(params),
   });
 }
 

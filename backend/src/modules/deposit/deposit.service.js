@@ -2,7 +2,8 @@ const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
-const { createSyncJob } = require("../syncQueue/syncQueue.service");
+const { createSyncJob }                                       = require("../syncQueue/syncQueue.service");
+const { updateDepositInAccurate, deleteDepositFromAccurate }  = require("./deposit.sync.service");
 const {
   findAll,
   count,
@@ -11,6 +12,8 @@ const {
   findAppointmentById,
   create,
   updateStatus,
+  updateDeposit,
+  removeDeposit,
   updateAppointmentLink,
 } = require("./deposit.repository");
 
@@ -138,6 +141,61 @@ const cancelDeposit = async (id) => {
   return withComputed(updated);
 };
 
+// ── Update ────────────────────────────────────────────────────────────
+
+const editDeposit = async (id, { notes, amount }) => {
+  const deposit = await findById(id);
+  if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
+
+  const data = {};
+  if (notes !== undefined) data.notes = notes ?? null;
+
+  if (amount !== undefined) {
+    if (deposit.status !== "UNPAID") {
+      throw new AppError("Cannot change amount after deposit has been paid", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+    data.amount = D(amount);
+  }
+
+  const updated = await updateDeposit(id, data);
+
+  // If amount changed and deposit is already in Accurate, update there too
+  if (amount !== undefined && deposit.accurateDepositId) {
+    await updateDepositInAccurate(id);
+  }
+
+  return withComputed(updated);
+};
+
+// ── Delete ────────────────────────────────────────────────────────────
+
+const deleteDeposit = async (id) => {
+  const deposit = await findById(id);
+  if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
+
+  if (deposit.invoiceDeposits?.length > 0) {
+    throw new AppError(
+      "Cannot delete deposit that has been applied to an invoice",
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
+  const blocked = ["PAID", "PARTIAL_USED", "USED"];
+  if (blocked.includes(deposit.status)) {
+    throw new AppError(
+      `Cannot delete deposit with status ${deposit.status}`,
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
+  if (deposit.accurateDepositId) {
+    await deleteDepositFromAccurate(deposit.accurateDepositId);
+  }
+
+  await removeDeposit(id);
+  return { deleted: true };
+};
+
 // ── Link appointment ──────────────────────────────────────────────────
 
 const linkAppointmentToDeposit = async (id, appointmentId) => {
@@ -158,4 +216,4 @@ const linkAppointmentToDeposit = async (id, appointmentId) => {
   return withComputed(updated);
 };
 
-module.exports = { listDeposits, getDepositById, createDeposit, refundDeposit, cancelDeposit, linkAppointmentToDeposit };
+module.exports = { listDeposits, getDepositById, createDeposit, editDeposit, deleteDeposit, refundDeposit, cancelDeposit, linkAppointmentToDeposit };

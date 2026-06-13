@@ -2,7 +2,8 @@ const { accurateRequest }                     = require("../accurate/accurate.cl
 const { findDepositForSync, markDepositSynced } = require("./deposit.sync.repository");
 const { mapDepositToAccurate }                  = require("./deposit.sync.mapper");
 
-const ACCURATE_DEPOSIT_SAVE = "/sales-invoice/save.do";
+const ACCURATE_DEPOSIT_SAVE   = "/sales-invoice/save.do";
+const ACCURATE_DEPOSIT_DELETE = "/sales-invoice/delete.do";
 
 const syncDepositToAccurate = async (depositId) => {
   console.log(`[deposit sync] start depositId=${depositId}`);
@@ -57,4 +58,47 @@ const syncDepositToAccurate = async (depositId) => {
   return { synced: true, accurateId, accurateNumber };
 };
 
-module.exports = { syncDepositToAccurate };
+const updateDepositInAccurate = async (depositId) => {
+  console.log(`[deposit sync] update in Accurate depositId=${depositId}`);
+
+  const deposit = await findDepositForSync(depositId);
+  if (!deposit?.accurateDepositId) return { skipped: true };
+
+  const payload = {
+    ...mapDepositToAccurate(deposit),
+    id: deposit.accurateDepositId,
+  };
+
+  const response = await accurateRequest(ACCURATE_DEPOSIT_SAVE, {
+    method: "POST",
+    body:   payload,
+  });
+
+  if (!response.s) {
+    throw new Error(`Accurate update error: ${JSON.stringify(response)}`);
+  }
+
+  console.log(`[deposit sync] updated in Accurate depositId=${depositId}`);
+  return { updated: true };
+};
+
+const deleteDepositFromAccurate = async (accurateDepositId) => {
+  console.log(`[deposit sync] delete from Accurate accurateDepositId=${accurateDepositId}`);
+
+  try {
+    const response = await accurateRequest(ACCURATE_DEPOSIT_DELETE, {
+      method: "POST",
+      body:   { id: accurateDepositId },
+    });
+
+    if (!response.s) {
+      console.warn(`[deposit sync] Accurate delete failed (ignored): ${JSON.stringify(response)}`);
+    } else {
+      console.log(`[deposit sync] deleted from Accurate accurateDepositId=${accurateDepositId}`);
+    }
+  } catch (err) {
+    console.warn(`[deposit sync] Accurate delete error (ignored): ${err.message}`);
+  }
+};
+
+module.exports = { syncDepositToAccurate, updateDepositInAccurate, deleteDepositFromAccurate };

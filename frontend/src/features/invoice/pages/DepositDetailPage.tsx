@@ -1,20 +1,26 @@
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, CreditCard, ImageIcon } from "lucide-react";
+import { ChevronLeft, CreditCard, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthStore } from "@/stores/authStore";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { useDeposit, useDepositPayments } from "../hooks";
+import { useDeposit, useDepositPayments, useUpdateDeposit, useDeleteDepositPayment } from "../hooks";
+import type { DepositPayment } from "../types";
+
+const CAN_EDIT: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
 
 const STATUS_LABEL: Record<string, string> = {
   UNPAID:       "Belum Dibayar",
   PAID:         "Aktif",
   PARTIAL_USED: "Sebagian Terpakai",
   USED:         "Habis",
-  REFUNDED:     "Di-refund",
-  CANCELLED:    "Dibatalkan",
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -22,15 +28,19 @@ const STATUS_COLOR: Record<string, string> = {
   PAID:         "text-green-600 border-green-300",
   PARTIAL_USED: "text-blue-600 border-blue-300",
   USED:         "text-muted-foreground",
-  REFUNDED:     "text-orange-600 border-orange-300",
-  CANCELLED:    "text-destructive border-destructive/30",
 };
 
 export function DepositDetailPage() {
   const { id }       = useParams<{ id: string }>();
   const navigate     = useNavigate();
+  const { user }     = useAuthStore();
   const { data: deposit, isLoading, isError } = useDeposit(id!);
   const { data: payments = [] }               = useDepositPayments(id!);
+  const [editOpen, setEditOpen]               = useState(false);
+
+  const canEdit   = user ? CAN_EDIT.includes(user.roleCode) : false;
+  const [deletePaymentTarget, setDeletePaymentTarget] = useState<DepositPayment | null>(null);
+  const deletePaymentMutation = useDeleteDepositPayment();
 
   if (isLoading) {
     return (
@@ -61,14 +71,22 @@ export function DepositDetailPage() {
     <PageContainer>
       <div className="max-w-lg mx-auto space-y-5">
         {/* Header */}
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="shrink-0" asChild>
-            <Link to="/deposits"><ChevronLeft className="h-5 w-5" /></Link>
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">Detail Deposit</h1>
-            <p className="text-sm text-muted-foreground">{deposit.customer?.name ?? "—"}</p>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="shrink-0" asChild>
+              <Link to="/deposits"><ChevronLeft className="h-5 w-5" /></Link>
+            </Button>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight">Detail Deposit</h1>
+              <p className="text-sm text-muted-foreground">{deposit.customer?.name ?? "—"}</p>
+            </div>
           </div>
+          {canEdit && (
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil className="mr-1.5 h-4 w-4" />
+              Edit
+            </Button>
+          )}
         </div>
 
         {/* Deposit info */}
@@ -137,9 +155,21 @@ export function DepositDetailPage() {
                           )}
                         </div>
                       </div>
-                      <span className="text-sm font-semibold text-green-700 shrink-0">
-                        {formatCurrency(p.amount)}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-sm font-semibold text-green-700">
+                          {formatCurrency(p.amount)}
+                        </span>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => setDeletePaymentTarget(p)}
+                            className="inline-flex items-center justify-center rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                            title="Hapus pembayaran"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Transfer proof photo */}
@@ -169,7 +199,135 @@ export function DepositDetailPage() {
           </Button>
         )}
       </div>
+      {/* Konfirmasi hapus pembayaran */}
+      <Dialog open={!!deletePaymentTarget} onOpenChange={(v) => { if (!v) setDeletePaymentTarget(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Hapus Pembayaran Deposit</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            Yakin ingin menghapus pembayaran{" "}
+            <span className="font-medium text-foreground">{deletePaymentTarget?.paymentNo}</span>?
+            Deposit akan dikembalikan ke status{" "}
+            <span className="font-medium text-foreground">Belum Dibayar</span>.
+            Tindakan ini tidak dapat dibatalkan.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeletePaymentTarget(null)}>Batal</Button>
+            <Button
+              variant="destructive"
+              disabled={deletePaymentMutation.isPending}
+              onClick={async () => {
+                if (!deletePaymentTarget) return;
+                await deletePaymentMutation.mutateAsync(deletePaymentTarget.id);
+                setDeletePaymentTarget(null);
+              }}
+            >
+              {deletePaymentMutation.isPending ? "Menghapus…" : "Hapus"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {canEdit && (
+        <EditDepositDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          deposit={deposit}
+          depositId={id!}
+        />
+      )}
     </PageContainer>
+  );
+}
+
+function EditDepositDialog({
+  open, onOpenChange, deposit, depositId,
+}: {
+  open:           boolean;
+  onOpenChange:   (v: boolean) => void;
+  deposit:        import("../types").Deposit;
+  depositId:      string;
+}) {
+  const updateMutation = useUpdateDeposit(depositId);
+  const isUnpaid       = (deposit.status as string) === "UNPAID";
+  const canEditAmount  = isUnpaid;
+
+  const [notes,  setNotes]  = useState(deposit.notes ?? "");
+  const [amount, setAmount] = useState(deposit.amount ? String(Math.round(Number(deposit.amount))) : "");
+  const [error,  setError]  = useState<string | null>(null);
+
+  function handleOpen(v: boolean) {
+    if (v) {
+      setNotes(deposit.notes ?? "");
+      setAmount(deposit.amount ? String(Math.round(Number(deposit.amount))) : "");
+      setError(null);
+    }
+    onOpenChange(v);
+  }
+
+  function formatDisplay(raw: string) {
+    const n = raw.replace(/\D/g, "");
+    return n ? Number(n).toLocaleString("id-ID") : "";
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const payload: import("../types").UpdateDepositInput = {};
+    payload.notes = notes.trim() || null;
+    if (canEditAmount) {
+      const amt = parseFloat(amount.replace(/\D/g, ""));
+      if (isNaN(amt) || amt <= 0) { setError("Jumlah harus > 0"); return; }
+      payload.amount = amt;
+    }
+    try {
+      await updateMutation.mutateAsync(payload);
+      onOpenChange(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Gagal menyimpan");
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpen}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader><DialogTitle>Edit Deposit</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          {canEditAmount && (
+            <div className="flex flex-col gap-1.5">
+              <Label>Jumlah</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
+                <Input
+                  className="pl-8"
+                  value={formatDisplay(amount)}
+                  onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))}
+                  placeholder="0"
+                  inputMode="numeric"
+                />
+              </div>
+            </div>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <Label>Catatan</Label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Batal</Button>
+            <Button type="submit" disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? "Menyimpan…" : "Simpan"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

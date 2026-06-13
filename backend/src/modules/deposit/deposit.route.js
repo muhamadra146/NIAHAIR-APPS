@@ -4,11 +4,13 @@ const authorize     = require("../../middlewares/role.middleware");
 const validate      = require("../../middlewares/validate.middleware");
 const requireBranch = require("../../middlewares/branch.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
-const { createDepositSchema, linkAppointmentSchema } = require("./deposit.validation");
+const { createDepositSchema, updateDepositSchema, linkAppointmentSchema } = require("./deposit.validation");
 const {
   getAllController,
   getByIdController,
   createController,
+  updateController,
+  deleteController,
   refundController,
   cancelController,
   linkAppointmentController,
@@ -28,6 +30,21 @@ router.post(
   authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER, ROLES.STAFF),
   validate(createDepositSchema),
   createController
+);
+
+router.patch(
+  "/:id",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER),
+  validate(updateDepositSchema),
+  updateController
+);
+
+router.delete(
+  "/:id",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER),
+  deleteController
 );
 
 router.patch(

@@ -94,6 +94,15 @@ export async function createDeposit(input: CreateDepositInput): Promise<Deposit>
   return data.data;
 }
 
+export async function updateDeposit(id: string, input: import("./types").UpdateDepositInput): Promise<Deposit> {
+  const { data } = await api.patch<ApiResponse<Deposit>>(`/deposits/${id}`, input);
+  return data.data;
+}
+
+export async function deleteDeposit(id: string): Promise<void> {
+  await api.delete(`/deposits/${id}`);
+}
+
 export async function refundDeposit(id: string): Promise<Deposit> {
   const { data } = await api.patch<ApiResponse<Deposit>>(`/deposits/${id}/refund`);
   return data.data;
@@ -107,10 +116,34 @@ export async function cancelDeposit(id: string): Promise<Deposit> {
 // ── Deposit Payments ──────────────────────────────────────────────────────────
 
 export async function fetchDepositPayments(depositId: string): Promise<import("./types").DepositPayment[]> {
-  const { data } = await api.get<ApiResponse<import("./types").DepositPayment[]>>(
+  const { data } = await api.get<ApiResponse<{ data: import("./types").DepositPayment[]; meta: unknown }>>(
     `/deposits/${depositId}/payments`,
+    { params: { limit: 50 } },
   );
-  return data.data ?? [];
+  return data.data?.data ?? [];
+}
+
+export interface DepositPaymentListParams {
+  page?:            number;
+  limit?:           number;
+  depositId?:       string;
+  paymentMethodId?: string;
+}
+
+export interface DepositPaymentListData {
+  data: import("./types").DepositPayment[];
+  meta: PaginatedResponse<import("./types").DepositPayment>["meta"];
+}
+
+export async function deleteDepositPayment(id: string): Promise<void> {
+  await api.delete(`/deposit-payments/${id}`);
+}
+
+export async function fetchAllDepositPayments(
+  params: DepositPaymentListParams = {},
+): Promise<DepositPaymentListData> {
+  const { data } = await api.get<ApiResponse<DepositPaymentListData>>("/deposit-payments", { params });
+  return data.data;
 }
 
 export async function createDepositPayment(

@@ -86,6 +86,15 @@ const markDepositPaid = (id, paidAt) =>
     data:  { status: "PAID", paidAt },
   });
 
+const removeDepositPayment = (id) =>
+  prisma.depositPayment.delete({ where: { id } });
+
+const revertDepositToUnpaid = (id) =>
+  prisma.deposit.update({
+    where: { id },
+    data:  { status: "UNPAID", paidAt: null },
+  });
+
 module.exports = {
   findAll,
   count,
@@ -96,4 +105,6 @@ module.exports = {
   findPaymentMethodById,
   create,
   markDepositPaid,
+  removeDepositPayment,
+  revertDepositToUnpaid,
 };

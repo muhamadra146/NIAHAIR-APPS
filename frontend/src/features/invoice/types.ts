@@ -1,5 +1,5 @@
 export type InvoiceStatus = "UNPAID" | "PAID" | "CANCELLED";
-export type DepositStatus = "PAID" | "PARTIAL_USED" | "USED" | "REFUNDED" | "CANCELLED";
+export type DepositStatus = "UNPAID" | "PAID" | "PARTIAL_USED" | "USED";
 
 export interface InvoiceCustomer {
   id:          string;
@@ -87,18 +87,20 @@ export interface Invoice {
 }
 
 export interface Deposit {
-  id:              string;
-  customerId:      string;
-  appointmentId:   string | null;
-  amount:          string;
-  status:          DepositStatus;
-  notes:           string | null;
-  createdAt:       string;
-  updatedAt:       string;
-  usedAmount:      string;
-  remainingAmount: string;
-  customer?:       InvoiceCustomer;
-  invoiceDeposits?: { invoiceId: string; amountApplied: string }[];
+  id:                    string;
+  customerId:            string;
+  appointmentId:         string | null;
+  amount:                string;
+  status:                DepositStatus;
+  notes:                 string | null;
+  createdAt:             string;
+  updatedAt:             string;
+  usedAmount:            string;
+  remainingAmount:       string;
+  accurateDepositId:     string | null | undefined;
+  accurateDepositNumber: string | null | undefined;
+  customer?:             InvoiceCustomer;
+  invoiceDeposits?:      { invoiceId: string; amountApplied: string }[];
 }
 
 // ── Input types ───────────────────────────────────────────────────────────────
@@ -148,6 +150,11 @@ export interface CreateDepositInput {
   amount:        number;
   appointmentId?: string;
   notes?:        string;
+}
+
+export interface UpdateDepositInput {
+  notes?:  string | null;
+  amount?: number;
 }
 
 export interface CreateDepositPaymentInput {

@@ -83,6 +83,10 @@ export const sidebarNav: NavItem[] = [
     href:  "/deposits",
     icon:  Wallet,
     roles: POS_ROLES,
+    children: [
+      { label: "Deposit",            href: "/deposits",         roles: POS_ROLES },
+      { label: "Pembayaran Deposit", href: "/deposit-payments", roles: POS_ROLES },
+    ],
   },
   {
     label: "Treatments",

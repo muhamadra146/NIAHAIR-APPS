@@ -2,7 +2,8 @@ const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
-const { createSyncJob }            = require("../syncQueue/syncQueue.service");
+const { createSyncJob }                                            = require("../syncQueue/syncQueue.service");
+const { deleteDepositPaymentFromAccurate }                         = require("./depositPayment.sync.service");
 const {
   findAll,
   count,
@@ -13,6 +14,8 @@ const {
   findPaymentMethodById,
   create,
   markDepositPaid,
+  removeDepositPayment,
+  revertDepositToUnpaid,
 } = require("./depositPayment.repository");
 
 const D = (v) => new Prisma.Decimal(String(v));
@@ -106,4 +109,22 @@ const createDepositPayment = async ({ depositId, paymentMethodId, paidAt: paidAt
   return findById(created.id);
 };
 
-module.exports = { listDepositPayments, getDepositPaymentById, getPaymentsByDeposit, createDepositPayment };
+// ── Delete ────────────────────────────────────────────────────────────
+
+const deleteDepositPayment = async (id) => {
+  const dp = await findById(id);
+  if (!dp) throw new AppError("Deposit payment not found", StatusCodes.NOT_FOUND);
+
+  // Best-effort: hapus dari Accurate jika sudah di-sync
+  if (dp.accurateReceiptId) {
+    await deleteDepositPaymentFromAccurate(dp.accurateReceiptId);
+  }
+
+  // Hapus payment lalu kembalikan deposit ke UNPAID
+  await removeDepositPayment(id);
+  await revertDepositToUnpaid(dp.depositId);
+
+  return { deleted: true };
+};
+
+module.exports = { listDepositPayments, getDepositPaymentById, getPaymentsByDeposit, createDepositPayment, deleteDepositPayment };

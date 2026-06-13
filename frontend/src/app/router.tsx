@@ -23,6 +23,7 @@ import { InvoiceDetailPage }      from "@/features/invoice/pages/InvoiceDetailPa
 import { DepositListPage }        from "@/features/invoice/pages/DepositListPage";
 import { DepositDetailPage }      from "@/features/invoice/pages/DepositDetailPage";
 import { DepositPaymentPage }     from "@/features/invoice/pages/DepositPaymentPage";
+import { DepositPaymentListPage } from "@/features/invoice/pages/DepositPaymentListPage";
 import { CommissionListPage }    from "@/features/commission/pages/CommissionListPage";
 import { InventoryPage }         from "@/features/inventory/pages/InventoryPage";
 import { ReportsPage }           from "@/features/report/pages/ReportsPage";
@@ -72,9 +73,10 @@ export const router = createBrowserRouter([
           { path: "/invoices",     element: <InvoiceListPage /> },
           { path: "/invoices/:id", element: <InvoiceDetailPage /> },
           // Deposits
-          { path: "/deposits",         element: <DepositListPage /> },
-          { path: "/deposits/:id",     element: <DepositDetailPage /> },
-          { path: "/deposits/:id/pay", element: <DepositPaymentPage /> },
+          { path: "/deposits",              element: <DepositListPage /> },
+          { path: "/deposits/:id",          element: <DepositDetailPage /> },
+          { path: "/deposits/:id/pay",      element: <DepositPaymentPage /> },
+          { path: "/deposit-payments",      element: <DepositPaymentListPage /> },
           // Commissions
           { path: "/commissions", element: <CommissionListPage /> },
           // Inventory
