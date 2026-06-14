@@ -1,16 +1,19 @@
 import { useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Home, Store, Plus, Loader2, Trash2, Upload, X, ImageIcon } from "lucide-react";
+import { Home, Store, Plus, Loader2, Trash2, Upload, X, ImageIcon, FileText, ExternalLink } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { AppointmentStatusBadge } from "./AppointmentStatusBadge";
-import { fetchDeposits, createDeposit, createDepositPayment } from "@/features/invoice/api";
+import { fetchDeposits, createDeposit, createDepositPayment, fetchInvoices } from "@/features/invoice/api";
 import { fetchPaymentMethods } from "@/features/settings/api/paymentMethod.api";
+import { CreateInvoiceDialog } from "@/features/invoice/components/CreateInvoiceDialog";
+import { useAuthStore } from "@/stores/authStore";
 import {
   fetchAppointmentPhotos,
   uploadAppointmentPhoto,
@@ -46,12 +49,10 @@ function DetailsTab({ a }: { a: Appointment }) {
       } />
       {isHS && <InfoRow label="Alamat HS" value={a.homeServiceAddress ?? "—"} />}
       <InfoRow label="Customer"        value={`${a.customer.name}${a.customer.customerNo ? ` (${a.customer.customerNo})` : ""}`} />
-      <InfoRow label="Phone"           value={a.customer.mobilePhone} />
       <InfoRow label="Branch"          value={`${a.branch.name} (${a.branch.code})`} />
       <InfoRow label="Visit Date"      value={formatDate(a.visitDate)} />
       <InfoRow label="Time"            value={`${startTime} – ${endTime}`} />
-      <InfoRow label="Estimated Total" value={a.estimatedTotal ? formatCurrency(a.estimatedTotal) : null} />
-      <InfoRow label="Notes"           value={a.notes} />
+<InfoRow label="Notes"           value={a.notes} />
       <InfoRow label="Booked On"       value={formatDate(a.bookingDate)} />
       {a.createdByEmployee && (
         <InfoRow label="Created By" value={`${a.createdByEmployee.name} (${a.createdByEmployee.employeeCode})`} />
@@ -133,32 +134,162 @@ function HistoryTab({ a }: { a: Appointment }) {
   );
 }
 
-function TreatmentsTab({ a }: { a: Appointment }) {
-  if (a.treatmentSessions.length === 0) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">No treatment sessions.</p>;
+const INVOICE_STATUS_LABEL: Record<string, string> = {
+  UNPAID:    "Belum Lunas",
+  PAID:      "Lunas",
+  CANCELLED: "Dibatalkan",
+};
+const INVOICE_STATUS_COLOR: Record<string, string> = {
+  UNPAID:    "text-red-600 border-red-300",
+  PAID:      "text-green-600 border-green-300",
+  CANCELLED: "text-muted-foreground",
+};
+
+function InvoiceTab({ a }: { a: Appointment }) {
+  const { branchId } = useAuthStore();
+  const navigate     = useNavigate();
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["invoices", { appointmentId: a.id }],
+    queryFn:  () => fetchInvoices({ appointmentId: a.id, limit: 1 }),
+    staleTime: 0,
+  });
+
+  const invoice = data?.data?.[0] ?? null;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Memuat invoice…
+      </div>
+    );
   }
+
+  if (!invoice) {
+    return (
+      <div className="py-8 text-center space-y-3">
+        <FileText className="mx-auto h-10 w-10 text-muted-foreground/40" />
+        <p className="text-sm text-muted-foreground">Invoice belum dibuat untuk booking ini.</p>
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus className="mr-1.5 h-4 w-4" />
+          Buat Invoice
+        </Button>
+        <CreateInvoiceDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          branchId={branchId ?? ""}
+          preselectedAppointment={a}
+          onSuccess={(invoiceId) => {
+            setCreateOpen(false);
+            navigate(`/invoices/${invoiceId}`);
+          }}
+        />
+      </div>
+    );
+  }
+
+  const items    = invoice.items ?? [];
+  const deposits = invoice.invoiceDeposits ?? [];
+
   return (
-    <div className="divide-y divide-border py-2">
-      {a.treatmentSessions.map((t) => (
-        <div key={t.id} className="py-3 space-y-1">
-          <div className="flex items-center gap-2">
-            <Badge variant={t.completedAt ? "success" : "warning"}>
-              {t.completedAt ? "Completed" : "In Progress"}
-            </Badge>
-          </div>
-          {t.startedAt && (
-            <p className="text-xs text-muted-foreground">
-              Started: {new Date(t.startedAt).toLocaleString("id-ID")}
-            </p>
-          )}
-          {t.completedAt && (
-            <p className="text-xs text-muted-foreground">
-              Completed: {new Date(t.completedAt).toLocaleString("id-ID")}
-            </p>
-          )}
-          {t.notes && <p className="text-xs">{t.notes}</p>}
+    <div className="py-4 space-y-4">
+      {/* Invoice header */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold font-mono">{invoice.invoiceNo}</p>
+          <p className="text-xs text-muted-foreground">{formatDate(invoice.invoiceDate)}</p>
         </div>
-      ))}
+        <div className="flex items-center gap-2">
+          <Badge
+            variant="outline"
+            className={`text-xs ${INVOICE_STATUS_COLOR[invoice.status] ?? ""}`}
+          >
+            {INVOICE_STATUS_LABEL[invoice.status] ?? invoice.status}
+          </Badge>
+          <Link
+            to={`/invoices/${invoice.id}`}
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Lihat Invoice
+          </Link>
+        </div>
+      </div>
+
+      {/* Line items */}
+      {items.length > 0 && (
+        <div className="rounded-md border border-border overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/50 border-b border-border">
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Item</th>
+                <th className="px-3 py-2 text-right font-medium text-muted-foreground">Qty</th>
+                <th className="px-3 py-2 text-right font-medium text-muted-foreground">Harga</th>
+                <th className="px-3 py-2 text-right font-medium text-muted-foreground">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td className="px-3 py-2">
+                    <p className="font-medium">{item.item?.name ?? "—"}</p>
+                    {Number(item.discount) > 0 && (
+                      <p className="text-xs text-muted-foreground">Diskon {formatCurrency(item.discount)}</p>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right text-muted-foreground">{item.qty}</td>
+                  <td className="px-3 py-2 text-right text-muted-foreground">{formatCurrency(item.price)}</td>
+                  <td className="px-3 py-2 text-right font-medium">{formatCurrency(item.subtotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Totals */}
+      <div className="rounded-md border border-border divide-y divide-border text-sm">
+        <div className="flex justify-between px-3 py-2">
+          <span className="text-muted-foreground">Subtotal</span>
+          <span>{formatCurrency(invoice.subtotal)}</span>
+        </div>
+        {Number(invoice.totalDiscount) > 0 && (
+          <div className="flex justify-between px-3 py-2">
+            <span className="text-muted-foreground">Diskon</span>
+            <span className="text-red-600">- {formatCurrency(invoice.totalDiscount)}</span>
+          </div>
+        )}
+        {Number(invoice.totalTax) > 0 && (
+          <div className="flex justify-between px-3 py-2">
+            <span className="text-muted-foreground">Pajak</span>
+            <span>{formatCurrency(invoice.totalTax)}</span>
+          </div>
+        )}
+        <div className="flex justify-between px-3 py-2 font-semibold">
+          <span>Total</span>
+          <span>{formatCurrency(invoice.grandTotal)}</span>
+        </div>
+        {deposits.length > 0 && (
+          <div className="flex justify-between px-3 py-2">
+            <span className="text-muted-foreground">DP Dipakai</span>
+            <span className="text-green-700">- {formatCurrency(invoice.totalDeposit)}</span>
+          </div>
+        )}
+        {Number(invoice.outstandingAmount) > 0 && (
+          <div className="flex justify-between px-3 py-2 font-semibold text-red-600">
+            <span>Sisa Tagihan</span>
+            <span>{formatCurrency(invoice.outstandingAmount)}</span>
+          </div>
+        )}
+        {invoice.status === "PAID" && (
+          <div className="flex justify-between px-3 py-2 font-semibold text-green-600">
+            <span>Lunas</span>
+            <span>{formatCurrency(invoice.paidAmount)}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -579,16 +710,14 @@ export function AppointmentDetailView({ appointment }: { appointment: Appointmen
         </TabsTrigger>
         <TabsTrigger value="dp">DP</TabsTrigger>
         <TabsTrigger value="history">History</TabsTrigger>
-        <TabsTrigger value="treatments">
-          Treatments{appointment.treatmentSessions.length > 0 && ` (${appointment.treatmentSessions.length})`}
-        </TabsTrigger>
+        <TabsTrigger value="invoice">Invoice</TabsTrigger>
       </TabsList>
-      <TabsContent value="details">    <DetailsTab a={appointment} /></TabsContent>
-      <TabsContent value="photos">     <PhotosTab a={appointment} /></TabsContent>
-      <TabsContent value="staff">      <StaffTab a={appointment} /></TabsContent>
-      <TabsContent value="dp">         <DepositTab a={appointment} /></TabsContent>
-      <TabsContent value="history">    <HistoryTab a={appointment} /></TabsContent>
-      <TabsContent value="treatments"> <TreatmentsTab a={appointment} /></TabsContent>
+      <TabsContent value="details">  <DetailsTab a={appointment} /></TabsContent>
+      <TabsContent value="photos">   <PhotosTab a={appointment} /></TabsContent>
+      <TabsContent value="staff">    <StaffTab a={appointment} /></TabsContent>
+      <TabsContent value="dp">       <DepositTab a={appointment} /></TabsContent>
+      <TabsContent value="history">  <HistoryTab a={appointment} /></TabsContent>
+      <TabsContent value="invoice">  <InvoiceTab a={appointment} /></TabsContent>
     </Tabs>
   );
 }
