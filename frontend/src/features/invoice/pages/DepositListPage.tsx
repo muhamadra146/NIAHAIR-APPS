@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useAuthStore } from "@/stores/authStore";
 import { fetchCustomers } from "@/features/customer/api/customer.api";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import { useDeposits, useCreateDeposit, useDeleteDeposit } from "../hooks";
+import { useDeposits, useCreateDeposit, useDeleteDeposit, useDepositSummary } from "../hooks";
 import type { DepositStatus, Deposit } from "../types";
 
 const ALL_STATUSES: DepositStatus[] = ["UNPAID", "PAID", "PARTIAL_USED", "USED"];
@@ -40,26 +40,31 @@ export function DepositListPage() {
   const [status, setStatus]     = useState<string>("");
   const [startDate, setStart]   = useState("");
   const [endDate, setEnd]       = useState("");
-  const [custSearch, setCustSearch]   = useState("");
-  const [custResults, setCustResults] = useState<{ id: string; name: string }[]>([]);
+  const [custSearch, setCustSearch]     = useState("");
+  const [custResults, setCustResults]   = useState<{ id: string; name: string }[]>([]);
   const [selectedCust, setSelectedCust] = useState<{ id: string; name: string } | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Deposit | null>(null);
   const filterTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  // Post-create dialog state
   const [createdDeposit, setCreatedDeposit] = useState<{ id: string; name: string; amount: string; date: string } | null>(null);
 
   const deleteMutation = useDeleteDeposit();
   const canDelete = user ? CAN_DELETE.includes(user.roleCode) : false;
+  const { data: summary } = useDepositSummary({ branchId: branchId || undefined });
 
   const { data, isLoading } = useDeposits({
     page, limit: 20,
-    branchId:   branchId              || undefined,
-    status:     status                || undefined,
-    startDate:  startDate             || undefined,
-    endDate:    endDate               || undefined,
-    customerId: selectedCust?.id      || undefined,
+    branchId:   branchId         || undefined,
+    status:     status           || undefined,
+    startDate:  startDate        || undefined,
+    endDate:    endDate          || undefined,
+    customerId: selectedCust?.id || undefined,
   });
+
+  const createMutation = useCreateDeposit();
+  const deposits   = data?.data ?? [];
+  const meta       = data?.meta;
+  const totalPages = meta ? Math.ceil(meta.total / 20) : 1;
 
   function handleCustSearch(e: React.ChangeEvent<HTMLInputElement>) {
     const q = e.target.value;
@@ -75,21 +80,20 @@ export function DepositListPage() {
   }
 
   function clearCust() {
-    setSelectedCust(null);
-    setCustSearch("");
-    setCustResults([]);
-    setPage(1);
+    setSelectedCust(null); setCustSearch(""); setCustResults([]); setPage(1);
   }
-  const createMutation = useCreateDeposit();
 
-  const deposits   = data?.data ?? [];
-  const meta       = data?.meta;
-  const totalPages = meta ? Math.ceil(meta.total / 20) : 1;
+  function resetFilters() {
+    clearCust(); setStatus(""); setStart(""); setEnd(""); setPage(1);
+  }
+
+  const hasFilter = !!(selectedCust || status || startDate || endDate);
 
   return (
     <PageContainer>
-      <div className="space-y-4 sm:space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="space-y-4 sm:space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Deposit</h1>
             <p className="text-sm text-muted-foreground">
@@ -97,16 +101,34 @@ export function DepositListPage() {
             </p>
           </div>
           <Button onClick={() => setFormOpen(true)} size="sm" disabled={!branchId}>
-            <Plus className="mr-2 h-4 w-4" />
-            Tambah Deposit
+            <Plus className="mr-1.5 h-4 w-4" />
+            <span className="hidden xs:inline">Tambah </span>Deposit
           </Button>
         </div>
 
+        {/* Summary cards */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          {(["UNPAID", "PAID", "PARTIAL_USED", "USED"] as const).map((s) => (
+            <Card
+              key={s}
+              className={`cursor-pointer transition-all ${status === s ? "ring-2 ring-primary" : "hover:border-primary/40"}`}
+              onClick={() => { setStatus(status === s ? "" : s); setPage(1); }}
+            >
+              <CardContent className="p-3">
+                <p className="text-xs text-muted-foreground leading-tight">{STATUS_LABEL[s]}</p>
+                <p className="text-base font-bold mt-0.5 sm:text-lg">{formatCurrency(summary?.[s]?.total ?? "0")}</p>
+                <p className="text-xs text-muted-foreground">{summary?.[s]?.count ?? 0} deposit</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Filter + table card */}
         <Card>
           <CardHeader className="pb-3 pt-4">
-            <div className="flex flex-wrap gap-3">
-              {/* Customer search */}
-              <div className="flex flex-col gap-1">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+              {/* Customer search — full width on mobile */}
+              <div className="col-span-2 flex flex-col gap-1 sm:col-auto">
                 <Label className="text-xs text-muted-foreground">Customer</Label>
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -115,7 +137,7 @@ export function DepositListPage() {
                     onChange={handleCustSearch}
                     onClick={() => { if (selectedCust) clearCust(); }}
                     placeholder="Cari customer..."
-                    className="h-9 pl-8 w-44"
+                    className="h-9 pl-8 w-full sm:w-44"
                   />
                   {!selectedCust && custResults.length > 0 && (
                     <div className="absolute z-10 mt-1 w-full rounded-md border border-input bg-background shadow-md">
@@ -134,65 +156,84 @@ export function DepositListPage() {
                 </div>
               </div>
 
-              {/* Status */}
-              <div className="flex flex-col gap-1">
+              {/* Status — full width on mobile */}
+              <div className="col-span-2 flex flex-col gap-1 sm:col-auto">
                 <Label className="text-xs text-muted-foreground">Status</Label>
-                <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-                  className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <option value="">Semua</option>
+                <select
+                  value={status}
+                  onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
+                >
+                  <option value="">Semua Status</option>
                   {ALL_STATUSES.map((s) => (
                     <option key={s} value={s}>{STATUS_LABEL[s]}</option>
                   ))}
                 </select>
               </div>
 
-              {/* Date range */}
+              {/* Date range — each half-width on mobile */}
               <div className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">Dari</Label>
-                <Input type="date" value={startDate} onChange={(e) => { setStart(e.target.value); setPage(1); }} className="h-9 w-36" />
+                <Input type="date" value={startDate} onChange={(e) => { setStart(e.target.value); setPage(1); }} className="h-9 w-full sm:w-36" />
               </div>
               <div className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">Sampai</Label>
-                <Input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className="h-9 w-36" />
+                <Input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className="h-9 w-full sm:w-36" />
               </div>
 
-              {(selectedCust || status || startDate || endDate) && (
-                <div className="flex items-end">
-                  <Button variant="ghost" size="sm" onClick={() => { clearCust(); setStatus(""); setStart(""); setEnd(""); setPage(1); }} className="h-9 text-xs">Reset</Button>
+              {hasFilter && (
+                <div className="col-span-2 flex items-end sm:col-auto">
+                  <Button variant="ghost" size="sm" onClick={resetFilters} className="h-9 w-full text-xs sm:w-auto">
+                    Reset Filter
+                  </Button>
                 </div>
               )}
             </div>
           </CardHeader>
+
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="space-y-3 p-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+              <div className="space-y-3 p-4">
+                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+              </div>
             ) : deposits.length === 0 ? (
               <p className="py-12 text-center text-sm text-muted-foreground">Tidak ada deposit.</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/50">
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Customer</th>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tanggal</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Jumlah</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Terpakai</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Sisa</th>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-                      <th className="px-4 py-3" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {deposits.map((d) => (
-                      <DepositRow key={d.id} deposit={d} canDelete={canDelete} onDelete={() => setDeleteTarget(d)} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                {/* Mobile cards */}
+                <div className="sm:hidden divide-y divide-border">
+                  {deposits.map((d) => (
+                    <DepositCard key={d.id} deposit={d} canDelete={canDelete} onDelete={() => setDeleteTarget(d)} />
+                  ))}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/50">
+                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Customer</th>
+                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tanggal</th>
+                        <th className="px-4 py-3 text-right font-medium text-muted-foreground">Jumlah</th>
+                        <th className="px-4 py-3 text-right font-medium text-muted-foreground">Terpakai</th>
+                        <th className="px-4 py-3 text-right font-medium text-muted-foreground">Sisa</th>
+                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
+                        <th className="px-4 py-3" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deposits.map((d) => (
+                        <DepositRow key={d.id} deposit={d} canDelete={canDelete} onDelete={() => setDeleteTarget(d)} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
 
+        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Halaman {page} dari {totalPages}</span>
@@ -210,22 +251,15 @@ export function DepositListPage() {
         onSubmit={async (customerId, customerName, amount, notes, payDate) => {
           const result = await createMutation.mutateAsync({ customerId, amount, notes: notes || undefined });
           setFormOpen(false);
-          setCreatedDeposit({
-            id:     (result as Deposit).id,
-            name:   customerName,
-            amount: String(amount),
-            date:   payDate,
-          });
+          setCreatedDeposit({ id: (result as Deposit).id, name: customerName, amount: String(amount), date: payDate });
         }}
         isPending={createMutation.isPending}
       />
 
-      {/* Konfirmasi hapus */}
+      {/* Hapus deposit */}
       <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Hapus Deposit</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Hapus Deposit</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground py-2">
             Yakin ingin menghapus deposit{" "}
             <span className="font-medium text-foreground">{deleteTarget?.customer?.name}</span>
@@ -250,12 +284,10 @@ export function DepositListPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Post-create: lanjut ke pembayaran? */}
+      {/* Post-create */}
       <Dialog open={!!createdDeposit} onOpenChange={(v) => { if (!v) setCreatedDeposit(null); }}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Deposit Berhasil Dibuat</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Deposit Berhasil Dibuat</DialogTitle></DialogHeader>
           <div className="py-2 space-y-1 text-sm">
             <p className="text-muted-foreground">
               Deposit untuk <span className="font-medium text-foreground">{createdDeposit?.name}</span> sebesar{" "}
@@ -264,16 +296,8 @@ export function DepositListPage() {
             <p className="text-muted-foreground mt-2">Lanjut catat pembayaran sekarang?</p>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setCreatedDeposit(null)}>
-              Nanti
-            </Button>
-            <Button
-              onClick={() => {
-                const d = createdDeposit!;
-                setCreatedDeposit(null);
-                navigate(`/deposits/${d.id}/pay?date=${d.date}`);
-              }}
-            >
+            <Button variant="outline" onClick={() => setCreatedDeposit(null)}>Nanti</Button>
+            <Button onClick={() => { const d = createdDeposit!; setCreatedDeposit(null); navigate(`/deposits/${d.id}/pay?date=${d.date}`); }}>
               <ArrowRight className="mr-1.5 h-4 w-4" />
               Catat Pembayaran
             </Button>
@@ -284,39 +308,85 @@ export function DepositListPage() {
   );
 }
 
-function DepositRow({ deposit, canDelete, onDelete }: {
-  deposit:   import("../types").Deposit;
+// ── Mobile card ───────────────────────────────────────────────────────────────
+function DepositCard({ deposit, canDelete, onDelete }: {
+  deposit:   Deposit;
   canDelete: boolean;
   onDelete:  () => void;
 }) {
-  const statusLabel = STATUS_LABEL[deposit.status];
-  const statusColor = STATUS_COLOR[deposit.status];
-  const deletable   = canDelete && deposit.status === "UNPAID";
+  const deletable = canDelete && deposit.status === "UNPAID";
+  return (
+    <div className="flex items-start gap-3 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-medium truncate">{deposit.customer?.name ?? "—"}</p>
+            {deposit.customer?.mobilePhone && (
+              <p className="text-xs text-muted-foreground">{deposit.customer.mobilePhone}</p>
+            )}
+          </div>
+          <Badge variant="outline" className={`text-xs shrink-0 ${STATUS_COLOR[deposit.status] ?? ""}`}>
+            {STATUS_LABEL[deposit.status] ?? deposit.status}
+          </Badge>
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-sm">
+          <span className="font-semibold">{formatCurrency(deposit.amount)}</span>
+          {Number(deposit.remainingAmount) > 0 && (
+            <span className="text-green-700 text-xs">Sisa {formatCurrency(deposit.remainingAmount)}</span>
+          )}
+          <span className="text-xs text-muted-foreground">{formatDate(deposit.createdAt)}</span>
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-1 pt-0.5">
+        <Link
+          to={`/deposits/${deposit.id}`}
+          className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title="Lihat detail"
+        >
+          <Eye className="h-4 w-4" />
+        </Link>
+        {deletable && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+            title="Hapus deposit"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
+// ── Desktop table row ─────────────────────────────────────────────────────────
+function DepositRow({ deposit, canDelete, onDelete }: {
+  deposit:   Deposit;
+  canDelete: boolean;
+  onDelete:  () => void;
+}) {
+  const deletable = canDelete && deposit.status === "UNPAID";
   return (
     <tr className="border-b border-border transition-colors hover:bg-muted/30">
       <td className="px-4 py-3">
         <p className="font-medium">{deposit.customer?.name ?? "—"}</p>
         <p className="text-xs text-muted-foreground">{deposit.customer?.mobilePhone ?? ""}</p>
       </td>
-      <td className="px-4 py-3 text-muted-foreground">{formatDate(deposit.createdAt)}</td>
-      <td className="px-4 py-3 text-right font-medium">{formatCurrency(deposit.amount)}</td>
-      <td className="px-4 py-3 text-right text-muted-foreground">
+      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(deposit.createdAt)}</td>
+      <td className="px-4 py-3 text-right font-medium whitespace-nowrap">{formatCurrency(deposit.amount)}</td>
+      <td className="px-4 py-3 text-right text-muted-foreground whitespace-nowrap">
         {Number(deposit.usedAmount) > 0 ? formatCurrency(deposit.usedAmount) : "—"}
       </td>
-      <td className="px-4 py-3 text-right">
+      <td className="px-4 py-3 text-right whitespace-nowrap">
         {Number(deposit.remainingAmount) > 0
           ? <span className="font-medium text-green-700">{formatCurrency(deposit.remainingAmount)}</span>
           : "—"}
       </td>
       <td className="px-4 py-3">
-        {statusLabel ? (
-          <Badge variant="outline" className={`text-xs ${statusColor}`}>
-            {statusLabel}
-          </Badge>
-        ) : (
-          <span className="text-xs text-muted-foreground">{deposit.status}</span>
-        )}
+        <Badge variant="outline" className={`text-xs ${STATUS_COLOR[deposit.status] ?? ""}`}>
+          {STATUS_LABEL[deposit.status] ?? deposit.status}
+        </Badge>
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-1">
@@ -343,13 +413,14 @@ function DepositRow({ deposit, canDelete, onDelete }: {
   );
 }
 
+// ── Create dialog ─────────────────────────────────────────────────────────────
 function CreateDepositDialog({
   open, onOpenChange, onSubmit, isPending,
 }: {
-  open: boolean;
+  open:         boolean;
   onOpenChange: (v: boolean) => void;
-  onSubmit: (customerId: string, customerName: string, amount: number, notes: string, payDate: string) => Promise<void>;
-  isPending: boolean;
+  onSubmit:     (customerId: string, customerName: string, amount: number, notes: string, payDate: string) => Promise<void>;
+  isPending:    boolean;
 }) {
   const todayStr = new Date().toISOString().split("T")[0];
   const [custSearch, setCustSearch]     = useState("");
@@ -377,15 +448,6 @@ function CreateDepositDialog({
     }, 300);
   }
 
-  function formatAmountDisplay(raw: string) {
-    const num = raw.replace(/\D/g, "");
-    if (!num) return "";
-    return Number(num).toLocaleString("id-ID");
-  }
-  function handleAmountChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setAmount(e.target.value.replace(/\D/g, ""));
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedCust) { setError("Pilih customer"); return; }
@@ -398,10 +460,9 @@ function CreateDepositDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[calc(100%-2rem)] max-w-md rounded-xl sm:rounded-lg">
         <DialogHeader><DialogTitle>Tambah Deposit</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          {/* Customer */}
           <div className="flex flex-col gap-1.5">
             <Label>Customer *</Label>
             <div className="relative">
@@ -423,7 +484,6 @@ function CreateDepositDialog({
             )}
           </div>
 
-          {/* Amount + Date side by side */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>Jumlah *</Label>
@@ -431,8 +491,8 @@ function CreateDepositDialog({
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
                 <Input
                   className="pl-8"
-                  value={formatAmountDisplay(amount)}
-                  onChange={handleAmountChange}
+                  value={amount ? Number(amount).toLocaleString("id-ID") : ""}
+                  onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))}
                   placeholder="0"
                   inputMode="numeric"
                 />
@@ -444,7 +504,6 @@ function CreateDepositDialog({
             </div>
           </div>
 
-          {/* Notes */}
           <div className="flex flex-col gap-1.5">
             <Label>Catatan</Label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
@@ -452,9 +511,9 @@ function CreateDepositDialog({
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => handleClose(false)}>Batal</Button>
-            <Button type="submit" disabled={isPending}>{isPending ? "Menyimpan…" : "Simpan"}</Button>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => handleClose(false)} className="flex-1 sm:flex-none">Batal</Button>
+            <Button type="submit" disabled={isPending} className="flex-1 sm:flex-none">{isPending ? "Menyimpan…" : "Simpan"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

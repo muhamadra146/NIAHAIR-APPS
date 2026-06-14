@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, CreditCard, Pencil, Trash2 } from "lucide-react";
+import { ChevronLeft, CreditCard, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/stores/authStore";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { useDeposit, useDepositPayments, useUpdateDeposit, useDeleteDepositPayment } from "../hooks";
+import { useDeposit, useDepositPayments, useUpdateDeposit, useDeleteDepositPayment, useResyncDeposit, useResyncDepositPayment } from "../hooks";
 import type { DepositPayment } from "../types";
 
 const CAN_EDIT: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
@@ -40,7 +40,9 @@ export function DepositDetailPage() {
 
   const canEdit   = user ? CAN_EDIT.includes(user.roleCode) : false;
   const [deletePaymentTarget, setDeletePaymentTarget] = useState<DepositPayment | null>(null);
-  const deletePaymentMutation = useDeleteDepositPayment();
+  const deletePaymentMutation   = useDeleteDepositPayment();
+  const resyncDepositMutation   = useResyncDeposit();
+  const resyncPaymentMutation   = useResyncDepositPayment();
 
   if (isLoading) {
     return (
@@ -81,12 +83,27 @@ export function DepositDetailPage() {
               <p className="text-sm text-muted-foreground">{deposit.customer?.name ?? "—"}</p>
             </div>
           </div>
-          {canEdit && (
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-              <Pencil className="mr-1.5 h-4 w-4" />
-              Edit
-            </Button>
-          )}
+          <div className="flex items-center gap-1.5">
+            {canEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={resyncDepositMutation.isPending}
+                onClick={() => resyncDepositMutation.mutate(id!)}
+                title="Sinkronkan ulang ke Accurate"
+                className="px-2.5"
+              >
+                <RefreshCw className={`h-4 w-4 sm:mr-1.5 ${resyncDepositMutation.isPending ? "animate-spin" : ""}`} />
+                <span className="hidden sm:inline">Resync</span>
+              </Button>
+            )}
+            {canEdit && (
+              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} className="px-2.5">
+                <Pencil className="h-4 w-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">Edit</span>
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Deposit info */}
@@ -116,6 +133,15 @@ export function DepositDetailPage() {
                 <span className={Number(deposit.remainingAmount) > 0 ? "font-medium text-green-700" : "text-muted-foreground"}>
                   {Number(deposit.remainingAmount) > 0 ? formatCurrency(deposit.remainingAmount) : "—"}
                 </span>
+              </Row>
+            </div>
+            <div className="border-t border-border/50 pt-3">
+              <Row label="Accurate">
+                {deposit.accurateDepositId ? (
+                  <span className="text-xs font-medium text-green-700">{deposit.accurateDepositNumber ?? deposit.accurateDepositId}</span>
+                ) : (
+                  <span className="text-xs text-yellow-600">Belum sinkron</span>
+                )}
               </Row>
             </div>
             {deposit.notes && (
@@ -156,9 +182,25 @@ export function DepositDetailPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-sm font-semibold text-green-700">
-                          {formatCurrency(p.amount)}
-                        </span>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-green-700">{formatCurrency(p.amount)}</p>
+                          {p.accurateReceiptId ? (
+                            <p className="text-xs text-green-600">Accurate ✓</p>
+                          ) : (
+                            <p className="text-xs text-yellow-600">Belum sinkron</p>
+                          )}
+                        </div>
+                        {canEdit && !p.accurateReceiptId && (
+                          <button
+                            type="button"
+                            disabled={resyncPaymentMutation.isPending}
+                            onClick={() => resyncPaymentMutation.mutate(p.id)}
+                            className="inline-flex items-center justify-center rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors"
+                            title="Sinkronkan ulang ke Accurate"
+                          >
+                            <RefreshCw className={`h-3.5 w-3.5 ${resyncPaymentMutation.isPending ? "animate-spin" : ""}`} />
+                          </button>
+                        )}
                         {canEdit && (
                           <button
                             type="button"

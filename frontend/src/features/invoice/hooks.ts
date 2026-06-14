@@ -20,6 +20,10 @@ import {
   createDepositPayment,
   deleteDepositPayment,
   fetchAllDepositPayments,
+  fetchDepositSummary,
+  fetchDepositPaymentSummary,
+  resyncDeposit,
+  resyncDepositPayment,
 } from "./api";
 import type {
   InvoiceListParams,
@@ -236,6 +240,49 @@ export function useAllDepositPayments(params: DepositPaymentListParams = {}) {
   return useQuery({
     queryKey: ["deposit-payments", "all", params],
     queryFn:  () => fetchAllDepositPayments(params),
+  });
+}
+
+export function useDepositSummary(params: { branchId?: string } = {}) {
+  return useQuery({
+    queryKey: ["deposits", "summary", params],
+    queryFn:  () => fetchDepositSummary(params),
+  });
+}
+
+export function useDepositPaymentSummary(
+  params: { startDate?: string; endDate?: string; paymentMethodId?: string; branchId?: string } = {},
+) {
+  return useQuery({
+    queryKey: ["deposit-payments", "summary", params],
+    queryFn:  () => fetchDepositPaymentSummary(params),
+  });
+}
+
+export function useResyncDeposit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => resyncDeposit(id),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["deposits"] });
+      if (data.skipped)      toast.success("Deposit sudah tersinkron ke Accurate");
+      else if (data.updated) toast.success("Deposit berhasil diperbarui di Accurate");
+      else                   toast.success("Sinkronisasi deposit dijadwalkan ulang");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useResyncDepositPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => resyncDepositPayment(id),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["deposit-payments"] });
+      if (data.skipped) toast.success("Pembayaran sudah tersinkron ke Accurate");
+      else              toast.success("Sinkronisasi pembayaran dijadwalkan ulang");
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 }
 

@@ -128,6 +128,9 @@ export interface DepositPaymentListParams {
   limit?:           number;
   depositId?:       string;
   paymentMethodId?: string;
+  branchId?:        string;
+  startDate?:       string;
+  endDate?:         string;
 }
 
 export interface DepositPaymentListData {
@@ -167,6 +170,46 @@ export async function createDepositPayment(
   const { data } = await api.post<ApiResponse<import("./types").DepositPayment>>(
     `/deposits/${depositId}/payments`,
     input,
+  );
+  return data.data;
+}
+
+// ── Deposit / payment summary & resync ───────────────────────────────────────
+
+export interface DepositSummary {
+  UNPAID:       { count: number; total: string };
+  PAID:         { count: number; total: string };
+  PARTIAL_USED: { count: number; total: string };
+  USED:         { count: number; total: string };
+}
+
+export interface DepositPaymentSummary {
+  today:  { count: number; total: string };
+  period: { count: number; total: string };
+}
+
+export async function fetchDepositSummary(params: { branchId?: string } = {}): Promise<DepositSummary> {
+  const { data } = await api.get<ApiResponse<DepositSummary>>("/deposits/summary", { params });
+  return data.data;
+}
+
+export async function fetchDepositPaymentSummary(
+  params: { startDate?: string; endDate?: string; paymentMethodId?: string; branchId?: string } = {},
+): Promise<DepositPaymentSummary> {
+  const { data } = await api.get<ApiResponse<DepositPaymentSummary>>("/deposit-payments/summary", { params });
+  return data.data;
+}
+
+export async function resyncDeposit(id: string): Promise<{ updated?: boolean; queued?: boolean; skipped?: boolean }> {
+  const { data } = await api.post<ApiResponse<{ updated?: boolean; queued?: boolean; skipped?: boolean }>>(
+    `/deposits/${id}/resync`,
+  );
+  return data.data;
+}
+
+export async function resyncDepositPayment(id: string): Promise<{ queued?: boolean; skipped?: boolean }> {
+  const { data } = await api.post<ApiResponse<{ queued?: boolean; skipped?: boolean }>>(
+    `/deposit-payments/${id}/resync`,
   );
   return data.data;
 }

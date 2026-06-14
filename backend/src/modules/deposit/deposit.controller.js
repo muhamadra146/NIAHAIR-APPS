@@ -8,6 +8,8 @@ const {
   refundDeposit,
   cancelDeposit,
   linkAppointmentToDeposit,
+  getDepositSummary,
+  resyncDeposit,
 } = require("./deposit.service");
 
 const getAllController = async (req, res, next) => {
@@ -88,6 +90,20 @@ const linkAppointmentController = async (req, res, next) => {
   }
 };
 
+const summaryController = async (req, res, next) => {
+  try {
+    const result = await getDepositSummary(req.query);
+    return success(res, result, "Deposit summary fetched");
+  } catch (err) { next(err); }
+};
+
+const resyncController = async (req, res, next) => {
+  try {
+    const result = await resyncDeposit(req.params.id);
+    return success(res, result, "Deposit resync triggered");
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   getAllController,
   getByIdController,
@@ -97,4 +113,6 @@ module.exports = {
   refundController,
   cancelController,
   linkAppointmentController,
+  summaryController,
+  resyncController,
 };

@@ -14,14 +14,19 @@ const {
   refundController,
   cancelController,
   linkAppointmentController,
+  summaryController,
+  resyncController,
 } = require("./deposit.controller");
 
 // mergeParams: true — inherits :appointmentId when mounted at
 // app.use("/appointments/:appointmentId/deposits", router)
 const router = Router({ mergeParams: true });
 
-router.get("/",    authenticate, getAllController);
-router.get("/:id", authenticate, getByIdController);
+router.get("/",        authenticate, getAllController);
+router.get("/summary", authenticate, summaryController);
+router.get("/:id",     authenticate, getByIdController);
+
+router.post("/:id/resync", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER), resyncController);
 
 router.post(
   "/",

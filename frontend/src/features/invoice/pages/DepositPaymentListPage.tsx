@@ -14,7 +14,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { fetchCustomers } from "@/features/customer/api/customer.api";
 import { fetchPaymentMethods } from "@/features/settings/api/paymentMethod.api";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import { useAllDepositPayments, useDeposits, useCreateDepositPayment, useDeleteDepositPayment } from "../hooks";
+import { useAllDepositPayments, useCreateDepositPayment, useDeleteDepositPayment, useDepositPaymentSummary } from "../hooks";
 import type { DepositPayment } from "../types";
 
 import { fetchDeposits } from "../api";
@@ -41,24 +41,30 @@ export function DepositPaymentListPage() {
 
   const { data, isLoading } = useAllDepositPayments({
     page,
-    limit: 20,
+    limit:           20,
+    branchId:        branchId        || undefined,
     paymentMethodId: paymentMethodId || undefined,
+    startDate:       startDate       || undefined,
+    endDate:         endDate         || undefined,
+  });
+
+  const { data: summary } = useDepositPaymentSummary({
+    branchId:        branchId        || undefined,
+    paymentMethodId: paymentMethodId || undefined,
+    startDate:       startDate       || undefined,
+    endDate:         endDate         || undefined,
   });
 
   const payments   = data?.data ?? [];
   const meta       = data?.meta;
   const totalPages = meta ? Math.ceil(meta.total / 20) : 1;
-
-  const filtered = payments.filter((p) => {
-    if (startDate && p.paidAt < startDate) return false;
-    if (endDate   && p.paidAt > endDate + "T23:59:59") return false;
-    return true;
-  });
+  const hasFilter  = !!(paymentMethodId || startDate || endDate);
 
   return (
     <PageContainer>
-      <div className="space-y-4 sm:space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="space-y-4 sm:space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Pembayaran Deposit</h1>
             <p className="text-sm text-muted-foreground">
@@ -66,20 +72,40 @@ export function DepositPaymentListPage() {
             </p>
           </div>
           <Button onClick={() => setDialogOpen(true)} size="sm">
-            <Plus className="mr-2 h-4 w-4" />
-            Tambah Pembayaran
+            <Plus className="mr-1.5 h-4 w-4" />
+            <span className="hidden xs:inline">Tambah </span>Pembayaran
           </Button>
         </div>
 
+        {/* Summary cards */}
+        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+          <Card>
+            <CardContent className="p-3 sm:p-4">
+              <p className="text-xs text-muted-foreground">Hari Ini</p>
+              <p className="text-base font-bold mt-0.5 sm:text-lg">{formatCurrency(summary?.today.total ?? "0")}</p>
+              <p className="text-xs text-muted-foreground">{summary?.today.count ?? 0} transaksi</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 sm:p-4">
+              <p className="text-xs text-muted-foreground">{startDate || endDate ? "Periode Filter" : "Semua Waktu"}</p>
+              <p className="text-base font-bold mt-0.5 sm:text-lg">{formatCurrency(summary?.period.total ?? "0")}</p>
+              <p className="text-xs text-muted-foreground">{summary?.period.count ?? 0} transaksi</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filter + list card */}
         <Card>
           <CardHeader className="pb-3 pt-4">
-            <div className="flex flex-wrap gap-3">
-              <div className="flex flex-col gap-1">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+              {/* Metode — full width on mobile */}
+              <div className="col-span-2 flex flex-col gap-1 sm:col-auto">
                 <Label className="text-xs text-muted-foreground">Metode Pembayaran</Label>
                 <select
                   value={paymentMethodId}
                   onChange={(e) => { setMethod(e.target.value); setPage(1); }}
-                  className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
                 >
                   <option value="">Semua Metode</option>
                   {methodsData.map((m) => (
@@ -87,86 +113,107 @@ export function DepositPaymentListPage() {
                   ))}
                 </select>
               </div>
+
+              {/* Date range — half-width each on mobile */}
               <div className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">Dari</Label>
-                <Input type="date" value={startDate} onChange={(e) => { setStart(e.target.value); setPage(1); }} className="h-9 w-36" />
+                <Input type="date" value={startDate} onChange={(e) => { setStart(e.target.value); setPage(1); }} className="h-9 w-full sm:w-36" />
               </div>
               <div className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">Sampai</Label>
-                <Input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className="h-9 w-36" />
+                <Input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className="h-9 w-full sm:w-36" />
               </div>
-              {(paymentMethodId || startDate || endDate) && (
-                <div className="flex items-end">
-                  <Button variant="ghost" size="sm" onClick={() => { setMethod(""); setStart(""); setEnd(""); setPage(1); }} className="h-9 text-xs">Reset</Button>
+
+              {hasFilter && (
+                <div className="col-span-2 flex items-end sm:col-auto">
+                  <Button
+                    variant="ghost" size="sm"
+                    onClick={() => { setMethod(""); setStart(""); setEnd(""); setPage(1); }}
+                    className="h-9 w-full text-xs sm:w-auto"
+                  >
+                    Reset Filter
+                  </Button>
                 </div>
               )}
             </div>
           </CardHeader>
+
           <CardContent className="p-0">
             {isLoading ? (
               <div className="space-y-3 p-4">
-                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
+                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
               </div>
-            ) : filtered.length === 0 ? (
+            ) : payments.length === 0 ? (
               <p className="py-12 text-center text-sm text-muted-foreground">Tidak ada pembayaran.</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/50">
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">No. Pembayaran</th>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Customer</th>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tanggal</th>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Metode</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Jumlah</th>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Ref</th>
-                      <th className="px-4 py-3" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((p) => (
-                      <tr key={p.id} className="border-b border-border transition-colors hover:bg-muted/30">
-                        <td className="px-4 py-3">
-                          <Badge variant="outline" className="text-xs font-mono">{p.paymentNo}</Badge>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="font-medium">{p.deposit?.customer?.name ?? "—"}</p>
-                          <p className="text-xs text-muted-foreground">{p.deposit?.customer?.mobilePhone ?? ""}</p>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">{formatDate(p.paidAt)}</td>
-                        <td className="px-4 py-3">{p.paymentMethod?.name ?? "—"}</td>
-                        <td className="px-4 py-3 text-right font-medium">{formatCurrency(p.amount)}</td>
-                        <td className="px-4 py-3 text-muted-foreground text-xs">{p.referenceNo ?? "—"}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1">
-                            <Link
-                              to={`/deposits/${p.depositId}`}
-                              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                              title="Lihat deposit"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Link>
-                            {canDelete && (
-                              <button
-                                type="button"
-                                onClick={() => setDeleteTarget(p)}
-                                className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                                title="Hapus pembayaran"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
+              <>
+                {/* Mobile cards */}
+                <div className="sm:hidden divide-y divide-border">
+                  {payments.map((p) => (
+                    <PaymentCard key={p.id} payment={p} canDelete={canDelete} onDelete={() => setDeleteTarget(p)} />
+                  ))}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/50">
+                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">No. Pembayaran</th>
+                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Customer</th>
+                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tanggal</th>
+                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Metode</th>
+                        <th className="px-4 py-3 text-right font-medium text-muted-foreground">Jumlah</th>
+                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Ref</th>
+                        <th className="px-4 py-3" />
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {payments.map((p) => (
+                        <tr key={p.id} className="border-b border-border transition-colors hover:bg-muted/30">
+                          <td className="px-4 py-3">
+                            <Badge variant="outline" className="text-xs font-mono">{p.paymentNo}</Badge>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="font-medium">{p.deposit?.customer?.name ?? "—"}</p>
+                            <p className="text-xs text-muted-foreground">{p.deposit?.customer?.mobilePhone ?? ""}</p>
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(p.paidAt)}</td>
+                          <td className="px-4 py-3">{p.paymentMethod?.name ?? "—"}</td>
+                          <td className="px-4 py-3 text-right font-medium whitespace-nowrap">{formatCurrency(p.amount)}</td>
+                          <td className="px-4 py-3 text-muted-foreground text-xs">{p.referenceNo ?? "—"}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              <Link
+                                to={`/deposits/${p.depositId}`}
+                                className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                                title="Lihat deposit"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Link>
+                              {canDelete && (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteTarget(p)}
+                                  className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                                  title="Hapus pembayaran"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
 
+        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Halaman {page} dari {totalPages}</span>
@@ -178,12 +225,10 @@ export function DepositPaymentListPage() {
         )}
       </div>
 
-      {/* Konfirmasi hapus pembayaran */}
+      {/* Konfirmasi hapus */}
       <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Hapus Pembayaran Deposit</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-xl sm:rounded-lg">
+          <DialogHeader><DialogTitle>Hapus Pembayaran Deposit</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground py-2">
             Yakin ingin menghapus pembayaran{" "}
             <span className="font-medium text-foreground">{deleteTarget?.paymentNo}</span>?
@@ -191,10 +236,11 @@ export function DepositPaymentListPage() {
             Tindakan ini tidak dapat dibatalkan.
           </p>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Batal</Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} className="flex-1 sm:flex-none">Batal</Button>
             <Button
               variant="destructive"
               disabled={deleteMutation.isPending}
+              className="flex-1 sm:flex-none"
               onClick={async () => {
                 if (!deleteTarget) return;
                 await deleteMutation.mutateAsync(deleteTarget.id);
@@ -211,44 +257,87 @@ export function DepositPaymentListPage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         branchId={branchId ?? undefined}
-        onSuccess={() => {
-          setDialogOpen(false);
-          setPage(1);
-        }}
+        onSuccess={() => { setDialogOpen(false); setPage(1); }}
       />
     </PageContainer>
   );
 }
 
+// ── Mobile payment card ───────────────────────────────────────────────────────
+function PaymentCard({ payment: p, canDelete, onDelete }: {
+  payment:   DepositPayment;
+  canDelete: boolean;
+  onDelete:  () => void;
+}) {
+  return (
+    <div className="flex items-start gap-3 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-medium truncate">{p.deposit?.customer?.name ?? "—"}</p>
+            {p.deposit?.customer?.mobilePhone && (
+              <p className="text-xs text-muted-foreground">{p.deposit.customer.mobilePhone}</p>
+            )}
+          </div>
+          <span className="text-sm font-bold text-green-700 shrink-0">{formatCurrency(p.amount)}</span>
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          <Badge variant="outline" className="text-xs font-mono">{p.paymentNo}</Badge>
+          <span className="text-xs text-muted-foreground">{formatDate(p.paidAt)}</span>
+          <span className="text-xs text-muted-foreground">{p.paymentMethod?.name ?? "—"}</span>
+          {p.referenceNo && <span className="text-xs text-muted-foreground">Ref: {p.referenceNo}</span>}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-1 pt-0.5">
+        <Link
+          to={`/deposits/${p.depositId}`}
+          className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title="Lihat deposit"
+        >
+          <Eye className="h-4 w-4" />
+        </Link>
+        {canDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+            title="Hapus pembayaran"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Add payment dialog ────────────────────────────────────────────────────────
 function AddPaymentDialog({
   open, onOpenChange, branchId, onSuccess,
 }: {
-  open:          boolean;
-  onOpenChange:  (v: boolean) => void;
-  branchId?:     string;
-  onSuccess:     () => void;
+  open:         boolean;
+  onOpenChange: (v: boolean) => void;
+  branchId?:    string;
+  onSuccess:    () => void;
 }) {
   const todayStr = new Date().toISOString().split("T")[0];
 
-  // Step 1: customer search
   const [custSearch, setCustSearch]     = useState("");
   const [custResults, setCustResults]   = useState<{ id: string; name: string; mobilePhone: string | null }[]>([]);
   const [selectedCust, setSelectedCust] = useState<{ id: string; name: string } | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
 
-  // Step 2: deposit selection
-  const [deposits, setDeposits]         = useState<Deposit[]>([]);
+  const [deposits, setDeposits]               = useState<Deposit[]>([]);
   const [loadingDeposits, setLoadingDeposits] = useState(false);
   const [selectedDeposit, setSelectedDeposit] = useState<Deposit | null>(null);
 
-  // Step 3: payment form
-  const [methodId, setMethodId]     = useState("");
-  const [paidAt, setPaidAt]         = useState(todayStr);
-  const [refNo, setRefNo]           = useState("");
-  const [notes, setNotes]           = useState("");
+  const [methodId, setMethodId]           = useState("");
+  const [paidAt, setPaidAt]               = useState(todayStr);
+  const [refNo, setRefNo]                 = useState("");
+  const [notes, setNotes]                 = useState("");
   const [transferProof, setTransferProof] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [error, setError]           = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl]       = useState<string | null>(null);
+  const [error, setError]                 = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const createMutation = useCreateDepositPayment(selectedDeposit?.id ?? "");
@@ -271,10 +360,7 @@ function AddPaymentDialog({
 
   function handleCustSearch(e: React.ChangeEvent<HTMLInputElement>) {
     const q = e.target.value;
-    setCustSearch(q);
-    setSelectedCust(null);
-    setDeposits([]);
-    setSelectedDeposit(null);
+    setCustSearch(q); setSelectedCust(null); setDeposits([]); setSelectedDeposit(null);
     clearTimeout(searchTimer.current);
     if (q.length < 2) { setCustResults([]); return; }
     searchTimer.current = setTimeout(async () => {
@@ -284,17 +370,12 @@ function AddPaymentDialog({
   }
 
   async function selectCustomer(c: { id: string; name: string; mobilePhone: string | null }) {
-    setSelectedCust(c);
-    setCustSearch("");
-    setCustResults([]);
-    setSelectedDeposit(null);
+    setSelectedCust(c); setCustSearch(""); setCustResults([]); setSelectedDeposit(null);
     setLoadingDeposits(true);
     try {
       const res = await fetchDeposits({ customerId: c.id, status: "UNPAID", limit: 50, branchId });
       setDeposits(res.data ?? []);
-    } finally {
-      setLoadingDeposits(false);
-    }
+    } finally { setLoadingDeposits(false); }
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -323,8 +404,7 @@ function AddPaymentDialog({
         notes:           notes         || undefined,
         transferProof:   transferProof ?? undefined,
       });
-      onSuccess();
-      reset();
+      onSuccess(); reset();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Gagal mencatat pembayaran");
     }
@@ -332,13 +412,13 @@ function AddPaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100%-2rem)] max-w-md max-h-[90vh] overflow-y-auto rounded-xl sm:rounded-lg">
         <DialogHeader>
           <DialogTitle>Tambah Pembayaran Deposit</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-1">
-          {/* Customer search */}
+          {/* Customer */}
           <div className="flex flex-col gap-1.5">
             <Label>Customer *</Label>
             <div className="relative">
@@ -380,9 +460,7 @@ function AddPaymentDialog({
                       type="button"
                       onClick={() => setSelectedDeposit(d)}
                       className={`w-full rounded-md border px-3 py-2.5 text-left text-sm transition-colors ${
-                        selectedDeposit?.id === d.id
-                          ? "border-primary bg-primary/5"
-                          : "border-input hover:bg-muted/40"
+                        selectedDeposit?.id === d.id ? "border-primary bg-primary/5" : "border-input hover:bg-muted/40"
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -397,7 +475,7 @@ function AddPaymentDialog({
             </div>
           )}
 
-          {/* Payment form — shown after deposit selected */}
+          {/* Payment form */}
           {selectedDeposit && (
             <>
               <div className="rounded-md bg-muted/50 px-3 py-2.5 text-sm">
@@ -462,8 +540,8 @@ function AddPaymentDialog({
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <DialogFooter className="gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={() => handleClose(false)}>Batal</Button>
-            <Button type="submit" disabled={!selectedDeposit || createMutation.isPending}>
+            <Button type="button" variant="outline" onClick={() => handleClose(false)} className="flex-1 sm:flex-none">Batal</Button>
+            <Button type="submit" disabled={!selectedDeposit || createMutation.isPending} className="flex-1 sm:flex-none">
               {createMutation.isPending ? "Memproses…" : "Konfirmasi Pembayaran"}
             </Button>
           </DialogFooter>

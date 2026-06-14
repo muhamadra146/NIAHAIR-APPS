@@ -5,6 +5,8 @@ const {
   getPaymentsByDeposit,
   createDepositPayment,
   deleteDepositPayment,
+  getDepositPaymentSummary,
+  resyncDepositPayment,
 } = require("./depositPayment.service");
 
 const getAllController = async (req, res, next) => {
@@ -56,4 +58,18 @@ const deleteController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getAllController, getByDepositController, getByIdController, createController, deleteController };
+const summaryController = async (req, res, next) => {
+  try {
+    const result = await getDepositPaymentSummary(req.query);
+    return success(res, result, "Deposit payment summary fetched");
+  } catch (err) { next(err); }
+};
+
+const resyncController = async (req, res, next) => {
+  try {
+    const result = await resyncDepositPayment(req.params.id);
+    return success(res, result, "Deposit payment resync queued");
+  } catch (err) { next(err); }
+};
+
+module.exports = { getAllController, getByDepositController, getByIdController, createController, deleteController, summaryController, resyncController };

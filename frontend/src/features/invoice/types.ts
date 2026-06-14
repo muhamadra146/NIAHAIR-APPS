@@ -176,6 +176,7 @@ export interface DepositPayment {
   notes:                 string | null;
   transferProofUrl:      string | null;
   transferProofPublicId: string | null;
+  accurateReceiptId:     string | null | undefined;
   createdAt:             string;
   paymentMethod?:        { id: string; name: string };
   deposit?:              Deposit;

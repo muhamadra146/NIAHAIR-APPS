@@ -2,6 +2,7 @@ const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const prisma          = require("../../config/prisma");
 const { createSyncJob }                                       = require("../syncQueue/syncQueue.service");
 const { updateDepositInAccurate, deleteDepositFromAccurate }  = require("./deposit.sync.service");
 const {
@@ -216,4 +217,40 @@ const linkAppointmentToDeposit = async (id, appointmentId) => {
   return withComputed(updated);
 };
 
-module.exports = { listDeposits, getDepositById, createDeposit, editDeposit, deleteDeposit, refundDeposit, cancelDeposit, linkAppointmentToDeposit };
+// ── Summary ───────────────────────────────────────────────────────────
+
+const getDepositSummary = async ({ branchId } = {}) => {
+  const baseWhere = branchId ? { branchId } : {};
+  const statuses  = ["UNPAID", "PAID", "PARTIAL_USED", "USED"];
+
+  const results = await Promise.all(
+    statuses.map((s) =>
+      prisma.deposit.aggregate({
+        where: { ...baseWhere, status: s },
+        _count: { id: true },
+        _sum:   { amount: true },
+      })
+    )
+  );
+
+  return Object.fromEntries(
+    statuses.map((s, i) => [s, { count: results[i]._count.id, total: String(results[i]._sum.amount ?? 0) }])
+  );
+};
+
+// ── Resync ────────────────────────────────────────────────────────────
+
+const resyncDeposit = async (id) => {
+  const deposit = await findById(id);
+  if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
+
+  if (deposit.accurateDepositId) {
+    await updateDepositInAccurate(id);
+    return { updated: true };
+  }
+
+  await createSyncJob({ entityType: "DEPOSIT", entityId: id, direction: "APP_TO_ACCURATE" });
+  return { queued: true };
+};
+
+module.exports = { listDeposits, getDepositById, createDeposit, editDeposit, deleteDeposit, refundDeposit, cancelDeposit, linkAppointmentToDeposit, getDepositSummary, resyncDeposit };

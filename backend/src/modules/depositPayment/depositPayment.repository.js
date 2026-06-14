@@ -22,14 +22,14 @@ const SELECT = {
       amount:                true,
       status:                true,
       notes:                 true,
+      branchId:              true,
       accurateDepositId:     true,
       accurateDepositNumber: true,
-      appointment: {
-        select: {
-          customer: {
-            select: { id: true, name: true, customerNo: true, accurateCustomerId: true },
-          },
-        },
+      customer: {
+        select: { id: true, name: true, customerNo: true, mobilePhone: true, accurateCustomerId: true },
+      },
+      branch: {
+        select: { id: true, code: true, name: true },
       },
     },
   },

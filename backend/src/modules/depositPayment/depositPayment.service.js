@@ -2,6 +2,7 @@ const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const prisma                                                       = require("../../config/prisma");
 const { createSyncJob }                                            = require("../syncQueue/syncQueue.service");
 const { deleteDepositPaymentFromAccurate }                         = require("./depositPayment.sync.service");
 const {
@@ -34,12 +35,18 @@ const buildPaymentNo = async () => {
 
 // ── List ──────────────────────────────────────────────────────────────
 
-const listDepositPayments = async ({ page, limit, depositId, paymentMethodId }) => {
+const listDepositPayments = async ({ page, limit, depositId, paymentMethodId, branchId, startDate, endDate }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
   if (depositId)       where.depositId       = depositId;
   if (paymentMethodId) where.paymentMethodId = paymentMethodId;
+  if (branchId)        where.deposit          = { branchId };
+  if (startDate || endDate) {
+    where.paidAt = {};
+    if (startDate) where.paidAt.gte = new Date(startDate);
+    if (endDate)   where.paidAt.lte = new Date(endDate + "T23:59:59");
+  }
 
   const [data, total] = await Promise.all([
     findAll({ skip, take, where }),
@@ -127,4 +134,44 @@ const deleteDepositPayment = async (id) => {
   return { deleted: true };
 };
 
-module.exports = { listDepositPayments, getDepositPaymentById, getPaymentsByDeposit, createDepositPayment, deleteDepositPayment };
+// ── Summary ───────────────────────────────────────────────────────────
+
+const getDepositPaymentSummary = async ({ startDate, endDate, paymentMethodId, branchId } = {}) => {
+  const today    = new Date(); today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const baseWhere = {};
+  if (paymentMethodId) baseWhere.paymentMethodId = paymentMethodId;
+  if (branchId)        baseWhere.deposit          = { branchId };
+
+  const todayWhere = { ...baseWhere, paidAt: { gte: today, lt: tomorrow } };
+
+  const periodWhere = { ...baseWhere };
+  if (startDate || endDate) {
+    periodWhere.paidAt = {};
+    if (startDate) periodWhere.paidAt.gte = new Date(startDate);
+    if (endDate)   periodWhere.paidAt.lte = new Date(endDate + "T23:59:59");
+  }
+
+  const [todayAgg, periodAgg] = await Promise.all([
+    prisma.depositPayment.aggregate({ where: todayWhere,  _count: { id: true }, _sum: { amount: true } }),
+    prisma.depositPayment.aggregate({ where: periodWhere, _count: { id: true }, _sum: { amount: true } }),
+  ]);
+
+  return {
+    today:  { count: todayAgg._count.id,  total: String(todayAgg._sum.amount  ?? 0) },
+    period: { count: periodAgg._count.id, total: String(periodAgg._sum.amount ?? 0) },
+  };
+};
+
+// ── Resync ────────────────────────────────────────────────────────────
+
+const resyncDepositPayment = async (id) => {
+  const dp = await findById(id);
+  if (!dp) throw new AppError("Deposit payment not found", StatusCodes.NOT_FOUND);
+  if (dp.accurateReceiptId) return { skipped: true, reason: "Already synced to Accurate" };
+  await createSyncJob({ entityType: "DEPOSIT_PAYMENT", entityId: id, direction: "APP_TO_ACCURATE" });
+  return { queued: true };
+};
+
+module.exports = { listDepositPayments, getDepositPaymentById, getPaymentsByDeposit, createDepositPayment, deleteDepositPayment, getDepositPaymentSummary, resyncDepositPayment };
