@@ -13,6 +13,7 @@ import { uploadAppointmentPhoto } from "../api/appointment.api";
 import { STATUS_LABEL } from "../components/AppointmentStatusBadge";
 import type { AppointmentStatus } from "../types";
 import type { CreateAppointmentFormValues } from "../schemas/appointment.schema";
+import { linkDepositToAppointment } from "@/features/invoice/api";
 
 const ALL_STATUSES: AppointmentStatus[] = [
   "BOOKED", "CONFIRMED", "CHECK_IN", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW",
@@ -34,7 +35,7 @@ export function AppointmentListPage() {
   const meta         = data?.meta;
   const totalPages   = meta?.totalPages ?? 1;
 
-  async function handleCreate(values: CreateAppointmentFormValues, photos: PendingPhoto[]) {
+  async function handleCreate(values: CreateAppointmentFormValues, photos: PendingPhoto[], depositId: string | null) {
     setFormError(null);
     try {
       const appointment = await createMutation.mutateAsync({
@@ -51,14 +52,21 @@ export function AppointmentListPage() {
           qty:    Number(s.qty),
           price:  Number(s.price),
         })),
-        staffIds: values.staffIds?.length ? values.staffIds : undefined,
+        staffsBySlot: values.staffsBySlot?.length ? values.staffsBySlot : undefined,
       });
-      if (photos.length > 0 && appointment?.id) {
-        await Promise.all(
-          photos.map((p) => uploadAppointmentPhoto(appointment.id, p.file, p.type).catch(() => {}))
-        );
-      }
+
+      // Close form immediately after appointment is created
       setFormOpen(false);
+
+      // Fire-and-forget secondary operations
+      if (appointment?.id) {
+        if (photos.length > 0) {
+          photos.forEach((p) => uploadAppointmentPhoto(appointment.id, p.file, p.type).catch(() => {}));
+        }
+        if (depositId) {
+          linkDepositToAppointment(depositId, appointment.id).catch(() => {});
+        }
+      }
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Failed to create appointment");
     }

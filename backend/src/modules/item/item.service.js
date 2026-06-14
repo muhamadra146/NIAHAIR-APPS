@@ -30,7 +30,7 @@ const getAll = async ({ page, limit, search, isActive, itemType }) => {
   ]);
 
   return {
-    items,
+    data: items,
     meta: paginationMeta(total, pageNum, limitNum),
   };
 };

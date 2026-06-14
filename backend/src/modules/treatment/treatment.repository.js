@@ -11,15 +11,14 @@ const INCLUDE = {
     select: { id: true, bookingNo: true, visitDate: true, status: true },
   },
   treatmentItems: {
-    select: {
-      id:                 true,
-      itemId:             true,
-      unitId:             true,
-      qty:                true,
-      priceSnapshot:      true,
-      conversionSnapshot: true,
-      notes:              true,
-      createdAt:          true,
+    include: {
+      item:        { select: { id: true, name: true, itemCode: true } },
+      unit:        { select: { id: true, name: true } },
+      assignments: {
+        include: {
+          employee: { select: { id: true, name: true, employeeCode: true } },
+        },
+      },
     },
   },
 };

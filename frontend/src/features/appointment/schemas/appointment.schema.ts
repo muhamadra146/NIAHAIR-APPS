@@ -19,8 +19,11 @@ export const createAppointmentSchema = z.object({
   homeServiceAddress:  z.string().optional().or(z.literal("")),
   notes:               z.string().optional().or(z.literal("")),
   estimatedTotal:      z.coerce.number().min(0).optional(),
-  services:            z.array(serviceLineSchema).optional(),
-  staffIds:            z.array(z.string()).optional(),
+  services:      z.array(serviceLineSchema).optional(),
+  staffsBySlot:  z.array(z.object({
+    employeeId: z.string().min(1),
+    slotKey:    z.string(),
+  })).optional(),
 });
 
 export const updateAppointmentSchema = z.object({

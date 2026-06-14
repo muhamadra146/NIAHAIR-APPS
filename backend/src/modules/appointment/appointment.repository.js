@@ -11,7 +11,8 @@ const INCLUDE = {
     orderBy: { createdAt: "asc" },
   },
   staffs: {
-    include: {
+    select: {
+      id: true, slotKey: true,
       employee: {
         select: {
           id: true, name: true, employeeCode: true,
@@ -55,7 +56,8 @@ const findBranchById = (id) =>
 
 // ── Create ────────────────────────────────────────────────────────────
 
-const createWithTransaction = ({ appointmentData, services = [], staffIds = [], userId }) =>
+// staffsBySlot: [{ employeeId, slotKey }] or legacy flat staffIds converted upstream
+const createWithTransaction = ({ appointmentData, services = [], staffsBySlot = [], userId }) =>
   prisma.$transaction(async (tx) => {
     const appointment = await tx.appointment.create({ data: appointmentData });
 
@@ -82,11 +84,12 @@ const createWithTransaction = ({ appointmentData, services = [], staffIds = [], 
       });
     }
 
-    if (staffIds.length > 0) {
+    if (staffsBySlot.length > 0) {
       await tx.appointmentStaff.createMany({
-        data: staffIds.map((employeeId) => ({
+        data: staffsBySlot.map(({ employeeId, slotKey }) => ({
           appointmentId: appointment.id,
           employeeId,
+          slotKey: slotKey ?? null,
         })),
       });
     }
@@ -99,16 +102,20 @@ const createWithTransaction = ({ appointmentData, services = [], staffIds = [], 
 const updateAppointment = (id, data) =>
   prisma.appointment.update({ where: { id }, data, include: INCLUDE });
 
-// staffIds = undefined → leave staff untouched; [] → clear all; [...] → replace
-const updateWithStaff = (id, data, staffIds) =>
+// staffsBySlot = undefined → leave staff untouched; [] → clear all; [...] → replace
+const updateWithStaff = (id, data, staffsBySlot) =>
   prisma.$transaction(async (tx) => {
     await tx.appointment.update({ where: { id }, data });
 
-    if (staffIds !== undefined) {
+    if (staffsBySlot !== undefined) {
       await tx.appointmentStaff.deleteMany({ where: { appointmentId: id } });
-      if (staffIds.length > 0) {
+      if (staffsBySlot.length > 0) {
         await tx.appointmentStaff.createMany({
-          data: staffIds.map((employeeId) => ({ appointmentId: id, employeeId })),
+          data: staffsBySlot.map(({ employeeId, slotKey }) => ({
+            appointmentId: id,
+            employeeId,
+            slotKey: slotKey ?? null,
+          })),
         });
       }
     }

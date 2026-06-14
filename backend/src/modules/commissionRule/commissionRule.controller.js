@@ -1,5 +1,5 @@
 const { success, created } = require("../../common/responses/apiResponse");
-const { getAll, getById, createCommissionRule, updateCommissionRule } = require("./commissionRule.service");
+const { getAll, getById, createCommissionRule, updateCommissionRule, deleteCommissionRule } = require("./commissionRule.service");
 
 const getAllController = async (req, res, next) => {
   try {
@@ -37,4 +37,13 @@ const updateController = async (req, res, next) => {
   }
 };
 
-module.exports = { getAllController, getByIdController, createController, updateController };
+const deleteController = async (req, res, next) => {
+  try {
+    await deleteCommissionRule(req.params.id);
+    return success(res, null, "Commission rule deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getAllController, getByIdController, createController, updateController, deleteController };

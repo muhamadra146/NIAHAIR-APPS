@@ -6,10 +6,12 @@ const {
   count,
   findById,
   findActiveByEmployeeAndCategory,
+  findDuplicate,
   findEmployeeById,
   findCommissionCategoryById,
   create,
   update,
+  deleteById,
 } = require("./commissionRule.repository");
 
 const getAll = async ({ page, limit, search, employeeId, commissionCategoryId, isActive }) => {
@@ -56,10 +58,11 @@ const createCommissionRule = async (body) => {
     throw new AppError("Percentage commission cannot exceed 100", StatusCodes.BAD_REQUEST);
   }
 
-  const duplicate = await findActiveByEmployeeAndCategory(body.employeeId, body.commissionCategoryId);
+  const slotKey   = body.slotKey ?? null;
+  const duplicate = await findDuplicate(body.employeeId, body.commissionCategoryId, slotKey, body.effectiveDate);
   if (duplicate) {
     throw new AppError(
-      "Active commission rule already exists for this employee and category",
+      "Rule komisi dengan karyawan, kategori, role, dan tanggal berlaku yang sama sudah ada",
       StatusCodes.CONFLICT
     );
   }
@@ -67,6 +70,7 @@ const createCommissionRule = async (body) => {
   return create({
     employeeId:           body.employeeId,
     commissionCategoryId: body.commissionCategoryId,
+    slotKey,
     commissionType:       body.commissionType,
     commissionValue:      body.commissionValue,
     effectiveDate:        new Date(body.effectiveDate),
@@ -103,4 +107,10 @@ const updateCommissionRule = async (id, body) => {
   return update(id, updateData);
 };
 
-module.exports = { getAll, getById, createCommissionRule, updateCommissionRule };
+const deleteCommissionRule = async (id) => {
+  const rule = await findById(id);
+  if (!rule) throw new AppError("Commission rule not found", StatusCodes.NOT_FOUND);
+  await deleteById(id);
+};
+
+module.exports = { getAll, getById, createCommissionRule, updateCommissionRule, deleteCommissionRule };

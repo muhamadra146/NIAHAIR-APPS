@@ -3,6 +3,13 @@ const {
   picklist, number, minValue, array,
 } = require("valibot");
 
+const SLOT_KEYS = ["stylist", "asisten", "colorist"];
+
+const staffSlotSchema = object({
+  employeeId: pipe(string(), minLength(1, "employeeId is required")),
+  slotKey:    optional(picklist(SLOT_KEYS, "Invalid slotKey")),
+});
+
 const APPOINTMENT_STATUSES = [
   "BOOKED", "CONFIRMED", "CHECK_IN", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW",
 ];
@@ -28,8 +35,8 @@ const createAppointmentSchema = object({
   homeServiceAddress:  optional(string()),
   notes:               optional(string()),
   estimatedTotal:      optional(pipe(number(), minValue(0, "estimatedTotal must be >= 0"))),
-  services:            optional(array(serviceLineSchema)),
-  staffIds:            optional(array(pipe(string(), minLength(1, "staffId is required")))),
+  services:      optional(array(serviceLineSchema)),
+  staffsBySlot:  optional(array(staffSlotSchema)),
 });
 
 const updateAppointmentSchema = object({
@@ -39,8 +46,8 @@ const updateAppointmentSchema = object({
   type:                optional(picklist(APPOINTMENT_TYPES, "Invalid appointment type")),
   homeServiceAddress:  optional(string()),
   notes:               optional(string()),
-  estimatedTotal:      optional(pipe(number(), minValue(0, "estimatedTotal must be >= 0"))),
-  staffIds:            optional(array(pipe(string(), minLength(1, "staffId is required")))),
+  estimatedTotal:  optional(pipe(number(), minValue(0, "estimatedTotal must be >= 0"))),
+  staffsBySlot:    optional(array(staffSlotSchema)),
 });
 
 const changeStatusSchema = object({

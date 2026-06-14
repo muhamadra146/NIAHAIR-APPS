@@ -12,13 +12,14 @@ const {
   update,
 } = require("./treatment.repository");
 
-const getAll = async ({ page, limit, customerId, branchId, startDate, endDate }) => {
+const getAll = async ({ page, limit, customerId, branchId, invoiceId, startDate, endDate }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
 
   if (customerId) where.customerId = customerId;
   if (branchId)   where.branchId   = branchId;
+  if (invoiceId)  where.invoiceId  = invoiceId;
 
   if (startDate || endDate) {
     where.startedAt = {};

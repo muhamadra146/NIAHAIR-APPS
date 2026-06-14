@@ -1,5 +1,5 @@
 const { success, created } = require("../../common/responses/apiResponse");
-const { getAll, getById, createCommissionCategory, updateCommissionCategory } = require("./commissionCategory.service");
+const { getAll, getById, createCommissionCategory, updateCommissionCategory, deleteCommissionCategory } = require("./commissionCategory.service");
 
 const getAllController = async (req, res, next) => {
   try {
@@ -37,4 +37,13 @@ const updateController = async (req, res, next) => {
   }
 };
 
-module.exports = { getAllController, getByIdController, createController, updateController };
+const deleteController = async (req, res, next) => {
+  try {
+    await deleteCommissionCategory(req.params.id);
+    return success(res, null, "Commission category deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getAllController, getByIdController, createController, updateController, deleteController };

@@ -1,7 +1,7 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
-const { findAll, count, findById, findByCode, create, update } = require("./commissionCategory.repository");
+const { findAll, count, findById, findByCode, create, update, deleteById, countRulesByCategory } = require("./commissionCategory.repository");
 
 const getAll = async ({ page, limit, search, isActive }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -55,4 +55,19 @@ const updateCommissionCategory = async (id, body) => {
   return update(id, body);
 };
 
-module.exports = { getAll, getById, createCommissionCategory, updateCommissionCategory };
+const deleteCommissionCategory = async (id) => {
+  const category = await findById(id);
+  if (!category) throw new AppError("Commission category not found", StatusCodes.NOT_FOUND);
+
+  const rulesCount = await countRulesByCategory(id);
+  if (rulesCount > 0) {
+    throw new AppError(
+      `Kategori ini digunakan oleh ${rulesCount} rule komisi. Hapus rule terlebih dahulu.`,
+      StatusCodes.CONFLICT
+    );
+  }
+
+  await deleteById(id);
+};
+
+module.exports = { getAll, getById, createCommissionCategory, updateCommissionCategory, deleteCommissionCategory };

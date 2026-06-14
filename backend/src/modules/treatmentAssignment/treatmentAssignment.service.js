@@ -32,7 +32,7 @@ const getById = async (id) => {
 };
 
 const createAssignment = async (treatmentItemId, body) => {
-  const { employeeId, workQty, notes } = body;
+  const { employeeId, slotKey, workQty, notes } = body;
 
   // 1 — treatment item must exist
   const treatmentItem = await findTreatmentItemById(treatmentItemId);
@@ -45,14 +45,11 @@ const createAssignment = async (treatmentItemId, body) => {
     throw new AppError("Employee is not active", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
-  // 3 — quota check: existing assigned + new must not exceed maxWork
-  const maxWork      = calcMaxWork(treatmentItem);
-  const existingSum  = await sumWorkQtyByItem(treatmentItemId);
-  const afterInsert  = existingSum + workQty;
-
-  if (afterInsert > maxWork) {
+  // 3 — validate workQty does not exceed maxWork per individual assignment
+  const maxWork = calcMaxWork(treatmentItem);
+  if (workQty > maxWork) {
     throw new AppError(
-      `Work quota exceeded. Max: ${maxWork}, already assigned: ${existingSum}, requested: ${workQty}`,
+      `Work qty exceeds item max. Max per assignment: ${maxWork}, requested: ${workQty}`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
@@ -60,6 +57,7 @@ const createAssignment = async (treatmentItemId, body) => {
   return create({
     treatmentItemId,
     employeeId,
+    slotKey: slotKey ?? null,
     workQty,
     notes: notes ?? null,
   });
@@ -69,24 +67,21 @@ const updateAssignment = async (id, body) => {
   const assignment = await findById(id);
   if (!assignment) throw new AppError("Assignment not found", StatusCodes.NOT_FOUND);
 
-  const { workQty, notes } = body;
+  const { slotKey, workQty, notes } = body;
 
   if (workQty !== undefined) {
-    // Re-validate quota excluding this assignment's current workQty
     const treatmentItem = assignment.treatmentItem;
     const maxWork       = calcMaxWork(treatmentItem);
-    const otherSum      = await sumWorkQtyByItem(assignment.treatmentItem.id, id);
-    const afterUpdate   = otherSum + workQty;
-
-    if (afterUpdate > maxWork) {
+    if (workQty > maxWork) {
       throw new AppError(
-        `Work quota exceeded. Max: ${maxWork}, other assignments: ${otherSum}, requested: ${workQty}`,
+        `Work qty exceeds item max. Max per assignment: ${maxWork}, requested: ${workQty}`,
         StatusCodes.UNPROCESSABLE_ENTITY
       );
     }
   }
 
   const data = {};
+  if (slotKey !== undefined) data.slotKey = slotKey;
   if (workQty !== undefined) data.workQty = workQty;
   if (notes   !== undefined) data.notes   = notes;
 

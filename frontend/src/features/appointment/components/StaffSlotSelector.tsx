@@ -135,7 +135,7 @@ export function staffIdsToSlots(ids: string[]): StaffBySlot {
   return result;
 }
 
-/** Convert staffBySlot → flat deduped staffIds (stylist → asisten → colorist order) */
+/** Convert staffBySlot → flat deduped staffIds (legacy, kept for compatibility) */
 export function slotsToStaffIds(staffBySlot: StaffBySlot): string[] {
   const seen = new Set<string>();
   const ids: string[] = [];
@@ -145,4 +145,19 @@ export function slotsToStaffIds(staffBySlot: StaffBySlot): string[] {
     }
   }
   return ids;
+}
+
+/** Convert staffBySlot → [{ employeeId, slotKey }] array preserving slot info */
+export function slotsToStaffBySlot(staffBySlot: StaffBySlot): { employeeId: string; slotKey: string }[] {
+  const seen   = new Set<string>();
+  const result: { employeeId: string; slotKey: string }[] = [];
+  for (const slot of APPOINTMENT_SLOTS.map((s) => s.key) as SlotKey[]) {
+    for (const employeeId of staffBySlot[slot]) {
+      if (!seen.has(employeeId)) {
+        seen.add(employeeId);
+        result.push({ employeeId, slotKey: slot });
+      }
+    }
+  }
+  return result;
 }

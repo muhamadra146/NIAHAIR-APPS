@@ -147,7 +147,7 @@ function DesktopTable({ appointments, canDelete }: { appointments: Appointment[]
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Branch</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Visit Date</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Time</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Est. Total</th>
+              {/* <th className="px-4 py-3 text-left font-medium text-muted-foreground">Est. Total</th> */}
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Action</th>
             </tr>
@@ -178,9 +178,9 @@ function DesktopTable({ appointments, canDelete }: { appointments: Appointment[]
                   {" – "}
                   {new Date(a.endTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                 </td>
-                <td className="px-4 py-3 text-muted-foreground">
+                {/* <td className="px-4 py-3 text-muted-foreground">
                   {a.estimatedTotal ? formatCurrency(a.estimatedTotal) : "—"}
-                </td>
+                </td> */}
                 <td className="px-4 py-3">
                   <AppointmentStatusBadge status={a.status} />
                 </td>

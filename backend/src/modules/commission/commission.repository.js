@@ -100,6 +100,7 @@ const findInvoiceForGeneration = (invoiceId, tx) => {
                   id:         true,
                   employeeId: true,
                   workQty:    true,
+                  slotKey:    true,
                 },
               },
             },
@@ -112,16 +113,24 @@ const findInvoiceForGeneration = (invoiceId, tx) => {
 
 // ── Generator: commission rule lookup ─────────────────────────────────
 
-const findActiveRuleForGeneration = (employeeId, commissionCategoryId, tx) => {
+// Lookup order: specific slotKey match first, then fallback to null (wildcard)
+const findActiveRuleForGeneration = async (employeeId, commissionCategoryId, slotKey, tx) => {
   const client = tx ?? prisma;
+  const select = { id: true, commissionType: true, commissionValue: true, commissionBase: true };
+
+  // 1. Try exact slotKey match
+  if (slotKey) {
+    const exact = await client.commissionRule.findFirst({
+      where:  { employeeId, commissionCategoryId, slotKey, isActive: true },
+      select,
+    });
+    if (exact) return exact;
+  }
+
+  // 2. Fallback: wildcard rule (no slotKey)
   return client.commissionRule.findFirst({
-    where:  { employeeId, commissionCategoryId, isActive: true },
-    select: {
-      id:              true,
-      commissionType:  true,
-      commissionValue: true,
-      commissionBase:  true,
-    },
+    where:  { employeeId, commissionCategoryId, slotKey: null, isActive: true },
+    select,
   });
 };
 

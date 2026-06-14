@@ -224,7 +224,7 @@ export interface LoanListParams {
 }
 
 // ── List params ───────────────────────────────────────────────────────
-export interface EmployeeListParams   { page?: number; limit?: number; search?: string; isActive?: boolean }
+export interface EmployeeListParams   { page?: number; limit?: number; search?: string; isActive?: boolean; branchId?: string }
 export interface EmployeeRoleListParams { page?: number; limit?: number; search?: string }
 export interface UserListParams       { page?: number; limit?: number; search?: string }
 export interface BranchListParams     { page?: number; limit?: number }

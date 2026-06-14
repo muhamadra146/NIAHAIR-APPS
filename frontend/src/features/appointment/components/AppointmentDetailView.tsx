@@ -10,8 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Home, Store, Plus, Loader2, Trash2, Upload, X, ImageIcon, FileText, ExternalLink } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { AppointmentStatusBadge } from "./AppointmentStatusBadge";
-import { fetchDeposits, createDeposit, createDepositPayment, fetchInvoices } from "@/features/invoice/api";
-import { fetchPaymentMethods } from "@/features/settings/api/paymentMethod.api";
+import { fetchDeposits, linkDepositToAppointment, fetchInvoices } from "@/features/invoice/api";
 import { CreateInvoiceDialog } from "@/features/invoice/components/CreateInvoiceDialog";
 import { useAuthStore } from "@/stores/authStore";
 import {
@@ -92,17 +91,27 @@ function StaffTab({ a }: { a: Appointment }) {
           Home Service — {a.staffs.length <= 3 ? "Rp 75.000/orang" : "Rp 50.000/orang"} · {a.staffs.length} staff
         </div>
       )}
-      {a.staffs.map((s) => (
-        <div key={s.id} className="py-3 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium">{s.employee.name}</p>
-            <p className="text-xs text-muted-foreground">{s.employee.employeeCode}</p>
+      {a.staffs.map((s) => {
+        const slotLabel = s.slotKey
+          ? s.slotKey.charAt(0).toUpperCase() + s.slotKey.slice(1)
+          : null;
+        return (
+          <div key={s.id} className="py-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">{s.employee.name}</p>
+              <p className="text-xs text-muted-foreground">{s.employee.employeeCode}</p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {slotLabel && (
+                <Badge variant="secondary" className="text-xs">{slotLabel}</Badge>
+              )}
+              {s.employee.role && (
+                <Badge variant="outline" className="text-xs">{s.employee.role.name}</Badge>
+              )}
+            </div>
           </div>
-          {s.employee.role && (
-            <Badge variant="outline" className="text-xs">{s.employee.role.name}</Badge>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -528,38 +537,35 @@ function AmbildDPDialog({
   appointment:  Appointment;
 }) {
   const qc = useQueryClient();
-  const [amount, setAmount]   = useState("");
-  const [pmId,   setPmId]     = useState("");
-  const [notes,  setNotes]    = useState("");
-  const [saving, setSaving]   = useState(false);
+  const [selectedId, setSelectedId] = useState("");
+  const [saving,     setSaving]     = useState(false);
 
-  const { data: pmData } = useQuery({
-    queryKey: ["paymentMethods", { isActive: true }],
-    queryFn:  () => fetchPaymentMethods({ isActive: true, limit: 50 }).then((r) => r.data),
+  const { data: depositData, isLoading } = useQuery({
+    queryKey: ["deposits", "available", appointment.customerId],
+    queryFn:  () => fetchDeposits({ customerId: appointment.customerId, limit: 50 }),
     enabled:  open,
   });
-  const paymentMethods = pmData ?? [];
+
+  const available = (depositData?.data ?? []).filter(
+    (d) =>
+      Number(d.remainingAmount) > 0 &&
+      d.status !== "CANCELLED" &&
+      d.status !== "REFUNDED" &&
+      d.appointmentId !== appointment.id,
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!amount || Number(amount) <= 0) return;
+    if (!selectedId) return;
     setSaving(true);
     try {
-      const deposit = await createDeposit({
-        customerId:    appointment.customerId,
-        appointmentId: appointment.id,
-        amount:        Number(amount),
-        notes:         notes || undefined,
-      });
-      if (pmId) {
-        await createDepositPayment(deposit.id, { paymentMethodId: pmId });
-      }
+      await linkDepositToAppointment(selectedId, appointment.id);
       qc.invalidateQueries({ queryKey: ["deposits"] });
-      toast.success("DP berhasil dicatat");
+      toast.success("Deposit berhasil ditautkan");
       onOpenChange(false);
-      setAmount(""); setPmId(""); setNotes("");
+      setSelectedId("");
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Gagal menyimpan DP");
+      toast.error(err instanceof Error ? err.message : "Gagal menautkan deposit");
     } finally {
       setSaving(false);
     }
@@ -578,48 +584,52 @@ function AmbildDPDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="dp-amount">Jumlah DP (IDR) <span className="text-destructive">*</span></Label>
-            <Input
-              id="dp-amount"
-              type="number"
-              min={1}
-              step={10000}
-              placeholder="Contoh: 100000"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              required
-            />
-          </div>
+            <Label>Pilih Deposit <span className="text-destructive">*</span></Label>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="dp-pm">Metode Bayar <span className="text-destructive">*</span></Label>
-            <select
-              id="dp-pm"
-              value={pmId}
-              onChange={(e) => setPmId(e.target.value)}
-              required
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">Pilih metode…</option>
-              {paymentMethods.map((pm) => (
-                <option key={pm.id} value={pm.id}>{pm.name}</option>
-              ))}
-            </select>
-          </div>
+            {isLoading && (
+              <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Memuat deposit…
+              </div>
+            )}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="dp-notes">Catatan</Label>
-            <Input
-              id="dp-notes"
-              placeholder="Opsional"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
+            {!isLoading && available.length === 0 && (
+              <p className="rounded-md border border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                Tidak ada deposit tersedia untuk customer ini.
+              </p>
+            )}
+
+            {!isLoading && available.length > 0 && (
+              <div className="divide-y divide-border rounded-md border border-border overflow-hidden">
+                {available.map((d) => {
+                  const selected = selectedId === d.id;
+                  return (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => setSelectedId(selected ? "" : d.id)}
+                      className={`flex w-full items-center justify-between px-3 py-2.5 text-sm transition-colors ${
+                        selected ? "bg-primary/10 text-primary" : "hover:bg-muted/50"
+                      }`}
+                    >
+                      <span className="font-semibold">{formatCurrency(d.remainingAmount)}</span>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {d.notes && <span className="truncate max-w-36">{d.notes}</span>}
+                        <span>{formatDate(d.createdAt)}</span>
+                        {selected && <span className="text-primary font-medium">✓</span>}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Batal</Button>
-            <Button type="submit" disabled={saving || !amount || !pmId}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={saving || !selectedId}>
               {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Menyimpan…</> : "Simpan DP"}
             </Button>
           </DialogFooter>

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Search, Loader2, UserCheck, Home, Store, ImageIcon, X, Plus, Trash2 } from "lucide-react";
+import { Search, Loader2, UserCheck, Home, Store, ImageIcon, X, Plus, Trash2, Wallet } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -12,6 +12,9 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
 import { fetchCustomers } from "@/features/customer/api/customer.api";
 import { fetchAvailableStaff } from "@/features/schedule/api/staffSchedule.api";
+import { fetchDeposits } from "@/features/invoice/api";
+import { formatCurrency } from "@/lib/utils";
+import type { Deposit } from "@/features/invoice/types";
 import {
   createAppointmentSchema,
   updateAppointmentSchema,
@@ -29,7 +32,7 @@ import type { Appointment } from "../types";
 import {
   StaffSlotSelector,
   EMPTY_SLOTS,
-  slotsToStaffIds,
+  slotsToStaffBySlot,
   type SlotKey,
   type StaffBySlot,
 } from "./StaffSlotSelector";
@@ -39,6 +42,8 @@ export interface PendingPhoto {
   type:    AppointmentPhotoType;
   preview: string;
 }
+
+export type { Deposit as DepositRecord };
 
 // ── Customer search combobox ──────────────────────────────────────────
 
@@ -146,7 +151,7 @@ function CustomerSearchField({
 interface CreateFormProps {
   open:         boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit:     (values: CreateAppointmentFormValues, photos: PendingPhoto[]) => void;
+  onSubmit:     (values: CreateAppointmentFormValues, photos: PendingPhoto[], depositId: string | null) => void;
   isPending:    boolean;
   error?:       string | null;
 }
@@ -168,7 +173,7 @@ export function AppointmentCreateForm({ open, onOpenChange, onSubmit, isPending,
       homeServiceAddress: "",
       notes:              "",
       services:           [],
-      staffIds:           [],
+      staffsBySlot:       [],
     },
   });
 
@@ -186,16 +191,41 @@ export function AppointmentCreateForm({ open, onOpenChange, onSubmit, isPending,
   const refFileRef  = useRef<HTMLInputElement>(null);
   const hairFileRef = useRef<HTMLInputElement>(null);
 
+  // Deposit state
+  const [depositEnabled,    setDepositEnabled]    = useState(false);
+  const [selectedDepositId, setSelectedDepositId] = useState("");
+  const [customerDeposits,  setCustomerDeposits]  = useState<Deposit[]>([]);
+  const [depositsLoading,   setDepositsLoading]   = useState(false);
+
   useEffect(() => {
     if (open) {
-      reset({ customerId: "", visitDate: "", startTime: "", endTime: "", type: "SALON", homeServiceAddress: "", notes: "", services: [], staffIds: [] });
+      reset({ customerId: "", visitDate: "", startTime: "", endTime: "", type: "SALON", homeServiceAddress: "", notes: "", services: [], staffsBySlot: [] });
       setAvailableStaff([]);
       setStaffBySlot(EMPTY_SLOTS);
-      // revoke old object URLs to free memory
       setPendingPhotos((prev) => { prev.forEach((p) => URL.revokeObjectURL(p.preview)); return []; });
+      setDepositEnabled(false);
+      setSelectedDepositId("");
+      setCustomerDeposits([]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, reset]);
+
+  const customerId = watch("customerId");
+  useEffect(() => {
+    if (!depositEnabled || !customerId) return;
+    setDepositsLoading(true);
+    setSelectedDepositId("");
+    fetchDeposits({ customerId, limit: 50 })
+      .then((r) => {
+        const available = r.data.filter(
+          (d) => Number(d.remainingAmount) > 0 && d.status !== "CANCELLED" && d.status !== "REFUNDED"
+        );
+        setCustomerDeposits(available);
+      })
+      .catch(() => setCustomerDeposits([]))
+      .finally(() => setDepositsLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [depositEnabled, customerId]);
 
   function addPhotos(files: FileList | null, type: AppointmentPhotoType) {
     if (!files || files.length === 0) return;
@@ -221,7 +251,7 @@ export function AppointmentCreateForm({ open, onOpenChange, onSubmit, isPending,
     if (!visitDate || !startTime || !endTime || !branchId) {
       setAvailableStaff([]);
       setStaffBySlot(EMPTY_SLOTS);
-      setValue("staffIds", []);
+      setValue("staffsBySlot", []);
       return;
     }
     if (!TIME_RE.test(startTime) || !TIME_RE.test(endTime)) return;
@@ -229,7 +259,7 @@ export function AppointmentCreateForm({ open, onOpenChange, onSubmit, isPending,
     let cancelled = false;
     setStaffLoading(true);
     setStaffBySlot(EMPTY_SLOTS);
-    setValue("staffIds", []);
+    setValue("staffsBySlot", []);
 
     fetchAvailableStaff({ date: visitDate, branchId, startTime, endTime })
       .then((staff) => { if (!cancelled) setAvailableStaff(staff); })
@@ -241,7 +271,7 @@ export function AppointmentCreateForm({ open, onOpenChange, onSubmit, isPending,
   }, [visitDate, startTime, endTime, branchId]);
 
   function syncStaffIds(next: StaffBySlot) {
-    setValue("staffIds", slotsToStaffIds(next));
+    setValue("staffsBySlot", slotsToStaffBySlot(next));
   }
 
   function addStaff(slot: SlotKey, employeeId: string) {
@@ -271,7 +301,13 @@ export function AppointmentCreateForm({ open, onOpenChange, onSubmit, isPending,
           <DialogTitle>New Appointment</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit((values) => onSubmit(values, pendingPhotos))} className="flex flex-1 flex-col overflow-hidden">
+        <form
+          onSubmit={handleSubmit((values) => {
+            const depositId = depositEnabled && selectedDepositId ? selectedDepositId : null;
+            onSubmit(values, pendingPhotos, depositId);
+          })}
+          className="flex flex-1 flex-col overflow-hidden"
+        >
 
           {/* Customer — outside scroll so dropdown isn't clipped */}
           <div className="shrink-0 px-4 pt-4 pb-2 sm:px-6">
@@ -473,6 +509,67 @@ export function AppointmentCreateForm({ open, onOpenChange, onSubmit, isPending,
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Deposit section */}
+          <div className="shrink-0 border-t border-border px-4 py-3 sm:px-6 space-y-3">
+            <button
+              type="button"
+              onClick={() => { setDepositEnabled((v) => !v); setSelectedDepositId(""); }}
+              className={cn(
+                "flex w-full items-center justify-between rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                depositEnabled
+                  ? "border-primary bg-primary/5 text-primary"
+                  : "border-dashed border-border text-muted-foreground hover:border-primary/40 hover:text-primary/60"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Wallet className="h-4 w-4" />
+                Tautkan Deposit
+              </div>
+              <span className="text-xs">{depositEnabled ? "✓ Aktif" : "Opsional"}</span>
+            </button>
+
+            {depositEnabled && (
+              <div className="space-y-1.5">
+                {!customerId && (
+                  <p className="text-xs text-muted-foreground">Pilih customer terlebih dahulu.</p>
+                )}
+                {customerId && depositsLoading && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Memuat deposit…
+                  </div>
+                )}
+                {customerId && !depositsLoading && customerDeposits.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Tidak ada deposit tersedia untuk customer ini.</p>
+                )}
+                {customerId && !depositsLoading && customerDeposits.length > 0 && (
+                  <div className="divide-y divide-border rounded-md border border-border overflow-hidden">
+                    {customerDeposits.map((d) => {
+                      const selected = selectedDepositId === d.id;
+                      return (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => setSelectedDepositId(selected ? "" : d.id)}
+                          className={cn(
+                            "flex w-full items-center justify-between px-3 py-2.5 text-sm transition-colors",
+                            selected ? "bg-primary/8 text-primary" : "hover:bg-muted/50"
+                          )}
+                        >
+                          <span className="font-medium">{formatCurrency(d.remainingAmount)}</span>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            {d.notes && <span className="truncate max-w-32">{d.notes}</span>}
+                            {selected && <span className="text-primary font-medium">✓ Dipilih</span>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <DialogFooter className="shrink-0 border-t border-border px-4 py-4 sm:px-6">

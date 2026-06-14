@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAuthStore } from "@/stores/authStore";
 import { Plus, Search } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -38,6 +39,7 @@ import { ShiftForm }          from "../components/shift/ShiftForm";
 import { SalaryTab }          from "../components/salary/SalaryTab";
 import { LoanTab }            from "../components/loan/LoanTab";
 import { AccuratePanel }      from "../accurate/AccuratePanel";
+import { CommissionSettingsTab } from "../components/commission/CommissionSettingsTab";
 
 import type { Employee, EmployeeRole, User, Branch, PaymentMethod, CashAccount, Warehouse, ShiftMaster } from "../types";
 import type { EmployeeFormValues } from "../schemas/employee.schema";
@@ -52,6 +54,9 @@ import type { ShiftFormValues } from "../schemas/shift.schema";
 // Tab 1 — Employee Management
 // ────────────────────────────────────────────────────────────────────────────
 function EmployeeTab() {
+  const { branchId, user } = useAuthStore();
+  const isSuperAdmin = user?.role?.code === "SUPER_ADMIN";
+
   const [search, setSearch]         = useState("");
   const [debouncedSearch, setDebounced] = useState("");
   const [empPage, setEmpPage]       = useState(1);
@@ -63,10 +68,12 @@ function EmployeeTab() {
   const [editRole, setEditRole]       = useState<EmployeeRole | null>(null);
   const [roleError, setRoleError]     = useState<string | null>(null);
 
+  const branchFilter = isSuperAdmin ? undefined : (branchId ?? undefined);
+
   const { data: empData, isLoading: empLoading } = useEmployees({
-    page: empPage, limit: 20, search: debouncedSearch || undefined,
+    page: empPage, limit: 20, search: debouncedSearch || undefined, branchId: branchFilter,
   });
-  const { data: empCountData } = useEmployees({ limit: 1 });
+  const { data: empCountData } = useEmployees({ limit: 1, branchId: branchFilter });
   const { data: roleData, isLoading: roleLoading } = useEmployeeRoles({ limit: 100 });
 
   const employees = empData?.data ?? [];
@@ -784,6 +791,7 @@ const TABS = [
   { value: "shifts",          label: "Master Shift" },
   { value: "salary",          label: "Setting Gaji" },
   { value: "loans",           label: "Kasbon" },
+  { value: "komisi",          label: "Komisi" },
   { value: "accurate",        label: "Accurate" },
 ] as const;
 
@@ -833,6 +841,7 @@ export function SettingsPage() {
         <TabsContent value="shifts"          className="mt-6"><ShiftTab /></TabsContent>
         <TabsContent value="salary"          className="mt-6"><SalaryTab /></TabsContent>
         <TabsContent value="loans"           className="mt-6"><LoanTab /></TabsContent>
+        <TabsContent value="komisi"          className="mt-6"><CommissionSettingsTab /></TabsContent>
         <TabsContent value="accurate"        className="mt-6"><AccuratePanel /></TabsContent>
       </Tabs>
     </PageContainer>

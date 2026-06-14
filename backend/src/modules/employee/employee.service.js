@@ -13,23 +13,37 @@ const {
   updateBranches,
 } = require("./employee.repository");
 
-const getAll = async ({ page, limit, search, isActive }) => {
+const getAll = async ({ page, limit, search, isActive, branchId }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
+  const andClauses = [];
 
   if (search) {
-    where.OR = [
-      { name: { contains: search, mode: "insensitive" } },
-      { email: { contains: search, mode: "insensitive" } },
-      { phone: { contains: search, mode: "insensitive" } },
-      { employeeCode: { contains: search, mode: "insensitive" } },
-    ];
+    andClauses.push({
+      OR: [
+        { name:         { contains: search, mode: "insensitive" } },
+        { email:        { contains: search, mode: "insensitive" } },
+        { phone:        { contains: search, mode: "insensitive" } },
+        { employeeCode: { contains: search, mode: "insensitive" } },
+      ],
+    });
   }
 
   if (isActive !== undefined && isActive !== "") {
     where.isActive = isActive === "true" || isActive === true;
   }
+
+  if (branchId) {
+    andClauses.push({
+      OR: [
+        { homeBranchId:      branchId },
+        { employeeBranches: { some: { branchId, isActive: true } } },
+      ],
+    });
+  }
+
+  if (andClauses.length > 0) where.AND = andClauses;
 
   const [employees, total] = await Promise.all([
     findAll({ skip, take, where }),

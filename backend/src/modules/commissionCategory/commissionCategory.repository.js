@@ -16,4 +16,9 @@ const create = (data) => prisma.commissionCategory.create({ data });
 
 const update = (id, data) => prisma.commissionCategory.update({ where: { id }, data });
 
-module.exports = { findAll, count, findById, findByCode, create, update };
+const deleteById = (id) => prisma.commissionCategory.delete({ where: { id } });
+
+const countRulesByCategory = (commissionCategoryId) =>
+  prisma.commissionRule.count({ where: { commissionCategoryId } });
+
+module.exports = { findAll, count, findById, findByCode, create, update, deleteById, countRulesByCategory };

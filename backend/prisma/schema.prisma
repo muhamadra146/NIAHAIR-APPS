@@ -994,6 +994,8 @@ model AppointmentStaff {
 
   employeeId String
 
+  slotKey String?
+
   isPrimary Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -1368,6 +1370,8 @@ model TreatmentAssignment {
 
   employeeId String
 
+  slotKey String?
+
   workQty Decimal @db.Decimal(18, 2)
 
   notes String?
@@ -1407,6 +1411,7 @@ model CommissionRule {
 
   employeeId           String
   commissionCategoryId String
+  slotKey              String?
 
   commissionType CommissionType
 
@@ -1428,7 +1433,7 @@ model CommissionRule {
 
   commissions Commission[]
 
-  @@unique([employeeId, commissionCategoryId, effectiveDate])
+  @@unique([employeeId, commissionCategoryId, slotKey, effectiveDate])
   @@index([employeeId])
   @@index([commissionCategoryId])
   @@map("commission_rules")

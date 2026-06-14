@@ -6,9 +6,9 @@ const STATUS_LABEL: Record<AppointmentStatus, string> = {
   CONFIRMED:   "Confirmed",
   CHECK_IN:    "Check In",
   IN_PROGRESS: "In Progress",
-  COMPLETED:   "Completed",
+  COMPLETED:   "Selesai",
   CANCELLED:   "Cancelled",
-  NO_SHOW:     "No Show",
+  NO_SHOW:     "Reschedule",
 };
 
 type BadgeVariant = "default" | "success" | "warning" | "destructive" | "secondary" | "outline";

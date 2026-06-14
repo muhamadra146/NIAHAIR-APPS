@@ -1,4 +1,119 @@
 export type CommissionStatus = "PENDING" | "APPROVED" | "PAID";
+
+// ── Commission Category ───────────────────────────────────────────────────────
+
+export interface CommissionCategory {
+  id:        string;
+  code:      string;
+  name:      string;
+  isActive:  boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommissionCategoryListParams {
+  page?:     number;
+  limit?:    number;
+  search?:   string;
+  isActive?: boolean;
+}
+
+export interface CreateCommissionCategoryInput {
+  code:      string;
+  name:      string;
+  isActive?: boolean;
+}
+
+export interface UpdateCommissionCategoryInput {
+  code?:     string;
+  name?:     string;
+  isActive?: boolean;
+}
+
+// ── Commission Rule ───────────────────────────────────────────────────────────
+
+export interface CommissionRuleEmployee {
+  id:           string;
+  name:         string;
+  employeeCode: string | null;
+}
+
+export interface CommissionRuleCategory {
+  id:   string;
+  code: string;
+  name: string;
+}
+
+export interface CommissionRule {
+  id:                   string;
+  employeeId:           string;
+  commissionCategoryId: string;
+  slotKey:              string | null;
+  commissionType:       CommissionType;
+  commissionValue:      string | number;
+  commissionBase:       CommissionBase;
+  effectiveDate:        string;
+  endDate:              string | null;
+  isActive:             boolean;
+  createdAt:            string;
+  updatedAt:            string;
+  employee?:            CommissionRuleEmployee;
+  commissionCategory?:  CommissionRuleCategory;
+}
+
+export interface CommissionRuleListParams {
+  page?:                number;
+  limit?:               number;
+  search?:              string;
+  employeeId?:          string;
+  commissionCategoryId?: string;
+  isActive?:            boolean;
+}
+
+export interface CreateCommissionRuleInput {
+  employeeId:           string;
+  commissionCategoryId: string;
+  slotKey?:             string | null;
+  commissionType:       CommissionType;
+  commissionValue:      number;
+  commissionBase?:      CommissionBase;
+  effectiveDate:        string;
+  endDate?:             string | null;
+  isActive?:            boolean;
+}
+
+export interface UpdateCommissionRuleInput {
+  commissionType?:  CommissionType;
+  commissionValue?: number;
+  commissionBase?:  CommissionBase;
+  effectiveDate?:   string;
+  endDate?:         string | null;
+  isActive?:        boolean;
+}
+
+// ── Master Item (for commission category assignment) ──────────────────────────
+
+export interface MasterItem {
+  id:                   string;
+  itemCode:             string;
+  name:                 string;
+  itemType:             string;
+  isActive:             boolean;
+  commissionCategoryId: string | null;
+  commissionCategory?:  CommissionRuleCategory | null;
+}
+
+export interface MasterItemListParams {
+  page?:     number;
+  limit?:    number;
+  search?:   string;
+  isActive?: boolean;
+  itemType?: string;
+}
+
+export interface UpdateItemCommissionInput {
+  commissionCategoryId: string | null;
+}
 export type CommissionType   = "PERCENTAGE" | "FIXED";
 export type CommissionBase   = "BEFORE_DISCOUNT" | "AFTER_DISCOUNT";
 
@@ -47,6 +162,7 @@ export interface CommissionListParams {
   limit?:      number;
   employeeId?: string;
   branchId?:   string;
+  invoiceId?:  string;
   status?:     CommissionStatus | string;
   startDate?:  string;
   endDate?:    string;

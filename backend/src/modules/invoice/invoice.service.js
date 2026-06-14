@@ -5,6 +5,8 @@ const { paginate, paginationMeta } = require("../../utils/pagination");
 const { handleInvoicePaid }        = require("./invoice.workflow");
 const { createSyncJob }            = require("../syncQueue/syncQueue.service");
 const { generateStockMovement }    = require("../inventory/inventory.service");
+const { accurateRequest }          = require("../accurate/accurate.client");
+const prisma                       = require("../../config/prisma");
 const {
   findAll,
   count,
@@ -24,6 +26,8 @@ const {
   applyDepositWithTransaction,
   updateWithTransaction,
   cancelWithTransaction,
+  deleteWithTransaction,
+  findMaxInvoiceSeqToday,
 } = require("./invoice.repository");
 
 const D = (v) => new Prisma.Decimal(String(v));
@@ -42,7 +46,11 @@ const listInvoices = async ({ page, limit, customerId, branchId, status, appoint
   if (startDate || endDate) {
     where.invoiceDate = {};
     if (startDate) where.invoiceDate.gte = new Date(startDate);
-    if (endDate)   where.invoiceDate.lte = new Date(endDate);
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setUTCHours(23, 59, 59, 999);
+      where.invoiceDate.lte = end;
+    }
   }
 
   const [data, total] = await Promise.all([
@@ -68,11 +76,10 @@ const buildInvoiceNo = async () => {
   const yyyy = now.getFullYear();
   const mm   = String(now.getMonth() + 1).padStart(2, "0");
   const dd   = String(now.getDate()).padStart(2, "0");
+  const prefix = `INV-${yyyy}${mm}${dd}-`;
 
-  const startOfDay  = new Date(yyyy, now.getMonth(), now.getDate());
-  const todayCount  = await countToday(startOfDay);
-
-  return `INV-${yyyy}${mm}${dd}-${String(todayCount + 1).padStart(4, "0")}`;
+  const maxSeq = await findMaxInvoiceSeqToday(prefix);
+  return `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
 };
 
 // ── Create ────────────────────────────────────────────────────────────
@@ -494,6 +501,126 @@ const applyDepositToInvoice = async (invoiceId, { depositId, amount }, userId) =
   return updated;
 };
 
+// ── Setup Treatment Session ───────────────────────────────────────────
+//
+// Creates one TreatmentSession per invoice (linked to invoice + appointment if any).
+// For each invoice line item, creates a TreatmentItem using the item's unit price snapshot.
+// Idempotent: if a session already exists for this invoice, returns the existing one.
+
+const setupTreatmentSession = async (invoiceId) => {
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    select: {
+      id:            true,
+      customerId:    true,
+      branchId:      true,
+      appointmentId: true,
+      status:        true,
+      items: {
+        select: {
+          id:     true,
+          itemId: true,
+          unitId: true,
+          qty:    true,
+          price:  true,
+          item:   { select: { id: true, name: true, itemCode: true, itemType: true } },
+          unit:   { select: { id: true, name: true } },
+        },
+      },
+      appointment: {
+        select: {
+          id:     true,
+          staffs: {
+            select: {
+              id:      true,
+              slotKey: true,
+              employee: { select: { id: true, name: true, employeeCode: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+
+  // Idempotent: return existing session if already set up (with items)
+  const existingSession = await prisma.treatmentSession.findFirst({
+    where: { invoiceId },
+    include: {
+      treatmentItems: {
+        include: {
+          item:        { select: { id: true, name: true, itemCode: true } },
+          unit:        { select: { id: true, name: true } },
+          assignments: {
+            include: {
+              employee: { select: { id: true, name: true, employeeCode: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  // If session exists and already has items, return it as-is
+  if (existingSession && existingSession.treatmentItems.length > 0) return existingSession;
+  // If session exists but is empty (e.g. created before fix), delete and recreate
+  if (existingSession) {
+    await prisma.treatmentSession.delete({ where: { id: existingSession.id } });
+  }
+
+  // Create session + items in a transaction
+  return prisma.$transaction(async (tx) => {
+    const session = await tx.treatmentSession.create({
+      data: {
+        customerId:    invoice.customerId,
+        branchId:      invoice.branchId,
+        invoiceId,
+        appointmentId: invoice.appointmentId ?? null,
+        startedAt:     new Date(),
+      },
+    });
+
+    const serviceItems = invoice.items;
+
+    for (const line of serviceItems) {
+      // conversionSnapshot: fetch from item_units for the unit used on this invoice line
+      const itemUnit = await tx.itemUnit.findFirst({
+        where:  { itemId: line.itemId, unitId: line.unitId },
+        select: { conversionFactor: true },
+      });
+      const conversionSnapshot = itemUnit ? Number(itemUnit.conversionFactor) : 1;
+
+      await tx.treatmentItem.create({
+        data: {
+          treatmentSessionId: session.id,
+          itemId:             line.itemId,
+          unitId:             line.unitId,
+          qty:                line.qty,
+          priceSnapshot:      line.price,
+          conversionSnapshot,
+        },
+      });
+    }
+
+    return tx.treatmentSession.findUnique({
+      where: { id: session.id },
+      include: {
+        treatmentItems: {
+          include: {
+            item:        { select: { id: true, name: true, itemCode: true } },
+            unit:        { select: { id: true, name: true } },
+            assignments: {
+              include: {
+                employee: { select: { id: true, name: true, employeeCode: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+};
+
 // ── Cancel ────────────────────────────────────────────────────────────
 
 const cancelInvoice = async (id, userId) => {
@@ -510,4 +637,32 @@ const cancelInvoice = async (id, userId) => {
   return cancelWithTransaction({ invoice, userId });
 };
 
-module.exports = { listInvoices, getInvoiceById, createInvoice, updateInvoice, applyDepositToInvoice, cancelInvoice };
+const deleteInvoice = async (id) => {
+  const invoice = await findById(id);
+  if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+
+  if (invoice.status === "PAID") {
+    throw new AppError("Invoice yang sudah lunas tidak dapat dihapus", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
+  // Delete from Accurate first if it was synced
+  if (invoice.accurateInvoiceId) {
+    try {
+      const resp = await accurateRequest("/sales-invoice/delete.do", {
+        method: "POST",
+        body:   { id: invoice.accurateInvoiceId },
+      });
+      if (!resp.s) {
+        console.warn(`[invoice delete] Accurate delete failed for accurateId=${invoice.accurateInvoiceId}:`, resp.d ?? resp);
+      } else {
+        console.log(`[invoice delete] Accurate delete ok accurateId=${invoice.accurateInvoiceId}`);
+      }
+    } catch (err) {
+      console.warn(`[invoice delete] Accurate delete error (continuing with local delete): ${err.message}`);
+    }
+  }
+
+  await deleteWithTransaction(id);
+};
+
+module.exports = { listInvoices, getInvoiceById, createInvoice, updateInvoice, applyDepositToInvoice, cancelInvoice, deleteInvoice, setupTreatmentSession };

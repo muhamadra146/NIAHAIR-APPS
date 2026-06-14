@@ -42,6 +42,7 @@ export interface AppointmentService {
 
 export interface AppointmentStaff {
   id:       string;
+  slotKey:  string | null;
   employee: AppointmentEmployee;
 }
 
@@ -115,17 +116,22 @@ export interface AvailableStaff {
   endTime:    string | null;
 }
 
+export interface StaffSlotInput {
+  employeeId: string;
+  slotKey:    string;
+}
+
 export interface CreateAppointmentInput {
-  customerId:         string;
-  visitDate:          string;      // YYYY-MM-DD
-  startTime:          string;      // HH:MM
-  endTime:            string;      // HH:MM
-  type?:              AppointmentType;
+  customerId:          string;
+  visitDate:           string;      // YYYY-MM-DD
+  startTime:           string;      // HH:MM
+  endTime:             string;      // HH:MM
+  type?:               AppointmentType;
   homeServiceAddress?: string;
-  notes?:             string;
-  estimatedTotal?:    number;
-  services?:          ServiceInput[];
-  staffIds?:          string[];
+  notes?:              string;
+  estimatedTotal?:     number;
+  services?:           ServiceInput[];
+  staffsBySlot?:       StaffSlotInput[];
 }
 
 export interface UpdateAppointmentInput {
@@ -136,7 +142,41 @@ export interface UpdateAppointmentInput {
   homeServiceAddress?: string;
   notes?:              string;
   estimatedTotal?:     number;
-  staffIds?:           string[];
+  staffsBySlot?:       StaffSlotInput[];
+}
+
+// ── Treatment / Commission types ─────────────────────────────────────
+
+export interface TreatmentAssignment {
+  id:         string;
+  slotKey:    string | null;
+  workQty:    string;
+  notes:      string | null;
+  employeeId: string;
+  employee:   { id: string; name: string; employeeCode: string };
+}
+
+export interface TreatmentItem {
+  id:                 string;
+  itemId:             string;
+  unitId:             string;
+  qty:                string;
+  priceSnapshot:      string;
+  conversionSnapshot: string;
+  notes:              string | null;
+  item:               { id: string; name: string; itemCode: string };
+  unit:               { id: string; name: string };
+  assignments:        TreatmentAssignment[];
+}
+
+export interface TreatmentSession {
+  id:             string;
+  invoiceId:      string | null;
+  appointmentId:  string | null;
+  startedAt:      string | null;
+  completedAt:    string | null;
+  notes:          string | null;
+  treatmentItems: TreatmentItem[];
 }
 
 export interface ChangeStatusInput {

@@ -6,7 +6,10 @@ const {
   updateInvoice,
   applyDepositToInvoice,
   cancelInvoice,
+  deleteInvoice,
+  setupTreatmentSession,
 } = require("./invoice.service");
+const { generateCommission } = require("../commission/commission.service");
 
 const getAllController = async (req, res, next) => {
   try {
@@ -62,4 +65,41 @@ const applyDepositController = async (req, res, next) => {
   }
 };
 
-module.exports = { getAllController, getByIdController, createController, updateController, applyDepositController, cancelController };
+const setupTreatmentController = async (req, res, next) => {
+  try {
+    const result = await setupTreatmentSession(req.params.id);
+    return success(res, result, "Treatment session ready");
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteController = async (req, res, next) => {
+  try {
+    await deleteInvoice(req.params.id);
+    return success(res, null, "Invoice berhasil dihapus");
+  } catch (err) {
+    next(err);
+  }
+};
+
+const generateCommissionController = async (req, res, next) => {
+  try {
+    const result = await generateCommission(req.params.id);
+    return success(res, result, `${result.created} commission(s) generated`);
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = {
+  getAllController,
+  getByIdController,
+  createController,
+  updateController,
+  applyDepositController,
+  cancelController,
+  deleteController,
+  setupTreatmentController,
+  generateCommissionController,
+};

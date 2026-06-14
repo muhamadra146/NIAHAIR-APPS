@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Trash2, ChevronDown, ChevronUp, Plus, Loader2, Receipt, Pencil } from "lucide-react";
+import { Search, Trash2, ChevronDown, ChevronUp, Plus, Loader2, Receipt, Pencil, CalendarDays, ShoppingBag } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,8 @@ import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { fetchAppointments } from "@/features/appointment/api/appointment.api";
 import type { Appointment } from "@/features/appointment/types";
+import { fetchCustomers } from "@/features/customer/api/customer.api";
+import type { Customer } from "@/features/customer/types";
 import {
   fetchDeposits,
   fetchInvoices,
@@ -136,11 +138,20 @@ export function CreateInvoiceDialog({
 }: CreateInvoiceDialogProps) {
   const qc = useQueryClient();
 
+  // ── Mode: with booking or walk-in ──
+  const [mode, setMode] = useState<"booking" | "walkin">("booking");
+
   // ── Appointment selection ──
   const [selectedAppt, setSelectedAppt]           = useState<Appointment | null>(null);
   const [existingInvoiceId, setExistingInvoiceId] = useState<string | null>(
     initialExistingInvoiceId ?? null
   );
+
+  // ── Walk-in customer selection ──
+  const [selectedCustomer, setSelectedCustomer]   = useState<Customer | null>(null);
+  const [custSearch, setCustSearch]               = useState("");
+  const [custResults, setCustResults]             = useState<Customer[]>([]);
+  const custTimer = useRef<ReturnType<typeof setTimeout>>();
 
   // ── Line items ──
   const [lines, setLines]           = useState<LineItem[]>([]);
@@ -177,14 +188,36 @@ export function CreateInvoiceDialog({
     enabled:  !!existingInvoiceId && open,
   });
 
-  // Auto-load IN_PROGRESS appointments for branch
+  const [apptSearch, setApptSearch] = useState("");
+
+  // Load today's active appointments + today's invoices to exclude already-invoiced ones
+  const today = new Date().toISOString().split("T")[0];
   const { data: apptData, isLoading: apptLoading } = useQuery({
-    queryKey: ["invoice-create-appts", branchId],
-    queryFn:  () => fetchAppointments({ page: 1, limit: 100, branchId, status: "IN_PROGRESS" }),
+    queryKey: ["invoice-create-appts", branchId, today],
+    queryFn:  () => fetchAppointments({ page: 1, limit: 200, branchId, startDate: today, endDate: today }),
     enabled:  open && !!branchId && !preselectedAppointment,
     staleTime: 0,
   });
-  const inProgressAppts = apptData?.appointments ?? [];
+  const { data: todayInvoices, isLoading: invoicesLoading } = useQuery({
+    queryKey: ["invoice-create-today-invoices", branchId, today],
+    queryFn:  () => fetchInvoices({ branchId, startDate: today, endDate: today, limit: 200 }),
+    enabled:  open && !!branchId && !preselectedAppointment,
+    staleTime: 0,
+  });
+  const invoicedApptIds = new Set(
+    (todayInvoices?.data ?? [])
+      .map((inv) => inv.appointmentId)
+      .filter(Boolean) as string[]
+  );
+  const allAppts = (apptData?.appointments ?? []).filter(
+    (a) => a.status !== "CANCELLED" && a.status !== "NO_SHOW" && !invoicedApptIds.has(a.id)
+  );
+  const inProgressAppts = apptSearch.trim()
+    ? allAppts.filter((a) =>
+        a.customer.name.toLowerCase().includes(apptSearch.toLowerCase()) ||
+        a.bookingNo.toLowerCase().includes(apptSearch.toLowerCase())
+      )
+    : allAppts;
 
   // Apply preselected appointment
   useEffect(() => {
@@ -193,13 +226,26 @@ export function CreateInvoiceDialog({
     }
   }, [preselectedAppointment, open]);
 
+  // ── Customer search (walk-in mode) ──
+  function handleCustSearch(e: React.ChangeEvent<HTMLInputElement>) {
+    const q = e.target.value; setCustSearch(q);
+    clearTimeout(custTimer.current);
+    if (q.length < 1) { setCustResults([]); return; }
+    custTimer.current = setTimeout(async () => {
+      const res = await fetchCustomers({ search: q, limit: 10 });
+      setCustResults(res.data ?? []);
+    }, 300);
+  }
+
   // Reset when dialog closes
   function reset() {
+    setMode("booking");
     setSelectedAppt(null); setExistingInvoiceId(null);
+    setSelectedCustomer(null); setCustSearch(""); setCustResults([]);
     setLines([]); setItemSearch(""); setItemResults([]);
     setSelectedDeps([]); setDepOpen(false);
     setTaxable(false); setInclusive(false); setNotes(""); setError(null);
-    setEditMode(false);
+    setEditMode(false); setApptSearch("");
   }
   function handleClose(v: boolean) { if (!v) reset(); onOpenChange(v); }
 
@@ -359,7 +405,8 @@ export function CreateInvoiceDialog({
   // ── Submit ────────────────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedAppt) { setError("Pilih booking terlebih dahulu"); return; }
+    if (mode === "booking" && !selectedAppt) { setError("Pilih booking terlebih dahulu"); return; }
+    if (mode === "walkin" && !selectedCustomer) { setError("Pilih customer terlebih dahulu"); return; }
     if (lines.length === 0) { setError("Tambahkan minimal 1 item"); return; }
 
     for (const l of lines) {
@@ -415,8 +462,8 @@ export function CreateInvoiceDialog({
       }));
 
       const input: CreateInvoiceInput = {
-        customerId:    selectedAppt.customerId,
-        appointmentId: selectedAppt.id,
+        customerId:    mode === "booking" ? selectedAppt!.customerId : selectedCustomer!.id,
+        appointmentId: mode === "booking" ? selectedAppt!.id : undefined,
         items:         lineItems,
         deposits:      deposits.length > 0 ? deposits : undefined,
         notes:         notes || undefined,
@@ -473,7 +520,87 @@ export function CreateInvoiceDialog({
               <div className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
             )}
 
+            {/* ── Mode toggle ── */}
+            {!preselectedAppointment && !existingInvoiceId && (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setMode("booking"); setSelectedCustomer(null); setCustSearch(""); setCustResults([]); }}
+                  className={cn(
+                    "flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
+                    mode === "booking"
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  )}
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  Dengan Booking
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMode("walkin"); setSelectedAppt(null); setSelectedDeps([]); }}
+                  className={cn(
+                    "flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
+                    mode === "walkin"
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  )}
+                >
+                  <ShoppingBag className="h-4 w-4" />
+                  Tanpa Booking
+                </button>
+              </div>
+            )}
+
+            {/* ── Walk-in: Customer selection ── */}
+            {mode === "walkin" && !existingInvoiceId && (
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Customer <span className="text-destructive">*</span></Label>
+                {selectedCustomer ? (
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5 flex items-center justify-between gap-2">
+                    <div>
+                      <p className="font-medium text-sm">{selectedCustomer.name}</p>
+                      <p className="text-xs text-muted-foreground">{selectedCustomer.mobilePhone ?? "—"}</p>
+                    </div>
+                    <button type="button" onClick={() => { setSelectedCustomer(null); setCustSearch(""); }}
+                      className="text-muted-foreground hover:text-destructive shrink-0">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-border overflow-hidden">
+                    <div className="relative border-b border-border">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                      <input
+                        type="text"
+                        value={custSearch}
+                        onChange={handleCustSearch}
+                        placeholder="Cari nama customer atau nomor HP…"
+                        className="w-full pl-8 pr-3 py-2 text-sm bg-transparent outline-none placeholder:text-muted-foreground/60"
+                      />
+                    </div>
+                    {custResults.length > 0 ? (
+                      <div className="divide-y divide-border max-h-48 overflow-y-auto">
+                        {custResults.map((c) => (
+                          <button key={c.id} type="button" onClick={() => { setSelectedCustomer(c); setCustSearch(""); setCustResults([]); }}
+                            className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors">
+                            <p className="font-medium text-sm">{c.name}</p>
+                            <p className="text-xs text-muted-foreground">{c.mobilePhone ?? "—"}</p>
+                          </button>
+                        ))}
+                      </div>
+                    ) : custSearch.length > 0 ? (
+                      <p className="py-5 text-center text-sm text-muted-foreground">Customer tidak ditemukan.</p>
+                    ) : (
+                      <p className="py-5 text-center text-sm text-muted-foreground">Ketik nama atau nomor HP customer.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* ── Booking selection ── */}
+            {mode === "booking" && (
             <div className="space-y-2">
               <Label className="text-sm font-semibold">Booking <span className="text-destructive">*</span></Label>
 
@@ -484,9 +611,11 @@ export function CreateInvoiceDialog({
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-xs font-semibold text-primary">{selectedAppt.bookingNo}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium border border-amber-200">
-                          In Progress
-                        </span>
+                        {(() => {
+                          const sc: Record<string,string> = { BOOKED:"bg-rose-100 text-rose-700 border-rose-200", CONFIRMED:"bg-blue-100 text-blue-700 border-blue-200", CHECK_IN:"bg-violet-100 text-violet-700 border-violet-200", IN_PROGRESS:"bg-amber-100 text-amber-700 border-amber-200", COMPLETED:"bg-green-100 text-green-700 border-green-200" };
+                          const sl: Record<string,string> = { BOOKED:"Booked", CONFIRMED:"Confirmed", CHECK_IN:"Check In", IN_PROGRESS:"In Progress", COMPLETED:"Selesai" };
+                          return <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium border ${sc[selectedAppt.status] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>{sl[selectedAppt.status] ?? selectedAppt.status}</span>;
+                        })()}
                       </div>
                       <p className="font-medium text-sm mt-0.5">{selectedAppt.customer.name}</p>
                       <p className="text-xs text-muted-foreground">
@@ -549,51 +678,80 @@ export function CreateInvoiceDialog({
               ) : (
                 /* Appointment list */
                 <div className="rounded-lg border border-border overflow-hidden">
-                  {apptLoading ? (
+                  {/* Search */}
+                  <div className="relative border-b border-border">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <input
+                      type="text"
+                      value={apptSearch}
+                      onChange={(e) => setApptSearch(e.target.value)}
+                      placeholder="Cari nama customer atau no. booking…"
+                      className="w-full pl-8 pr-3 py-2 text-sm bg-transparent outline-none placeholder:text-muted-foreground/60"
+                    />
+                  </div>
+
+                  {(apptLoading || invoicesLoading) ? (
                     <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" /> Memuat booking…
                     </div>
                   ) : inProgressAppts.length === 0 ? (
                     <p className="py-6 text-center text-sm text-muted-foreground">
-                      Tidak ada booking In Progress hari ini.
+                      {apptSearch ? "Tidak ada booking ditemukan." : "Tidak ada booking aktif hari ini."}
                     </p>
                   ) : (
                     <div className="divide-y divide-border max-h-56 overflow-y-auto">
-                      {inProgressAppts.map((a) => (
-                        <button
-                          key={a.id}
-                          type="button"
-                          onClick={() => handleSelectAppointment(a)}
-                          className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-mono text-[10px] font-medium text-primary">{a.bookingNo}</span>
-                              </div>
-                              <p className="font-medium text-sm truncate">{a.customer.name}</p>
-                              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                                <span className="text-xs text-muted-foreground">
-                                  {new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-                                  {" – "}
-                                  {new Date(a.endTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-                                </span>
-                                {a.services.length > 0 && (
-                                  <span className="text-[10px] text-muted-foreground/70">
-                                    {a.services.map((s) => s.serviceItem.name).join(", ")}
+                      {inProgressAppts.map((a) => {
+                        const statusColors: Record<string, string> = {
+                          BOOKED:      "bg-rose-100 text-rose-700",
+                          CONFIRMED:   "bg-blue-100 text-blue-700",
+                          CHECK_IN:    "bg-violet-100 text-violet-700",
+                          IN_PROGRESS: "bg-amber-100 text-amber-700",
+                          COMPLETED:   "bg-green-100 text-green-700",
+                        };
+                        const statusLabels: Record<string, string> = {
+                          BOOKED: "Booked", CONFIRMED: "Confirmed", CHECK_IN: "Check In",
+                          IN_PROGRESS: "In Progress", COMPLETED: "Selesai",
+                        };
+                        return (
+                          <button
+                            key={a.id}
+                            type="button"
+                            onClick={() => handleSelectAppointment(a)}
+                            className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-mono text-[10px] font-medium text-primary">{a.bookingNo}</span>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${statusColors[a.status] ?? "bg-gray-100 text-gray-600"}`}>
+                                    {statusLabels[a.status] ?? a.status}
                                   </span>
-                                )}
+                                </div>
+                                <p className="font-medium text-sm truncate">{a.customer.name}</p>
+                                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                  <span className="text-xs text-muted-foreground">
+                                    {new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                                    {" – "}
+                                    {new Date(a.endTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                  {a.services.length > 0 && (
+                                    <span className="text-[10px] text-muted-foreground/70">
+                                      {a.services.map((s) => s.serviceItem.name).join(", ")}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
+                              <Plus className="h-4 w-4 text-primary shrink-0" />
                             </div>
-                            <Plus className="h-4 w-4 text-primary shrink-0" />
-                          </div>
-                        </button>
-                      ))}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
               )}
             </div>
+            )} {/* end mode === "booking" */}
 
             {/* ── Existing invoice view ── */}
             {existingInvoiceId && existingLoading && (
@@ -791,7 +949,7 @@ export function CreateInvoiceDialog({
                   onChange={handleItemSearch}
                   placeholder="Cari layanan atau produk…"
                   className="pl-8"
-                  disabled={!selectedAppt}
+                  disabled={mode === "booking" ? !selectedAppt : !selectedCustomer}
                 />
                 {itemResults.length > 0 && (
                   <div className="absolute z-20 mt-1 w-full rounded-md border border-input bg-background shadow-lg max-h-48 overflow-y-auto">
@@ -815,8 +973,11 @@ export function CreateInvoiceDialog({
                   </div>
                 )}
               </div>
-              {!selectedAppt && (
+              {mode === "booking" && !selectedAppt && (
                 <p className="text-xs text-muted-foreground">Pilih booking terlebih dahulu.</p>
+              )}
+              {mode === "walkin" && !selectedCustomer && (
+                <p className="text-xs text-muted-foreground">Pilih customer terlebih dahulu.</p>
               )}
 
               {lines.length > 0 && (
@@ -1009,7 +1170,11 @@ export function CreateInvoiceDialog({
                 <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={submitting}>
                   Batal
                 </Button>
-                <Button type="submit" disabled={submitting || !selectedAppt || lines.length === 0}>
+                <Button type="submit" disabled={
+                  submitting ||
+                  (mode === "booking" ? !selectedAppt : !selectedCustomer) ||
+                  lines.length === 0
+                }>
                   {submitting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Membuat…</> : "Buat Invoice"}
                 </Button>
               </>

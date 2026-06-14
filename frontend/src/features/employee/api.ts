@@ -17,19 +17,19 @@ export async function fetchEmployees(
   params: EmployeeListParams = {},
 ): Promise<PaginatedResponse<Employee>> {
   const { data } = await api.get<ApiResponse<PaginatedResponse<Employee>>>(
-    "/employee",
+    "/employees",
     { params },
   );
   return data.data;
 }
 
 export async function fetchEmployee(id: string): Promise<Employee> {
-  const { data } = await api.get<ApiResponse<Employee>>(`/employee/${id}`);
+  const { data } = await api.get<ApiResponse<Employee>>(`/employees/${id}`);
   return data.data;
 }
 
 export async function createEmployee(input: CreateEmployeeInput): Promise<Employee> {
-  const { data } = await api.post<ApiResponse<Employee>>("/employee", input);
+  const { data } = await api.post<ApiResponse<Employee>>("/employees", input);
   return data.data;
 }
 
@@ -37,14 +37,14 @@ export async function updateEmployee(
   id: string,
   input: UpdateEmployeeInput,
 ): Promise<Employee> {
-  const { data } = await api.put<ApiResponse<Employee>>(`/employee/${id}`, input);
+  const { data } = await api.put<ApiResponse<Employee>>(`/employees/${id}`, input);
   return data.data;
 }
 
 // ── Employee Roles ────────────────────────────────────────────────────────────
 
 export async function fetchEmployeeRoles(): Promise<EmployeeRole[]> {
-  const { data } = await api.get<ApiResponse<EmployeeRole[]>>("/employee-role");
+  const { data } = await api.get<ApiResponse<EmployeeRole[]>>("/employee-roles");
   return data.data;
 }
 

@@ -92,7 +92,7 @@ const createAppointment = async (body, userId, createdByEmployeeId = null) => {
   const {
     customerId, branchId, visitDate, startTime, endTime,
     type = "SALON", homeServiceAddress,
-    notes, estimatedTotal, services = [], staffIds = [],
+    notes, estimatedTotal, services = [], staffsBySlot = [],
   } = body;
 
   const customer = await findCustomerById(customerId);
@@ -101,10 +101,11 @@ const createAppointment = async (body, userId, createdByEmployeeId = null) => {
   const branch = await findBranchById(branchId);
   if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
 
-  if (staffIds.length > 0) {
+  if (staffsBySlot.length > 0) {
+    const employeeIds  = staffsBySlot.map((s) => s.employeeId);
     const available    = await getAvailableStaff({ date: visitDate, branchId, startTime, endTime });
     const availableSet = new Set(available.map((s) => s.employeeId));
-    const unavailable  = staffIds.filter((id) => !availableSet.has(id));
+    const unavailable  = employeeIds.filter((id) => !availableSet.has(id));
     if (unavailable.length > 0) {
       throw new AppError("Staff not available at selected time", StatusCodes.UNPROCESSABLE_ENTITY);
     }
@@ -148,7 +149,7 @@ const createAppointment = async (body, userId, createdByEmployeeId = null) => {
     notes:           s.notes ?? null,
   }));
 
-  return createWithTransaction({ appointmentData, services: mappedServices, staffIds, userId });
+  return createWithTransaction({ appointmentData, services: mappedServices, staffsBySlot, userId });
 };
 
 // ── Update fields ─────────────────────────────────────────────────────
@@ -164,19 +165,20 @@ const updateAppointmentById = async (id, body, userId) => {
     throw new AppError("Cannot modify a cancelled appointment", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
-  const { visitDate, startTime, endTime, type, homeServiceAddress, notes, estimatedTotal, staffIds } = body;
+  const { visitDate, startTime, endTime, type, homeServiceAddress, notes, estimatedTotal, staffsBySlot } = body;
 
-  const hasUpdate = visitDate !== undefined || startTime  !== undefined ||
-                    endTime   !== undefined || notes      !== undefined ||
-                    estimatedTotal !== undefined || staffIds !== undefined ||
+  const hasUpdate = visitDate !== undefined || startTime     !== undefined ||
+                    endTime   !== undefined || notes         !== undefined ||
+                    estimatedTotal !== undefined || staffsBySlot !== undefined ||
                     type !== undefined || homeServiceAddress !== undefined;
 
   if (!hasUpdate) {
     throw new AppError("No fields to update", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
-  // Validate staff availability when staffIds are being set
-  if (staffIds !== undefined && staffIds.length > 0) {
+  // Validate staff availability when staffsBySlot are being set
+  if (staffsBySlot !== undefined && staffsBySlot.length > 0) {
+    const employeeIds      = staffsBySlot.map((s) => s.employeeId);
     const effectiveDateStr = visitDate
       ? visitDate.split("T")[0]
       : appointment.visitDate.toISOString().split("T")[0];
@@ -191,7 +193,7 @@ const updateAppointmentById = async (id, body, userId) => {
       excludeAppointmentId: id,
     });
     const availableSet = new Set(available.map((s) => s.employeeId));
-    const unavailable  = staffIds.filter((empId) => !availableSet.has(empId));
+    const unavailable  = employeeIds.filter((empId) => !availableSet.has(empId));
     if (unavailable.length > 0) {
       throw new AppError("Staff not available at selected time", StatusCodes.UNPROCESSABLE_ENTITY);
     }
@@ -211,7 +213,7 @@ const updateAppointmentById = async (id, body, userId) => {
   if (type                !== undefined) data.type                = type;
   if (homeServiceAddress  !== undefined) data.homeServiceAddress  = homeServiceAddress;
 
-  return updateWithStaff(id, data, staffIds);
+  return updateWithStaff(id, data, staffsBySlot);
 };
 
 // ── Change status ─────────────────────────────────────────────────────

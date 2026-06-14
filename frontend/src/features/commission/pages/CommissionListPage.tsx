@@ -33,7 +33,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 export function CommissionListPage() {
   const { user, branchId } = useAuthStore();
-  const isSuperAdmin = user?.role === "SUPER_ADMIN";
+  const isSuperAdmin = user?.role?.code === "SUPER_ADMIN";
 
   const [page, setPage]         = useState(1);
   const [status, setStatus]     = useState("");

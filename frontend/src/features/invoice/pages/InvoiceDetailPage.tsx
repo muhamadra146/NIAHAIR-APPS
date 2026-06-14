@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { ChevronLeft, CreditCard, Wallet, XCircle } from "lucide-react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { ChevronLeft, CreditCard, Wallet, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,12 +14,15 @@ import { fetchPaymentMethods } from "@/features/settings/api/paymentMethod.api";
 import { useQuery } from "@tanstack/react-query";
 import {
   useInvoice,
-  useCancelInvoice,
   useAddPayment,
   useApplyDeposit,
   useCustomerAvailableDeposits,
+  useDeleteInvoice,
 } from "../hooks";
 import type { InvoiceStatus } from "../types";
+import { useAppointment } from "@/features/appointment/hooks";
+import { fetchCommissions } from "@/features/commission/api";
+import { TreatmentAssignmentSection } from "../components/TreatmentAssignmentSection";
 
 const STATUS_LABEL: Record<InvoiceStatus, string> = {
   UNPAID:    "Belum Bayar",
@@ -35,14 +38,26 @@ const STATUS_COLOR: Record<InvoiceStatus, string> = {
 
 export function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { data: invoice, isLoading, isError } = useInvoice(id!);
-  const cancelMutation  = useCancelInvoice(id!);
   const paymentMutation = useAddPayment(id!);
   const depositMutation = useApplyDeposit(id!);
+  const deleteMutation  = useDeleteInvoice(id!);
 
   const [payOpen, setPayOpen]     = useState(false);
   const [depOpen, setDepOpen]     = useState(false);
-  const [cancelConfirm, setCancel] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  const appointmentId = invoice?.appointmentId ?? null;
+  const { data: appointment } = useAppointment(appointmentId ?? "");
+
+  const { data: commissionsData } = useQuery({
+    queryKey:  ["commissions", "invoice", id],
+    queryFn:   () => fetchCommissions({ invoiceId: id!, limit: 1 }),
+    enabled:   !!id,
+    staleTime: 0,
+  });
+  const hasExistingCommission = (commissionsData?.meta?.total ?? 0) > 0;
 
   if (isLoading) {
     return (
@@ -68,7 +83,6 @@ export function InvoiceDetailPage() {
   }
 
   const canPay    = invoice.status === "UNPAID";
-  const canCancel = invoice.status !== "PAID" && invoice.status !== "CANCELLED";
   const outstanding = Number(invoice.outstandingAmount);
 
   return (
@@ -105,10 +119,10 @@ export function InvoiceDetailPage() {
                   </Button>
                 </>
               )}
-              {canCancel && (
-                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setCancel(true)}>
-                  <XCircle className="mr-1.5 h-3.5 w-3.5" />
-                  Batalkan
+              {invoice.status !== "PAID" && (
+                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteConfirm(true)}>
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  Hapus
                 </Button>
               )}
             </div>
@@ -208,6 +222,20 @@ export function InvoiceDetailPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Treatment assignment & commission */}
+        <Card>
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="text-sm font-semibold">Assignment Pekerjaan</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-4">
+            <TreatmentAssignmentSection
+              invoiceId={id!}
+              appointment={appointmentId ? (appointment ?? null) : null}
+              hasExistingCommission={hasExistingCommission}
+            />
+          </CardContent>
+        </Card>
       </div>
 
       {/* Add Payment Dialog */}
@@ -235,22 +263,30 @@ export function InvoiceDetailPage() {
         isPending={depositMutation.isPending}
       />
 
-      {/* Cancel confirm */}
-      <Dialog open={cancelConfirm} onOpenChange={setCancel}>
+      {/* Delete confirm */}
+      <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle>Batalkan Invoice?</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Hapus Invoice?</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground py-2">
-            Invoice <span className="font-mono font-medium">{invoice.invoiceNo}</span> akan dibatalkan. Tindakan ini tidak dapat dibalik.
+            Invoice <span className="font-mono font-medium">{invoice?.invoiceNo}</span> akan dihapus permanen dari sistem. Tindakan ini tidak dapat dibalik.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCancel(false)}>Tidak</Button>
-            <Button variant="destructive" disabled={cancelMutation.isPending}
-              onClick={async () => { await cancelMutation.mutateAsync(); setCancel(false); }}>
-              {cancelMutation.isPending ? "Membatalkan…" : "Ya, Batalkan"}
+            <Button variant="outline" onClick={() => setDeleteConfirm(false)}>Batal</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={async () => {
+                await deleteMutation.mutateAsync();
+                setDeleteConfirm(false);
+                navigate("/invoices");
+              }}
+            >
+              {deleteMutation.isPending ? "Menghapus…" : "Ya, Hapus"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </PageContainer>
   );
 }

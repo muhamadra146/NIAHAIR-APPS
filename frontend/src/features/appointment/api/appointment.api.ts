@@ -16,15 +16,15 @@ export interface ServiceItem {
 }
 
 interface ServiceItemListData {
-  items: ServiceItem[];
-  meta:  PaginatedResponse<ServiceItem>["meta"];
+  data: ServiceItem[];
+  meta: PaginatedResponse<ServiceItem>["meta"];
 }
 
 export const fetchServiceItems = async (search: string) => {
   const res = await api.get<ApiResponse<ServiceItemListData>>("/items", {
     params: { itemType: "SERVICE", search: search || undefined, limit: 10, page: 1 },
   });
-  return res.data.data.items ?? [];
+  return res.data.data.data ?? [];
 };
 
 interface AppointmentListData {

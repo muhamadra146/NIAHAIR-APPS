@@ -43,6 +43,17 @@ const findById = (id) =>
 const countToday = (startOfDay) =>
   prisma.invoice.count({ where: { createdAt: { gte: startOfDay } } });
 
+const findMaxInvoiceSeqToday = async (prefix) => {
+  const result = await prisma.invoice.findFirst({
+    where:   { invoiceNo: { startsWith: prefix } },
+    orderBy: { invoiceNo: "desc" },
+    select:  { invoiceNo: true },
+  });
+  if (!result) return 0;
+  const seq = parseInt(result.invoiceNo.split("-").pop(), 10);
+  return isNaN(seq) ? 0 : seq;
+};
+
 // ── Lookup helpers ────────────────────────────────────────────────────
 
 const findCustomerById = (id) =>
@@ -236,6 +247,51 @@ const updateWithTransaction = ({ invoiceId, invoiceData, itemsData, oldStatus, u
     return tx.invoice.findUnique({ where: { id: invoiceId }, include: INCLUDE });
   });
 
+// ── Delete ────────────────────────────────────────────────────────────
+
+const deleteWithTransaction = (invoiceId) =>
+  prisma.$transaction(async (tx) => {
+    // Get treatment session IDs linked to this invoice
+    const sessions = await tx.treatmentSession.findMany({
+      where:  { invoiceId },
+      select: { id: true },
+    });
+    const sessionIds = sessions.map((s) => s.id);
+
+    if (sessionIds.length > 0) {
+      // Get treatment item IDs
+      const tItems = await tx.treatmentItem.findMany({
+        where:  { treatmentSessionId: { in: sessionIds } },
+        select: { id: true },
+      });
+      const tItemIds = tItems.map((t) => t.id);
+
+      if (tItemIds.length > 0) {
+        // Get materialUsage IDs first
+        const usages = await tx.materialUsage.findMany({
+          where:  { treatmentItemId: { in: tItemIds } },
+          select: { id: true },
+        });
+        if (usages.length > 0) {
+          await tx.materialUsageItem.deleteMany({ where: { materialUsageId: { in: usages.map((u) => u.id) } } });
+          await tx.materialUsage.deleteMany({ where: { id: { in: usages.map((u) => u.id) } } });
+        }
+        await tx.treatmentAssignment.deleteMany({ where: { treatmentItemId: { in: tItemIds } } });
+        await tx.treatmentItem.deleteMany({ where: { id: { in: tItemIds } } });
+      }
+
+      await tx.treatmentMedia.deleteMany({ where: { treatmentSessionId: { in: sessionIds } } });
+      await tx.treatmentSession.deleteMany({ where: { id: { in: sessionIds } } });
+    }
+
+    await tx.invoiceDeposit.deleteMany({ where: { invoiceId } });
+    await tx.invoiceStatusHistory.deleteMany({ where: { invoiceId } });
+    await tx.payment.deleteMany({ where: { invoiceId } });
+    await tx.commission.deleteMany({ where: { invoiceId } });
+    await tx.invoiceItem.deleteMany({ where: { invoiceId } });
+    await tx.invoice.delete({ where: { id: invoiceId } });
+  });
+
 // ── Cancel ────────────────────────────────────────────────────────────
 
 const cancelWithTransaction = ({ invoice, userId }) =>
@@ -263,10 +319,12 @@ module.exports = {
   count,
   findById,
   countToday,
+  findMaxInvoiceSeqToday,
   findCustomerById,
   findBranchById,
   findItemById,
   findItemUnit,
+  deleteWithTransaction,
   findActivePrice,
   findActivePriceGlobal,
   findTreatmentSessionsByIds,

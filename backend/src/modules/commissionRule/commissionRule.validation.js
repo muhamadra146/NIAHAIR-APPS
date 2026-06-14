@@ -3,6 +3,7 @@ const { object, string, pipe, optional, boolean, minLength, picklist, number, mi
 const createCommissionRuleSchema = object({
   employeeId:           pipe(string(), minLength(1, "Employee ID is required")),
   commissionCategoryId: pipe(string(), minLength(1, "Commission category ID is required")),
+  slotKey:              optional(string()),
   commissionType:       picklist(["PERCENTAGE", "FIXED_AMOUNT"], "Commission type must be PERCENTAGE or FIXED_AMOUNT"),
   commissionValue:      pipe(number("Commission value must be a number"), minValue(0.01, "Commission value must be positive")),
   effectiveDate:        pipe(string(), minLength(1, "Effective date is required")),

@@ -58,6 +58,7 @@ export interface EmployeeListParams {
   limit?:    number;
   search?:   string;
   isActive?: boolean;
+  branchId?: string;
 }
 
 export interface CreateEmployeeInput {

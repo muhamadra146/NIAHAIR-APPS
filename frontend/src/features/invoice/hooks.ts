@@ -5,6 +5,7 @@ import {
   fetchInvoice,
   createInvoice,
   cancelInvoice,
+  deleteInvoice,
   fetchPayments,
   addPayment,
   applyDeposit,
@@ -73,6 +74,18 @@ export function useCancelInvoice(id: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["invoices"] });
       toast.success("Invoice dibatalkan");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useDeleteInvoice(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => deleteInvoice(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      toast.success("Invoice berhasil dihapus");
     },
     onError: (err: Error) => toast.error(err.message),
   });

@@ -49,7 +49,7 @@ const COLUMNS: {
   { status: "IN_PROGRESS", label: "In Progress", colCls: "border-amber-200 bg-amber-50/40",  headCls: "bg-amber-100 text-amber-700",  countCls: "bg-amber-200 text-amber-800" },
   { status: "COMPLETED",   label: "Selesai",     colCls: "border-green-200 bg-green-50/40",  headCls: "bg-green-100 text-green-700",  countCls: "bg-green-200 text-green-800" },
   { status: "CANCELLED",   label: "Cancelled",   colCls: "border-gray-200 bg-gray-50/40",    headCls: "bg-gray-100 text-gray-500",    countCls: "bg-gray-200 text-gray-600" },
-  { status: "NO_SHOW",     label: "No Show",     colCls: "border-gray-200 bg-gray-50/40",    headCls: "bg-gray-100 text-gray-500",    countCls: "bg-gray-200 text-gray-600" },
+  { status: "NO_SHOW",     label: "Reschedule",  colCls: "border-gray-200 bg-gray-50/40",    headCls: "bg-gray-100 text-gray-500",    countCls: "bg-gray-200 text-gray-600" },
 ];
 
 // Status transitions allowed by the backend

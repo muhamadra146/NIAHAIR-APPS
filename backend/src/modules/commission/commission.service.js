@@ -23,12 +23,13 @@ const D = (v) => new Prisma.Decimal(String(v));
 
 // ── Management ────────────────────────────────────────────────────────
 
-const listCommissions = async ({ page, limit, employeeId, status, branchId, startDate, endDate }) => {
+const listCommissions = async ({ page, limit, employeeId, status, branchId, invoiceId, startDate, endDate }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
   const where = {};
 
   if (employeeId) where.employeeId = employeeId;
   if (status)     where.status     = status;
+  if (invoiceId)  where.invoiceId  = invoiceId;
   if (branchId)   where.invoice    = { branchId };
 
   if (startDate || endDate) {
@@ -111,6 +112,7 @@ const generateCommission = (invoiceId) =>
           const rule = await findActiveRuleForGeneration(
             assignment.employeeId,
             commissionCategoryId,
+            assignment.slotKey ?? null,
             tx
           );
           if (!rule) continue;

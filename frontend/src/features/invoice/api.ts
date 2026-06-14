@@ -50,6 +50,10 @@ export async function cancelInvoice(id: string): Promise<Invoice> {
   return data.data;
 }
 
+export async function deleteInvoice(id: string): Promise<void> {
+  await api.delete(`/invoices/${id}`);
+}
+
 // ── Payments ──────────────────────────────────────────────────────────────────
 
 export async function fetchPayments(invoiceId: string): Promise<InvoicePayment[]> {
@@ -101,6 +105,11 @@ export async function updateDeposit(id: string, input: import("./types").UpdateD
 
 export async function deleteDeposit(id: string): Promise<void> {
   await api.delete(`/deposits/${id}`);
+}
+
+export async function linkDepositToAppointment(depositId: string, appointmentId: string): Promise<Deposit> {
+  const { data } = await api.patch<ApiResponse<Deposit>>(`/deposits/${depositId}/link-appointment`, { appointmentId });
+  return data.data;
 }
 
 export async function refundDeposit(id: string): Promise<Deposit> {
@@ -239,10 +248,10 @@ export interface ItemSearchResult {
 }
 
 export async function fetchInvoiceItems(search: string): Promise<ItemSearchResult[]> {
-  const { data } = await api.get<{ data: { items: ItemSearchResult[] } }>("/items", {
-    params: { search: search || undefined, limit: 20, page: 1 },
+  const { data } = await api.get<{ data: { data: ItemSearchResult[] } }>("/items", {
+    params: { search: search || undefined, limit: 20, page: 1, isActive: true },
   });
-  return data.data.items ?? [];
+  return data.data.data ?? [];
 }
 
 export async function fetchFullItem(itemId: string): Promise<ItemSearchResult> {
