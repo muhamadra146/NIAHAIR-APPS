@@ -109,7 +109,8 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   }
 
   // Resolve price and build line items
-  const itemsData   = [];
+  const itemsData    = [];
+  const discountTypes = []; // parallel array — saved via raw SQL after create
   let totalSubtotal = D("0");
   let totalDiscount = D("0");
   let totalTax      = D("0");
@@ -143,9 +144,13 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
       }
       price = D(priceRecord.sellingPrice);
     }
-    const qty       = D(line.qty);
-    const discount  = D(line.discountAmount ?? 0);
-    const grossLine = price.mul(qty).sub(discount);
+    const qty             = D(line.qty);
+    const discountType    = line.discountType ?? "AMOUNT";
+    const discountPercent = discountType === "PERCENT" ? D(line.discountPercent ?? 0) : null;
+    const discount        = discountType === "PERCENT"
+      ? price.mul(qty).mul(discountPercent).div(D("100")).toDecimalPlaces(2)
+      : D(line.discountAmount ?? 0);
+    const grossLine       = price.mul(qty).sub(discount);
 
     const lineTaxable = taxable && (line.taxable ?? false);
 
@@ -167,6 +172,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
     totalDiscount = totalDiscount.add(discount);
     totalTax      = totalTax.add(itemTax);
 
+    discountTypes.push(discountType);
     itemsData.push({
       itemId:   line.itemId,
       unitId:   line.unitId,
@@ -289,6 +295,22 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
     userId,
   });
 
+  // Save discountType via raw SQL — Prisma client doesn't know this column yet
+  // (pending `npx prisma generate` after migration). Match by itemId+unitId+price
+  // which is unique per invoice line.
+  for (let i = 0; i < discountTypes.length; i++) {
+    if (discountTypes[i] === "PERCENT") {
+      await prisma.$executeRaw`
+        UPDATE invoice_items
+        SET "discountType" = 'PERCENT'
+        WHERE "invoiceId" = ${invoice.id}
+          AND "itemId"    = ${itemsData[i].itemId}
+          AND "unitId"    = ${itemsData[i].unitId}
+          AND price       = ${itemsData[i].price}
+      `;
+    }
+  }
+
   // Stock OUT on invoice creation — physical goods are consumed at this point
   await generateStockMovement(invoice.id);
 
@@ -323,7 +345,8 @@ const updateInvoice = async (id, body, userId) => {
   const branchId = existing.branchId;
 
   // Re-resolve prices and build new line items (same logic as createInvoice)
-  const itemsData   = [];
+  const itemsData    = [];
+  const discountTypes = [];
   let totalSubtotal = D("0");
   let totalDiscount = D("0");
   let totalTax      = D("0");
@@ -349,10 +372,14 @@ const updateInvoice = async (id, body, userId) => {
       price = D(priceRecord.sellingPrice);
     }
 
-    const qty       = D(line.qty);
-    const discount  = D(line.discountAmount ?? 0);
-    const grossLine = price.mul(qty).sub(discount);
-    const lineTaxable = taxable && (line.taxable ?? false);
+    const qty             = D(line.qty);
+    const discountType    = line.discountType ?? "AMOUNT";
+    const discountPercent = discountType === "PERCENT" ? D(line.discountPercent ?? 0) : null;
+    const discount        = discountType === "PERCENT"
+      ? price.mul(qty).mul(discountPercent).div(D("100")).toDecimalPlaces(2)
+      : D(line.discountAmount ?? 0);
+    const grossLine       = price.mul(qty).sub(discount);
+    const lineTaxable     = taxable && (line.taxable ?? false);
 
     let lineSubtotal, itemTax;
     if (!lineTaxable) {
@@ -370,6 +397,7 @@ const updateInvoice = async (id, body, userId) => {
     totalDiscount = totalDiscount.add(discount);
     totalTax      = totalTax.add(itemTax);
 
+    discountTypes.push(discountType);
     itemsData.push({
       itemId:   line.itemId,
       unitId:   line.unitId,
@@ -412,6 +440,20 @@ const updateInvoice = async (id, body, userId) => {
     oldStatus: existing.status,
     userId,
   });
+
+  // Save discountType via raw SQL — Prisma client doesn't know this column yet
+  for (let i = 0; i < discountTypes.length; i++) {
+    if (discountTypes[i] === "PERCENT") {
+      await prisma.$executeRaw`
+        UPDATE invoice_items
+        SET "discountType" = 'PERCENT'
+        WHERE "invoiceId" = ${id}
+          AND "itemId"    = ${itemsData[i].itemId}
+          AND "unitId"    = ${itemsData[i].unitId}
+          AND price       = ${itemsData[i].price}
+      `;
+    }
+  }
 
   // Re-sync to Accurate
   await createSyncJob({ entityType: "INVOICE", entityId: id, direction: "APP_TO_ACCURATE" });

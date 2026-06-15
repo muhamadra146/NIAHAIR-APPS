@@ -1240,7 +1240,11 @@ model InvoiceItem {
 
   price Decimal @db.Decimal(18, 2)
 
-  discount Decimal @default(0) @db.Decimal(18, 2)
+  discount        Decimal  @default(0) @db.Decimal(18, 2)
+
+  discountType    String   @default("AMOUNT")
+
+  discountPercent Decimal? @db.Decimal(5, 2)
 
   subtotal Decimal @db.Decimal(18, 2)
 

@@ -26,12 +26,26 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
 
   const addEntries = invoice.items.map((line) => {
     const entry = {
-      itemNo:         line.item.itemCode,
-      itemUnitName:   line.unit.name,
-      quantity:       Number(line.qty),
-      unitPrice:      Number(line.price),
-      discountAmount: Number(line.discount ?? 0),
+      itemNo:       line.item.itemCode,
+      itemUnitName: line.unit.name,
+      quantity:     Number(line.qty),
+      unitPrice:    Number(line.price),
     };
+
+    // Route discount to the correct Accurate field based on discountType:
+    //   AMOUNT → itemCashDiscount (Rp nominal, no rounding loss)
+    //   PERCENT → itemDiscPercent (percentage, Accurate computes the nominal)
+    const discountAbs = Number(line.discount ?? 0);
+    if (discountAbs > 0) {
+      if (line.discountType === "PERCENT") {
+        const lineTotal = Number(line.price) * Number(line.qty);
+        if (lineTotal > 0) {
+          entry.itemDiscPercent = parseFloat(((discountAbs / lineTotal) * 100).toFixed(4));
+        }
+      } else {
+        entry.itemCashDiscount = discountAbs;
+      }
+    }
 
     // INVENTORY items require a warehouse; SERVICE items do not affect stock
     if (line.item.itemType === "INVENTORY" && warehouse?.accurateWarehouseId) {

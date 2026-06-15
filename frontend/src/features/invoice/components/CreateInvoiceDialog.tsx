@@ -44,16 +44,17 @@ interface ItemUnitOption {
 }
 
 interface LineItem {
-  itemId:     string;
-  itemName:   string;
-  itemCode:   string;
-  itemType:   string;
-  unitId:     string;
-  qty:        string;
-  price:      string;
-  discount:   string;
-  itemUnits:  ItemUnitOption[];
-  itemPrices: ItemPriceOption[];
+  itemId:       string;
+  itemName:     string;
+  itemCode:     string;
+  itemType:     string;
+  unitId:       string;
+  qty:          string;
+  price:        string;
+  discount:     string;
+  discountType: "AMOUNT" | "PERCENT";
+  itemUnits:    ItemUnitOption[];
+  itemPrices:   ItemPriceOption[];
 }
 
 interface SelectedDeposit {
@@ -84,9 +85,10 @@ function buildLineFromItem(
     unitId,
     qty:        "1",
     price:      resolvePrice(item.itemPrices ?? [], unitId, branchId),
-    discount:   "0",
-    itemUnits:  item.itemUnits,
-    itemPrices: item.itemPrices ?? [],
+    discount:     "0",
+    discountType: "AMOUNT",
+    itemUnits:    item.itemUnits,
+    itemPrices:   item.itemPrices ?? [],
   };
 }
 
@@ -358,7 +360,12 @@ export function CreateInvoiceDialog({
 
   // ── Estimate totals (client-side preview) ─────────────────────────────
   const subtotalEst = lines.reduce((sum, l) => {
-    const gross = (parseFloat(l.price) || 0) * (parseFloat(l.qty) || 1) - (parseFloat(l.discount) || 0);
+    const price = parseFloat(l.price) || 0;
+    const qty   = parseFloat(l.qty) || 1;
+    const disc  = parseFloat(l.discount) || 0;
+    const gross = l.discountType === "PERCENT"
+      ? price * qty * (1 - disc / 100)
+      : price * qty - disc;
     return sum + Math.max(0, gross);
   }, 0);
   const taxEst         = taxable && !inclusiveTax ? subtotalEst * 0.11 : 0;
@@ -378,16 +385,17 @@ export function CreateInvoiceDialog({
       const newLines: LineItem[] = existingInvoice.items.map((li, idx) => {
         const full = fullItems[idx];
         return {
-          itemId:     li.itemId,
-          itemName:   full.name,
-          itemCode:   full.itemCode,
-          itemType:   full.itemType,
-          unitId:     li.unitId,
-          qty:        String(li.qty),
-          price:      String(li.price),
-          discount:   String(li.discount),
-          itemUnits:  full.itemUnits ?? [],
-          itemPrices: full.itemPrices ?? [],
+          itemId:       li.itemId,
+          itemName:     full.name,
+          itemCode:     full.itemCode,
+          itemType:     full.itemType,
+          unitId:       li.unitId,
+          qty:          String(li.qty),
+          price:        String(li.price),
+          discount:     li.discountType === "PERCENT" ? String(li.discountPercent ?? "0") : String(li.discount),
+          discountType: (li.discountType as "AMOUNT" | "PERCENT") ?? "AMOUNT",
+          itemUnits:    full.itemUnits ?? [],
+          itemPrices:   full.itemPrices ?? [],
         };
       });
       setLines(newLines);
@@ -429,12 +437,14 @@ export function CreateInvoiceDialog({
 
     try {
       const lineItems: CreateInvoiceItemInput[] = lines.map((l) => ({
-        itemId:         l.itemId,
-        unitId:         l.unitId,
-        qty:            parseFloat(l.qty) || 1,
-        price:          parseFloat(l.price) || undefined,
-        discountAmount: parseFloat(l.discount) || 0,
-        taxable:        false,
+        itemId:          l.itemId,
+        unitId:          l.unitId,
+        qty:             parseFloat(l.qty) || 1,
+        price:           parseFloat(l.price) || undefined,
+        discountType:    l.discountType,
+        discountAmount:  l.discountType === "AMOUNT" ? (parseFloat(l.discount) || 0) : 0,
+        discountPercent: l.discountType === "PERCENT" ? (parseFloat(l.discount) || 0) : undefined,
+        taxable:         false,
       }));
 
       // ── Update existing invoice ──
@@ -983,7 +993,7 @@ export function CreateInvoiceDialog({
               {lines.length > 0 && (
                 <div className="rounded-md border border-border overflow-hidden">
                   {/* Header */}
-                  <div className="grid grid-cols-[1fr_90px_60px_90px_72px_28px] gap-1.5 bg-muted/50 px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  <div className="grid grid-cols-[1fr_90px_60px_90px_100px_28px] gap-1.5 bg-muted/50 px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
                     <span>Item</span>
                     <span>Satuan</span>
                     <span>Qty</span>
@@ -992,13 +1002,17 @@ export function CreateInvoiceDialog({
                     <span />
                   </div>
                   {lines.map((line, idx) => {
-                    const sub = Math.max(0,
-                      (parseFloat(line.price) || 0) * (parseFloat(line.qty) || 1) - (parseFloat(line.discount) || 0)
+                    const _price = parseFloat(line.price) || 0;
+                    const _qty   = parseFloat(line.qty) || 1;
+                    const _disc  = parseFloat(line.discount) || 0;
+                    const sub    = Math.max(0, line.discountType === "PERCENT"
+                      ? _price * _qty * (1 - _disc / 100)
+                      : _price * _qty - _disc
                     );
                     return (
                       <div
                         key={idx}
-                        className="border-t border-border/50 grid grid-cols-[1fr_90px_60px_90px_72px_28px] gap-1.5 items-center px-2.5 py-2"
+                        className="border-t border-border/50 grid grid-cols-[1fr_90px_60px_90px_100px_28px] gap-1.5 items-center px-2.5 py-2"
                       >
                         {/* Item name */}
                         <div className="min-w-0">
@@ -1043,13 +1057,30 @@ export function CreateInvoiceDialog({
                           placeholder="0"
                         />
                         {/* Diskon */}
-                        <Input
-                          type="number" min="0" step="1"
-                          value={line.discount}
-                          onChange={(e) => updateLine(idx, "discount", e.target.value)}
-                          className="h-8 text-xs px-2"
-                          placeholder="0"
-                        />
+                        <div className="flex gap-1 items-center">
+                          <button
+                            type="button"
+                            onClick={() => updateLine(idx, "discountType", line.discountType === "AMOUNT" ? "PERCENT" : "AMOUNT")}
+                            className={cn(
+                              "h-8 w-8 shrink-0 rounded border text-[10px] font-bold transition-colors",
+                              line.discountType === "PERCENT"
+                                ? "bg-primary text-white border-primary"
+                                : "bg-muted text-muted-foreground border-border hover:border-primary/50"
+                            )}
+                          >
+                            {line.discountType === "PERCENT" ? "%" : "Rp"}
+                          </button>
+                          <Input
+                            type="number"
+                            min="0"
+                            max={line.discountType === "PERCENT" ? "100" : undefined}
+                            step={line.discountType === "PERCENT" ? "0.1" : "1"}
+                            value={line.discount}
+                            onChange={(e) => updateLine(idx, "discount", e.target.value)}
+                            className="h-8 text-xs px-2 min-w-0"
+                            placeholder="0"
+                          />
+                        </div>
                         {/* Hapus */}
                         <button
                           type="button"

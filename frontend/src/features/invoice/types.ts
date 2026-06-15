@@ -26,18 +26,20 @@ export interface InvoiceUnitRef {
 }
 
 export interface InvoiceLineItem {
-  id:        string;
-  itemId:    string;
-  unitId:    string;
-  qty:       string;
-  price:     string;
-  discount:  string;
-  subtotal:  string;
-  taxable:   boolean;
-  taxName:   string | null;
-  taxRate:   string;
-  item?:     InvoiceItemRef;
-  unit?:     InvoiceUnitRef;
+  id:              string;
+  itemId:          string;
+  unitId:          string;
+  qty:             string;
+  price:           string;
+  discount:        string;
+  discountType:    string;
+  discountPercent: string | null;
+  subtotal:        string;
+  taxable:         boolean;
+  taxName:         string | null;
+  taxRate:         string;
+  item?:           InvoiceItemRef;
+  unit?:           InvoiceUnitRef;
 }
 
 export interface InvoiceDeposit {
@@ -106,12 +108,14 @@ export interface Deposit {
 // ── Input types ───────────────────────────────────────────────────────────────
 
 export interface CreateInvoiceItemInput {
-  itemId:         string;
-  unitId:         string;
-  qty:            number;
-  price?:         number;
+  itemId:          string;
+  unitId:          string;
+  qty:             number;
+  price?:          number;
+  discountType?:   "AMOUNT" | "PERCENT";
   discountAmount?: number;
-  taxable?:       boolean;
+  discountPercent?: number;
+  taxable?:        boolean;
 }
 
 export interface CreateInvoiceInput {
