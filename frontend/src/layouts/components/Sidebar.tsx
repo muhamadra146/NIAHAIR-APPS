@@ -24,20 +24,19 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
         onClick={closeSidebar}
         title={collapsed ? item.label : undefined}
         className={cn(
-          "group relative flex items-center rounded-xl py-2 text-sm font-medium transition-all duration-150",
+          "group relative flex items-center rounded-lg py-2 text-sm font-medium transition-all duration-150",
           collapsed ? "justify-center px-2.5" : "gap-3 px-3",
           active
             ? "bg-sidebar-primary text-white shadow-sm shadow-sidebar-primary/30"
-            : "text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            : "text-sidebar-foreground/60 hover:bg-slate-100 hover:text-sidebar-foreground"
         )}
       >
         {active && !collapsed && (
           <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white/60" />
         )}
         <Icon className={cn(
-          "shrink-0 transition-transform duration-150",
-          collapsed ? "h-[18px] w-[18px]" : "h-4 w-4",
-          active ? "text-white" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/80"
+          "h-5 w-5 shrink-0 transition-transform duration-150",
+          active ? "text-white" : "text-sidebar-foreground/45 group-hover:text-sidebar-foreground/80"
         )} />
         {!collapsed && <span className="truncate">{item.label}</span>}
       </Link>
@@ -54,7 +53,7 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
                   "flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors",
                   pathname === child.href || pathname.startsWith(child.href + "/")
                     ? "text-sidebar-primary font-semibold"
-                    : "text-sidebar-foreground/50 hover:text-sidebar-foreground"
+                    : "text-sidebar-foreground/50 hover:bg-slate-50 hover:text-sidebar-foreground"
                 )}
               >
                 <span className={cn(
@@ -81,7 +80,7 @@ function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean 
   }
   return (
     <li className="mb-1 mt-3 px-3">
-      <span className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 select-none">
+      <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 select-none">
         {label}
       </span>
     </li>
@@ -97,7 +96,7 @@ function UserFooter({ collapsed }: { collapsed: boolean }) {
 
   return (
     <div className={cn(
-      "border-t border-sidebar-border/60 p-3",
+      "border-t border-slate-200/80 p-3",
       collapsed ? "flex justify-center" : ""
     )}>
       {collapsed ? (
@@ -155,13 +154,13 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "relative flex h-full flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-in-out overflow-visible",
+        "relative flex h-full flex-col border-r border-slate-200 bg-white transition-[width] duration-200 ease-in-out overflow-visible",
         sidebarCollapsed ? "w-16" : "w-60"
       )}
     >
       {/* ── Logo ─────────────────────────────────────────────── */}
       <div className={cn(
-        "flex h-[68px] shrink-0 items-center border-b border-sidebar-border/60 overflow-hidden",
+        "flex h-[68px] shrink-0 items-center border-b border-slate-200/80 overflow-hidden",
         sidebarCollapsed ? "justify-center px-2" : "justify-center px-5"
       )}>
         {sidebarCollapsed ? (

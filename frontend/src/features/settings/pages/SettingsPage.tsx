@@ -801,8 +801,8 @@ export function SettingsPage() {
   return (
     <PageContainer>
       <div className="space-y-1 sm:space-y-2">
-        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Settings</h1>
-        <p className="text-sm text-muted-foreground">Manage employees, users, branches, and configuration</p>
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Settings</h1>
+        <p className="text-sm text-slate-500">Manage employees, users, branches, and configuration</p>
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="mt-6">
@@ -820,12 +820,12 @@ export function SettingsPage() {
         </div>
 
         {/* ── Desktop: underline tab bar ────────────────────────────── */}
-        <TabsList className="hidden md:flex h-auto w-full items-end justify-start gap-0 rounded-none border-b border-border bg-transparent p-0">
+        <TabsList className="hidden md:flex h-auto w-full items-end justify-start gap-0 rounded-none border-b border-slate-200 bg-transparent p-0">
           {TABS.map((t) => (
             <TabsTrigger
               key={t.value}
               value={t.value}
-              className="rounded-none border-b-2 border-transparent bg-transparent px-4 pb-3 pt-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              className="rounded-none border-b-2 border-transparent bg-transparent px-4 pb-3 pt-2 text-sm font-medium text-slate-500 shadow-none transition-colors hover:text-slate-900 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none"
             >
               {t.label}
             </TabsTrigger>

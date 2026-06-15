@@ -5,43 +5,43 @@
 @layer base {
   :root {
     /* ── Base ───────────────────────────────────── */
-    --background:      340 18% 96%;          /* warm blush-gray — not pure white */
-    --foreground:      340 12% 12%;
+    --background:      210 40% 98%;          /* slate-50 — crisp neutral */
+    --foreground:      222 47% 11%;          /* slate-900 */
 
-    --card:            0 0% 100%;            /* white cards pop against bg */
-    --card-foreground: 340 12% 12%;
+    --card:            0 0% 100%;            /* white */
+    --card-foreground: 222 47% 11%;
 
-    --border:          340 22% 90%;
-    --input:           340 22% 90%;
-    --ring:            340 52% 60%;
-    --radius:          0.75rem;              /* slightly more rounded globally */
+    --border:          214 32% 91%;          /* slate-200 */
+    --input:           214 32% 91%;
+    --ring:            340 52% 60%;          /* rose ring */
+    --radius:          0.75rem;
 
-    /* ── Primary – dusty rose ───────────────────── */
+    /* ── Primary – dusty rose (brand) ──────────── */
     --primary:            340 52% 60%;
     --primary-foreground: 0 0% 100%;
 
     /* ── Secondary ──────────────────────────────── */
-    --secondary:            345 55% 96%;
-    --secondary-foreground: 340 12% 22%;
+    --secondary:            210 40% 96%;     /* slate-100 */
+    --secondary-foreground: 222 47% 20%;
 
     /* ── Muted ──────────────────────────────────── */
-    --muted:            345 30% 94%;
-    --muted-foreground: 340 10% 52%;
+    --muted:            210 40% 96%;         /* slate-100 */
+    --muted-foreground: 215 16% 47%;         /* slate-500 */
 
     /* ── Accent ─────────────────────────────────── */
-    --accent:            345 50% 95%;
-    --accent-foreground: 340 12% 22%;
+    --accent:            210 40% 95%;
+    --accent-foreground: 222 47% 20%;
 
     /* ── Destructive ────────────────────────────── */
     --destructive:            0 84.2% 60.2%;
     --destructive-foreground: 0 0% 100%;
 
     /* ── Sidebar ────────────────────────────────── */
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 340 12% 18%;
-    --sidebar-primary:    340 52% 60%;
-    --sidebar-accent:     345 55% 96%;
-    --sidebar-border:     340 22% 92%;
+    --sidebar-background: 0 0% 100%;         /* white */
+    --sidebar-foreground: 222 47% 15%;       /* slate-800 */
+    --sidebar-primary:    340 52% 60%;       /* rose active */
+    --sidebar-accent:     210 40% 95%;       /* slate-100 hover */
+    --sidebar-border:     214 32% 92%;       /* slate-200 */
   }
 }
 

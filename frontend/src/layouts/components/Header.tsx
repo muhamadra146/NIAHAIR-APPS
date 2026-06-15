@@ -34,7 +34,7 @@ export function Header() {
   const canSwitch    = (user?.branches.length ?? 0) > 1;
 
   return (
-    <header className="flex h-14 shrink-0 items-center border-b border-border bg-card px-4 sm:h-16 sm:px-6">
+    <header className="flex h-14 shrink-0 items-center border-b border-slate-200/80 bg-white px-4 shadow-sm sm:h-16 sm:px-6">
       {/* Hamburger — mobile only */}
       <Button
         variant="ghost"
@@ -58,12 +58,12 @@ export function Header() {
 
       {/* Desktop left: page title + branch badge */}
       <div className="hidden flex-1 items-center gap-3 lg:flex">
-        <span className="text-sm font-semibold text-foreground">{pageTitle}</span>
+        <span className="text-sm font-semibold text-slate-800">{pageTitle}</span>
         {activeBranch && (
           <button
             onClick={() => canSwitch && navigate("/branch-select")}
-            className={`inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary transition-colors ${
-              canSwitch ? "cursor-pointer hover:bg-primary/20" : "cursor-default"
+            className={`inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 transition-colors ${
+              canSwitch ? "cursor-pointer hover:bg-slate-200" : "cursor-default"
             }`}
             title={canSwitch ? "Click to switch branch" : undefined}
           >
