@@ -27,8 +27,10 @@ import { DepositPaymentListPage } from "@/features/invoice/pages/DepositPaymentL
 import { CommissionListPage }    from "@/features/commission/pages/CommissionListPage";
 import { InventoryPage }         from "@/features/inventory/pages/InventoryPage";
 import { ReportsPage }           from "@/features/report/pages/ReportsPage";
-import { LoanListPage }          from "@/features/loan/pages/LoanListPage";
-import { LoanDetailPage }        from "@/features/loan/pages/LoanDetailPage";
+import { LoanListPage }               from "@/features/loan/pages/LoanListPage";
+import { LoanDetailPage }             from "@/features/loan/pages/LoanDetailPage";
+import { ConsultationListPage }       from "@/features/consultation/pages/ConsultationListPage";
+import { ConsultationFormPage }       from "@/features/consultation/pages/ConsultationFormPage";
 
 export const router = createBrowserRouter([
   // ── Public routes ────────────────────────────────────────────────────
@@ -86,6 +88,10 @@ export const router = createBrowserRouter([
           // Loans (Kasbon)
           { path: "/loans",     element: <LoanListPage /> },
           { path: "/loans/:id", element: <LoanDetailPage /> },
+          // Consultation Notes
+          { path: "/consultation-notes",          element: <ConsultationListPage /> },
+          { path: "/consultation-notes/new",      element: <ConsultationFormPage /> },
+          { path: "/consultation-notes/:id/edit", element: <ConsultationFormPage /> },
           // Settings
           { path: "/settings", element: <SettingsPage /> },
         ],

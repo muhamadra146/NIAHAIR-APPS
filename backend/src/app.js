@@ -43,6 +43,7 @@ const salaryRouter                  = require("./modules/salary/salary.route");
 const loanRouter                    = require("./modules/loan/loan.route");
 const payrollRouter                 = require("./modules/payroll/payroll.route");
 const reportRouter                  = require("./modules/report/report.route");
+const consultationRouter            = require("./modules/consultation/consultation.route");
 
 
 const app = express();
@@ -117,6 +118,7 @@ app.use("/salary-settings",                      salaryRouter);
 app.use("/loans",                                loanRouter);
 app.use("/payroll",                              payrollRouter);
 app.use("/reports",                              reportRouter);
+app.use("/consultation-notes",                   consultationRouter);
 
 
 // global error handler — must be last

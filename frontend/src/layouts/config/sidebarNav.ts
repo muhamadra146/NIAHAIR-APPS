@@ -16,6 +16,7 @@ import {
   CalendarRange,
   DollarSign,
   Banknote,
+  NotebookPen,
   type LucideIcon,
 } from "lucide-react";
 
@@ -91,6 +92,13 @@ export const sidebarNav: NavItem[] = [
     href:  "/treatments",
     icon:  Scissors,
     roles: [...MANAGEMENT_ROLES, "CASHIER", "STYLIST", "STAFF"],
+    group: "Operasional",
+  },
+  {
+    label: "Catatan Klien",
+    href:  "/consultation-notes",
+    icon:  NotebookPen,
+    roles: ALL_ROLES,
     group: "Operasional",
   },
 
