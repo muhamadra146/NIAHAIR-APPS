@@ -21,6 +21,10 @@ import { fetchSalarySettings, createSalarySetting, updateSalarySetting } from ".
 import { fetchLoansByEmployee, fetchLoans, createLoan, updateLoan, cancelLoan, addRepayment } from "../api/loan.api";
 import { fetchLeaveTypes, createLeaveType, updateLeaveType } from "../api/leaveType.api";
 import { fetchLeaveQuotas, fetchMyLeaveQuotas, assignLeaveQuota } from "../api/leaveQuota.api";
+import {
+  fetchMemberships, fetchAllMemberships, createMembership, updateMembership, deleteMembership,
+  fetchCustomerMembership, assignMembership, cancelCustomerMembership,
+} from "../api/membership.api";
 import type {
   EmployeeListParams, EmployeeRoleListParams, UserListParams, BranchListParams,
   PaymentMethodListParams, CashAccountListParams, WarehouseListParams,
@@ -36,6 +40,7 @@ import type {
   LoanListParams, CreateLoanInput, UpdateLoanInput, AddRepaymentInput,
   CreateLeaveTypeInput, UpdateLeaveTypeInput,
   AssignQuotaInput, LeaveQuotaParams,
+  CreateMembershipInput, UpdateMembershipInput, MembershipListParams,
 } from "../types";
 
 // ── Employees ─────────────────────────────────────────────────────────
@@ -414,5 +419,65 @@ export const useAssignLeaveQuota = () => {
   return useMutation({
     mutationFn: (input: AssignQuotaInput) => assignLeaveQuota(input),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["leaveQuotas"] }); },
+  });
+};
+
+// ── Memberships ───────────────────────────────────────────────────────
+export const useMemberships = (params: MembershipListParams = {}) =>
+  useQuery({ queryKey: ["memberships", params], queryFn: () => fetchMemberships(params) });
+
+export const useAllMemberships = () =>
+  useQuery({ queryKey: ["memberships", "all"], queryFn: fetchAllMemberships });
+
+export const useCreateMembership = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateMembershipInput) => createMembership(input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["memberships"] }); },
+  });
+};
+
+export const useUpdateMembership = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateMembershipInput) => updateMembership(id, input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["memberships"] }); },
+  });
+};
+
+export const useDeleteMembership = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteMembership(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["memberships"] }); },
+  });
+};
+
+export const useCustomerMembership = (customerId: string) =>
+  useQuery({
+    queryKey: ["memberships", "customer", customerId],
+    queryFn:  () => fetchCustomerMembership(customerId),
+    enabled:  Boolean(customerId),
+  });
+
+export const useAssignMembership = (customerId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (membershipId: string) => assignMembership(customerId, membershipId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["memberships", "customer", customerId] });
+      qc.invalidateQueries({ queryKey: ["customers"] });
+    },
+  });
+};
+
+export const useCancelCustomerMembership = (customerId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => cancelCustomerMembership(customerId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["memberships", "customer", customerId] });
+      qc.invalidateQueries({ queryKey: ["customers"] });
+    },
   });
 };

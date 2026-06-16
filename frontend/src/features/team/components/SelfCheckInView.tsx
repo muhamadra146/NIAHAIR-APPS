@@ -136,6 +136,9 @@ function TodayCard() {
             <p className={`mt-1 text-xl font-bold sm:text-2xl ${hasOut ? "text-slate-700" : "text-slate-300"}`}>
               {fmtTime(att?.checkOutAt)}
             </p>
+            {att?.overtimeMinutes != null && att.overtimeMinutes > 0 && (
+              <p className="mt-0.5 text-[10px] text-blue-500 sm:text-xs">Lembur {att.overtimeMinutes} menit</p>
+            )}
           </div>
         </div>
 

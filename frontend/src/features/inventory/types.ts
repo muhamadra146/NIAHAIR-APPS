@@ -60,3 +60,53 @@ export interface MovementListParams {
   branchId?:      string;
   type?:          StockMovementType | string;
 }
+
+// ── Stock Transfer ────────────────────────────────────────────────────
+export type StockTransferStatus = "PENDING" | "IN_TRANSIT" | "RECEIVED";
+
+export interface StockTransferWarehouse {
+  id:       string;
+  name:     string;
+  branchId: string | null;
+  branch:   { id: string; code: string; name: string } | null;
+}
+
+export interface StockTransferItem {
+  id:       string;
+  itemId:   string;
+  qty:      string;
+  item:     { id: string; name: string; itemCode: string; itemType: string };
+}
+
+export interface StockTransfer {
+  id:                    string;
+  transferNo:            string;
+  sourceWarehouseId:     string;
+  destinationWarehouseId: string;
+  status:                StockTransferStatus;
+  notes:                 string | null;
+  transferDate:          string;
+  createdBy:             string | null;
+  createdAt:             string;
+  updatedAt:             string;
+  sourceWarehouse:       StockTransferWarehouse;
+  destinationWarehouse:  StockTransferWarehouse;
+  items:                 StockTransferItem[];
+}
+
+export interface CreateTransferInput {
+  sourceWarehouseId:      string;
+  destinationWarehouseId: string;
+  transferDate:           string;
+  notes?:                 string;
+  items:                  { itemId: string; qty: number }[];
+}
+
+export interface TransferListParams {
+  page?:                  number;
+  limit?:                 number;
+  sourceWarehouseId?:     string;
+  destinationWarehouseId?: string;
+  status?:                StockTransferStatus | "";
+  branchId?:              string;
+}

@@ -50,6 +50,8 @@ const leaveQuotaRouter              = require("./modules/leaveQuota/leaveQuota.r
 const correctionRouter              = require("./modules/correction/correction.route");
 const permissionRouter              = require("./modules/permission/permission.route");
 const sickLeaveRouter               = require("./modules/sickLeave/sickLeave.route");
+const membershipRouter              = require("./modules/membership/membership.route");
+const stockTransferRouter           = require("./modules/stockTransfer/stockTransfer.route");
 
 
 const app = express();
@@ -131,6 +133,8 @@ app.use("/leave-quotas",                         leaveQuotaRouter);
 app.use("/attendance-corrections",               correctionRouter);
 app.use("/permissions",                          permissionRouter);
 app.use("/sick-leaves",                          sickLeaveRouter);
+app.use("/memberships",                          membershipRouter);
+app.use("/stock-transfers",                      stockTransferRouter);
 
 
 // global error handler — must be last

@@ -746,6 +746,10 @@ model StockTransfer {
 
   createdBy String?
 
+  accurateTransferId     Int?      @unique
+  accurateTransferNumber String?
+  lastSyncAt             DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -772,6 +776,8 @@ model StockTransferItem {
   itemId String
 
   qty Decimal @db.Decimal(18, 6)
+
+  accurateDetailId Int?
 
   createdAt DateTime @default(now())
 
@@ -1913,6 +1919,7 @@ enum SyncEntityType {
   INVOICE
   PAYMENT
   DEPOSIT_PAYMENT
+  STOCK_TRANSFER
 }
 
 enum SyncQueueStatus {
@@ -2195,11 +2202,13 @@ model SickLeave {
   endDate   DateTime
   totalDays Int
 
-  hasLetter  Boolean   @default(false)
-  letterDate DateTime?
-  doctorName String?
-  diagnosis  String?
-  clinicName String?
+  hasLetter        Boolean   @default(false)
+  letterDate       DateTime?
+  doctorName       String?
+  diagnosis        String?
+  clinicName       String?
+  letterPhotoUrl   String?
+  letterPhotoPublicId String?
 
   status SickLeaveStatus @default(PENDING)
 

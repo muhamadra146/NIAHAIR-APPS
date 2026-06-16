@@ -46,18 +46,20 @@ export interface PermissionListParams {
 export type SickLeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export interface SickLeave {
-  id:         string;
-  employeeId: string;
-  branchId:   string;
-  startDate:  string;
-  endDate:    string;
-  totalDays:  number;
-  hasLetter:  boolean;
-  letterDate: string | null;
-  doctorName: string | null;
-  diagnosis:  string | null;
-  clinicName: string | null;
-  status:     SickLeaveStatus;
+  id:                  string;
+  employeeId:          string;
+  branchId:            string;
+  startDate:           string;
+  endDate:             string;
+  totalDays:           number;
+  hasLetter:           boolean;
+  letterDate:          string | null;
+  doctorName:          string | null;
+  diagnosis:           string | null;
+  clinicName:          string | null;
+  letterPhotoUrl:      string | null;
+  letterPhotoPublicId: string | null;
+  status:              SickLeaveStatus;
   reviewedBy: string | null;
   reviewedAt: string | null;
   reviewNote: string | null;

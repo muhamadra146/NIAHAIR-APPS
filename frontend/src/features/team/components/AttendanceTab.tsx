@@ -245,14 +245,15 @@ export function AttendanceTab() {
               <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Masuk</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Keluar</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Terlambat</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Lembur</th>
               <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {isLoading ? (
-              <tr><td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">Memuat…</td></tr>
+              <tr><td colSpan={8} className="py-10 text-center text-sm text-muted-foreground">Memuat…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">Tidak ada jadwal pada tanggal ini</td></tr>
+              <tr><td colSpan={8} className="py-10 text-center text-sm text-muted-foreground">Tidak ada jadwal pada tanggal ini</td></tr>
             ) : rows.map((row) => {
               const att       = row.attendance;
               const canCheckIn  = !att?.checkInAt  && row.status !== "OFF";
@@ -282,6 +283,11 @@ export function AttendanceTab() {
                   <td className="px-4 py-3 text-sm">
                     {att?.lateMinutes ? (
                       <span className="text-amber-600 font-medium">{att.lateMinutes} mnt</span>
+                    ) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    {att?.overtimeMinutes ? (
+                      <span className="text-blue-600 font-medium">{att.overtimeMinutes} mnt</span>
                     ) : "—"}
                   </td>
 

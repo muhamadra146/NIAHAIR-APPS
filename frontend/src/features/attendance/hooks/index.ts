@@ -8,7 +8,7 @@ import {
 } from "../api/permission.api";
 import {
   fetchSickLeaves, fetchMySickLeaves, createSickLeave,
-  approveSickLeave, rejectSickLeave, cancelSickLeave,
+  approveSickLeave, rejectSickLeave, cancelSickLeave, uploadSickLeaveDocument,
 } from "../api/sickLeave.api";
 import type {
   CorrectionListParams, CreateCorrectionInput, ReviewCorrectionInput,
@@ -120,6 +120,14 @@ export const useCancelSickLeave = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => cancelSickLeave(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["sick-leaves"] }); },
+  });
+};
+
+export const useUploadSickLeaveDocument = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => uploadSickLeaveDocument(id, file),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["sick-leaves"] }); },
   });
 };

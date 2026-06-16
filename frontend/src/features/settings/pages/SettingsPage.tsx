@@ -42,6 +42,7 @@ import { AccuratePanel }      from "../accurate/AccuratePanel";
 import { CommissionSettingsTab } from "../components/commission/CommissionSettingsTab";
 import { LeaveTypeTab }          from "../components/leaveType/LeaveTypeTab";
 import { LeaveQuotaTab }         from "../components/leaveQuota/LeaveQuotaTab";
+import { MembershipTab }         from "../components/membership/MembershipTab";
 
 import type { Employee, EmployeeRole, User, Branch, PaymentMethod, CashAccount, Warehouse, ShiftMaster } from "../types";
 import type { EmployeeFormValues } from "../schemas/employee.schema";
@@ -828,6 +829,7 @@ const TABS = [
   { value: "komisi",          label: "Komisi" },
   { value: "leave-types",     label: "Tipe Cuti" },
   { value: "leave-quotas",    label: "Kuota Cuti" },
+  { value: "memberships",     label: "Membership" },
   { value: "accurate",        label: "Accurate" },
 ] as const;
 
@@ -880,6 +882,7 @@ export function SettingsPage() {
         <TabsContent value="komisi"          className="mt-6"><CommissionSettingsTab /></TabsContent>
         <TabsContent value="leave-types"     className="mt-6"><LeaveTypeTab /></TabsContent>
         <TabsContent value="leave-quotas"    className="mt-6"><LeaveQuotaTab /></TabsContent>
+        <TabsContent value="memberships"     className="mt-6"><MembershipTab /></TabsContent>
         <TabsContent value="accurate"        className="mt-6"><AccuratePanel /></TabsContent>
       </Tabs>
     </PageContainer>

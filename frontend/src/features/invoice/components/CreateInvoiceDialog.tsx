@@ -11,6 +11,7 @@ import { fetchAppointments } from "@/features/appointment/api/appointment.api";
 import type { Appointment } from "@/features/appointment/types";
 import { fetchCustomers } from "@/features/customer/api/customer.api";
 import type { Customer } from "@/features/customer/types";
+import { fetchCustomerMembership } from "@/features/settings/api/membership.api";
 import {
   fetchDeposits,
   fetchInvoices,
@@ -170,11 +171,22 @@ export function CreateInvoiceDialog({
   const [loadingEdit, setLoadingEdit] = useState(false);
 
   // ── Other ──
-  const [taxable, setTaxable]         = useState(false);
-  const [inclusiveTax, setInclusive]  = useState(false);
-  const [notes, setNotes]             = useState("");
-  const [error, setError]             = useState<string | null>(null);
-  const [submitting, setSubmitting]   = useState(false);
+  const [taxable, setTaxable]                   = useState(false);
+  const [inclusiveTax, setInclusive]            = useState(false);
+  const [notes, setNotes]                       = useState("");
+  const [error, setError]                       = useState<string | null>(null);
+  const [submitting, setSubmitting]             = useState(false);
+  const [membershipDiscApplied, setMembershipDiscApplied] = useState(false);
+
+  const activeCustomerId = mode === "walkin" ? selectedCustomer?.id : selectedAppt?.customerId;
+
+  const { data: custMembership } = useQuery({
+    queryKey:  ["memberships", "customer", activeCustomerId],
+    queryFn:   () => fetchCustomerMembership(activeCustomerId!),
+    enabled:   Boolean(activeCustomerId),
+    staleTime: 30_000,
+  });
+  const activeMembership = custMembership?.activeMembership ?? null;
 
   // Sync initial prop when dialog opens (pre-checked by parent)
   useEffect(() => {
@@ -246,6 +258,7 @@ export function CreateInvoiceDialog({
     setSelectedCustomer(null); setCustSearch(""); setCustResults([]);
     setLines([]); setItemSearch(""); setItemResults([]);
     setSelectedDeps([]); setDepOpen(false);
+    setMembershipDiscApplied(false);
     setTaxable(false); setInclusive(false); setNotes(""); setError(null);
     setEditMode(false); setApptSearch("");
   }
@@ -294,9 +307,12 @@ export function CreateInvoiceDialog({
 
   function addLine(item: Parameters<typeof buildLineFromItem>[0]) {
     if (lines.find((l) => l.itemId === item.id)) return;
-    const line = buildLineFromItem(item, branchId);
+    let line = buildLineFromItem(item, branchId);
     if (!line) return;
-    setLines((prev) => [...prev, line]);
+    if (membershipDiscApplied && activeMembership) {
+      line = applyDiscountToLine(line, activeMembership);
+    }
+    setLines((prev) => [...prev, line!]);
     setItemSearch(""); setItemResults([]);
   }
 
@@ -309,6 +325,24 @@ export function CreateInvoiceDialog({
       setLines((prev) => [...prev, line]);
     } catch {
       // can't fetch item details
+    }
+  }
+
+  function applyDiscountToLine(line: LineItem, m: NonNullable<typeof activeMembership>): LineItem {
+    if (m.discountType === "PERCENTAGE") {
+      return { ...line, discountType: "PERCENT", discount: String(m.discountValue) };
+    }
+    return { ...line, discountType: "AMOUNT", discount: String(m.discountValue) };
+  }
+
+  function toggleMembershipDiscount() {
+    if (!activeMembership) return;
+    if (membershipDiscApplied) {
+      setLines((prev) => prev.map((l) => ({ ...l, discount: "0", discountType: "AMOUNT" })));
+      setMembershipDiscApplied(false);
+    } else {
+      setLines((prev) => prev.map((l) => applyDiscountToLine(l, activeMembership)));
+      setMembershipDiscApplied(true);
     }
   }
 
@@ -946,6 +980,37 @@ export function CreateInvoiceDialog({
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ── Membership discount banner ── */}
+            {(!existingInvoiceId || editMode) && activeMembership && (
+              <div className={cn(
+                "rounded-lg border px-3 py-2.5 flex items-center justify-between gap-2",
+                membershipDiscApplied
+                  ? "border-purple-300 bg-purple-50"
+                  : "border-border bg-muted/30"
+              )}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm font-medium text-purple-800 truncate">{activeMembership.name}</span>
+                  <span className="text-xs text-purple-600 shrink-0">
+                    {activeMembership.discountType === "PERCENTAGE"
+                      ? `${activeMembership.discountValue}% off`
+                      : `Rp ${Number(activeMembership.discountValue).toLocaleString("id-ID")} off`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleMembershipDiscount}
+                  className={cn(
+                    "shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors",
+                    membershipDiscApplied
+                      ? "bg-purple-600 text-white border-purple-600"
+                      : "text-purple-700 border-purple-300 hover:bg-purple-50"
+                  )}
+                >
+                  {membershipDiscApplied ? "✓ Diterapkan" : "Terapkan Diskon"}
+                </button>
               </div>
             )}
 

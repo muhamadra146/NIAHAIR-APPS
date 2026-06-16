@@ -35,3 +35,12 @@ export const cancelSickLeave = async (id: string): Promise<SickLeave> => {
   const res = await api.delete<ApiResponse<SickLeave>>(`/sick-leaves/${id}`);
   return res.data.data;
 };
+
+export const uploadSickLeaveDocument = async (id: string, file: File): Promise<SickLeave> => {
+  const form = new FormData();
+  form.append("document", file);
+  const res = await api.post<ApiResponse<SickLeave>>(`/sick-leaves/${id}/document`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data.data;
+};

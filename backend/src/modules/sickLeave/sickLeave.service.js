@@ -148,4 +148,16 @@ const cancel = async (id, employeeId) => {
   return repo.update(id, { status: "REJECTED" });
 };
 
-module.exports = { getAll, getMy, getById, create, approve, reject, cancel };
+const uploadDocument = async (id, employeeId, file) => {
+  if (!file) throw new AppError("File tidak ditemukan", StatusCodes.BAD_REQUEST);
+  const sick = await repo.findById(id);
+  if (!sick) throw new AppError("Data sakit tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (sick.employeeId !== employeeId) throw new AppError("Akses ditolak", StatusCodes.FORBIDDEN);
+
+  return repo.update(id, {
+    letterPhotoUrl:      file.path,
+    letterPhotoPublicId: file.filename,
+  });
+};
+
+module.exports = { getAll, getMy, getById, create, approve, reject, cancel, uploadDocument };

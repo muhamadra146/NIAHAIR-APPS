@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, CheckCircle, XCircle, X, Thermometer, AlertTriangle } from "lucide-react";
+import { useState, useRef } from "react";
+import { Plus, CheckCircle, XCircle, X, Thermometer, AlertTriangle, Paperclip, FileImage, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { useAuthStore } from "@/stores/authStore";
 import {
   useMySickLeaves, useSickLeaves,
   useCreateSickLeave, useApproveSickLeave, useRejectSickLeave, useCancelSickLeave,
+  useUploadSickLeaveDocument,
 } from "../hooks";
 import type { SickLeave } from "../types";
 
@@ -70,6 +71,12 @@ function ReviewDialog({ sl, onClose }: { sl: SickLeave; onClose: () => void }) {
             {sl.doctorName  && <p className="text-muted-foreground">Dokter: {sl.doctorName}</p>}
             {sl.diagnosis   && <p className="text-muted-foreground">Diagnosa: {sl.diagnosis}</p>}
             {sl.clinicName  && <p className="text-muted-foreground">Klinik: {sl.clinicName}</p>}
+            {sl.letterPhotoUrl && (
+              <a href={sl.letterPhotoUrl} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+                <FileImage className="h-3.5 w-3.5" /> Lihat Foto Dokumen
+              </a>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Catatan (opsional)</Label>
@@ -105,16 +112,20 @@ function CreateForm({ onClose, noLetterCount }: { onClose: () => void; noLetterC
   const [doctorName, setDoctorName] = useState("");
   const [diagnosis,  setDiagnosis ] = useState("");
   const [clinicName, setClinicName] = useState("");
+  const [docFile,    setDocFile   ] = useState<File | null>(null);
   const [err,        setErr       ] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const createMut = useCreateSickLeave();
+  const createMut   = useCreateSickLeave();
+  const uploadMut   = useUploadSickLeaveDocument();
+  const isPending   = createMut.isPending || uploadMut.isPending;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (endDate < startDate) { setErr("Tanggal selesai tidak boleh sebelum tanggal mulai"); return; }
     setErr(null);
     try {
-      await createMut.mutateAsync({
+      const sl = await createMut.mutateAsync({
         startDate,
         endDate,
         hasLetter,
@@ -125,6 +136,10 @@ function CreateForm({ onClose, noLetterCount }: { onClose: () => void; noLetterC
           clinicName: clinicName.trim() || undefined,
         }),
       });
+      // Upload document if selected
+      if (docFile) {
+        await uploadMut.mutateAsync({ id: sl.id, file: docFile });
+      }
       onClose();
     } catch (e) { setErr(apiErr(e)); }
   }
@@ -194,11 +209,42 @@ function CreateForm({ onClose, noLetterCount }: { onClose: () => void; noLetterC
             </>
           )}
 
+          {/* Document upload */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Foto Dokumen <span className="text-muted-foreground">(opsional)</span></Label>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic"
+              className="hidden"
+              onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+            />
+            {docFile ? (
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                <FileImage className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span className="text-xs text-emerald-700 flex-1 truncate">{docFile.name}</span>
+                <button type="button" onClick={() => { setDocFile(null); if (fileRef.current) fileRef.current.value = ""; }}
+                  className="text-muted-foreground hover:text-destructive">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="w-full rounded-lg border border-dashed border-border px-4 py-3 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors flex items-center justify-center gap-2"
+              >
+                <Paperclip className="h-3.5 w-3.5" />
+                Pilih foto surat dokter
+              </button>
+            )}
+          </div>
+
           {err && <p className="text-xs text-red-600">{err}</p>}
           <div className="flex gap-2 pt-1">
             <Button type="button" variant="outline" size="sm" className="flex-1" onClick={onClose}>Batal</Button>
-            <Button type="submit" size="sm" className="flex-1" disabled={createMut.isPending}>
-              {createMut.isPending ? "Mengajukan..." : "Ajukan Sakit"}
+            <Button type="submit" size="sm" className="flex-1" disabled={isPending}>
+              {isPending ? "Mengajukan..." : "Ajukan Sakit"}
             </Button>
           </div>
         </form>
@@ -316,6 +362,14 @@ export function SickLeavePage() {
                   </div>
                   {sl.diagnosis  && <p className="mt-1 text-sm text-muted-foreground">Diagnosa: {sl.diagnosis}</p>}
                   {sl.doctorName && <p className="mt-0.5 text-xs text-muted-foreground">dr. {sl.doctorName}{sl.clinicName ? ` — ${sl.clinicName}` : ""}</p>}
+                  {sl.letterPhotoUrl && (
+                    <a href={sl.letterPhotoUrl} target="_blank" rel="noopener noreferrer"
+                      className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700 hover:bg-blue-100 transition-colors">
+                      <FileImage className="h-3 w-3" />
+                      Lihat Foto Dokumen
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
                   {sl.reviewNote && (
                     <p className="mt-1 text-xs rounded-md bg-muted/50 px-2 py-1">
                       Catatan: {sl.reviewNote}

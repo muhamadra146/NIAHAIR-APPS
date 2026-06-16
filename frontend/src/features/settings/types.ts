@@ -317,3 +317,42 @@ export interface LeaveQuotaParams {
   employeeId?: string;
   year?:       number;
 }
+
+// ── Membership ─────────────────────────────────────────────────────────
+export type DiscountType = "PERCENTAGE" | "FIXED_AMOUNT";
+
+export interface Membership {
+  id:           string;
+  name:         string;
+  price:        string;
+  durationDays: number;
+  discountType:  DiscountType;
+  discountValue: string;
+  createdAt:    string;
+  updatedAt:    string;
+}
+
+export interface CreateMembershipInput {
+  name:         string;
+  price:        number;
+  durationDays: number;
+  discountType:  DiscountType;
+  discountValue: number;
+}
+
+export type UpdateMembershipInput = Partial<CreateMembershipInput>;
+
+export interface MembershipListParams {
+  page?:  number;
+  limit?: number;
+}
+
+export interface CustomerMembershipRecord {
+  id:          string;
+  customerId:  string;
+  membershipId: string;
+  startDate:   string;
+  endDate:     string;
+  status:      "ACTIVE" | "EXPIRED" | "CANCELLED";
+  membership:  Membership;
+}

@@ -54,7 +54,15 @@ const cancelController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const uploadDocumentController = async (req, res, next) => {
+  try {
+    const result = await svc.uploadDocument(req.params.id, req.user.employeeId, req.file);
+    return success(res, result, "Dokumen berhasil diupload");
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   getAllController, getMyController, getByIdController,
   createController, approveController, rejectController, cancelController,
+  uploadDocumentController,
 };
