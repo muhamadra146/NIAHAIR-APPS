@@ -1,4 +1,5 @@
-import { Pencil, KeyRound } from "lucide-react";
+import { useState } from "react";
+import { Pencil, KeyRound, Trash2, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -6,10 +7,11 @@ import { cn } from "@/lib/utils";
 import type { User } from "../../types";
 
 interface Props {
-  users:         User[];
-  isLoading:     boolean;
-  onEdit:        (user: User) => void;
-  onResetPw:     (user: User) => void;
+  users:     User[];
+  isLoading: boolean;
+  onEdit:    (user: User) => void;
+  onResetPw: (user: User) => void;
+  onDelete:  (user: User) => void;
 }
 
 function getRoleBadgeClass(roleCode: string): string {
@@ -48,36 +50,68 @@ function EmptyState() {
   return <div className="py-12 text-center text-sm text-slate-400">No user accounts found.</div>;
 }
 
-function MobileCardList({ users, onEdit, onResetPw }: { users: User[]; onEdit: (u: User) => void; onResetPw: (u: User) => void }) {
+function MobileCardList({ users, onEdit, onResetPw, onDelete }: Omit<Props, "isLoading">) {
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
   return (
     <div className="divide-y divide-slate-100 md:hidden">
       {users.map((u) => (
-        <div key={u.id} className="flex items-start justify-between gap-3 px-4 py-4">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-slate-900">{u.email}</p>
-            <p className="mt-0.5 text-xs text-slate-500">{u.employee?.name ?? "—"}</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <RoleBadge code={u.role.code} name={u.role.name} />
-              <Badge variant={u.isActive ? "success" : "secondary"} className="text-xs">
-                {u.isActive ? "Active" : "Inactive"}
-              </Badge>
+        <div key={u.id} className="px-4 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-slate-900">{u.email}</p>
+              <p className="mt-0.5 text-xs text-slate-500">{u.employee?.name ?? "—"}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <RoleBadge code={u.role.code} name={u.role.name} />
+                <Badge variant={u.isActive ? "success" : "secondary"} className="text-xs">
+                  {u.isActive ? "Active" : "Inactive"}
+                </Badge>
+              </div>
+            </div>
+            <div className="flex shrink-0 gap-1">
+              {confirmId === u.id ? (
+                <>
+                  <Button variant="destructive" size="sm" className="h-7 text-xs px-2"
+                    onClick={() => { onDelete(u); setConfirmId(null); }}>
+                    Hapus
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs px-2"
+                    onClick={() => setConfirmId(null)}>
+                    Batal
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="ghost" size="icon" onClick={() => onResetPw(u)} title="Reset password">
+                    <KeyRound className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => onEdit(u)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon"
+                    className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => setConfirmId(u.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
-          <div className="flex shrink-0 gap-1">
-            <Button variant="ghost" size="icon" onClick={() => onResetPw(u)} title="Reset password">
-              <KeyRound className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => onEdit(u)}>
-              <Pencil className="h-4 w-4" />
-            </Button>
-          </div>
+          {confirmId === u.id && (
+            <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              User akan dinonaktifkan. Konfirmasi?
+            </div>
+          )}
         </div>
       ))}
     </div>
   );
 }
 
-function DesktopTable({ users, onEdit, onResetPw }: { users: User[]; onEdit: (u: User) => void; onResetPw: (u: User) => void }) {
+function DesktopTable({ users, onEdit, onResetPw, onDelete }: Omit<Props, "isLoading">) {
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
   return (
     <div className="hidden overflow-x-auto md:block">
       <table className="w-full text-sm">
@@ -87,7 +121,7 @@ function DesktopTable({ users, onEdit, onResetPw }: { users: User[]; onEdit: (u:
             <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Employee</th>
             <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">User Role</th>
             <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
-            <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
+            <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -103,15 +137,36 @@ function DesktopTable({ users, onEdit, onResetPw }: { users: User[]; onEdit: (u:
                   {u.isActive ? "Active" : "Inactive"}
                 </Badge>
               </td>
-              <td className="px-5 py-4">
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => onResetPw(u)} title="Reset password">
-                    <KeyRound className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => onEdit(u)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                </div>
+              <td className="px-5 py-4 text-right">
+                {confirmId === u.id ? (
+                  <div className="flex items-center justify-end gap-2">
+                    <span className="text-xs text-red-600 flex items-center gap-1">
+                      <AlertTriangle className="h-3.5 w-3.5" /> Nonaktifkan?
+                    </span>
+                    <Button variant="destructive" size="sm" className="h-7 text-xs"
+                      onClick={() => { onDelete(u); setConfirmId(null); }}>
+                      Ya
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 text-xs"
+                      onClick={() => setConfirmId(null)}>
+                      Batal
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => onResetPw(u)} title="Reset password">
+                      <KeyRound className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => onEdit(u)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon"
+                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => setConfirmId(u.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </td>
             </tr>
           ))}
@@ -121,13 +176,13 @@ function DesktopTable({ users, onEdit, onResetPw }: { users: User[]; onEdit: (u:
   );
 }
 
-export function UserTable({ users, isLoading, onEdit, onResetPw }: Props) {
+export function UserTable({ users, isLoading, onEdit, onResetPw, onDelete }: Props) {
   if (isLoading) return <LoadingState />;
   if (users.length === 0) return <EmptyState />;
   return (
     <>
-      <MobileCardList users={users} onEdit={onEdit} onResetPw={onResetPw} />
-      <DesktopTable   users={users} onEdit={onEdit} onResetPw={onResetPw} />
+      <MobileCardList users={users} onEdit={onEdit} onResetPw={onResetPw} onDelete={onDelete} />
+      <DesktopTable   users={users} onEdit={onEdit} onResetPw={onResetPw} onDelete={onDelete} />
     </>
   );
 }

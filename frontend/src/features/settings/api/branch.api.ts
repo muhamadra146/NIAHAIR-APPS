@@ -23,3 +23,7 @@ export const updateBranch = async (id: string, input: UpdateBranchInput): Promis
   const { data } = await api.put<ApiResponse<Branch>>(`/branches/${id}`, input);
   return data.data;
 };
+
+export const deleteBranch = async (id: string): Promise<void> => {
+  await api.delete(`/branches/${id}`);
+};

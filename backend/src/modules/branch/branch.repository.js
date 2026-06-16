@@ -21,4 +21,18 @@ const create = (data) => prisma.branch.create({ data });
 const update = (id, data) =>
   prisma.branch.update({ where: { id }, data });
 
-module.exports = { findAll, count, findById, findByCode, create, update };
+const softDelete = (id) =>
+  prisma.branch.update({ where: { id }, data: { isActive: false } });
+
+const countActiveEmployees = (branchId) =>
+  prisma.employee.count({
+    where: {
+      isActive: true,
+      OR: [
+        { homeBranchId: branchId },
+        { employeeBranches: { some: { branchId, isActive: true } } },
+      ],
+    },
+  });
+
+module.exports = { findAll, count, findById, findByCode, create, update, softDelete, countActiveEmployees };

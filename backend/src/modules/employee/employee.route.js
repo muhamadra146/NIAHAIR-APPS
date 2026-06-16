@@ -14,6 +14,7 @@ const {
   createController,
   updateController,
   updateBranchesController,
+  deleteController,
 } = require("./employee.controller");
 
 const router = Router();
@@ -22,6 +23,8 @@ router.get("/",    authenticate, getAllController);
 router.post("/",   authenticate, validate(createEmployeeSchema), createController);
 router.get("/:id", authenticate, getByIdController);
 router.put("/:id", authenticate, validate(updateEmployeeSchema), updateController);
+
+router.delete("/:id", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), deleteController);
 
 // Must be declared after GET /:id — different method (PATCH), no conflict
 router.patch(

@@ -32,3 +32,7 @@ export const updateEmployeeBranches = async (id: string, input: UpdateEmployeeBr
   const { data } = await api.patch<ApiResponse<Employee>>(`/employees/${id}/branches`, input);
   return data.data;
 };
+
+export const deleteEmployee = async (id: string): Promise<void> => {
+  await api.delete(`/employees/${id}`);
+};

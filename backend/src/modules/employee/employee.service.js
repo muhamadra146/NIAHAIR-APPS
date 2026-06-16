@@ -11,6 +11,7 @@ const {
   create,
   update,
   updateBranches,
+  softDelete,
 } = require("./employee.repository");
 
 const getAll = async ({ page, limit, search, isActive, branchId }) => {
@@ -113,4 +114,10 @@ const updateEmployeeBranches = async (id, branchIds) => {
   return updateBranches(id, branchIds);
 };
 
-module.exports = { getAll, getById, createEmployee, updateEmployee, updateEmployeeBranches };
+const deleteEmployee = async (id) => {
+  const employee = await findById(id);
+  if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+  return softDelete(id);
+};
+
+module.exports = { getAll, getById, createEmployee, updateEmployee, updateEmployeeBranches, deleteEmployee };

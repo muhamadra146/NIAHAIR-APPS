@@ -9,6 +9,7 @@ const {
   getByIdController,
   createController,
   updateController,
+  deleteController,
 } = require("./branch.controller");
 const router = Router();
 
@@ -17,5 +18,6 @@ router.get("/", authenticate, getAllController);
 router.post("/", authenticate, validate(createBranchSchema), createController);
 router.get("/:id", authenticate, getByIdController);
 router.put("/:id", authenticate, validate(updateBranchSchema), updateController);
+router.delete("/:id", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), deleteController);
 
 module.exports = router;

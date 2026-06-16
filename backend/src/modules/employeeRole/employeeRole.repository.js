@@ -21,4 +21,8 @@ const create = (data) => prisma.employeeRole.create({ data });
 const update = (id, data) =>
   prisma.employeeRole.update({ where: { id }, data });
 
-module.exports = { findAll, count, findById, findByCode, create, update };
+const remove = (id) => prisma.employeeRole.delete({ where: { id } });
+
+const countEmployees = (roleId) => prisma.employee.count({ where: { roleId } });
+
+module.exports = { findAll, count, findById, findByCode, create, update, remove, countEmployees };

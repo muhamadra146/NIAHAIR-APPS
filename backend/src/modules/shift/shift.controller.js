@@ -1,5 +1,5 @@
 const { success, created } = require("../../common/responses/apiResponse");
-const { getAll, getById, createShift, updateShift } = require("./shift.service");
+const { getAll, getById, createShift, updateShift, deleteShift } = require("./shift.service");
 
 const getAllController = async (req, res, next) => {
   try {
@@ -29,4 +29,11 @@ const updateController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getAllController, getByIdController, createController, updateController };
+const deleteController = async (req, res, next) => {
+  try {
+    const result = await deleteShift(req.params.id);
+    return success(res, result, "Shift deleted");
+  } catch (err) { next(err); }
+};
+
+module.exports = { getAllController, getByIdController, createController, updateController, deleteController };

@@ -1,7 +1,7 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
-const { findAll, count, findById, findByCode, create, update } = require("./branch.repository");
+const { findAll, count, findById, findByCode, create, update, softDelete, countActiveEmployees } = require("./branch.repository");
 
 const getAll = async ({ page, limit, search, isActive }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -55,4 +55,15 @@ const updateBranch = async (id, body) => {
   return update(id, body);
 };
 
-module.exports = { getAll, getById, createBranch, updateBranch };
+const deleteBranch = async (id) => {
+  const branch = await findById(id);
+  if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
+
+  const empCount = await countActiveEmployees(id);
+  if (empCount > 0)
+    throw new AppError(`Tidak bisa dihapus: ${empCount} karyawan masih terdaftar di cabang ini`, StatusCodes.CONFLICT);
+
+  return softDelete(id);
+};
+
+module.exports = { getAll, getById, createBranch, updateBranch, deleteBranch };

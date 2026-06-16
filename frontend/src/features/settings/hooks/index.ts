@@ -1,12 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchShifts, createShift, updateShift } from "@/features/schedule/api/shift.api";
+import { fetchShifts, createShift, updateShift, deleteShift } from "@/features/schedule/api/shift.api";
 import {
-  fetchEmployees, fetchEmployee, createEmployee, updateEmployee, updateEmployeeBranches,
+  fetchEmployees, fetchEmployee, createEmployee, updateEmployee, updateEmployeeBranches, deleteEmployee,
 } from "../api/employee.api";
-import { fetchEmployeeRoles, createEmployeeRole, updateEmployeeRole } from "../api/employeeRole.api";
+import { fetchEmployeeRoles, createEmployeeRole, updateEmployeeRole, deleteEmployeeRole } from "../api/employeeRole.api";
 import { fetchUsers, createUser, updateUser, resetUserPassword, deactivateUser } from "../api/user.api";
 import { fetchUserRoles } from "../api/userRole.api";
-import { fetchBranches, fetchAllBranches, createBranch, updateBranch } from "../api/branch.api";
+import { fetchBranches, fetchAllBranches, createBranch, updateBranch, deleteBranch } from "../api/branch.api";
 import {
   fetchPaymentMethods, createPaymentMethod, updatePaymentMethod, deletePaymentMethod,
 } from "../api/paymentMethod.api";
@@ -75,6 +75,14 @@ export const useUpdateEmployeeBranches = (id: string) => {
   });
 };
 
+export const useDeleteEmployee = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteEmployee(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); },
+  });
+};
+
 // ── Employee Roles ────────────────────────────────────────────────────
 export const useEmployeeRoles = (params: EmployeeRoleListParams = {}) =>
   useQuery({ queryKey: ["employeeRoles", params], queryFn: () => fetchEmployeeRoles(params) });
@@ -94,6 +102,14 @@ export const useUpdateEmployeeRole = (id: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateEmployeeRoleInput) => updateEmployeeRole(id, input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employeeRoles"] }); },
+  });
+};
+
+export const useDeleteEmployeeRole = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteEmployeeRole(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["employeeRoles"] }); },
   });
 };
@@ -152,6 +168,14 @@ export const useUpdateBranch = (id: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateBranchInput) => updateBranch(id, input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["branches"] }); },
+  });
+};
+
+export const useDeleteBranch = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteBranch(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["branches"] }); },
   });
 };
@@ -267,6 +291,14 @@ export const useUpdateShift = (id: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateShiftInput) => updateShift(id, input),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ["shifts"] }); },
+  });
+};
+
+export const useDeleteShift = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteShift(id),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ["shifts"] }); },
   });
 };

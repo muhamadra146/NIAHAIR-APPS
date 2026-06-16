@@ -16,3 +16,7 @@ export const updateEmployeeRole = async (id: string, input: UpdateEmployeeRoleIn
   const { data } = await api.put<ApiResponse<EmployeeRole>>(`/employee-roles/${id}`, input);
   return data.data;
 };
+
+export const deleteEmployeeRole = async (id: string): Promise<void> => {
+  await api.delete(`/employee-roles/${id}`);
+};

@@ -25,4 +25,8 @@ const findUsedShiftIds = async () => {
   return new Set(rows.map((r) => r.shiftId));
 };
 
-module.exports = { findAll, findById, findByCode, create, update, isShiftUsed, findUsedShiftIds };
+const softDelete = (id) => prisma.shift.update({ where: { id }, data: { isActive: false } });
+
+const hardDelete = (id) => prisma.shift.delete({ where: { id } });
+
+module.exports = { findAll, findById, findByCode, create, update, isShiftUsed, findUsedShiftIds, softDelete, hardDelete };

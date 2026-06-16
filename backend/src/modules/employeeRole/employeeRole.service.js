@@ -1,7 +1,7 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
-const { findAll, count, findById, findByCode, create, update } = require("./employeeRole.repository");
+const { findAll, count, findById, findByCode, create, update, remove, countEmployees } = require("./employeeRole.repository");
 
 const getAll = async ({ page, limit, search, isActive }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -55,4 +55,15 @@ const updateEmployeeRole = async (id, body) => {
   return update(id, body);
 };
 
-module.exports = { getAll, getById, createEmployeeRole, updateEmployeeRole };
+const deleteEmployeeRole = async (id) => {
+  const role = await findById(id);
+  if (!role) throw new AppError("Employee role not found", StatusCodes.NOT_FOUND);
+
+  const inUse = await countEmployees(id);
+  if (inUse > 0)
+    throw new AppError(`Cannot delete: ${inUse} employee(s) still use this role`, StatusCodes.CONFLICT);
+
+  return remove(id);
+};
+
+module.exports = { getAll, getById, createEmployeeRole, updateEmployeeRole, deleteEmployeeRole };

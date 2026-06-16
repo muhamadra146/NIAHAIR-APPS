@@ -1,4 +1,5 @@
-import { Pencil } from "lucide-react";
+import { useState } from "react";
+import { Pencil, Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge }  from "@/components/ui/badge";
 import type { ShiftMaster } from "../../types";
@@ -7,6 +8,7 @@ interface Props {
   shifts:    ShiftMaster[];
   isLoading: boolean;
   onEdit:    (shift: ShiftMaster) => void;
+  onDelete:  (shift: ShiftMaster) => void;
 }
 
 function ColorSwatch({ color }: { color: string | null }) {
@@ -19,7 +21,9 @@ function ColorSwatch({ color }: { color: string | null }) {
   );
 }
 
-export function ShiftTable({ shifts, isLoading, onEdit }: Props) {
+export function ShiftTable({ shifts, isLoading, onEdit, onDelete }: Props) {
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -51,7 +55,7 @@ export function ShiftTable({ shifts, isLoading, onEdit }: Props) {
               <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tipe</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pemakaian</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
-              <th className="px-4 py-3" />
+              <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -60,9 +64,7 @@ export function ShiftTable({ shifts, isLoading, onEdit }: Props) {
                 <td className="px-4 py-3 font-mono font-semibold text-xs">{shift.code}</td>
                 <td className="px-4 py-3 font-medium">{shift.name}</td>
                 <td className="px-4 py-3 text-muted-foreground">
-                  {shift.startTime && shift.endTime
-                    ? `${shift.startTime} – ${shift.endTime}`
-                    : "—"}
+                  {shift.startTime && shift.endTime ? `${shift.startTime} – ${shift.endTime}` : "—"}
                 </td>
                 <td className="px-4 py-3"><ColorSwatch color={shift.color} /></td>
                 <td className="px-4 py-3">
@@ -81,9 +83,32 @@ export function ShiftTable({ shifts, isLoading, onEdit }: Props) {
                     : <Badge variant="outline" className="text-xs text-gray-400 border-gray-200">Nonaktif</Badge>}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(shift)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
+                  {confirmId === shift.id ? (
+                    <div className="flex items-center justify-end gap-2">
+                      <span className="text-xs text-red-600 flex items-center gap-1">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        {shift.isUsed ? "Nonaktifkan?" : "Hapus?"}
+                      </span>
+                      <Button variant="destructive" size="sm" className="h-7 text-xs"
+                        onClick={() => { onDelete(shift); setConfirmId(null); }}>
+                        Ya
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-7 text-xs"
+                        onClick={() => setConfirmId(null)}>
+                        Batal
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-end gap-1">
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(shift)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setConfirmId(shift.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -94,25 +119,52 @@ export function ShiftTable({ shifts, isLoading, onEdit }: Props) {
       {/* Mobile */}
       <div className="md:hidden divide-y divide-border">
         {shifts.map((shift) => (
-          <div key={shift.id} className="flex items-center gap-3 px-4 py-3">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs font-semibold">{shift.code}</span>
-                <span className="font-medium text-sm">{shift.name}</span>
+          <div key={shift.id} className="px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-semibold">{shift.code}</span>
+                  <span className="font-medium text-sm">{shift.name}</span>
+                </div>
+                <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                  {shift.startTime && shift.endTime ? `${shift.startTime} – ${shift.endTime}` : "Jam tidak diset"}
+                  {shift.color && (
+                    <span className="inline-block h-3 w-3 rounded-full border border-border" style={{ backgroundColor: shift.color }} />
+                  )}
+                </div>
               </div>
-              <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                {shift.startTime && shift.endTime ? `${shift.startTime} – ${shift.endTime}` : "Jam tidak diset"}
-                {shift.color && (
-                  <span className="inline-block h-3 w-3 rounded-full border border-border" style={{ backgroundColor: shift.color }} />
+              <div className="flex items-center gap-1 shrink-0">
+                {confirmId === shift.id ? (
+                  <>
+                    <Button variant="destructive" size="sm" className="h-7 text-xs px-2"
+                      onClick={() => { onDelete(shift); setConfirmId(null); }}>
+                      Ya
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 text-xs px-2"
+                      onClick={() => setConfirmId(null)}>
+                      Batal
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {!shift.isActive && <Badge variant="outline" className="text-xs text-gray-400">Nonaktif</Badge>}
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(shift)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => setConfirmId(shift.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </>
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {!shift.isActive && <Badge variant="outline" className="text-xs text-gray-400">Nonaktif</Badge>}
-              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(shift)}>
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+            {confirmId === shift.id && (
+              <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                {shift.isUsed ? "Shift terpakai, akan dinonaktifkan." : "Shift akan dihapus permanen."} Konfirmasi?
+              </div>
+            )}
           </div>
         ))}
       </div>

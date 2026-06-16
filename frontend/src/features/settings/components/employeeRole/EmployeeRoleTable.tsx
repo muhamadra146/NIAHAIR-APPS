@@ -1,4 +1,5 @@
-import { Pencil } from "lucide-react";
+import { useState } from "react";
+import { Pencil, Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { EmployeeRole } from "../../types";
@@ -7,9 +8,12 @@ interface Props {
   roles:     EmployeeRole[];
   isLoading: boolean;
   onEdit:    (role: EmployeeRole) => void;
+  onDelete:  (role: EmployeeRole) => void;
 }
 
-export function EmployeeRoleTable({ roles, isLoading, onEdit }: Props) {
+export function EmployeeRoleTable({ roles, isLoading, onEdit, onDelete }: Props) {
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -35,9 +39,32 @@ export function EmployeeRoleTable({ roles, isLoading, onEdit }: Props) {
             <td className="px-3 py-2 text-muted-foreground font-mono text-xs">{role.code}</td>
             <td className="px-3 py-2 font-medium">{role.name}</td>
             <td className="px-3 py-2 text-right">
-              <Button variant="ghost" size="icon" onClick={() => onEdit(role)}>
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
+              {confirmId === role.id ? (
+                <div className="flex items-center justify-end gap-2">
+                  <span className="text-xs text-red-600 flex items-center gap-1">
+                    <AlertTriangle className="h-3.5 w-3.5" /> Hapus?
+                  </span>
+                  <Button variant="destructive" size="sm" className="h-7 text-xs"
+                    onClick={() => { onDelete(role); setConfirmId(null); }}>
+                    Ya
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs"
+                    onClick={() => setConfirmId(null)}>
+                    Batal
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-end gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => onEdit(role)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon"
+                    className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => setConfirmId(role.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
             </td>
           </tr>
         ))}

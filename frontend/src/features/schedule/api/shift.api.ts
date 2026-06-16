@@ -22,3 +22,7 @@ export const updateShift = async (id: string, input: Partial<{
   const { data } = await api.put<ApiResponse<Shift>>(`/shifts/${id}`, input);
   return data.data;
 };
+
+export const deleteShift = async (id: string): Promise<void> => {
+  await api.delete(`/shifts/${id}`);
+};

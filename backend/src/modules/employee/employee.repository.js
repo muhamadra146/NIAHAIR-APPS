@@ -73,9 +73,12 @@ const updateBranches = (employeeId, branchIds) =>
     return tx.employee.findUnique({ where: { id: employeeId }, include: INCLUDE });
   });
 
+const softDelete = (id) =>
+  prisma.employee.update({ where: { id }, data: { isActive: false } });
+
 module.exports = {
   findAll, count, findById,
   findByEmployeeCode, findByEmail,
   findRoleById,
-  create, update, updateBranches,
+  create, update, updateBranches, softDelete,
 };

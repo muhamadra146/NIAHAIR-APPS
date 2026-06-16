@@ -4,7 +4,7 @@ const authorize     = require("../../middlewares/role.middleware");
 const validate      = require("../../middlewares/validate.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
 const { createShiftSchema, updateShiftSchema } = require("./shift.validation");
-const { getAllController, getByIdController, createController, updateController } = require("./shift.controller");
+const { getAllController, getByIdController, createController, updateController, deleteController } = require("./shift.controller");
 
 const router = Router();
 
@@ -23,6 +23,12 @@ router.put("/:id",
   authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER),
   validate(updateShiftSchema),
   updateController,
+);
+
+router.delete("/:id",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER),
+  deleteController,
 );
 
 module.exports = router;

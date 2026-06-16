@@ -9,14 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/common/Pagination";
 
 import {
-  useEmployees, useCreateEmployee, useUpdateEmployee, useUpdateEmployeeBranches,
-  useEmployeeRoles, useCreateEmployeeRole, useUpdateEmployeeRole,
-  useUsers, useCreateUser, useUpdateUser, useResetUserPassword,
-  useBranches, useCreateBranch, useUpdateBranch,
+  useEmployees, useCreateEmployee, useUpdateEmployee, useUpdateEmployeeBranches, useDeleteEmployee,
+  useEmployeeRoles, useCreateEmployeeRole, useUpdateEmployeeRole, useDeleteEmployeeRole,
+  useUsers, useCreateUser, useUpdateUser, useResetUserPassword, useDeactivateUser,
+  useBranches, useCreateBranch, useUpdateBranch, useDeleteBranch,
   usePaymentMethods, useCreatePaymentMethod, useUpdatePaymentMethod, useDeletePaymentMethod,
   useCashAccounts, useUpdateCashAccount, useDeleteCashAccount, useSyncCashAccounts,
   useWarehouses, useSyncWarehouses, useUpdateWarehouseBranch, useUpdateWarehouseAccurate,
-  useShiftMasters, useCreateShift, useUpdateShift,
+  useShiftMasters, useCreateShift, useUpdateShift, useDeleteShift,
 } from "../hooks";
 
 import { EmployeeTable }     from "../components/employee/EmployeeTable";
@@ -96,8 +96,10 @@ function EmployeeTab() {
   const createEmpMut    = useCreateEmployee();
   const updateEmpMut    = useUpdateEmployee(editEmp?.id ?? "");
   const updateBranchMut = useUpdateEmployeeBranches(editEmp?.id ?? "");
+  const deleteEmpMut    = useDeleteEmployee();
   const createRoleMut   = useCreateEmployeeRole();
   const updateRoleMut   = useUpdateEmployeeRole(editRole?.id ?? "");
+  const deleteRoleMut   = useDeleteEmployeeRole();
 
   const empPending  = createEmpMut.isPending || updateEmpMut.isPending || updateBranchMut.isPending;
 
@@ -182,6 +184,14 @@ function EmployeeTab() {
     }
   }
 
+  async function handleDeleteEmp(emp: Employee) {
+    try { await deleteEmpMut.mutateAsync(emp.id); } catch { /* ignored */ }
+  }
+
+  async function handleDeleteRole(role: EmployeeRole) {
+    try { await deleteRoleMut.mutateAsync(role.id); } catch { /* ignored */ }
+  }
+
   return (
     <div className="space-y-6">
       {/* Employee section */}
@@ -209,7 +219,7 @@ function EmployeeTab() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <EmployeeTable employees={employees} isLoading={empLoading} onEdit={openEditEmp} />
+            <EmployeeTable employees={employees} isLoading={empLoading} onEdit={openEditEmp} onDelete={handleDeleteEmp} />
           </CardContent>
         </Card>
 
@@ -241,7 +251,7 @@ function EmployeeTab() {
 
         <Card>
           <CardContent className="p-0">
-            <EmployeeRoleTable roles={roles} isLoading={roleLoading} onEdit={openEditRole} />
+            <EmployeeRoleTable roles={roles} isLoading={roleLoading} onEdit={openEditRole} onDelete={handleDeleteRole} />
           </CardContent>
         </Card>
       </div>
@@ -296,13 +306,18 @@ function UserTab() {
       setTimeout(() => setDebouncedUser(e.target.value), 400);
   }
 
-  const createMut = useCreateUser();
-  const updateMut = useUpdateUser(editUser?.id ?? "");
-  const resetPwMut = useResetUserPassword(pwUser?.id ?? "");
+  const createMut     = useCreateUser();
+  const updateMut     = useUpdateUser(editUser?.id ?? "");
+  const resetPwMut    = useResetUserPassword(pwUser?.id ?? "");
+  const deactivateMut = useDeactivateUser();
 
   function openCreate() { setEditUser(null); setFormError(null); setFormOpen(true); }
   function openEdit(user: User) { setEditUser(user); setFormError(null); setFormOpen(true); }
   function openResetPw(user: User) { setPwUser(user); setPwError(null); setPwOpen(true); }
+
+  async function handleDeleteUser(user: User) {
+    try { await deactivateMut.mutateAsync(user.id); } catch { /* ignored */ }
+  }
 
   async function handleSubmit(values: CreateUserFormValues | UpdateUserFormValues) {
     setFormError(null);
@@ -357,7 +372,7 @@ function UserTab() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <UserTable users={users} isLoading={isLoading} onEdit={openEdit} onResetPw={openResetPw} />
+          <UserTable users={users} isLoading={isLoading} onEdit={openEdit} onResetPw={openResetPw} onDelete={handleDeleteUser} />
         </CardContent>
       </Card>
 
@@ -403,9 +418,13 @@ function BranchTab() {
 
   const createMut = useCreateBranch();
   const updateMut = useUpdateBranch(editBranch?.id ?? "");
+  const deleteMut = useDeleteBranch();
 
   function openCreate() { setEdit(null); setFormError(null); setFormOpen(true); }
   function openEdit(b: Branch) { setEdit(b); setFormError(null); setFormOpen(true); }
+  async function handleDelete(b: Branch) {
+    try { await deleteMut.mutateAsync(b.id); } catch { /* ignored */ }
+  }
 
   async function handleSubmit(values: BranchFormValues) {
     setFormError(null);
@@ -449,7 +468,7 @@ function BranchTab() {
 
       <Card>
         <CardContent className="p-0">
-          <BranchTable branches={branches} isLoading={isLoading} onEdit={openEdit} />
+          <BranchTable branches={branches} isLoading={isLoading} onEdit={openEdit} onDelete={handleDelete} />
         </CardContent>
       </Card>
 
@@ -733,8 +752,12 @@ function ShiftTab() {
   const { data: shifts = [], isLoading } = useShiftMasters();
   const createMut = useCreateShift();
   const updateMut = useUpdateShift(editShift?.id ?? "");
+  const deleteMut = useDeleteShift();
 
   function openCreate() { setEdit(null); setFormError(null); setFormOpen(true); }
+  async function handleDelete(shift: ShiftMaster) {
+    try { await deleteMut.mutateAsync(shift.id); } catch { /* ignored */ }
+  }
   function openEdit(s: ShiftMaster) { setEdit(s); setFormError(null); setFormOpen(true); }
 
   async function handleSubmit(values: ShiftFormValues) {
@@ -773,7 +796,7 @@ function ShiftTab() {
 
       <Card>
         <CardContent className="p-0">
-          <ShiftTable shifts={shifts} isLoading={isLoading} onEdit={openEdit} />
+          <ShiftTable shifts={shifts} isLoading={isLoading} onEdit={openEdit} onDelete={handleDelete} />
         </CardContent>
       </Card>
 

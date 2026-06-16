@@ -76,4 +76,17 @@ const updateShift = async (id, body) => {
   return { ...updated, isUsed };
 };
 
-module.exports = { getAll, getById, createShift, updateShift };
+const deleteShift = async (id) => {
+  const shift = await repo.findById(id);
+  if (!shift) throw new AppError("Shift not found", StatusCodes.NOT_FOUND);
+
+  const isUsed = await repo.isShiftUsed(id);
+  if (isUsed) {
+    // Shift is assigned to schedules — soft delete only
+    return { ...(await repo.softDelete(id)), isUsed: true };
+  }
+  await repo.hardDelete(id);
+  return { deleted: true };
+};
+
+module.exports = { getAll, getById, createShift, updateShift, deleteShift };
