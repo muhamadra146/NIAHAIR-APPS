@@ -49,23 +49,33 @@ function StatusBadge({ status }: { status: PayrollStatus }) {
 
 function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { branchId: sessionBranchId } = useAuthStore();
-  const { data: empData } = useEmployees({ limit: 200, isActive: true });
+  const { data: empData }   = useEmployees({ limit: 200, isActive: true });
   const { data: branchData } = useAllBranches();
   const employees = empData?.data ?? [];
   const branches  = branchData ?? [];
 
   const now       = new Date();
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const [employeeId, setEmployee] = useState("");
-  const [branchId,   setBranch]   = useState(sessionBranchId ?? "");
-  const [yearMonth,  setMonth]    = useState(thisMonth);
-  const [notes,      setNotes]    = useState("");
+
+  const [mode,        setMode]      = useState<"month" | "range">("month");
+  const [employeeId,  setEmployee]  = useState("");
+  const [branchId,    setBranch]    = useState(sessionBranchId ?? "");
+  const [yearMonth,   setMonth]     = useState(thisMonth);
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd,   setPeriodEnd]   = useState("");
+  const [notes,       setNotes]     = useState("");
 
   const generateMut = useGeneratePayroll();
 
+  const isValid = !!employeeId && !!branchId && (
+    mode === "month" ? !!yearMonth : (!!periodStart && !!periodEnd && periodEnd >= periodStart)
+  );
+
   const handleSubmit = async () => {
-    if (!employeeId || !branchId || !yearMonth) { toast.error("Lengkapi semua field"); return; }
-    const input: GeneratePayrollInput = { employeeId, branchId, yearMonth, notes: notes || undefined };
+    if (!isValid) { toast.error("Lengkapi semua field"); return; }
+    const input: GeneratePayrollInput = mode === "month"
+      ? { employeeId, branchId, yearMonth, notes: notes || undefined }
+      : { employeeId, branchId, periodStart, periodEnd, notes: notes || undefined };
     try {
       await generateMut.mutateAsync(input);
       toast.success("Payroll berhasil dibuat");
@@ -74,6 +84,8 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
       toast.error(e?.response?.data?.message ?? "Gagal generate payroll");
     }
   };
+
+  const selectCls = "mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm";
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -84,24 +96,61 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
         <div className="space-y-3 py-1">
           <div>
             <Label className="text-xs">Karyawan *</Label>
-            <select value={employeeId} onChange={(e) => setEmployee(e.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm">
+            <select value={employeeId} onChange={(e) => setEmployee(e.target.value)} className={selectCls}>
               <option value="">Pilih karyawan…</option>
               {employees.map((e) => <option key={e.id} value={e.id}>{e.name} ({e.role.name})</option>)}
             </select>
           </div>
           <div>
             <Label className="text-xs">Cabang *</Label>
-            <select value={branchId} onChange={(e) => setBranch(e.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm">
+            <select value={branchId} onChange={(e) => setBranch(e.target.value)} className={selectCls}>
               <option value="">Pilih cabang…</option>
               {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           </div>
+
+          {/* Period mode toggle */}
           <div>
-            <Label className="text-xs">Periode (Bulan) *</Label>
-            <Input type="month" value={yearMonth} onChange={(e) => setMonth(e.target.value)} className="mt-1" />
+            <Label className="text-xs">Mode Periode *</Label>
+            <div className="mt-1 flex rounded-lg border border-border overflow-hidden text-xs font-medium">
+              <button
+                type="button"
+                className={`flex-1 px-3 py-2 transition-colors ${mode === "month" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                onClick={() => setMode("month")}
+              >
+                Per Bulan
+              </button>
+              <button
+                type="button"
+                className={`flex-1 px-3 py-2 transition-colors ${mode === "range" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                onClick={() => setMode("range")}
+              >
+                Rentang Tanggal
+              </button>
+            </div>
           </div>
+
+          {mode === "month" ? (
+            <div>
+              <Label className="text-xs">Bulan *</Label>
+              <Input type="month" value={yearMonth} onChange={(e) => setMonth(e.target.value)} className="mt-1" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Tanggal Mulai *</Label>
+                <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs">Tanggal Selesai *</Label>
+                <Input type="date" value={periodEnd} min={periodStart} onChange={(e) => setPeriodEnd(e.target.value)} className="mt-1" />
+              </div>
+              {periodStart && periodEnd && periodEnd < periodStart && (
+                <p className="col-span-2 text-xs text-red-500 -mt-1">Tanggal selesai harus setelah tanggal mulai</p>
+              )}
+            </div>
+          )}
+
           <div>
             <Label className="text-xs">Catatan</Label>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opsional" className="mt-1" />
@@ -109,7 +158,7 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose} disabled={generateMut.isPending}>Batal</Button>
-          <Button size="sm" onClick={handleSubmit} disabled={generateMut.isPending}>
+          <Button size="sm" onClick={handleSubmit} disabled={generateMut.isPending || !isValid}>
             {generateMut.isPending ? "Memproses…" : "Generate"}
           </Button>
         </DialogFooter>

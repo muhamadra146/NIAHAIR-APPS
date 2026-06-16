@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Calendar, LogIn, LogOut, Pencil, CheckCircle2, XCircle, Clock, AlertCircle } from "lucide-react";
 import { Button }  from "@/components/ui/button";
 import { Badge }   from "@/components/ui/badge";
@@ -63,12 +63,28 @@ interface ManualDialogProps {
   onClose:    () => void;
 }
 
+const toTimeInput = (iso: string | null | undefined): string => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
 function ManualDialog({ open, row, isPending, onSave, onClose }: ManualDialogProps) {
   const now = new Date().toTimeString().slice(0, 5);
   const [status,    setStatus]    = useState<AttendanceStatus>("PRESENT");
   const [checkInAt,  setCheckIn]  = useState(now);
   const [checkOutAt, setCheckOut] = useState("");
   const [notes,      setNotes]    = useState("");
+
+  useEffect(() => {
+    if (open && row) {
+      const att = row.attendance;
+      setStatus(att?.status ?? "PRESENT");
+      setCheckIn(att?.checkInAt  ? toTimeInput(att.checkInAt)  : now);
+      setCheckOut(att?.checkOutAt ? toTimeInput(att.checkOutAt) : "");
+      setNotes(att?.notes ?? "");
+    }
+  }, [open, row]);
 
   if (!row) return null;
 

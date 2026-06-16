@@ -101,7 +101,36 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) =
   return { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments };
 };
 
+const findByEmployee = ({ skip, take, where }) =>
+  prisma.payroll.findMany({
+    skip, take, where,
+    orderBy: { periodStart: "desc" },
+    include: PAYROLL_INCLUDE,
+  });
+
+const countByEmployee = (where) => prisma.payroll.count({ where });
+
+const findBpjsData = ({ branchId, periodStart, periodEnd }) =>
+  prisma.payroll.findMany({
+    where: {
+      branchId,
+      periodStart: { gte: periodStart, lte: periodEnd },
+      status: { in: ["APPROVED", "PAID"] },
+    },
+    include: {
+      employee: {
+        select: {
+          id: true, name: true, employeeCode: true,
+          role: { select: { name: true } },
+        },
+      },
+      items: true,
+    },
+    orderBy: { employee: { name: "asc" } },
+  });
+
 module.exports = {
   findAll, count, findById, findByEmployeeAndPeriod,
   create, update, replaceAutoItems, getGenerationData,
+  findByEmployee, countByEmployee, findBpjsData,
 };

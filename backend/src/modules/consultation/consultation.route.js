@@ -18,9 +18,9 @@ const router = Router();
 
 const MANAGER_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER];
 
-// Stats & list — management only
+// Stats — management only; list — any authenticated (service enforces ownership for non-managers)
 router.get("/stats",            authenticate, authorize(...MANAGER_ROLES), getStatsController);
-router.get("/",                 authenticate, authorize(...MANAGER_ROLES), getAllController);
+router.get("/",                 authenticate, getAllController);
 
 // By invoice — any authenticated user (used by stylist to fetch their form)
 router.get("/invoice/:invoiceId", authenticate, getByInvoiceController);

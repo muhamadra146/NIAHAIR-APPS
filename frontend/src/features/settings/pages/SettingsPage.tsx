@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { Plus, Search } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -40,6 +40,8 @@ import { SalaryTab }          from "../components/salary/SalaryTab";
 import { LoanTab }            from "../components/loan/LoanTab";
 import { AccuratePanel }      from "../accurate/AccuratePanel";
 import { CommissionSettingsTab } from "../components/commission/CommissionSettingsTab";
+import { LeaveTypeTab }          from "../components/leaveType/LeaveTypeTab";
+import { LeaveQuotaTab }         from "../components/leaveQuota/LeaveQuotaTab";
 
 import type { Employee, EmployeeRole, User, Branch, PaymentMethod, CashAccount, Warehouse, ShiftMaster } from "../types";
 import type { EmployeeFormValues } from "../schemas/employee.schema";
@@ -50,9 +52,18 @@ import type { PaymentMethodFormValues } from "../schemas/paymentMethod.schema";
 import type { CashAccountFormValues } from "../schemas/cashAccount.schema";
 import type { ShiftFormValues } from "../schemas/shift.schema";
 
-// ────────────────────────────────────────────────────────────────────────────
-// Tab 1 — Employee Management
-// ────────────────────────────────────────────────────────────────────────────
+// Extract the real API error message from Axios errors
+function apiErr(err: unknown, fallback = "Terjadi kesalahan"): string {
+  if (err && typeof err === "object" && "response" in err) {
+    const r = (err as { response?: { data?: { message?: string } } }).response;
+    if (r?.data?.message) return r.data.message;
+  }
+  return err instanceof Error ? err.message : fallback;
+}
+
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// Tab 1 â€" Employee Management
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function EmployeeTab() {
   const { branchId, user } = useAuthStore();
   const isSuperAdmin = user?.role?.code === "SUPER_ADMIN";
@@ -141,7 +152,7 @@ function EmployeeTab() {
       }
       setEmpForm(false);
     } catch (err: unknown) {
-      setEmpError(err instanceof Error ? err.message : "Failed to save employee");
+      setEmpError(apiErr(err, "Gagal menyimpan karyawan"));
     }
   }
 
@@ -167,7 +178,7 @@ function EmployeeTab() {
       }
       setRoleForm(false);
     } catch (err: unknown) {
-      setRoleError(err instanceof Error ? err.message : "Failed to save role");
+      setRoleError(apiErr(err, "Gagal menyimpan role"));
     }
   }
 
@@ -190,7 +201,7 @@ function EmployeeTab() {
             <div className="relative w-full sm:max-w-xs">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search name, code, phone…"
+                placeholder="Search name, code, phoneâ€¦"
                 value={search}
                 onChange={handleSearchChange}
                 className="pl-9"
@@ -257,9 +268,9 @@ function EmployeeTab() {
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Tab 2 — User Account
-// ────────────────────────────────────────────────────────────────────────────
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// Tab 2 â€" User Account
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function UserTab() {
   const [formOpen, setFormOpen]         = useState(false);
   const [editUser, setEditUser]         = useState<User | null>(null);
@@ -305,7 +316,7 @@ function UserTab() {
       }
       setFormOpen(false);
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to save user");
+      setFormError(apiErr(err, "Gagal menyimpan user"));
     }
   }
 
@@ -315,7 +326,7 @@ function UserTab() {
       await resetPwMut.mutateAsync(values);
       setPwOpen(false);
     } catch (err: unknown) {
-      setPwError(err instanceof Error ? err.message : "Failed to reset password");
+      setPwError(apiErr(err, "Gagal reset password"));
     }
   }
 
@@ -338,7 +349,7 @@ function UserTab() {
           <div className="relative w-full sm:max-w-xs">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search email, employee…"
+              placeholder="Search email, employeeâ€¦"
               value={userSearch}
               onChange={handleUserSearch}
               className="pl-9"
@@ -379,9 +390,9 @@ function UserTab() {
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Tab 3 — Branch
-// ────────────────────────────────────────────────────────────────────────────
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// Tab 3 â€" Branch
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function BranchTab() {
   const [formOpen, setFormOpen]   = useState(false);
   const [editBranch, setEdit]     = useState<Branch | null>(null);
@@ -420,7 +431,7 @@ function BranchTab() {
       }
       setFormOpen(false);
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to save branch");
+      setFormError(apiErr(err, "Gagal menyimpan cabang"));
     }
   }
 
@@ -454,9 +465,9 @@ function BranchTab() {
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Tab 4 — Payment Method
-// ────────────────────────────────────────────────────────────────────────────
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// Tab 4 â€" Payment Method
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function PaymentMethodTab() {
   const [formOpen, setFormOpen]   = useState(false);
   const [editMethod, setEdit]     = useState<PaymentMethod | null>(null);
@@ -492,7 +503,7 @@ function PaymentMethodTab() {
       }
       setFormOpen(false);
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to save payment method");
+      setFormError(apiErr(err, "Gagal menyimpan metode bayar"));
     }
   }
 
@@ -531,9 +542,9 @@ function PaymentMethodTab() {
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Tab 5 — Cash Account
-// ────────────────────────────────────────────────────────────────────────────
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// Tab 5 â€" Cash Account
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function CashAccountTab() {
   const [formOpen, setFormOpen]   = useState(false);
   const [editAccount, setEdit]    = useState<CashAccount | null>(null);
@@ -573,7 +584,7 @@ function CashAccountTab() {
       });
       setFormOpen(false);
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to save cash account");
+      setFormError(apiErr(err, "Gagal menyimpan akun kas"));
     }
   }
 
@@ -585,7 +596,7 @@ function CashAccountTab() {
           <p className="text-sm text-muted-foreground">Synced from Accurate Online (GL accounts, type: Cash/Bank)</p>
         </div>
         <Button size="sm" variant="outline" onClick={handleSync} disabled={syncMut.isPending}>
-          {syncMut.isPending ? "Syncing…" : "Sync from Accurate"}
+          {syncMut.isPending ? "Syncingâ€¦" : "Sync from Accurate"}
         </Button>
       </div>
 
@@ -612,9 +623,9 @@ function CashAccountTab() {
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Tab 6 — Warehouse
-// ────────────────────────────────────────────────────────────────────────────
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// Tab 6 â€" Warehouse
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function WarehouseTab() {
   const [formOpen, setFormOpen]       = useState(false);
   const [editWh, setEditWh]           = useState<Warehouse | null>(null);
@@ -661,7 +672,7 @@ function WarehouseTab() {
       }
       setFormOpen(false);
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to update warehouse");
+      setFormError(apiErr(err, "Gagal update gudang"));
     }
   }
 
@@ -679,7 +690,7 @@ function WarehouseTab() {
           onClick={handleSync}
           disabled={syncMut.isPending}
         >
-          {syncMut.isPending ? "Syncing…" : "Sync from Accurate"}
+          {syncMut.isPending ? "Syncingâ€¦" : "Sync from Accurate"}
         </Button>
       </div>
 
@@ -711,9 +722,9 @@ function WarehouseTab() {
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Tab 7 — Shift Master
-// ────────────────────────────────────────────────────────────────────────────
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// Tab 7 â€" Shift Master
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function ShiftTab() {
   const [formOpen, setFormOpen]   = useState(false);
   const [editShift, setEdit]      = useState<ShiftMaster | null>(null);
@@ -744,7 +755,7 @@ function ShiftTab() {
       }
       setFormOpen(false);
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Gagal menyimpan shift");
+      setFormError(apiErr(err, "Gagal menyimpan shift"));
     }
   }
 
@@ -778,20 +789,22 @@ function ShiftTab() {
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 // Main SettingsPage
-// ────────────────────────────────────────────────────────────────────────────
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const TABS = [
-  { value: "employees",       label: "Employee Management" },
-  { value: "users",           label: "User Account" },
-  { value: "branches",        label: "Branch" },
-  { value: "payment-methods", label: "Payment Method" },
-  { value: "cash-accounts",   label: "Cash Account" },
-  { value: "warehouses",      label: "Warehouse" },
-  { value: "shifts",          label: "Master Shift" },
-  { value: "salary",          label: "Setting Gaji" },
+  { value: "employees",       label: "Karyawan" },
+  { value: "users",           label: "User" },
+  { value: "branches",        label: "Cabang" },
+  { value: "payment-methods", label: "Pembayaran" },
+  { value: "cash-accounts",   label: "Kas" },
+  { value: "warehouses",      label: "Gudang" },
+  { value: "shifts",          label: "Shift" },
+  { value: "salary",          label: "Gaji" },
   { value: "loans",           label: "Kasbon" },
   { value: "komisi",          label: "Komisi" },
+  { value: "leave-types",     label: "Tipe Cuti" },
+  { value: "leave-quotas",    label: "Kuota Cuti" },
   { value: "accurate",        label: "Accurate" },
 ] as const;
 
@@ -806,7 +819,7 @@ export function SettingsPage() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="mt-6">
-        {/* ── Mobile: native select ─────────────────────────────────── */}
+        {/* â"€â"€ Mobile: native select â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
         <div className="md:hidden">
           <select
             value={tab}
@@ -819,8 +832,8 @@ export function SettingsPage() {
           </select>
         </div>
 
-        {/* ── Desktop: underline tab bar ────────────────────────────── */}
-        <TabsList className="hidden md:flex h-auto w-full items-end justify-start gap-0 rounded-none border-b border-slate-200 bg-transparent p-0">
+        {/* Desktop: wrap tab bar */}
+        <TabsList className="hidden md:flex h-auto w-full flex-wrap items-end justify-start gap-0 rounded-none border-b border-slate-200 bg-transparent p-0">
           {TABS.map((t) => (
             <TabsTrigger
               key={t.value}
@@ -842,8 +855,11 @@ export function SettingsPage() {
         <TabsContent value="salary"          className="mt-6"><SalaryTab /></TabsContent>
         <TabsContent value="loans"           className="mt-6"><LoanTab /></TabsContent>
         <TabsContent value="komisi"          className="mt-6"><CommissionSettingsTab /></TabsContent>
+        <TabsContent value="leave-types"     className="mt-6"><LeaveTypeTab /></TabsContent>
+        <TabsContent value="leave-quotas"    className="mt-6"><LeaveQuotaTab /></TabsContent>
         <TabsContent value="accurate"        className="mt-6"><AccuratePanel /></TabsContent>
       </Tabs>
     </PageContainer>
   );
 }
+

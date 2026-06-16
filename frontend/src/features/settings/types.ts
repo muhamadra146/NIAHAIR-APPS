@@ -262,3 +262,37 @@ export type UpdateCashAccountInput = Partial<CreateCashAccountInput> & { isActiv
 
 export interface UpdateWarehouseBranchInput   { branchId: string }
 export interface UpdateWarehouseAccurateInput { accurateWarehouseId: number }
+
+// ── Leave Type ─────────────────────────────────────────────────────────
+export interface LeaveType {
+  id:              string;
+  code:            string;
+  name:            string;
+  maxDaysPerYear:  number;
+  isPaid:          boolean;
+  isActive:        boolean;
+}
+export interface CreateLeaveTypeInput { code: string; name: string; maxDaysPerYear?: number; isPaid?: boolean }
+export type UpdateLeaveTypeInput = Partial<CreateLeaveTypeInput> & { isActive?: boolean };
+
+// ── Leave Quota ────────────────────────────────────────────────────────
+export interface LeaveQuota {
+  id:          string;
+  employeeId:  string;
+  leaveTypeId: string;
+  year:        number;
+  totalDays:   number;
+  usedDays:    number;
+  employee:    { id: string; name: string; employeeCode: string | null };
+  leaveType:   { id: string; code: string; name: string; maxDaysPerYear: number; isPaid: boolean };
+}
+export interface AssignQuotaInput {
+  employeeId:  string;
+  leaveTypeId: string;
+  year:        number;
+  totalDays:   number;
+}
+export interface LeaveQuotaParams {
+  employeeId?: string;
+  year?:       number;
+}

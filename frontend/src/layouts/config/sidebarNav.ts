@@ -17,6 +17,9 @@ import {
   DollarSign,
   Banknote,
   NotebookPen,
+  UmbrellaOff,
+  FileText,
+  RotateCcw,
   type LucideIcon,
 } from "lucide-react";
 
@@ -130,7 +133,7 @@ export const sidebarNav: NavItem[] = [
     label: "Customers",
     href:  "/customers",
     icon:  Users,
-    roles: [...MANAGEMENT_ROLES, "CASHIER", "STAFF"],
+    roles: [...MANAGEMENT_ROLES, "CASHIER"],
     group: "Data",
   },
   {
@@ -162,6 +165,29 @@ export const sidebarNav: NavItem[] = [
     icon:  ClipboardList,
     roles: [...MANAGEMENT_ROLES, "STYLIST", "STAFF"],
     group: "Kehadiran",
+  },
+  {
+    label: "Cuti",
+    href:  "/leaves",
+    icon:  UmbrellaOff,
+    roles: ALL_ROLES,
+    group: "Kehadiran",
+  },
+  {
+    label: "Koreksi Absen",
+    href:  "/attendance-corrections",
+    icon:  RotateCcw,
+    roles: ALL_ROLES,
+    group: "Kehadiran",
+  },
+
+  // ── Keuangan Saya ─────────────────────────────────────────────────────────
+  {
+    label: "Slip Gaji",
+    href:  "/my-payslip",
+    icon:  FileText,
+    roles: [...MANAGEMENT_ROLES, "STYLIST", "STAFF", "CASHIER"],
+    group: "Keuangan Saya",
   },
 
   // ── Lainnya ───────────────────────────────────────────────────────────

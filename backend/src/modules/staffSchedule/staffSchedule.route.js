@@ -8,6 +8,7 @@ const {
   getRosterController,
   bulkUpsertController,
   getAvailableStaffController,
+  getMySchedulesController,
 } = require("./staffSchedule.controller");
 
 const router = Router();
@@ -15,6 +16,7 @@ const router = Router();
 // Fixed paths must come before parameterised routes
 router.get("/available", authenticate, getAvailableStaffController);
 router.get("/roster",    authenticate, getRosterController);
+router.get("/my",        authenticate, getMySchedulesController);
 
 router.post(
   "/bulk",

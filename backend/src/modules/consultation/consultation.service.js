@@ -20,7 +20,7 @@ const isManager = (roleCode) => MANAGEMENT_ROLES.includes(roleCode);
 
 // ── List ──────────────────────────────────────────────────────────────
 
-const listNotes = async ({ page, limit, customerId, branchId, filledByEmployeeId, startDate, endDate }) => {
+const listNotes = async ({ page, limit, customerId, branchId, filledByEmployeeId, startDate, endDate }, user) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};

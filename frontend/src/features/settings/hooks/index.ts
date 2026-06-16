@@ -19,6 +19,8 @@ import {
 } from "../api/warehouse.api";
 import { fetchSalarySettings, createSalarySetting, updateSalarySetting } from "../api/salary.api";
 import { fetchLoansByEmployee, fetchLoans, createLoan, updateLoan, cancelLoan, addRepayment } from "../api/loan.api";
+import { fetchLeaveTypes, createLeaveType, updateLeaveType } from "../api/leaveType.api";
+import { fetchLeaveQuotas, fetchMyLeaveQuotas, assignLeaveQuota } from "../api/leaveQuota.api";
 import type {
   EmployeeListParams, EmployeeRoleListParams, UserListParams, BranchListParams,
   PaymentMethodListParams, CashAccountListParams, WarehouseListParams,
@@ -32,6 +34,8 @@ import type {
   CreateShiftInput, UpdateShiftInput,
   CreateSalaryInput, UpdateSalaryInput,
   LoanListParams, CreateLoanInput, UpdateLoanInput, AddRepaymentInput,
+  CreateLeaveTypeInput, UpdateLeaveTypeInput,
+  AssignQuotaInput, LeaveQuotaParams,
 } from "../types";
 
 // ── Employees ─────────────────────────────────────────────────────────
@@ -343,5 +347,40 @@ export const useAddRepayment = (loanId: string, employeeId: string) => {
       qc.invalidateQueries({ queryKey: ["loans", "employee", employeeId] });
       qc.invalidateQueries({ queryKey: ["loans"] });
     },
+  });
+};
+
+// ── Leave Types ───────────────────────────────────────────────────────
+export const useLeaveTypes = (includeInactive = false) =>
+  useQuery({ queryKey: ["leaveTypes", includeInactive], queryFn: () => fetchLeaveTypes(includeInactive) });
+
+export const useCreateLeaveType = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateLeaveTypeInput) => createLeaveType(input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leaveTypes"] }); },
+  });
+};
+
+export const useUpdateLeaveType = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateLeaveTypeInput) => updateLeaveType(id, input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leaveTypes"] }); },
+  });
+};
+
+// ── Leave Quotas ──────────────────────────────────────────────────────
+export const useLeaveQuotas = (params: LeaveQuotaParams = {}) =>
+  useQuery({ queryKey: ["leaveQuotas", params], queryFn: () => fetchLeaveQuotas(params) });
+
+export const useMyLeaveQuotas = (year?: number) =>
+  useQuery({ queryKey: ["leaveQuotas", "my", year], queryFn: () => fetchMyLeaveQuotas(year) });
+
+export const useAssignLeaveQuota = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AssignQuotaInput) => assignLeaveQuota(input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leaveQuotas"] }); },
   });
 };

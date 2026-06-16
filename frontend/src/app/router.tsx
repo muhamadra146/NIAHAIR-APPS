@@ -31,6 +31,9 @@ import { LoanListPage }               from "@/features/loan/pages/LoanListPage";
 import { LoanDetailPage }             from "@/features/loan/pages/LoanDetailPage";
 import { ConsultationListPage }       from "@/features/consultation/pages/ConsultationListPage";
 import { ConsultationFormPage }       from "@/features/consultation/pages/ConsultationFormPage";
+import { LeavePage }                  from "@/features/leave/pages/LeavePage";
+import { MyPayslipPage }             from "@/features/payroll/pages/MyPayslipPage";
+import { CorrectionPage }            from "@/features/attendance/pages/CorrectionPage";
 
 export const router = createBrowserRouter([
   // ── Public routes ────────────────────────────────────────────────────
@@ -92,6 +95,12 @@ export const router = createBrowserRouter([
           { path: "/consultation-notes",          element: <ConsultationListPage /> },
           { path: "/consultation-notes/new",      element: <ConsultationFormPage /> },
           { path: "/consultation-notes/:id/edit", element: <ConsultationFormPage /> },
+          // Leave Management
+          { path: "/leaves", element: <LeavePage /> },
+          // My Payslip (employee self-service)
+          { path: "/my-payslip", element: <MyPayslipPage /> },
+          // Attendance Correction
+          { path: "/attendance-corrections", element: <CorrectionPage /> },
           // Settings
           { path: "/settings", element: <SettingsPage /> },
         ],

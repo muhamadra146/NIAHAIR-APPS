@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AvailableStaff } from "../types";
 
@@ -28,8 +29,23 @@ export function StaffSlotSelector({
 
   const allAssigned = new Set(Object.values(staffBySlot).flat());
 
+  const checkedOutAssigned = [...allAssigned].filter((id) => {
+    const s = staff.find((x) => x.employeeId === id);
+    return s?.hasCheckedOut;
+  });
+
   return (
-    <div className="divide-y divide-border rounded-md border border-border overflow-visible">
+    <div className="space-y-2">
+      {checkedOutAssigned.length > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            <strong>{checkedOutAssigned.map((id) => staff.find((s) => s.employeeId === id)?.name ?? id).join(", ")}</strong>
+            {checkedOutAssigned.length === 1 ? " sudah" : " sudah"} check-out hari ini. Pastikan masih bisa melayani.
+          </span>
+        </div>
+      )}
+      <div className="divide-y divide-border rounded-md border border-border overflow-visible">
       {APPOINTMENT_SLOTS.map(({ key: slot, label }) => {
         const selectedIds = staffBySlot[slot];
         const isOpen      = openSlot === slot;
@@ -90,16 +106,19 @@ export function StaffSlotSelector({
                 {staff.map((s) => {
                   const isInThisSlot  = selectedIds.includes(s.employeeId);
                   const isInOtherSlot = !isInThisSlot && allAssigned.has(s.employeeId);
+                  const checkedOut    = s.hasCheckedOut;
                   return (
                     <button
                       key={s.employeeId}
                       type="button"
-                      disabled={isInThisSlot}
+                      disabled={isInThisSlot || checkedOut}
                       onClick={() => { onAdd(slot, s.employeeId); setOpenSlot(null); }}
                       className={cn(
                         "flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors",
                         isInThisSlot
                           ? "bg-primary/8 text-primary font-medium cursor-default"
+                          : checkedOut
+                          ? "opacity-50 cursor-not-allowed bg-slate-50"
                           : "hover:bg-muted/50"
                       )}
                     >
@@ -112,6 +131,7 @@ export function StaffSlotSelector({
                       )}
                       {isInThisSlot  && <span className="shrink-0 text-primary text-xs">✓</span>}
                       {isInOtherSlot && <span className="shrink-0 text-xs text-muted-foreground/50">(slot lain)</span>}
+                      {checkedOut    && <span className="shrink-0 text-xs text-amber-600">sudah pulang</span>}
                     </button>
                   );
                 })}
@@ -120,6 +140,7 @@ export function StaffSlotSelector({
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

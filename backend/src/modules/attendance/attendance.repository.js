@@ -50,4 +50,37 @@ const upsertBySchedule = (staffScheduleId, createData, updateData) =>
     include: INCLUDE,
   });
 
-module.exports = { findMany, count, findById, findBySchedule, findByEmployeeAndDate, create, update, upsertBySchedule };
+const getReportData = ({ branchId, startDate, endDate, employeeId }) => {
+  const where = {
+    branchId,
+    workDate: { gte: startDate, lte: endDate },
+    status: "WORKING",
+  };
+  if (employeeId) where.employeeId = employeeId;
+
+  return prisma.staffSchedule.findMany({
+    where,
+    include: {
+      attendance: {
+        select: {
+          status: true,
+          lateMinutes: true,
+          earlyLeaveMinutes: true,
+          overtimeMinutes: true,
+          isHolidayWork: true,
+        },
+      },
+      employee: {
+        select: {
+          id: true,
+          name: true,
+          employeeCode: true,
+          role: { select: { id: true, code: true, name: true } },
+        },
+      },
+    },
+    orderBy: { workDate: "asc" },
+  });
+};
+
+module.exports = { findMany, count, findById, findBySchedule, findByEmployeeAndDate, create, update, upsertBySchedule, getReportData };

@@ -7,12 +7,17 @@ const { generateSchema, updateNotesSchema } = require("./payroll.validation");
 const {
   getAllController, getByIdController, generateController, recalculateController,
   submitController, approveController, markAsPaidController, updateNotesController,
+  getMyController, getBpjsReportController,
 } = require("./payroll.controller");
 
 const router = Router();
 
 const ALL_ADMIN = [ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.ADMIN];
 const APPROVERS = [ROLES.SUPER_ADMIN, ROLES.MANAGER];
+
+// Employee self-service — must be BEFORE /:id
+router.get("/my",          authenticate, getMyController);
+router.get("/bpjs-report", authenticate, authorize(...ALL_ADMIN), getBpjsReportController);
 
 router.get("/",    authenticate, authorize(...ALL_ADMIN), getAllController);
 router.get("/:id", authenticate, authorize(...ALL_ADMIN), getByIdController);

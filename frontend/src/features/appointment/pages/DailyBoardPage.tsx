@@ -127,12 +127,13 @@ function StaffAssignPopover({
   const alreadyAssigned = appointment.staffs
     .filter((s) => !avail.find((a) => a.employeeId === s.employee.id))
     .map((s): AvailableStaff => ({
-      employeeId: s.employee.id,
-      name:       s.employee.name,
-      shiftCode:  null,
-      startTime:  null,
-      endTime:    null,
-      role:       s.employee.role ?? { id: "", code: "", name: "—" },
+      employeeId:    s.employee.id,
+      name:          s.employee.name,
+      shiftCode:     null,
+      startTime:     null,
+      endTime:       null,
+      role:          s.employee.role ?? { id: "", code: "", name: "—" },
+      hasCheckedOut: false,
     }));
   const allStaff = [...alreadyAssigned, ...avail];
 

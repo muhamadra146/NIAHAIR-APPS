@@ -1,6 +1,7 @@
 const { success, created } = require("../../common/responses/apiResponse");
 const svc = require("./payroll.service");
 
+
 const getAllController = async (req, res, next) => {
   try {
     const { page = 1, limit = 20, employeeId, branchId, status, yearMonth } = req.query;
@@ -58,7 +59,23 @@ const updateNotesController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const getMyController = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const result = await svc.getMy({ employeeId: req.user.employeeId, page: Number(page), limit: Number(limit) });
+    return success(res, result, "My payrolls fetched");
+  } catch (err) { next(err); }
+};
+
+const getBpjsReportController = async (req, res, next) => {
+  try {
+    const result = await svc.getBpjsReport(req.query);
+    return success(res, result, "BPJS report fetched");
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   getAllController, getByIdController, generateController, recalculateController,
   submitController, approveController, markAsPaidController, updateNotesController,
+  getMyController, getBpjsReportController,
 };

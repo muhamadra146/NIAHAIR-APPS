@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -33,12 +32,12 @@ import type {
   CommissionBase,
 } from "@/features/commission/types";
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 function useEmployees() {
   return useQuery({
     queryKey: ["employees-all"],
-    queryFn:  async () => {
+    queryFn: async () => {
       const { api } = await import("@/lib/axios");
       const { data } = await api.get("/employees", { params: { limit: 200, isActive: true } });
       return (data.data?.data ?? []) as { id: string; name: string; employeeCode: string | null }[];
@@ -47,21 +46,23 @@ function useEmployees() {
   });
 }
 
-// ── Commission Category Section ───────────────────────────────────────────────
+const selectCls =
+  "h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60";
 
-interface CategoryFormState {
-  code: string;
-  name: string;
-}
+// ── Main export ───────────────────────────────────────────────────────────────
 
 export function CommissionSettingsTab() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <CommissionCategorySection />
       <CommissionRuleSection />
     </div>
   );
 }
+
+// ── Category Section ──────────────────────────────────────────────────────────
+
+interface CategoryFormState { code: string; name: string }
 
 function CommissionCategorySection() {
   const qc = useQueryClient();
@@ -76,7 +77,6 @@ function CommissionCategorySection() {
     queryFn:  () => fetchCommissionCategories({ limit: 100 }),
     staleTime: 30_000,
   });
-
   const categories = data?.data ?? [];
 
   const createMut = useMutation({
@@ -99,7 +99,7 @@ function CommissionCategorySection() {
     onError: (err: Error) => setError(err.message),
   });
 
-  const toggleActiveMut = useMutation({
+  const toggleMut = useMutation({
     mutationFn: (cat: CommissionCategory) => updateCommissionCategory(cat.id, { isActive: !cat.isActive }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["commission-categories"] }),
     onError: (err: Error) => toast.error(err.message),
@@ -112,54 +112,51 @@ function CommissionCategorySection() {
       setDeleteTarget(null);
       toast.success("Kategori komisi dihapus");
     },
-    onError: (err: Error) => {
-      setDeleteTarget(null);
-      toast.error(err.message);
-    },
+    onError: (err: Error) => { setDeleteTarget(null); toast.error(err.message); },
   });
 
   function startEdit(cat: CommissionCategory) {
     setEditId(cat.id); setForm({ code: cat.code, name: cat.name }); setError(null); setAdding(false);
   }
-
-  function cancelEdit() { setEditId(null); setAdding(false); setForm({ code: "", name: "" }); setError(null); }
+  function cancel() { setEditId(null); setAdding(false); setForm({ code: "", name: "" }); setError(null); }
 
   return (
     <>
-    <Card>
-      <CardHeader className="pb-3 pt-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Tag className="h-4 w-4 text-muted-foreground" />
-            <h3 className="font-semibold text-sm">Kategori Komisi</h3>
+      <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-5 py-4">
+          <div className="flex items-center gap-2.5">
+            <Tag className="h-4 w-4 text-slate-500" />
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Kategori Komisi</h3>
+              <p className="text-xs text-slate-400">{categories.length} kategori terdaftar</p>
+            </div>
           </div>
           {!adding && !editId && (
-            <Button size="sm" variant="outline" onClick={() => { setAdding(true); setEditId(null); setError(null); }}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Tambah
+            <Button size="sm" onClick={() => { setAdding(true); setEditId(null); setError(null); }}>
+              <Plus className="h-3.5 w-3.5 mr-1.5" /> Tambah
             </Button>
           )}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {error && <p className="text-xs text-destructive">{error}</p>}
 
         {/* Add form */}
         {adding && (
-          <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
-            <div className="flex gap-2">
-              <div className="space-y-1 w-28">
-                <Label className="text-xs">Kode</Label>
+          <div className="border-b border-slate-100 bg-slate-50/40 px-5 py-4 space-y-3">
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <div className="flex gap-3">
+              <div className="space-y-1 w-36">
+                <Label className="text-xs font-medium text-slate-600">Kode</Label>
                 <Input
-                  className="h-8 text-sm"
-                  placeholder="e.g. RAMBUT"
+                  className="h-9 text-sm"
+                  placeholder="CUTTING"
                   value={form.code}
-                  onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+                  onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
                 />
               </div>
-              <div className="space-y-1 flex-1">
-                <Label className="text-xs">Nama</Label>
+              <div className="flex-1 space-y-1">
+                <Label className="text-xs font-medium text-slate-600">Nama Kategori</Label>
                 <Input
-                  className="h-8 text-sm"
+                  className="h-9 text-sm"
                   placeholder="Nama kategori"
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -167,122 +164,115 @@ function CommissionCategorySection() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" className="h-7" disabled={!form.code.trim() || !form.name.trim() || createMut.isPending}
-                onClick={() => createMut.mutate()}>
-                {createMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
+              <Button
+                size="sm"
+                disabled={!form.code.trim() || !form.name.trim() || createMut.isPending}
+                onClick={() => createMut.mutate()}
+              >
+                {createMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
                 Simpan
               </Button>
-              <Button size="sm" variant="ghost" className="h-7" onClick={cancelEdit}>
-                <X className="h-3 w-3 mr-1" /> Batal
+              <Button size="sm" variant="ghost" onClick={cancel}>
+                <X className="h-3.5 w-3.5 mr-1" /> Batal
               </Button>
             </div>
           </div>
         )}
 
+        {/* List */}
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Memuat...</p>
+          <div className="px-5 py-8 text-center text-sm text-slate-400">Memuat...</div>
         ) : categories.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic">Belum ada kategori komisi.</p>
+          <div className="px-5 py-8 text-center text-sm text-slate-400 italic">Belum ada kategori komisi.</div>
         ) : (
-          <div className="divide-y divide-border rounded-md border border-border overflow-hidden">
+          <ul className="divide-y divide-slate-100">
             {categories.map((cat) => (
-              <div key={cat.id} className="flex items-center justify-between px-3 py-2.5">
+              <li key={cat.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50/70 transition-colors">
                 {editId === cat.id ? (
-                  <div className="flex flex-1 gap-2 items-center">
-                    <span className="text-xs font-mono text-muted-foreground w-20">{cat.code}</span>
+                  <>
+                    <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-mono text-slate-500">
+                      {cat.code}
+                    </span>
                     <Input
-                      className="h-7 text-sm flex-1"
+                      className="h-8 text-sm flex-1"
                       value={form.name}
                       onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                       autoFocus
                     />
-                    <Button size="sm" className="h-7 px-2" disabled={!form.name.trim() || updateMut.isPending}
-                      onClick={() => updateMut.mutate(cat.id)}>
+                    {error && <p className="text-xs text-destructive">{error}</p>}
+                    <Button
+                      size="sm" className="h-8 px-2.5" variant="default"
+                      disabled={!form.name.trim() || updateMut.isPending}
+                      onClick={() => updateMut.mutate(cat.id)}
+                    >
                       {updateMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                     </Button>
-                    <Button size="sm" variant="ghost" className="h-7 px-2" onClick={cancelEdit}>
+                    <Button size="sm" variant="ghost" className="h-8 px-2" onClick={cancel}>
                       <X className="h-3 w-3" />
                     </Button>
-                  </div>
+                  </>
                 ) : (
                   <>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xs font-mono text-muted-foreground w-20 shrink-0">{cat.code}</span>
-                      <span className="text-sm font-medium truncate">{cat.name}</span>
-                      {!cat.isActive && <Badge variant="secondary" className="text-[10px]">Nonaktif</Badge>}
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0 ml-2">
-                      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => startEdit(cat)}>
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        size="sm" variant="ghost"
-                        className={`h-7 px-2 text-xs ${cat.isActive ? "text-muted-foreground" : "text-green-600"}`}
-                        disabled={toggleActiveMut.isPending}
-                        onClick={() => toggleActiveMut.mutate(cat)}
+                    {/* Code chip */}
+                    <span className="shrink-0 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-mono font-medium text-slate-500 max-w-[140px] truncate" title={cat.code}>
+                      {cat.code}
+                    </span>
+                    {/* Name */}
+                    <span className="flex-1 min-w-0 text-sm font-medium text-slate-800 truncate">{cat.name}</span>
+                    {/* Inactive badge */}
+                    {!cat.isActive && (
+                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                        Nonaktif
+                      </span>
+                    )}
+                    {/* Actions */}
+                    <div className="shrink-0 flex items-center gap-0.5 ml-1">
+                      <button
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                        onClick={() => startEdit(cat)}
+                        title="Edit"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors hover:bg-slate-100 ${
+                          cat.isActive ? "text-slate-500 hover:text-slate-700" : "text-emerald-600 hover:text-emerald-700"
+                        }`}
+                        disabled={toggleMut.isPending}
+                        onClick={() => toggleMut.mutate(cat)}
                       >
                         {cat.isActive ? "Nonaktifkan" : "Aktifkan"}
-                      </Button>
-                      <Button
-                        size="sm" variant="ghost"
-                        className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                      </button>
+                      <button
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
                         disabled={deleteMut.isPending}
                         onClick={() => setDeleteTarget({ id: cat.id, name: cat.name })}
+                        title="Hapus"
                       >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </>
                 )}
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </CardContent>
-    </Card>
+      </div>
 
-    {/* ── Delete confirm dialog ────────────────────────────────────── */}
-    <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
-      <DialogContent className="sm:max-w-[420px]">
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-            </div>
-            <div>
-              <DialogTitle className="text-base">Hapus Kategori Komisi</DialogTitle>
-              <DialogDescription className="text-xs mt-0.5">
-                Tindakan ini tidak dapat dibatalkan.
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-        <p className="text-sm text-muted-foreground mt-1">
-          Hapus kategori komisi:{" "}
-          <span className="font-semibold text-foreground">{deleteTarget?.name}</span>?
-        </p>
-        <DialogFooter className="mt-4 gap-2">
-          <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)} disabled={deleteMut.isPending}>
-            Batal
-          </Button>
-          <Button
-            variant="destructive" size="sm"
-            disabled={deleteMut.isPending}
-            onClick={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
-          >
-            {deleteMut.isPending
-              ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-              : <Trash2 className="h-3.5 w-3.5 mr-1" />}
-            Hapus
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <DeleteDialog
+        open={!!deleteTarget}
+        title="Hapus Kategori Komisi"
+        message={<>Hapus kategori <span className="font-semibold text-foreground">{deleteTarget?.name}</span>?</>}
+        isPending={deleteMut.isPending}
+        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+        onClose={() => setDeleteTarget(null)}
+      />
     </>
   );
 }
 
-// ── Commission Rule Section ───────────────────────────────────────────────────
+// ── Rule Section ──────────────────────────────────────────────────────────────
 
 const SLOT_OPTIONS = [
   { value: "",         label: "— Semua role —" },
@@ -304,21 +294,12 @@ interface RuleFormState {
 }
 
 const EMPTY_RULE: RuleFormState = {
-  employeeId:           "",
-  commissionCategoryId: "",
-  slotKey:              "",
-  commissionType:       "PERCENTAGE",
-  commissionValue:      "",
-  commissionBase:       "AFTER_DISCOUNT",
-  effectiveDate:        new Date().toISOString().split("T")[0],
-  endDate:              "",
-  isActive:             true,
+  employeeId: "", commissionCategoryId: "", slotKey: "",
+  commissionType: "PERCENTAGE", commissionValue: "",
+  commissionBase: "AFTER_DISCOUNT",
+  effectiveDate: new Date().toISOString().split("T")[0],
+  endDate: "", isActive: true,
 };
-
-interface DeleteTarget {
-  id:   string;
-  name: string;
-}
 
 function CommissionRuleSection() {
   const qc = useQueryClient();
@@ -328,7 +309,7 @@ function CommissionRuleSection() {
   const [filterEmp, setFilterEmp]       = useState("");
   const [filterCat, setFilterCat]       = useState("");
   const [error, setError]               = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const { data: empData }  = useEmployees();
   const employees = empData ?? [];
@@ -344,7 +325,7 @@ function CommissionRuleSection() {
     queryKey: ["commission-rules", filterEmp, filterCat],
     queryFn:  () => fetchCommissionRules({
       limit: 200,
-      employeeId:          filterEmp || undefined,
+      employeeId:           filterEmp || undefined,
       commissionCategoryId: filterCat || undefined,
     }),
     staleTime: 0,
@@ -400,16 +381,11 @@ function CommissionRuleSection() {
       setDeleteTarget(null);
       toast.success("Rule komisi dihapus");
     },
-    onError: (err: Error) => {
-      setDeleteTarget(null);
-      toast.error(err.message);
-    },
+    onError: (err: Error) => { setDeleteTarget(null); toast.error(err.message); },
   });
 
   function startEdit(rule: CommissionRule) {
-    setEditId(rule.id);
-    setAdding(false);
-    setError(null);
+    setEditId(rule.id); setAdding(false); setError(null);
     setForm({
       employeeId:           rule.employeeId,
       commissionCategoryId: rule.commissionCategoryId,
@@ -422,287 +398,233 @@ function CommissionRuleSection() {
       isActive:             rule.isActive,
     });
   }
+  function cancel() { setEditId(null); setAdding(false); setForm(EMPTY_RULE); setError(null); }
 
-  function cancelEdit() { setEditId(null); setAdding(false); setForm(EMPTY_RULE); setError(null); }
-
-  const isFormValid = form.employeeId && form.commissionCategoryId && form.commissionValue && form.effectiveDate &&
+  const isFormValid =
+    form.employeeId && form.commissionCategoryId && form.commissionValue && form.effectiveDate &&
     parseFloat(form.commissionValue) > 0 &&
     (form.commissionType !== "PERCENTAGE" || parseFloat(form.commissionValue) <= 100);
 
   return (
     <>
-    <Card>
-      <CardHeader className="pb-3 pt-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-muted-foreground" />
-            <h3 className="font-semibold text-sm">Rules Komisi per Karyawan</h3>
+      <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-5 py-4">
+          <div className="flex items-center gap-2.5">
+            <Users className="h-4 w-4 text-slate-500" />
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Rules Komisi per Karyawan</h3>
+              <p className="text-xs text-slate-400">{rules.length} rule terdaftar</p>
+            </div>
           </div>
           {!adding && !editId && (
-            <Button size="sm" variant="outline" onClick={() => { setAdding(true); setEditId(null); setError(null); }}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Tambah Rule
+            <Button size="sm" onClick={() => { setAdding(true); setEditId(null); setError(null); }}>
+              <Plus className="h-3.5 w-3.5 mr-1.5" /> Tambah Rule
             </Button>
           )}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {error && <p className="text-xs text-destructive">{error}</p>}
 
         {/* Add / Edit form */}
         {(adding || editId) && (
-          <div className="rounded-md border border-border bg-muted/30 p-3 space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase">
+          <div className="border-b border-slate-100 bg-slate-50/40 px-5 py-4 space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               {editId ? "Edit Rule" : "Tambah Rule Baru"}
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {/* Employee */}
-              <div className="space-y-1">
-                <Label className="text-xs">Karyawan</Label>
-                <select
-                  value={form.employeeId}
-                  onChange={(e) => setForm((f) => ({ ...f, employeeId: e.target.value }))}
-                  disabled={!!editId}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-                >
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Karyawan</Label>
+                <select value={form.employeeId} onChange={(e) => setForm((f) => ({ ...f, employeeId: e.target.value }))} disabled={!!editId} className={selectCls}>
                   <option value="">Pilih karyawan…</option>
                   {employees.map((e) => (
-                    <option key={e.id} value={e.id}>{e.name} {e.employeeCode ? `(${e.employeeCode})` : ""}</option>
+                    <option key={e.id} value={e.id}>{e.name}{e.employeeCode ? ` (${e.employeeCode})` : ""}</option>
                   ))}
                 </select>
               </div>
-
-              {/* Category */}
-              <div className="space-y-1">
-                <Label className="text-xs">Kategori Komisi</Label>
-                <select
-                  value={form.commissionCategoryId}
-                  onChange={(e) => setForm((f) => ({ ...f, commissionCategoryId: e.target.value }))}
-                  disabled={!!editId}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-                >
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Kategori Komisi</Label>
+                <select value={form.commissionCategoryId} onChange={(e) => setForm((f) => ({ ...f, commissionCategoryId: e.target.value }))} disabled={!!editId} className={selectCls}>
                   <option value="">Pilih kategori…</option>
                   {categories.filter((c) => c.isActive).map((c) => (
                     <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
                   ))}
                 </select>
               </div>
-
-              {/* Slot / Role */}
-              <div className="space-y-1">
-                <Label className="text-xs">Role <span className="text-muted-foreground">(opsional)</span></Label>
-                <select
-                  value={form.slotKey}
-                  onChange={(e) => setForm((f) => ({ ...f, slotKey: e.target.value }))}
-                  disabled={!!editId}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-                >
-                  {SLOT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Role <span className="text-slate-400 font-normal">(opsional)</span></Label>
+                <select value={form.slotKey} onChange={(e) => setForm((f) => ({ ...f, slotKey: e.target.value }))} disabled={!!editId} className={selectCls}>
+                  {SLOT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
-
-              {/* Type */}
-              <div className="space-y-1">
-                <Label className="text-xs">Tipe Komisi</Label>
-                <select
-                  value={form.commissionType}
-                  onChange={(e) => setForm((f) => ({ ...f, commissionType: e.target.value as CommissionType }))}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Tipe Komisi</Label>
+                <select value={form.commissionType} onChange={(e) => setForm((f) => ({ ...f, commissionType: e.target.value as CommissionType }))} className={selectCls}>
                   <option value="PERCENTAGE">Persentase (%)</option>
                   <option value="FIXED_AMOUNT">Nominal (Rp)</option>
                 </select>
               </div>
-
-              {/* Value */}
-              <div className="space-y-1">
-                <Label className="text-xs">
-                  Nilai {form.commissionType === "PERCENTAGE" ? "(%)" : "(Rp)"}
-                </Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Nilai {form.commissionType === "PERCENTAGE" ? "(%)" : "(Rp)"}</Label>
                 <Input
-                  type="number"
-                  min={0.01}
+                  type="number" min={0.01} step={0.01}
                   max={form.commissionType === "PERCENTAGE" ? 100 : undefined}
-                  step={0.01}
-                  className="h-8 text-sm"
-                  placeholder={form.commissionType === "PERCENTAGE" ? "e.g. 10" : "e.g. 50000"}
+                  className="h-9 text-sm"
+                  placeholder={form.commissionType === "PERCENTAGE" ? "10" : "50000"}
                   value={form.commissionValue}
                   onChange={(e) => setForm((f) => ({ ...f, commissionValue: e.target.value }))}
                 />
               </div>
-
-              {/* Base */}
-              <div className="space-y-1">
-                <Label className="text-xs">Dasar Perhitungan</Label>
-                <select
-                  value={form.commissionBase}
-                  onChange={(e) => setForm((f) => ({ ...f, commissionBase: e.target.value as CommissionBase }))}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Dasar Perhitungan</Label>
+                <select value={form.commissionBase} onChange={(e) => setForm((f) => ({ ...f, commissionBase: e.target.value as CommissionBase }))} className={selectCls}>
                   <option value="AFTER_DISCOUNT">Setelah Diskon</option>
                   <option value="BEFORE_DISCOUNT">Sebelum Diskon</option>
                 </select>
               </div>
-
-              {/* Effective date */}
-              <div className="space-y-1">
-                <Label className="text-xs">Berlaku Mulai</Label>
-                <Input
-                  type="date"
-                  className="h-8 text-sm"
-                  value={form.effectiveDate}
-                  onChange={(e) => setForm((f) => ({ ...f, effectiveDate: e.target.value }))}
-                />
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Berlaku Mulai</Label>
+                <Input type="date" className="h-9 text-sm" value={form.effectiveDate} onChange={(e) => setForm((f) => ({ ...f, effectiveDate: e.target.value }))} />
               </div>
-
-              {/* End date (optional) */}
-              <div className="space-y-1">
-                <Label className="text-xs">Berlaku Sampai <span className="text-muted-foreground">(opsional)</span></Label>
-                <Input
-                  type="date"
-                  className="h-8 text-sm"
-                  value={form.endDate}
-                  onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
-                />
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Berlaku Sampai <span className="text-slate-400 font-normal">(opsional)</span></Label>
+                <Input type="date" className="h-9 text-sm" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} />
               </div>
-
-              {/* isActive (edit only) */}
               {editId && (
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="rule-active"
-                    checked={form.isActive}
-                    onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
-                    className="rounded"
-                  />
-                  <Label htmlFor="rule-active" className="text-xs cursor-pointer">Aktif</Label>
+                <div className="flex items-center gap-2 sm:col-span-2">
+                  <input type="checkbox" id="rule-active" checked={form.isActive} onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))} className="h-4 w-4 rounded accent-primary" />
+                  <Label htmlFor="rule-active" className="text-sm cursor-pointer">Aktif</Label>
                 </div>
               )}
             </div>
-
             <div className="flex gap-2">
-              <Button
-                size="sm" className="h-7"
-                disabled={!isFormValid || createMut.isPending || updateMut.isPending}
-                onClick={() => editId ? updateMut.mutate(editId) : createMut.mutate()}
-              >
-                {(createMut.isPending || updateMut.isPending)
-                  ? <Loader2 className="h-3 w-3 animate-spin" />
-                  : <Check className="h-3 w-3 mr-1" />}
+              <Button size="sm" disabled={!isFormValid || createMut.isPending || updateMut.isPending} onClick={() => editId ? updateMut.mutate(editId) : createMut.mutate()}>
+                {(createMut.isPending || updateMut.isPending) ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
                 Simpan
               </Button>
-              <Button size="sm" variant="ghost" className="h-7" onClick={cancelEdit}>
-                <X className="h-3 w-3 mr-1" /> Batal
+              <Button size="sm" variant="ghost" onClick={cancel}>
+                <X className="h-3.5 w-3.5 mr-1" /> Batal
               </Button>
             </div>
           </div>
         )}
 
         {/* Filters */}
-        <div className="flex flex-wrap gap-2">
-          <select
-            value={filterEmp}
-            onChange={(e) => setFilterEmp(e.target.value)}
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none"
-          >
+        <div className="flex flex-wrap gap-2 border-b border-slate-100 px-5 py-3 bg-white">
+          <select value={filterEmp} onChange={(e) => setFilterEmp(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-600 focus-visible:outline-none">
             <option value="">Semua karyawan</option>
-            {employees.map((e) => (
-              <option key={e.id} value={e.id}>{e.name}</option>
-            ))}
+            {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
-          <select
-            value={filterCat}
-            onChange={(e) => setFilterCat(e.target.value)}
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none"
-          >
+          <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-600 focus-visible:outline-none">
             <option value="">Semua kategori</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
 
+        {/* Table */}
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Memuat...</p>
+          <div className="px-5 py-8 text-center text-sm text-slate-400">Memuat...</div>
         ) : rules.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic">Belum ada rule komisi.</p>
+          <div className="px-5 py-8 text-center text-sm text-slate-400 italic">Belum ada rule komisi.</div>
         ) : (
-          <div className="rounded-md border border-border overflow-hidden">
-            <div className="grid grid-cols-[1fr_1fr_80px_100px_80px_80px] gap-2 bg-muted/50 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase">
-              <span>Karyawan</span>
-              <span>Kategori</span>
-              <span>Role</span>
-              <span>Nilai</span>
-              <span>Berlaku</span>
-              <span />
-            </div>
-            {rules.map((rule) => (
-              <div key={rule.id} className="grid grid-cols-[1fr_1fr_80px_100px_80px_80px] gap-2 items-center border-t border-border/50 px-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{rule.employee?.name ?? rule.employeeId}</p>
-                  <p className="text-[10px] text-muted-foreground">{rule.employee?.employeeCode}</p>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm truncate">{rule.commissionCategory?.name ?? rule.commissionCategoryId}</p>
-                  <p className="text-[10px] text-muted-foreground">{rule.commissionCategory?.code}</p>
-                </div>
-                <div>
-                  {rule.slotKey
-                    ? <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium capitalize">{rule.slotKey}</span>
-                    : <span className="text-[10px] text-muted-foreground italic">Semua</span>
-                  }
-                </div>
-                <div>
-                  <p className="text-sm font-medium">
-                    {rule.commissionType === "PERCENTAGE"
-                      ? `${rule.commissionValue}%`
-                      : formatCurrency(rule.commissionValue)}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {rule.commissionBase === "AFTER_DISCOUNT" ? "Stlh diskon" : "Sblm diskon"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground">
-                    {new Date(rule.effectiveDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "2-digit" })}
-                  </p>
-                  {!rule.isActive && <Badge variant="secondary" className="text-[9px] px-1">Nonaktif</Badge>}
-                </div>
-                <div className="flex gap-1 justify-end">
-                  <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => startEdit(rule)}>
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    size="sm" variant="ghost"
-                    className={`h-7 px-1.5 text-[10px] ${rule.isActive ? "text-muted-foreground" : "text-green-600"}`}
-                    disabled={toggleMut.isPending}
-                    onClick={() => toggleMut.mutate(rule)}
-                  >
-                    {rule.isActive ? "Off" : "On"}
-                  </Button>
-                  <Button
-                    size="sm" variant="ghost"
-                    className="h-7 px-2 text-muted-foreground hover:text-destructive"
-                    disabled={deleteMut.isPending}
-                    onClick={() => setDeleteTarget({
-                      id:   rule.id,
-                      name: `${rule.employee?.name ?? ""} — ${rule.commissionCategory?.name ?? ""}${rule.slotKey ? ` (${rule.slotKey})` : ""}`,
-                    })}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/70">
+                  {["Karyawan","Kategori","Role","Nilai","Berlaku",""].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rules.map((rule) => (
+                  <tr key={rule.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-slate-800 truncate max-w-[120px]">{rule.employee?.name ?? rule.employeeId}</p>
+                      <p className="text-[10px] text-slate-400">{rule.employee?.employeeCode}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-mono font-medium text-slate-600 block w-fit max-w-[130px] truncate" title={rule.commissionCategory?.name}>
+                        {rule.commissionCategory?.code ?? "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {rule.slotKey
+                        ? <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary capitalize">{rule.slotKey}</span>
+                        : <span className="text-xs text-slate-400 italic">Semua</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-semibold text-slate-800">
+                        {rule.commissionType === "PERCENTAGE"
+                          ? `${rule.commissionValue}%`
+                          : formatCurrency(rule.commissionValue)}
+                      </p>
+                      <p className="text-[10px] text-slate-400">
+                        {rule.commissionBase === "AFTER_DISCOUNT" ? "Stlh diskon" : "Sblm diskon"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-xs text-slate-600">
+                        {new Date(rule.effectiveDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "2-digit" })}
+                      </p>
+                      {!rule.isActive && (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">Nonaktif</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-0.5">
+                        <button className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors" onClick={() => startEdit(rule)} title="Edit">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          className={`rounded-lg px-2 py-1 text-xs font-medium transition-colors hover:bg-slate-100 ${rule.isActive ? "text-slate-500 hover:text-slate-700" : "text-emerald-600 hover:text-emerald-700"}`}
+                          disabled={toggleMut.isPending}
+                          onClick={() => toggleMut.mutate(rule)}
+                        >
+                          {rule.isActive ? "Off" : "On"}
+                        </button>
+                        <button
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                          disabled={deleteMut.isPending}
+                          onClick={() => setDeleteTarget({
+                            id:   rule.id,
+                            name: `${rule.employee?.name ?? ""} — ${rule.commissionCategory?.name ?? ""}${rule.slotKey ? ` (${rule.slotKey})` : ""}`,
+                          })}
+                          title="Hapus"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
 
-    {/* ── Delete confirm dialog ────────────────────────────────────── */}
-    <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+      <DeleteDialog
+        open={!!deleteTarget}
+        title="Hapus Rule Komisi"
+        message={<>Hapus rule untuk <span className="font-semibold text-foreground">{deleteTarget?.name}</span>?</>}
+        isPending={deleteMut.isPending}
+        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+        onClose={() => setDeleteTarget(null)}
+      />
+    </>
+  );
+}
+
+// ── Shared delete dialog ──────────────────────────────────────────────────────
+
+function DeleteDialog({
+  open, title, message, isPending, onConfirm, onClose,
+}: {
+  open: boolean; title: string; message: React.ReactNode;
+  isPending: boolean; onConfirm: () => void; onClose: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
           <div className="flex items-center gap-3">
@@ -710,42 +632,20 @@ function CommissionRuleSection() {
               <AlertTriangle className="h-5 w-5 text-destructive" />
             </div>
             <div>
-              <DialogTitle className="text-base">Hapus Rule Komisi</DialogTitle>
-              <DialogDescription className="text-xs mt-0.5">
-                Tindakan ini tidak dapat dibatalkan.
-              </DialogDescription>
+              <DialogTitle className="text-base">{title}</DialogTitle>
+              <DialogDescription className="text-xs mt-0.5">Tindakan ini tidak dapat dibatalkan.</DialogDescription>
             </div>
           </div>
         </DialogHeader>
-
-        <p className="text-sm text-muted-foreground mt-1">
-          Hapus rule komisi untuk:{" "}
-          <span className="font-semibold text-foreground">{deleteTarget?.name}</span>?
-        </p>
-
+        <p className="text-sm text-muted-foreground mt-2">{message}</p>
         <DialogFooter className="mt-4 gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setDeleteTarget(null)}
-            disabled={deleteMut.isPending}
-          >
-            Batal
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            disabled={deleteMut.isPending}
-            onClick={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
-          >
-            {deleteMut.isPending
-              ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-              : <Trash2 className="h-3.5 w-3.5 mr-1" />}
+          <Button variant="outline" size="sm" onClick={onClose} disabled={isPending}>Batal</Button>
+          <Button variant="destructive" size="sm" disabled={isPending} onClick={onConfirm}>
+            {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Trash2 className="h-3.5 w-3.5 mr-1" />}
             Hapus
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-    </>
   );
 }

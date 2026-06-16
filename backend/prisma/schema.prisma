@@ -68,6 +68,7 @@ model Branch {
   loans                 Loan[]
   payrolls              Payroll[]
   consultationNotes     ClientConsultationNote[]
+  correctionRequests    AttendanceCorrectionRequest[]
 
   @@map("branches")
 }
@@ -113,6 +114,8 @@ model User {
 
   role     UserRole @relation(fields: [userRoleId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
+
+  reviewedCorrections AttendanceCorrectionRequest[] @relation("CorrectionReviewer")
 
   @@index([userRoleId])
   @@index([employeeId])
@@ -178,10 +181,10 @@ model Employee {
   employeeBranches EmployeeBranch[]
   user             User?
 
-  createdAppointments Appointment[] @relation("AppointmentCreatedBy")
-  createdDeposits     Deposit[]     @relation("DepositCreatedBy")
-  createdInvoices     Invoice[]     @relation("InvoiceCreatedBy")
-  createdPayments     Payment[]     @relation("PaymentCreatedBy")
+  createdAppointments Appointment[]            @relation("AppointmentCreatedBy")
+  createdDeposits     Deposit[]                @relation("DepositCreatedBy")
+  createdInvoices     Invoice[]                @relation("InvoiceCreatedBy")
+  createdPayments     Payment[]                @relation("PaymentCreatedBy")
   filledConsultations ClientConsultationNote[] @relation("ConsultationFilledBy")
 
   appointmentStaffs     AppointmentStaff[]
@@ -196,6 +199,8 @@ model Employee {
   salarySettings        EmployeeSalarySettings[]
   loans                 Loan[]
   payrolls              Payroll[]
+  leaveQuotas           LeaveQuota[]
+  correctionRequests    AttendanceCorrectionRequest[]
 
   @@index([roleId])
   @@index([homeBranchId])
@@ -242,7 +247,7 @@ model EmployeeBranch {
   updatedAt DateTime @updatedAt
 
   employee Employee @relation(fields: [employeeId], references: [id])
-  branch   Branch   @relation(fields: [branchId],   references: [id])
+  branch   Branch   @relation(fields: [branchId], references: [id])
 
   @@unique([employeeId, branchId])
   @@index([employeeId])
@@ -340,12 +345,12 @@ model Customer {
   customerMemberships CustomerMembership[]
   membershipHistories MembershipHistory[]
 
-  appointments        Appointment[]
-  invoices            Invoice[]
-  deposits            Deposit[]
-  treatmentSessions   TreatmentSession[]
-  customerNotes       CustomerNote[]
-  consultationNotes   ClientConsultationNote[]
+  appointments      Appointment[]
+  invoices          Invoice[]
+  deposits          Deposit[]
+  treatmentSessions TreatmentSession[]
+  customerNotes     CustomerNote[]
+  consultationNotes ClientConsultationNote[]
 
   @@index([membershipId])
   @@index([name])
@@ -911,7 +916,7 @@ model Appointment {
 
   status AppointmentStatus
 
-  type             AppointmentType @default(SALON)
+  type               AppointmentType @default(SALON)
   homeServiceAddress String?
 
   notes String?
@@ -1028,7 +1033,7 @@ model Deposit {
 
   paidAt DateTime?
 
-  accurateDepositId     Int?    @unique
+  accurateDepositId     Int?      @unique
   accurateDepositNumber String?
   lastSyncAt            DateTime?
 
@@ -1037,10 +1042,10 @@ model Deposit {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  customer          Customer    @relation(fields: [customerId], references: [id])
+  customer          Customer     @relation(fields: [customerId], references: [id])
   appointment       Appointment? @relation(fields: [appointmentId], references: [id])
-  branch            Branch    @relation(fields: [branchId], references: [id])
-  createdByEmployee Employee? @relation("DepositCreatedBy", fields: [createdByEmployeeId], references: [id])
+  branch            Branch       @relation(fields: [branchId], references: [id])
+  createdByEmployee Employee?    @relation("DepositCreatedBy", fields: [createdByEmployeeId], references: [id])
 
   invoiceDeposits InvoiceDeposit[]
   depositPayments DepositPayment[]
@@ -1186,11 +1191,11 @@ model Invoice {
 
   notes String?
 
-  taxable      Boolean   @default(false)
+  taxable Boolean @default(false)
 
-  inclusiveTax Boolean   @default(false)
+  inclusiveTax Boolean @default(false)
 
-  taxDate      DateTime?
+  taxDate DateTime?
 
   lastSyncAt DateTime?
 
@@ -1199,10 +1204,10 @@ model Invoice {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  customer          Customer   @relation(fields: [customerId], references: [id])
-  branch            Branch     @relation(fields: [branchId], references: [id])
+  customer          Customer     @relation(fields: [customerId], references: [id])
+  branch            Branch       @relation(fields: [branchId], references: [id])
   appointment       Appointment? @relation(fields: [appointmentId], references: [id])
-  createdByEmployee Employee?  @relation("InvoiceCreatedBy", fields: [createdByEmployeeId], references: [id])
+  createdByEmployee Employee?    @relation("InvoiceCreatedBy", fields: [createdByEmployeeId], references: [id])
 
   items InvoiceItem[]
 
@@ -1240,19 +1245,19 @@ model InvoiceItem {
 
   price Decimal @db.Decimal(18, 2)
 
-  discount        Decimal  @default(0) @db.Decimal(18, 2)
+  discount Decimal @default(0) @db.Decimal(18, 2)
 
-  discountType    String   @default("AMOUNT")
+  discountType String @default("AMOUNT")
 
   discountPercent Decimal? @db.Decimal(5, 2)
 
   subtotal Decimal @db.Decimal(18, 2)
 
-  taxable  Boolean   @default(false)
+  taxable Boolean @default(false)
 
-  taxName  String?
+  taxName String?
 
-  taxRate  Decimal   @default(0) @db.Decimal(18, 2)
+  taxRate Decimal @default(0) @db.Decimal(18, 2)
 
   notes String?
 
@@ -1301,10 +1306,10 @@ model Payment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  invoice           Invoice   @relation(fields: [invoiceId], references: [id])
+  invoice           Invoice       @relation(fields: [invoiceId], references: [id])
   paymentMethod     PaymentMethod @relation(fields: [paymentMethodId], references: [id])
-  branch            Branch    @relation(fields: [branchId], references: [id])
-  createdByEmployee Employee? @relation("PaymentCreatedBy", fields: [createdByEmployeeId], references: [id])
+  branch            Branch        @relation(fields: [branchId], references: [id])
+  createdByEmployee Employee?     @relation("PaymentCreatedBy", fields: [createdByEmployeeId], references: [id])
 
   @@index([invoiceId])
   @@index([paymentMethodId])
@@ -1463,7 +1468,7 @@ model Commission {
 
   commissionRuleId String?
 
-  workQty   Decimal? @db.Decimal(18, 2)
+  workQty Decimal? @db.Decimal(18, 2)
 
   workRatio Decimal? @db.Decimal(18, 6)
 
@@ -1550,6 +1555,12 @@ enum LeaveStatus {
   REJECTED
 }
 
+enum CorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum ScheduleType {
   WORK
   OFF
@@ -1564,7 +1575,7 @@ enum MediaType {
 model Attendance {
   id String @id @default(uuid())
 
-  staffScheduleId String @unique
+  staffScheduleId String   @unique
   employeeId      String
   branchId        String
   workDate        DateTime @db.Date
@@ -1582,9 +1593,9 @@ model Attendance {
 
   status AttendanceStatus @default(ABSENT)
 
-  lateMinutes       Int @default(0)
-  earlyLeaveMinutes Int @default(0)
-  overtimeMinutes   Int @default(0)
+  lateMinutes       Int     @default(0)
+  earlyLeaveMinutes Int     @default(0)
+  overtimeMinutes   Int     @default(0)
   isHolidayWork     Boolean @default(false)
 
   notes String?
@@ -1592,14 +1603,47 @@ model Attendance {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  staffSchedule StaffSchedule @relation(fields: [staffScheduleId], references: [id])
-  employee      Employee      @relation(fields: [employeeId], references: [id])
-  branch        Branch        @relation(fields: [branchId], references: [id])
+  staffSchedule      StaffSchedule                 @relation(fields: [staffScheduleId], references: [id])
+  employee           Employee                      @relation(fields: [employeeId], references: [id])
+  branch             Branch                        @relation(fields: [branchId], references: [id])
+  correctionRequests AttendanceCorrectionRequest[]
 
   @@index([employeeId])
   @@index([branchId, workDate])
   @@index([workDate])
   @@map("attendances")
+}
+
+model AttendanceCorrectionRequest {
+  id String @id @default(uuid())
+
+  staffScheduleId String
+  attendanceId    String?
+  employeeId      String
+  branchId        String
+
+  requestedCheckIn  DateTime?
+  requestedCheckOut DateTime?
+  reason            String
+
+  status     CorrectionStatus @default(PENDING)
+  reviewedBy String?
+  reviewedAt DateTime?
+  reviewNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  staffSchedule StaffSchedule @relation(fields: [staffScheduleId], references: [id])
+  attendance    Attendance?   @relation(fields: [attendanceId], references: [id])
+  employee      Employee      @relation(fields: [employeeId], references: [id])
+  branch        Branch        @relation(fields: [branchId], references: [id])
+  reviewer      User?         @relation("CorrectionReviewer", fields: [reviewedBy], references: [id])
+
+  @@index([employeeId])
+  @@index([staffScheduleId])
+  @@index([status])
+  @@map("attendance_correction_requests")
 }
 
 model EmployeeSchedule {
@@ -1630,28 +1674,68 @@ model EmployeeSchedule {
 model Leave {
   id String @id @default(uuid())
 
-  employeeId String
+  employeeId  String
+  leaveTypeId String?
 
   startDate DateTime
-
-  endDate DateTime
+  endDate   DateTime
+  totalDays Int?
 
   reason String?
 
   status LeaveStatus
 
   approvedBy String?
-
   approvedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  employee Employee @relation(fields: [employeeId], references: [id])
+  employee  Employee   @relation(fields: [employeeId], references: [id])
+  leaveType LeaveType? @relation(fields: [leaveTypeId], references: [id])
 
   @@index([employeeId])
+  @@index([leaveTypeId])
   @@index([status])
   @@map("leaves")
+}
+
+model LeaveType {
+  id String @id @default(uuid())
+
+  code           String  @unique
+  name           String
+  maxDaysPerYear Int     @default(12)
+  isPaid         Boolean @default(true)
+  isActive       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leaves Leave[]
+  quotas LeaveQuota[]
+
+  @@map("leave_types")
+}
+
+model LeaveQuota {
+  id String @id @default(uuid())
+
+  employeeId  String
+  leaveTypeId String
+  year        Int
+  totalDays   Int
+  usedDays    Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee  Employee  @relation(fields: [employeeId], references: [id])
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  @@unique([employeeId, leaveTypeId, year])
+  @@index([employeeId])
+  @@map("leave_quotas")
 }
 
 model TreatmentSession {
@@ -2028,7 +2112,8 @@ model StaffSchedule {
   branch   Branch   @relation(fields: [branchId], references: [id])
   shift    Shift?   @relation(fields: [shiftId], references: [id])
 
-  attendance Attendance?
+  attendance         Attendance?
+  correctionRequests AttendanceCorrectionRequest[]
 
   @@unique([employeeId, branchId, workDate])
   @@index([branchId, workDate])
@@ -2045,15 +2130,15 @@ model EmployeeSalarySettings {
   employeeId String
 
   baseSalary                   Decimal @db.Decimal(18, 2)
-  mealAllowancePerDay          Decimal @db.Decimal(18, 2) @default(0)
-  transportAllowance           Decimal @db.Decimal(18, 2) @default(0)
-  overtimeRatePerHour          Decimal @db.Decimal(18, 2) @default(0)
-  holidayOvertimeRate          Decimal @db.Decimal(18, 2) @default(0)
-  lateDeductionPerMinute       Decimal @db.Decimal(18, 2) @default(0)
-  absentDeductionPerDay        Decimal @db.Decimal(18, 2) @default(0)
-  earlyLeaveDeductionPerMinute Decimal @db.Decimal(18, 2) @default(0)
-  bpjsJhtPercent               Decimal @db.Decimal(5, 2)  @default(2)
-  bpjsJpPercent                Decimal @db.Decimal(5, 2)  @default(1)
+  mealAllowancePerDay          Decimal @default(0) @db.Decimal(18, 2)
+  transportAllowance           Decimal @default(0) @db.Decimal(18, 2)
+  overtimeRatePerHour          Decimal @default(0) @db.Decimal(18, 2)
+  holidayOvertimeRate          Decimal @default(0) @db.Decimal(18, 2)
+  lateDeductionPerMinute       Decimal @default(0) @db.Decimal(18, 2)
+  absentDeductionPerDay        Decimal @default(0) @db.Decimal(18, 2)
+  earlyLeaveDeductionPerMinute Decimal @default(0) @db.Decimal(18, 2)
+  bpjsJhtPercent               Decimal @default(2) @db.Decimal(5, 2)
+  bpjsJpPercent                Decimal @default(1) @db.Decimal(5, 2)
 
   effectiveDate DateTime
   endDate       DateTime?
@@ -2163,9 +2248,9 @@ model Payroll {
 
   status PayrollStatus @default(DRAFT)
 
-  grossIncome     Decimal @db.Decimal(18, 2) @default(0)
-  totalDeductions Decimal @db.Decimal(18, 2) @default(0)
-  netSalary       Decimal @db.Decimal(18, 2) @default(0)
+  grossIncome     Decimal @default(0) @db.Decimal(18, 2)
+  totalDeductions Decimal @default(0) @db.Decimal(18, 2)
+  netSalary       Decimal @default(0) @db.Decimal(18, 2)
 
   approvedBy String?
   approvedAt DateTime?
@@ -2218,18 +2303,18 @@ model PayrollItem {
 // =====================================================
 
 model ClientConsultationNote {
-  id                     String   @id @default(uuid())
-  invoiceId              String   @unique
-  customerId             String
-  branchId               String
-  filledByEmployeeId     String?
+  id                 String  @id @default(uuid())
+  invoiceId          String  @unique
+  customerId         String
+  branchId           String
+  filledByEmployeeId String?
 
   // A. Profil Klien
-  profession             String?
-  professionOther        String?
-  ageRange               String?
-  dailyStyling           String[]
-  dailyStylingOther      String?
+  profession        String?
+  professionOther   String?
+  ageRange          String?
+  dailyStyling      String[]
+  dailyStylingOther String?
 
   // B. Motivasi & Perjalanan
   discoveryChannel       String?
@@ -2243,14 +2328,14 @@ model ClientConsultationNote {
   reasonSwitchToNia      String?
 
   // C. Catatan Sesi
-  issuesDuringUse        String?
-  changesAfterUse        String?
-  interestingNote        String
-  additionalNotes        String?
+  issuesDuringUse String?
+  changesAfterUse String?
+  interestingNote String
+  additionalNotes String?
 
-  filledAt               DateTime @default(now())
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  filledAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   invoice          Invoice   @relation(fields: [invoiceId], references: [id])
   customer         Customer  @relation(fields: [customerId], references: [id])

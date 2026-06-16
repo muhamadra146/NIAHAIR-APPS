@@ -191,10 +191,9 @@ export function ConsultationListPage() {
 
   const listParams = {
     page, limit: 20,
-    startDate:  startDate || undefined,
-    endDate:    endDate   || undefined,
-    branchId:   isManager ? undefined : (branchId || undefined),
-    filledByEmployeeId: isManager ? undefined : (user?.employeeId ?? undefined),
+    startDate: startDate || undefined,
+    endDate:   endDate   || undefined,
+    branchId:  isManager ? undefined : (branchId || undefined),
   };
 
   const { data, isLoading } = useConsultationNotes(listParams);

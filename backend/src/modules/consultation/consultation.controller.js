@@ -11,7 +11,7 @@ const {
 
 const getAllController = async (req, res, next) => {
   try {
-    const result = await listNotes(req.query);
+    const result = await listNotes(req.query, req.user);
     return success(res, result, "Catatan fetched");
   } catch (err) {
     next(err);

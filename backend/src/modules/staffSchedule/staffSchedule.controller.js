@@ -1,5 +1,5 @@
 const { success, created } = require("../../common/responses/apiResponse");
-const { getRoster, bulkUpsert, getAvailableStaff } = require("./staffSchedule.service");
+const { getRoster, bulkUpsert, getAvailableStaff, getMySchedules } = require("./staffSchedule.service");
 
 const getRosterController = async (req, res, next) => {
   try {
@@ -22,4 +22,11 @@ const getAvailableStaffController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getRosterController, bulkUpsertController, getAvailableStaffController };
+const getMySchedulesController = async (req, res, next) => {
+  try {
+    const result = await getMySchedules(req.user.employeeId, req.query);
+    return success(res, result, "My schedules fetched");
+  } catch (err) { next(err); }
+};
+
+module.exports = { getRosterController, bulkUpsertController, getAvailableStaffController, getMySchedulesController };

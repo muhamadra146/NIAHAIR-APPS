@@ -224,4 +224,114 @@ const manualSet = async ({ staffScheduleId, status, checkInAt, checkOutAt, notes
   );
 };
 
-module.exports = { getDailyRoster, getAll, getById, checkIn, checkOut, manualSet };
+// ── My today (self check-in view) ────────────────────────────────────────────
+
+const getMyToday = async (employeeId) => {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  const schedule = await prisma.staffSchedule.findFirst({
+    where:   { employeeId, workDate: today },
+    include: {
+      shift:      { select: { id: true, code: true, name: true, startTime: true, endTime: true, color: true } },
+      attendance: true,
+    },
+  });
+
+  if (!schedule) return null;
+
+  return {
+    scheduleId: schedule.id,
+    status:     schedule.status,
+    notes:      schedule.notes,
+    shift:      schedule.shift,
+    attendance: schedule.attendance ?? null,
+  };
+};
+
+// ── My history (paginated) ────────────────────────────────────────────────────
+
+const getMy = async ({ employeeId, page, limit, month, year }) => {
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+
+  const where = { employeeId };
+  if (month && year) {
+    const y = parseInt(year, 10);
+    const m = parseInt(month, 10);
+    where.workDate = {
+      gte: new Date(Date.UTC(y, m - 1, 1)),
+      lte: new Date(Date.UTC(y, m, 0, 23, 59, 59, 999)),
+    };
+  }
+
+  const [records, total] = await Promise.all([
+    repo.findMany({ skip, take, where }),
+    repo.count(where),
+  ]);
+
+  return { data: records, meta: paginationMeta(total, pageNum, limitNum) };
+};
+
+// ── Attendance report (per employee summary) ─────────────────────────────────
+
+const getReport = async ({ branchId, startDate, endDate, employeeId }) => {
+  if (!branchId)             throw new AppError("branchId is required", StatusCodes.BAD_REQUEST);
+  if (!startDate || !endDate) throw new AppError("startDate and endDate are required", StatusCodes.BAD_REQUEST);
+
+  const toDateOnly = (s) => { const d = new Date(s); d.setUTCHours(0, 0, 0, 0); return d; };
+  const start = toDateOnly(startDate);
+  const end   = toDateOnly(endDate);
+  if (end < start) throw new AppError("endDate must be after startDate", StatusCodes.BAD_REQUEST);
+
+  const schedules = await repo.getReportData({ branchId, startDate: start, endDate: end, employeeId });
+
+  const byEmployee = {};
+
+  for (const sc of schedules) {
+    const eid = sc.employeeId;
+    if (!byEmployee[eid]) {
+      byEmployee[eid] = {
+        employee:        sc.employee,
+        scheduledDays:   0,
+        presentDays:     0,
+        absentDays:      0,
+        lateDays:        0,
+        earlyLeaveDays:  0,
+        halfDays:        0,
+        lateMinutes:     0,
+        earlyLeaveMinutes: 0,
+        overtimeMinutes: 0,
+        holidayWorkDays: 0,
+      };
+    }
+    const r = byEmployee[eid];
+    r.scheduledDays++;
+
+    const att = sc.attendance;
+    if (!att || att.status === "ABSENT") {
+      r.absentDays++;
+    } else {
+      r.presentDays++;
+      if (att.status === "LATE")        r.lateDays++;
+      if (att.status === "EARLY_LEAVE") r.earlyLeaveDays++;
+      if (att.status === "HALF_DAY")    r.halfDays++;
+      r.lateMinutes       += att.lateMinutes       ?? 0;
+      r.earlyLeaveMinutes += att.earlyLeaveMinutes ?? 0;
+      r.overtimeMinutes   += att.overtimeMinutes   ?? 0;
+      if (att.isHolidayWork) r.holidayWorkDays++;
+    }
+  }
+
+  const rows = Object.values(byEmployee).map((r) => ({
+    ...r,
+    attendanceRate: r.scheduledDays > 0
+      ? Math.round((r.presentDays / r.scheduledDays) * 1000) / 10
+      : 0,
+  }));
+
+  rows.sort((a, b) => a.employee.name.localeCompare(b.employee.name, "id-ID"));
+
+  return { data: rows, period: { startDate: start, endDate: end } };
+};
+
+module.exports = { getDailyRoster, getAll, getById, checkIn, checkOut, manualSet, getMyToday, getMy, getReport };

@@ -108,12 +108,13 @@ export interface ServiceInput {
 }
 
 export interface AvailableStaff {
-  employeeId: string;
-  name:       string;
-  role:       { id: string; code: string; name: string };
-  shiftCode:  string | null;
-  startTime:  string | null;
-  endTime:    string | null;
+  employeeId:    string;
+  name:          string;
+  role:          { id: string; code: string; name: string };
+  shiftCode:     string | null;
+  startTime:     string | null;
+  endTime:       string | null;
+  hasCheckedOut: boolean;
 }
 
 export interface StaffSlotInput {

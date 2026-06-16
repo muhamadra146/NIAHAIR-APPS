@@ -6,11 +6,13 @@ import {
 import {
   fetchDailyRoster, fetchAttendances,
   checkIn, checkOut, manualSetAttendance,
+  fetchMyToday, fetchMyAttendance, fetchAttendanceReport,
 } from "../api/attendance.api";
 import type {
   ScheduleListParams, AttendanceListParams,
   CreateScheduleInput, UpdateScheduleInput,
-  CheckInInput, ManualSetInput,
+  CheckInInput, ManualSetInput, MyAttendanceParams,
+  AttendanceReportParams,
 } from "../types";
 
 // ── Schedules ─────────────────────────────────────────────────────────────────
@@ -72,7 +74,11 @@ export const useCheckIn = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CheckInInput) => checkIn(input),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: ["attendanceRoster"] }),
+    onSuccess:  () => {
+      qc.invalidateQueries({ queryKey: ["attendanceRoster"] });
+      qc.invalidateQueries({ queryKey: ["myToday"] });
+      qc.invalidateQueries({ queryKey: ["myAttendance"] });
+    },
   });
 };
 
@@ -80,7 +86,11 @@ export const useCheckOut = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CheckInInput) => checkOut(input),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: ["attendanceRoster"] }),
+    onSuccess:  () => {
+      qc.invalidateQueries({ queryKey: ["attendanceRoster"] });
+      qc.invalidateQueries({ queryKey: ["myToday"] });
+      qc.invalidateQueries({ queryKey: ["myAttendance"] });
+    },
   });
 };
 
@@ -91,3 +101,23 @@ export const useManualSetAttendance = () => {
     onSuccess:  () => qc.invalidateQueries({ queryKey: ["attendanceRoster"] }),
   });
 };
+
+export const useMyToday = () =>
+  useQuery({
+    queryKey:        ["myToday"],
+    queryFn:         fetchMyToday,
+    refetchInterval: 60_000,
+  });
+
+export const useMyAttendance = (params: MyAttendanceParams = {}) =>
+  useQuery({
+    queryKey: ["myAttendance", params],
+    queryFn:  () => fetchMyAttendance(params),
+  });
+
+export const useAttendanceReport = (params: AttendanceReportParams) =>
+  useQuery({
+    queryKey: ["attendanceReport", params],
+    queryFn:  () => fetchAttendanceReport(params),
+    enabled:  !!params.branchId && !!params.startDate && !!params.endDate,
+  });

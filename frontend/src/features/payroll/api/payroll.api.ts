@@ -1,6 +1,6 @@
 import { api } from "@/lib/axios";
 import type { ApiResponse, PaginatedResponse } from "@/types/api";
-import type { Payroll, GeneratePayrollInput, PayrollListParams } from "../types";
+import type { Payroll, GeneratePayrollInput, PayrollListParams, BpjsReportResult, BpjsReportParams } from "../types";
 
 export const fetchPayrolls = async (params: PayrollListParams = {}): Promise<PaginatedResponse<Payroll>> => {
   const { data } = await api.get<ApiResponse<PaginatedResponse<Payroll>>>("/payroll", { params });
@@ -34,5 +34,15 @@ export const approvePayroll = async (id: string): Promise<Payroll> => {
 
 export const markPayrollAsPaid = async (id: string): Promise<Payroll> => {
   const { data } = await api.post<ApiResponse<Payroll>>(`/payroll/${id}/mark-paid`);
+  return data.data;
+};
+
+export const fetchMyPayrolls = async (params: { page?: number; limit?: number } = {}): Promise<PaginatedResponse<Payroll>> => {
+  const { data } = await api.get<ApiResponse<PaginatedResponse<Payroll>>>("/payroll/my", { params });
+  return data.data;
+};
+
+export const fetchBpjsReport = async (params: BpjsReportParams): Promise<BpjsReportResult> => {
+  const { data } = await api.get<ApiResponse<BpjsReportResult>>("/payroll/bpjs-report", { params });
   return data.data;
 };

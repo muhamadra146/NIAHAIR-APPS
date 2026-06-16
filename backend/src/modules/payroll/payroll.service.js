@@ -124,8 +124,17 @@ const getById = async (id) => {
   return payroll;
 };
 
-const generate = async ({ employeeId, branchId, yearMonth, notes }) => {
-  const { periodStart, periodEnd } = buildPeriod(yearMonth);
+const generate = async ({ employeeId, branchId, yearMonth, periodStart: ps, periodEnd: pe, notes }) => {
+  let periodStart, periodEnd;
+  if (yearMonth) {
+    ({ periodStart, periodEnd } = buildPeriod(yearMonth));
+  } else if (ps && pe) {
+    periodStart = toDateOnly(new Date(ps));
+    periodEnd   = toDateOnly(new Date(pe));
+    if (periodEnd < periodStart) throw new AppError("periodEnd must be after periodStart", StatusCodes.BAD_REQUEST);
+  } else {
+    throw new AppError("Either yearMonth or periodStart+periodEnd is required", StatusCodes.BAD_REQUEST);
+  }
 
   // Check duplicate
   const existing = await repo.findByEmployeeAndPeriod(employeeId, periodStart);
@@ -234,4 +243,52 @@ const updateNotes = async (id, notes) => {
   return repo.update(id, { notes });
 };
 
-module.exports = { getAll, getById, generate, recalculate, submitForApproval, approve, markAsPaid, updateNotes };
+// ── Employee self-service: view own payslips ──────────────────────────────────
+
+const getMy = async ({ employeeId, page = 1, limit = 20 }) => {
+  if (!employeeId) throw new AppError("Employee not found for this user", StatusCodes.BAD_REQUEST);
+  const { skip, take } = paginate(page, limit);
+  const where = {
+    employeeId,
+    status: { in: ["APPROVED", "PAID"] },
+  };
+  const [rows, total] = await Promise.all([
+    repo.findByEmployee({ skip, take, where }),
+    repo.countByEmployee(where),
+  ]);
+  return { data: rows, meta: paginationMeta(total, page, limit) };
+};
+
+// ── BPJS report ───────────────────────────────────────────────────────────────
+
+const getBpjsReport = async ({ branchId, yearMonth }) => {
+  if (!branchId)   throw new AppError("branchId is required", StatusCodes.BAD_REQUEST);
+  if (!yearMonth)  throw new AppError("yearMonth is required", StatusCodes.BAD_REQUEST);
+
+  const { periodStart, periodEnd } = buildPeriod(yearMonth);
+  const payrolls = await repo.findBpjsData({ branchId, periodStart, periodEnd });
+
+  const getAmt = (items, cat) => Number(items.find((i) => i.category === cat)?.amount ?? 0);
+
+  const rows = payrolls.map((p) => ({
+    employee: p.employee,
+    periodStart: p.periodStart,
+    periodEnd:   p.periodEnd,
+    status:      p.status,
+    baseSalary:  getAmt(p.items, "gaji"),
+    bpjsJht:     getAmt(p.items, "bpjs_jht"),
+    bpjsJp:      getAmt(p.items, "bpjs_jp"),
+    totalBpjs:   getAmt(p.items, "bpjs_jht") + getAmt(p.items, "bpjs_jp"),
+  }));
+
+  const totals = {
+    baseSalary: rows.reduce((s, r) => s + r.baseSalary, 0),
+    bpjsJht:   rows.reduce((s, r) => s + r.bpjsJht, 0),
+    bpjsJp:    rows.reduce((s, r) => s + r.bpjsJp, 0),
+    totalBpjs: rows.reduce((s, r) => s + r.totalBpjs, 0),
+  };
+
+  return { data: rows, totals, period: { yearMonth, periodStart, periodEnd } };
+};
+
+module.exports = { getAll, getById, generate, recalculate, submitForApproval, approve, markAsPaid, updateNotes, getMy, getBpjsReport };

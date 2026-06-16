@@ -3,8 +3,9 @@ import {
   fetchPayrolls, fetchPayroll,
   generatePayroll, recalculatePayroll,
   submitPayroll, approvePayroll, markPayrollAsPaid,
+  fetchMyPayrolls, fetchBpjsReport,
 } from "../api/payroll.api";
-import type { PayrollListParams, GeneratePayrollInput } from "../types";
+import type { PayrollListParams, GeneratePayrollInput, BpjsReportParams } from "../types";
 
 const QK = "payrolls";
 
@@ -58,3 +59,13 @@ export const useMarkPayrollAsPaid = (id: string) => {
     onSuccess:  () => invalidate(qc, id),
   });
 };
+
+export const useMyPayrolls = (params: { page?: number; limit?: number } = {}) =>
+  useQuery({ queryKey: ["myPayrolls", params], queryFn: () => fetchMyPayrolls(params) });
+
+export const useBpjsReport = (params: BpjsReportParams) =>
+  useQuery({
+    queryKey: ["bpjsReport", params],
+    queryFn:  () => fetchBpjsReport(params),
+    enabled:  !!params.branchId && !!params.yearMonth,
+  });

@@ -42,10 +42,12 @@ export interface Payroll {
 }
 
 export interface GeneratePayrollInput {
-  employeeId: string;
-  branchId:   string;
-  yearMonth:  string;
-  notes?:     string;
+  employeeId:   string;
+  branchId:     string;
+  yearMonth?:   string;
+  periodStart?: string;
+  periodEnd?:   string;
+  notes?:       string;
 }
 
 export interface PayrollListParams {
@@ -55,4 +57,31 @@ export interface PayrollListParams {
   branchId?:   string;
   status?:     PayrollStatus;
   yearMonth?:  string;
+}
+
+export interface BpjsReportRow {
+  employee: {
+    id:           string;
+    name:         string;
+    employeeCode: string | null;
+    role:         { name: string };
+  };
+  periodStart: string;
+  periodEnd:   string;
+  status:      PayrollStatus;
+  baseSalary:  number;
+  bpjsJht:     number;
+  bpjsJp:      number;
+  totalBpjs:   number;
+}
+
+export interface BpjsReportResult {
+  data:    BpjsReportRow[];
+  totals:  { baseSalary: number; bpjsJht: number; bpjsJp: number; totalBpjs: number };
+  period:  { yearMonth: string; periodStart: string; periodEnd: string };
+}
+
+export interface BpjsReportParams {
+  branchId?:  string;
+  yearMonth:  string;
 }

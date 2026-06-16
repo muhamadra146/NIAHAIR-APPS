@@ -44,6 +44,10 @@ const loanRouter                    = require("./modules/loan/loan.route");
 const payrollRouter                 = require("./modules/payroll/payroll.route");
 const reportRouter                  = require("./modules/report/report.route");
 const consultationRouter            = require("./modules/consultation/consultation.route");
+const leaveRouter                   = require("./modules/leave/leave.route");
+const leaveTypeRouter               = require("./modules/leaveType/leaveType.route");
+const leaveQuotaRouter              = require("./modules/leaveQuota/leaveQuota.route");
+const correctionRouter              = require("./modules/correction/correction.route");
 
 
 const app = express();
@@ -119,6 +123,10 @@ app.use("/loans",                                loanRouter);
 app.use("/payroll",                              payrollRouter);
 app.use("/reports",                              reportRouter);
 app.use("/consultation-notes",                   consultationRouter);
+app.use("/leaves",                               leaveRouter);
+app.use("/leave-types",                          leaveTypeRouter);
+app.use("/leave-quotas",                         leaveQuotaRouter);
+app.use("/attendance-corrections",               correctionRouter);
 
 
 // global error handler — must be last

@@ -3,6 +3,8 @@ import type { ApiResponse, PaginatedResponse } from "@/types/api";
 import type {
   AttendanceRecord, AttendanceListParams,
   RosterAttendanceRow, CheckInInput, ManualSetInput,
+  MyTodayResponse, MyAttendanceParams,
+  AttendanceReportParams, AttendanceReportResult,
 } from "../types";
 
 export const fetchDailyRoster = async (
@@ -38,5 +40,30 @@ export const checkOut = async (input: CheckInInput): Promise<AttendanceRecord> =
 
 export const manualSetAttendance = async (input: ManualSetInput): Promise<AttendanceRecord> => {
   const { data } = await api.post<ApiResponse<AttendanceRecord>>("/attendance/manual", input);
+  return data.data;
+};
+
+export const fetchMyToday = async (): Promise<MyTodayResponse | null> => {
+  const { data } = await api.get<ApiResponse<MyTodayResponse | null>>("/attendance/my/today");
+  return data.data;
+};
+
+export const fetchMyAttendance = async (
+  params: MyAttendanceParams = {},
+): Promise<PaginatedResponse<AttendanceRecord>> => {
+  const { data } = await api.get<ApiResponse<PaginatedResponse<AttendanceRecord>>>(
+    "/attendance/my",
+    { params },
+  );
+  return data.data;
+};
+
+export const fetchAttendanceReport = async (
+  params: AttendanceReportParams,
+): Promise<AttendanceReportResult> => {
+  const { data } = await api.get<ApiResponse<AttendanceReportResult>>(
+    "/attendance/report",
+    { params },
+  );
   return data.data;
 };

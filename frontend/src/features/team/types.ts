@@ -107,6 +107,62 @@ export interface ManualSetInput {
   notes?:          string;
 }
 
+export interface MyTodayResponse {
+  scheduleId: string;
+  status:     ScheduleStatus;
+  notes:      string | null;
+  shift: {
+    id:        string;
+    code:      string;
+    name:      string;
+    startTime: string | null;
+    endTime:   string | null;
+    color:     string | null;
+  } | null;
+  attendance: AttendanceRecord | null;
+}
+
+export interface MyAttendanceParams {
+  page?:  number;
+  limit?: number;
+  month?: number;
+  year?:  number;
+}
+
+// ── Attendance report ─────────────────────────────────────────────────────────
+
+export interface AttendanceReportRow {
+  employee: {
+    id:           string;
+    name:         string;
+    employeeCode: string | null;
+    role:         { id: string; code: string; name: string };
+  };
+  scheduledDays:    number;
+  presentDays:      number;
+  absentDays:       number;
+  lateDays:         number;
+  earlyLeaveDays:   number;
+  halfDays:         number;
+  lateMinutes:      number;
+  earlyLeaveMinutes: number;
+  overtimeMinutes:  number;
+  holidayWorkDays:  number;
+  attendanceRate:   number;
+}
+
+export interface AttendanceReportResult {
+  data:   AttendanceReportRow[];
+  period: { startDate: string; endDate: string };
+}
+
+export interface AttendanceReportParams {
+  branchId?:   string;
+  startDate:   string;
+  endDate:     string;
+  employeeId?: string;
+}
+
 // Legacy schedule types (kept for schedule.api.ts compatibility)
 export interface ScheduleListParams {
   page?:       number;

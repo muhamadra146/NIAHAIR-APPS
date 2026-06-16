@@ -7,6 +7,7 @@ const { checkInSchema, checkOutSchema, manualSetSchema } = require("./attendance
 const {
   getDailyRosterController, getAllController, getByIdController,
   checkInController, checkOutController, manualSetController,
+  getMyTodayController, getMyController, getReportController,
 } = require("./attendance.controller");
 
 const router = Router();
@@ -17,6 +18,17 @@ router.get("/roster",
   authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.ADMIN),
   getDailyRosterController,
 );
+
+// GET /attendance/report?branchId=&startDate=&endDate=&employeeId=
+router.get("/report",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.ADMIN),
+  getReportController,
+);
+
+// Self — must be before /:id
+router.get("/my/today", authenticate, getMyTodayController);
+router.get("/my",       authenticate, getMyController);
 
 router.get("/",    authenticate, getAllController);
 router.get("/:id", authenticate, getByIdController);

@@ -171,14 +171,49 @@ const getAvailableStaff = async ({ date, branchId, startTime, endTime, excludeAp
     }
   }
 
+  // For today: mark staff who have already checked out
+  const todayStr = new Date().toISOString().split("T")[0];
+  let checkedOutSet = new Set();
+  if (date.split("T")[0] === todayStr && records.length > 0) {
+    const checkedOut = await prisma.attendance.findMany({
+      where: {
+        workDate:   { gte: start, lte: end },
+        employeeId: { in: records.map((r) => r.employeeId) },
+        checkOutAt: { not: null },
+      },
+      select: { employeeId: true },
+    });
+    checkedOutSet = new Set(checkedOut.map((a) => a.employeeId));
+  }
+
   return records.map((r) => ({
-    employeeId: r.employeeId,
-    name:       r.employee.name,
-    role:       r.employee.role,
-    shiftCode:  r.shift?.code      ?? null,
-    startTime:  r.shift?.startTime ?? null,
-    endTime:    r.shift?.endTime   ?? null,
+    employeeId:    r.employeeId,
+    name:          r.employee.name,
+    role:          r.employee.role,
+    shiftCode:     r.shift?.code      ?? null,
+    startTime:     r.shift?.startTime ?? null,
+    endTime:       r.shift?.endTime   ?? null,
+    hasCheckedOut: checkedOutSet.has(r.employeeId),
   }));
 };
 
-module.exports = { getRoster, bulkUpsert, getAvailableStaff };
+const getMySchedules = async (employeeId, { startDate, endDate } = {}) => {
+  if (!employeeId) throw new AppError("Employee not found", StatusCodes.BAD_REQUEST);
+
+  const now   = new Date();
+  const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
+  const end   = endDate   ? new Date(endDate)   : now;
+  start.setUTCHours(0, 0, 0, 0);
+  end.setUTCHours(23, 59, 59, 999);
+
+  return prisma.staffSchedule.findMany({
+    where:   { employeeId, workDate: { gte: start, lte: end } },
+    include: {
+      shift:      { select: { id: true, name: true, startTime: true, endTime: true } },
+      attendance: { select: { id: true, checkIn: true, checkOut: true, status: true } },
+    },
+    orderBy: { workDate: "desc" },
+  });
+};
+
+module.exports = { getRoster, bulkUpsert, getAvailableStaff, getMySchedules };
