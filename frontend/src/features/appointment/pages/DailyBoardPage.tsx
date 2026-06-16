@@ -22,7 +22,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { fetchAppointments, changeAppointmentStatus, updateAppointment } from "../api/appointment.api";
 import { fetchAvailableStaff } from "@/features/schedule/api/staffSchedule.api";
 import type { Appointment, AppointmentStatus, AvailableStaff } from "../types";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CreateInvoiceDialog } from "@/features/invoice/components/CreateInvoiceDialog";
 import { fetchInvoices } from "@/features/invoice/api";
 import { TreatmentAssignmentSection } from "@/features/invoice/components/TreatmentAssignmentSection";
@@ -255,6 +255,9 @@ function WorkAssignDialog({
             <ClipboardList className="h-4 w-4" />
             Assign Pekerjaan
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Assign staff dan generate komisi untuk appointment ini
+          </DialogDescription>
         </DialogHeader>
 
         {isLoading && (
