@@ -15,15 +15,18 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   ChevronLeft, ChevronRight, RefreshCw, Home, Clock, Eye,
-  Loader2, UserPlus, X, Users, FileText,
+  Loader2, UserPlus, X, Users, FileText, ClipboardList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/stores/authStore";
 import { fetchAppointments, changeAppointmentStatus, updateAppointment } from "../api/appointment.api";
 import { fetchAvailableStaff } from "@/features/schedule/api/staffSchedule.api";
 import type { Appointment, AppointmentStatus, AvailableStaff } from "../types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CreateInvoiceDialog } from "@/features/invoice/components/CreateInvoiceDialog";
 import { fetchInvoices } from "@/features/invoice/api";
+import { TreatmentAssignmentSection } from "@/features/invoice/components/TreatmentAssignmentSection";
+import { fetchCommissions } from "@/features/commission/api";
 import {
   StaffSlotSelector,
   APPOINTMENT_SLOTS,
@@ -214,6 +217,78 @@ function StaffAssignPopover({
 
 // ── Draggable appointment card ────────────────────────────────────────
 
+// ── Work assignment dialog ────────────────────────────────────────────
+
+function WorkAssignDialog({
+  appointmentId,
+  appointment,
+  open,
+  onClose,
+}: {
+  appointmentId: string;
+  appointment:   Appointment;
+  open:          boolean;
+  onClose:       () => void;
+}) {
+  const { data: invoiceData, isLoading } = useQuery({
+    queryKey:  ["invoices", "by-appointment", appointmentId],
+    queryFn:   () => fetchInvoices({ appointmentId, limit: 1 }),
+    enabled:   open,
+    staleTime: 0,
+  });
+
+  const invoice = invoiceData?.data?.[0] ?? null;
+
+  const { data: commissionsData } = useQuery({
+    queryKey:  ["commissions", "invoice", invoice?.id],
+    queryFn:   () => fetchCommissions({ invoiceId: invoice!.id, limit: 1 }),
+    enabled:   open && !!invoice,
+    staleTime: 0,
+  });
+  const hasExistingCommission = (commissionsData?.meta?.total ?? 0) > 0;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Assign Pekerjaan
+          </DialogTitle>
+        </DialogHeader>
+
+        {isLoading && (
+          <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Memuat data invoice…
+          </div>
+        )}
+
+        {!isLoading && !invoice && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Invoice belum dibuat untuk appointment ini.
+            <br />
+            <span className="text-xs">Buat invoice terlebih dahulu dari tombol Invoice di card.</span>
+          </div>
+        )}
+
+        {!isLoading && invoice && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground font-mono">{invoice.invoiceNo}</p>
+            <TreatmentAssignmentSection
+              invoiceId={invoice.id}
+              appointment={appointment}
+              hasExistingCommission={hasExistingCommission}
+            />
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Draggable card ────────────────────────────────────────────────────
+
 function DraggableCard({
   appointment: a,
   date,
@@ -243,7 +318,8 @@ function DraggableCard({
     ? { transform: CSS.Translate.toString(transform) }
     : undefined;
 
-  const [showStaff, setShowStaff] = useState(false);
+  const [showStaff,  setShowStaff]  = useState(false);
+  const [showAssign, setShowAssign] = useState(false);
   const startTime = new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
   const endTime   = new Date(a.endTime).toLocaleTimeString("id-ID",   { hour: "2-digit", minute: "2-digit" });
   const next      = NEXT_STATUS[a.status];
@@ -381,6 +457,17 @@ function DraggableCard({
             }
           </Button>
         )}
+        {/* Assign pekerjaan — for IN_PROGRESS and COMPLETED */}
+        {(a.status === "IN_PROGRESS" || a.status === "COMPLETED") && !isDragOverlay && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-xs text-amber-700 border-amber-300 hover:bg-amber-50"
+            onClick={() => setShowAssign(true)}
+          >
+            <ClipboardList className="h-3 w-3 mr-1" />Assign
+          </Button>
+        )}
         {next && nextLabel && (
           <Button
             size="sm"
@@ -392,6 +479,16 @@ function DraggableCard({
           </Button>
         )}
       </div>
+
+      {/* Work assignment dialog */}
+      {showAssign && (
+        <WorkAssignDialog
+          appointmentId={a.id}
+          appointment={a}
+          open={showAssign}
+          onClose={() => setShowAssign(false)}
+        />
+      )}
     </div>
   );
 }

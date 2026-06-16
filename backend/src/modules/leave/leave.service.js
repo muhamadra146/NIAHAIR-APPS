@@ -26,11 +26,12 @@ const dateRange = (start, end) => {
 };
 
 // When leave is approved, upsert StaffSchedule entries for each day as LEAVE
-const createLeaveSchedules = async (employeeId, branchId, startDate, endDate) => {
+// Accepts a transaction client so all upserts are part of the same atomic operation
+const createLeaveSchedules = async (tx, employeeId, branchId, startDate, endDate) => {
   if (!branchId) return;
   const dates = dateRange(startDate, endDate);
   for (const workDate of dates) {
-    await prisma.staffSchedule.upsert({
+    await tx.staffSchedule.upsert({
       where:  { employeeId_branchId_workDate: { employeeId, branchId, workDate } },
       update: { status: "LEAVE" },
       create: { employeeId, branchId, workDate, status: "LEAVE", notes: "Cuti" },
@@ -126,14 +127,19 @@ const approve = async (id, approvedBy) => {
 
   const branchId = leave.employee?.homeBranch?.id ?? null;
 
-  await createLeaveSchedules(leave.employeeId, branchId, leave.startDate, leave.endDate);
+  // Schedule upserts + status update in one transaction — partial failure won't leave ghost schedules
+  await prisma.$transaction(async (tx) => {
+    await createLeaveSchedules(tx, leave.employeeId, branchId, leave.startDate, leave.endDate);
+    await tx.leave.update({ where: { id }, data: { status: "APPROVED", approvedBy, approvedAt: new Date() } });
+  });
 
+  // Quota increment is best-effort — quota errors must not block the approval
   if (leave.leaveTypeId && leave.totalDays && leave.leaveType?.quotaType === "ANNUAL") {
     const year = new Date(leave.startDate).getUTCFullYear();
     await quotaSvc.incrementUsed(leave.employeeId, leave.leaveTypeId, year, leave.totalDays).catch(() => null);
   }
 
-  return repo.update(id, { status: "APPROVED", approvedBy, approvedAt: new Date() });
+  return repo.findById(id);
 };
 
 const reject = async (id, approvedBy) => {

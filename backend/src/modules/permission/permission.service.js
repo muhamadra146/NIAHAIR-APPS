@@ -76,20 +76,22 @@ const approve = async (id, reviewedBy, reviewNote) => {
 
   // ABSENCE: mark schedule as IZIN (absent)
   // LATE: no schedule change — payroll will skip the late deduction for that date
-  if (perm.type === "ABSENCE") {
-    await prisma.staffSchedule.upsert({
-      where:  { employeeId_branchId_workDate: { employeeId: perm.employeeId, branchId: perm.branchId, workDate: perm.date } },
-      update: { status: "IZIN", notes: `Izin: ${perm.reason}` },
-      create: { employeeId: perm.employeeId, branchId: perm.branchId, workDate: perm.date, status: "IZIN", notes: `Izin: ${perm.reason}` },
+  // Schedule upsert + status update in one transaction — prevents ghost schedule if status update fails
+  await prisma.$transaction(async (tx) => {
+    if (perm.type === "ABSENCE") {
+      await tx.staffSchedule.upsert({
+        where:  { employeeId_branchId_workDate: { employeeId: perm.employeeId, branchId: perm.branchId, workDate: perm.date } },
+        update: { status: "IZIN", notes: `Izin: ${perm.reason}` },
+        create: { employeeId: perm.employeeId, branchId: perm.branchId, workDate: perm.date, status: "IZIN", notes: `Izin: ${perm.reason}` },
+      });
+    }
+    await tx.permissionRequest.update({
+      where: { id },
+      data:  { status: "APPROVED", reviewedBy, reviewedAt: new Date(), reviewNote: reviewNote ?? null },
     });
-  }
-
-  return repo.update(id, {
-    status:     "APPROVED",
-    reviewedBy,
-    reviewedAt: new Date(),
-    reviewNote: reviewNote ?? null,
   });
+
+  return repo.findById(id);
 };
 
 const reject = async (id, reviewedBy, reviewNote) => {

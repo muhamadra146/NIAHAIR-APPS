@@ -3,7 +3,7 @@ const authenticate = require("../../middlewares/auth.middleware");
 const authorize    = require("../../middlewares/role.middleware");
 const validate     = require("../../middlewares/validate.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
-const { object, picklist } = require("valibot");
+const { object, picklist, optional, string } = require("valibot");
 const { createTransferSchema } = require("./stockTransfer.validation");
 const {
   getAllController, getByIdController,
@@ -15,7 +15,8 @@ const router = Router();
 const MANAGER_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.ADMIN];
 
 const updateStatusSchema = object({
-  status: picklist(["IN_TRANSIT", "RECEIVED"], "Status tidak valid"),
+  status:   picklist(["IN_TRANSIT", "RECEIVED"], "Status tidak valid"),
+  branchId: optional(string()),
 });
 
 router.get("/",     authenticate, getAllController);

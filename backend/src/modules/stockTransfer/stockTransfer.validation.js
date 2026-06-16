@@ -1,4 +1,4 @@
-const { object, array, string, number, pipe, minLength, minValue, optional } = require("valibot");
+const { object, array, string, number, pipe, minLength, minValue, optional, picklist, check } = require("valibot");
 
 const transferItemSchema = object({
   itemId: pipe(string(), minLength(1, "itemId wajib diisi")),
@@ -10,7 +10,7 @@ const createTransferSchema = object({
   destinationWarehouseId: pipe(string(), minLength(1, "Gudang tujuan wajib diisi")),
   transferDate:           pipe(string(), minLength(1, "Tanggal wajib diisi")),
   notes:                  optional(string()),
-  items:                  array(transferItemSchema),
+  items:                  pipe(array(transferItemSchema), minLength(1, "Minimal 1 item harus ditambahkan")),
 });
 
 module.exports = { createTransferSchema };

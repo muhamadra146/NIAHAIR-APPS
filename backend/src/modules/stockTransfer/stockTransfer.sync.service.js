@@ -19,9 +19,9 @@ const syncTransferToAccurate = async (transferId) => {
     return { skipped: true, reason: "Already synced" };
   }
 
-  // Only sync when RECEIVED (transfer fully confirmed)
-  if (transfer.status !== "RECEIVED") {
-    throw new Error(`Transfer status must be RECEIVED to sync, got: ${transfer.status}`);
+  // Sync is triggered at IN_TRANSIT (when goods leave source warehouse)
+  if (transfer.status !== "IN_TRANSIT" && transfer.status !== "RECEIVED") {
+    throw new Error(`Transfer status must be IN_TRANSIT or RECEIVED to sync, got: ${transfer.status}`);
   }
 
   // Validate source warehouse Accurate mapping

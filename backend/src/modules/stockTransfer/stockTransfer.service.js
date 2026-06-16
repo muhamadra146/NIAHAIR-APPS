@@ -9,13 +9,14 @@ const { createSyncJob } = require("../syncQueue/syncQueue.service");
 const D = (v) => new Prisma.Decimal(String(v));
 
 // ── Transfer number generator: TRF-YYYYMMDD-XXXX ─────────────────────
-const buildTransferNo = async () => {
+// Accepts a transaction client so seq lookup + insert are atomic (Serializable)
+const buildTransferNo = async (tx) => {
   const today    = new Date();
   const yyyy     = today.getFullYear();
   const mm       = String(today.getMonth() + 1).padStart(2, "0");
   const dd       = String(today.getDate()).padStart(2, "0");
   const prefix   = `TRF-${yyyy}${mm}${dd}-`;
-  const maxSeq   = await repo.findMaxSeqToday();
+  const maxSeq   = await repo.findMaxSeqToday(tx);
   return `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
 };
 
@@ -61,12 +62,9 @@ const create = async (body, userId) => {
   if (!srcWh) throw new AppError("Gudang asal tidak ditemukan", StatusCodes.NOT_FOUND);
   if (!dstWh) throw new AppError("Gudang tujuan tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  const transferNo = await buildTransferNo();
-
   const transferData = {
     sourceWarehouseId,
     destinationWarehouseId,
-    transferNo,
     status:       "PENDING",
     notes:        notes ?? null,
     transferDate: new Date(transferDate),
@@ -75,11 +73,20 @@ const create = async (body, userId) => {
 
   const itemData = items.map((i) => ({ itemId: i.itemId, qty: D(i.qty) }));
 
-  return repo.create(transferData, itemData);
+  // Serializable isolation ensures the seq read + insert are atomic — prevents duplicate transferNo
+  return prisma.$transaction(
+    async (tx) => {
+      const transferNo = await buildTransferNo(tx);
+      return repo.create({ ...transferData, transferNo }, itemData, tx);
+    },
+    { isolationLevel: "Serializable" },
+  );
 };
 
+const BYPASS_ROLES = ["SUPER_ADMIN", "OWNER"];
+
 // ── Update status ─────────────────────────────────────────────────────
-const updateStatus = async (id, newStatus) => {
+const updateStatus = async (id, newStatus, userRole, actingBranchId) => {
   const transfer = await repo.findById(id);
   if (!transfer) throw new AppError("Transfer tidak ditemukan", StatusCodes.NOT_FOUND);
 
@@ -96,25 +103,44 @@ const updateStatus = async (id, newStatus) => {
     );
   }
 
-  await repo.update(id, { status: newStatus });
+  // Branch authorization — non-super users can only act on their own branch's transfers
+  if (!BYPASS_ROLES.includes(userRole) && actingBranchId) {
+    if (newStatus === "IN_TRANSIT") {
+      const srcBranchId = transfer.sourceWarehouse?.branchId;
+      if (srcBranchId && srcBranchId !== actingBranchId) {
+        throw new AppError("Hanya cabang asal yang bisa mengirim transfer ini", StatusCodes.FORBIDDEN);
+      }
+    }
+    if (newStatus === "RECEIVED") {
+      const dstBranchId = transfer.destinationWarehouse?.branchId;
+      if (dstBranchId && dstBranchId !== actingBranchId) {
+        throw new AppError("Hanya cabang tujuan yang bisa menerima transfer ini", StatusCodes.FORBIDDEN);
+      }
+    }
+  }
 
+  // Status update + stock movements happen in the same transaction inside each generator
   if (newStatus === "IN_TRANSIT") {
     await generateTransferOutMovements(transfer);
-  } else if (newStatus === "RECEIVED") {
-    await generateTransferInMovements(transfer);
+    // Sync to Accurate when goods leave source warehouse
     await createSyncJob({
       entityType: "STOCK_TRANSFER",
       entityId:   id,
       direction:  "APP_TO_ACCURATE",
     });
+  } else if (newStatus === "RECEIVED") {
+    await generateTransferInMovements(transfer);
   }
 
   return repo.findById(id);
 };
 
 // ── Generate TRANSFER_OUT movements (deduct from source warehouse) ────
+// Status update is inside the transaction — if any movement fails the status stays PENDING
 const generateTransferOutMovements = async (transfer) => {
   await prisma.$transaction(async (tx) => {
+    await tx.stockTransfer.update({ where: { id: transfer.id }, data: { status: "IN_TRANSIT" } });
+
     for (const item of transfer.items) {
       if (item.item.itemType !== "INVENTORY") continue;
 
@@ -129,6 +155,13 @@ const generateTransferOutMovements = async (transfer) => {
 
       const balanceBefore = D(inv.availableQty);
       const balanceAfter  = balanceBefore.sub(qty);
+
+      if (balanceAfter.lessThan(0)) {
+        throw new AppError(
+          `Stok "${item.item.name}" tidak mencukupi. Tersedia: ${balanceBefore}, dibutuhkan: ${qty}`,
+          StatusCodes.BAD_REQUEST,
+        );
+      }
 
       await tx.stockMovement.create({
         data: {
@@ -153,8 +186,11 @@ const generateTransferOutMovements = async (transfer) => {
 };
 
 // ── Generate TRANSFER_IN movements (add to destination warehouse) ─────
+// Status update is inside the transaction — if any movement fails the status stays IN_TRANSIT
 const generateTransferInMovements = async (transfer) => {
   await prisma.$transaction(async (tx) => {
+    await tx.stockTransfer.update({ where: { id: transfer.id }, data: { status: "RECEIVED" } });
+
     for (const item of transfer.items) {
       if (item.item.itemType !== "INVENTORY") continue;
 

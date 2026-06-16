@@ -28,8 +28,13 @@ const createController = async (req, res, next) => {
 
 const updateStatusController = async (req, res, next) => {
   try {
-    const { status } = req.body;
-    const result = await svc.updateStatus(req.params.id, status);
+    const { status, branchId } = req.body;
+    const result = await svc.updateStatus(
+      req.params.id,
+      status,
+      req.user?.roleCode,
+      branchId ?? null,
+    );
     return success(res, result, "Status transfer diperbarui");
   } catch (err) { next(err); }
 };

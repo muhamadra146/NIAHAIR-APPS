@@ -348,8 +348,10 @@ function MovementsTab({ branchId }: { branchId?: string | null }) {
 
   const { data, isLoading } = useStockMovements({
     page, limit: 30,
-    type:     type || undefined,
-    branchId: branchId ?? undefined,
+    type:      type || undefined,
+    branchId:  branchId ?? undefined,
+    startDate: startDate || undefined,
+    endDate:   endDate || undefined,
   });
 
   const movements  = data?.data ?? [];
@@ -495,6 +497,7 @@ const STATUS_LABELS: Record<string, { label: string; className: string }> = {
 interface TransferItemLine { itemId: string; qty: number; itemName: string; }
 
 function TransferTab({ branchId }: { branchId?: string | null }) {
+  const { user } = useAuthStore();
   const [page, setPage]             = useState(1);
   const [filterStatus, setStatus]   = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -509,8 +512,28 @@ function TransferTab({ branchId }: { branchId?: string | null }) {
 
   const updateStatusMut = useUpdateTransferStatus();
 
+  const isSuperUser = user?.roleCode === "SUPER_ADMIN" || user?.roleCode === "OWNER";
+
+  function canKirim(t: typeof transfers[number]) {
+    if (t.status !== "PENDING") return false;
+    if (isSuperUser) return true;
+    return !t.sourceWarehouse.branchId || t.sourceWarehouse.branchId === branchId;
+  }
+
+  function canTerima(t: typeof transfers[number]) {
+    if (t.status !== "IN_TRANSIT") return false;
+    if (isSuperUser) return true;
+    return !t.destinationWarehouse.branchId || t.destinationWarehouse.branchId === branchId;
+  }
+
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  function toggleExpand(id: string) {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }
+
   function handleAction(id: string, status: string) {
-    updateStatusMut.mutate({ id, status }, {
+    updateStatusMut.mutate({ id, status, branchId }, {
       onSuccess: () => toast.success("Status transfer berhasil diperbarui"),
       onError:   (e: Error) => toast.error(e.message),
     });
@@ -569,44 +592,66 @@ function TransferTab({ branchId }: { branchId?: string | null }) {
                   </thead>
                   <tbody>
                     {transfers.map((t) => {
-                      const s = STATUS_LABELS[t.status];
+                      const s        = STATUS_LABELS[t.status];
+                      const expanded = expandedId === t.id;
                       return (
-                        <tr key={t.id} className="border-b border-border transition-colors hover:bg-muted/30">
-                          <td className="px-4 py-3 font-mono text-sm font-medium">{t.transferNo}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{formatDate(t.transferDate)}</td>
-                          <td className="px-4 py-3">
-                            <p className="font-medium">{t.sourceWarehouse.name}</p>
-                            {t.sourceWarehouse.branch && (
-                              <p className="text-xs text-muted-foreground">{t.sourceWarehouse.branch.name}</p>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <p className="font-medium">{t.destinationWarehouse.name}</p>
-                            {t.destinationWarehouse.branch && (
-                              <p className="text-xs text-muted-foreground">{t.destinationWarehouse.branch.name}</p>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-muted-foreground">{t.items.length} item</td>
-                          <td className="px-4 py-3">
-                            <Badge variant="outline" className={`text-xs ${s?.className ?? ""}`}>{s?.label ?? t.status}</Badge>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {t.status === "PENDING" && (
-                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-                                disabled={updateStatusMut.isPending}
-                                onClick={() => handleAction(t.id, "IN_TRANSIT")}>
-                                <TruckIcon className="h-3 w-3" /> Kirim
-                              </Button>
-                            )}
-                            {t.status === "IN_TRANSIT" && (
-                              <Button size="sm" className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700"
-                                disabled={updateStatusMut.isPending}
-                                onClick={() => handleAction(t.id, "RECEIVED")}>
-                                <Check className="h-3 w-3" /> Terima
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
+                        <>
+                          <tr key={t.id}
+                            className="border-b border-border transition-colors hover:bg-muted/30 cursor-pointer"
+                            onClick={() => toggleExpand(t.id)}>
+                            <td className="px-4 py-3 font-mono text-sm font-medium">{t.transferNo}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{formatDate(t.transferDate)}</td>
+                            <td className="px-4 py-3">
+                              <p className="font-medium">{t.sourceWarehouse.name}</p>
+                              {t.sourceWarehouse.branch && (
+                                <p className="text-xs text-muted-foreground">{t.sourceWarehouse.branch.name}</p>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="font-medium">{t.destinationWarehouse.name}</p>
+                              {t.destinationWarehouse.branch && (
+                                <p className="text-xs text-muted-foreground">{t.destinationWarehouse.branch.name}</p>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">{t.items.length} item</td>
+                            <td className="px-4 py-3">
+                              <Badge variant="outline" className={`text-xs ${s?.className ?? ""}`}>{s?.label ?? t.status}</Badge>
+                            </td>
+                            <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                              {canKirim(t) && (
+                                <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                                  disabled={updateStatusMut.isPending}
+                                  onClick={() => handleAction(t.id, "IN_TRANSIT")}>
+                                  <TruckIcon className="h-3 w-3" /> Kirim
+                                </Button>
+                              )}
+                              {canTerima(t) && (
+                                <Button size="sm" className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700"
+                                  disabled={updateStatusMut.isPending}
+                                  onClick={() => handleAction(t.id, "RECEIVED")}>
+                                  <Check className="h-3 w-3" /> Terima
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                          {expanded && (
+                            <tr key={`${t.id}-detail`} className="bg-muted/20">
+                              <td colSpan={7} className="px-6 pb-3 pt-0">
+                                <p className="text-xs font-medium text-muted-foreground mb-1.5">Detail Item</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {t.items.map((item) => (
+                                    <div key={item.id} className="flex items-center gap-1.5 bg-background border border-border rounded px-2.5 py-1 text-xs">
+                                      <span className="font-medium">{item.item.name}</span>
+                                      <span className="text-muted-foreground">·</span>
+                                      <span className="font-semibold">{Number(item.qty).toLocaleString("id-ID")} pcs</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                {t.notes && <p className="text-xs text-muted-foreground mt-1.5">Catatan: {t.notes}</p>}
+                              </td>
+                            </tr>
+                          )}
+                        </>
                       );
                     })}
                   </tbody>
@@ -616,10 +661,11 @@ function TransferTab({ branchId }: { branchId?: string | null }) {
               {/* Mobile */}
               <div className="md:hidden divide-y divide-border">
                 {transfers.map((t) => {
-                  const s = STATUS_LABELS[t.status];
+                  const s        = STATUS_LABELS[t.status];
+                  const expanded = expandedId === t.id;
                   return (
                     <div key={t.id} className="px-4 py-3 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center justify-between gap-2 cursor-pointer" onClick={() => toggleExpand(t.id)}>
                         <p className="font-mono text-sm font-medium">{t.transferNo}</p>
                         <Badge variant="outline" className={`text-xs ${s?.className ?? ""}`}>{s?.label ?? t.status}</Badge>
                       </div>
@@ -628,17 +674,27 @@ function TransferTab({ branchId }: { branchId?: string | null }) {
                         <span className="mx-2">→</span>
                         <span>{t.destinationWarehouse.name}</span>
                       </div>
+                      {expanded && (
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {t.items.map((item) => (
+                            <div key={item.id} className="flex items-center gap-1 bg-muted rounded px-2 py-0.5 text-xs">
+                              <span>{item.item.name}</span>
+                              <span className="font-semibold">{Number(item.qty).toLocaleString("id-ID")}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">{formatDate(t.transferDate)} · {t.items.length} item</span>
                         <div className="flex gap-1">
-                          {t.status === "PENDING" && (
+                          {canKirim(t) && (
                             <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
                               disabled={updateStatusMut.isPending}
                               onClick={() => handleAction(t.id, "IN_TRANSIT")}>
                               <TruckIcon className="h-3 w-3" /> Kirim
                             </Button>
                           )}
-                          {t.status === "IN_TRANSIT" && (
+                          {canTerima(t) && (
                             <Button size="sm" className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700"
                               disabled={updateStatusMut.isPending}
                               onClick={() => handleAction(t.id, "RECEIVED")}>
@@ -742,6 +798,8 @@ function CreateTransferDialog({ onClose }: { onClose: () => void }) {
     );
   }
 
+  const filteredResults = (itemResults ?? []).filter((it) => it.itemType === "INVENTORY");
+
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -750,6 +808,7 @@ function CreateTransferDialog({ onClose }: { onClose: () => void }) {
         </DialogHeader>
 
         <div className="space-y-4 py-1">
+          {/* Warehouses */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-sm">Gudang Asal <span className="text-destructive">*</span></Label>
@@ -773,6 +832,7 @@ function CreateTransferDialog({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
+          {/* Date + Notes */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-sm">Tanggal Transfer</Label>
@@ -784,33 +844,42 @@ function CreateTransferDialog({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
+          {/* Item search */}
           <div className="space-y-2">
             <Label className="text-sm">Item</Label>
+
+            {/* Input */}
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
                 value={itemSearch}
                 onChange={(e) => handleItemSearchChange(e.target.value)}
                 onFocus={() => { if (itemSearch.length >= 2) setShowItemDrop(true); }}
                 onBlur={() => setTimeout(() => setShowItemDrop(false), 150)}
-                placeholder="Cari item inventori..."
+                placeholder="Ketik minimal 2 huruf untuk cari item..."
                 className="pl-8 h-9"
               />
-              {showItemDrop && itemResults && itemResults.length > 0 && (
-                <div className="absolute z-50 left-0 right-0 top-10 bg-popover border border-border rounded-md shadow-md max-h-48 overflow-y-auto">
-                  {itemResults
-                    .filter((it) => it.itemType === "INVENTORY")
-                    .map((it) => (
-                      <button key={it.id} type="button" onMouseDown={() => selectItem(it)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors">
-                        <span className="font-medium">{it.name}</span>
-                        {it.itemCode && <span className="text-xs text-muted-foreground ml-2">{it.itemCode}</span>}
-                      </button>
-                    ))}
-                </div>
-              )}
             </div>
 
+            {/* Results — inline, NOT absolute, no overflow/z-index conflict */}
+            {showItemDrop && filteredResults.length > 0 && (
+              <div className="border border-border rounded-md overflow-hidden shadow-sm">
+                {filteredResults.slice(0, 8).map((it) => (
+                  <button key={it.id} type="button" onMouseDown={() => selectItem(it)}
+                    className="w-full text-left px-3 py-2.5 text-sm hover:bg-accent transition-colors border-b border-border/40 last:border-0 flex items-center justify-between gap-2">
+                    <span className="font-medium">{it.name}</span>
+                    {it.itemCode && <span className="text-xs text-muted-foreground font-mono shrink-0">{it.itemCode}</span>}
+                  </button>
+                ))}
+                {filteredResults.length > 8 && (
+                  <p className="px-3 py-1.5 text-xs text-muted-foreground text-center bg-muted/30">
+                    +{filteredResults.length - 8} item lainnya — perjelas pencarian
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Selected items */}
             {lines.length > 0 && (
               <div className="border rounded-md divide-y text-sm">
                 {lines.map((line) => (
@@ -820,7 +889,7 @@ function CreateTransferDialog({ onClose }: { onClose: () => void }) {
                       onChange={(e) => updateQty(line.itemId, parseFloat(e.target.value) || 0)}
                       className="h-7 w-24 text-right text-xs" />
                     <button type="button" onClick={() => removeLine(line.itemId)}
-                      className="text-muted-foreground hover:text-destructive">
+                      className="text-muted-foreground hover:text-destructive shrink-0">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>

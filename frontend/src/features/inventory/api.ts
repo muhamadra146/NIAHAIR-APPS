@@ -45,7 +45,10 @@ export async function createStockTransfer(input: CreateTransferInput): Promise<S
   return data.data;
 }
 
-export async function updateTransferStatus(id: string, status: string): Promise<StockTransfer> {
-  const { data } = await api.patch<ApiResponse<StockTransfer>>(`/stock-transfers/${id}/status`, { status });
+export async function updateTransferStatus(id: string, status: string, branchId?: string | null): Promise<StockTransfer> {
+  const { data } = await api.patch<ApiResponse<StockTransfer>>(`/stock-transfers/${id}/status`, {
+    status,
+    ...(branchId ? { branchId } : {}),
+  });
   return data.data;
 }
