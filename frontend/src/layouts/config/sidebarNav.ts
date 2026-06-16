@@ -20,6 +20,8 @@ import {
   UmbrellaOff,
   FileText,
   RotateCcw,
+  HandHelping,
+  Thermometer,
   type LucideIcon,
 } from "lucide-react";
 
@@ -170,6 +172,20 @@ export const sidebarNav: NavItem[] = [
     label: "Cuti",
     href:  "/leaves",
     icon:  UmbrellaOff,
+    roles: ALL_ROLES,
+    group: "Kehadiran",
+  },
+  {
+    label: "Izin",
+    href:  "/permissions",
+    icon:  HandHelping,
+    roles: ALL_ROLES,
+    group: "Kehadiran",
+  },
+  {
+    label: "Sakit",
+    href:  "/sick-leaves",
+    icon:  Thermometer,
     roles: ALL_ROLES,
     group: "Kehadiran",
   },

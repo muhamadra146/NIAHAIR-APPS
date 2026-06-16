@@ -116,42 +116,52 @@ export type UpdateShiftInput = Partial<CreateShiftInput> & { isActive?: boolean 
 
 // ── Salary Settings ───────────────────────────────────────────────────
 export interface SalarySetting {
-  id:                           string;
-  employeeId:                   string;
-  baseSalary:                   number;
-  mealAllowancePerDay:          number;
-  transportAllowance:           number;
-  overtimeRatePerHour:          number;
-  holidayOvertimeRate:          number;
-  lateDeductionPerMinute:       number;
-  absentDeductionPerDay:        number;
-  earlyLeaveDeductionPerMinute: number;
-  bpjsJhtPercent:               number;
-  bpjsJpPercent:                number;
-  effectiveDate:                string;
-  endDate:                      string | null;
-  isActive:                     boolean;
-  notes:                        string | null;
-  createdAt:                    string;
-  updatedAt:                    string;
+  id:                              string;
+  employeeId:                      string;
+  baseSalary:                      number;
+  mealAllowancePerDay:             number;
+  transportAllowance:              number;
+  overtimeRatePerHour:             number;
+  holidayOvertimeRate:             number;
+  lateDeductionPerMinute:          number;
+  lateDeductionBracket1:           number;
+  lateDeductionBracket2:           number;
+  lateDeductionBracket3:           number;
+  absentDeductionPerDay:           number;
+  earlyLeaveDeductionPerMinute:    number;
+  bpjsJhtPercent:                  number;
+  bpjsJpPercent:                   number;
+  bpjsKesehatanEmployeePercent:    number;
+  bpjsKesehatanEmployerPercent:    number;
+  effectiveDate:                   string;
+  endDate:                         string | null;
+  isActive:                        boolean;
+  notes:                           string | null;
+  createdAt:                       string;
+  updatedAt:                       string;
 }
 
 export interface CreateSalaryInput {
-  employeeId:                   string;
-  baseSalary:                   number;
-  mealAllowancePerDay?:         number;
-  transportAllowance?:          number;
-  overtimeRatePerHour?:         number;
-  holidayOvertimeRate?:         number;
-  lateDeductionPerMinute?:      number;
-  absentDeductionPerDay?:       number;
-  earlyLeaveDeductionPerMinute?: number;
-  bpjsJhtPercent?:              number;
-  bpjsJpPercent?:               number;
-  effectiveDate:                string;
-  endDate?:                     string;
-  isActive?:                    boolean;
-  notes?:                       string;
+  employeeId:                      string;
+  baseSalary:                      number;
+  mealAllowancePerDay?:            number;
+  transportAllowance?:             number;
+  overtimeRatePerHour?:            number;
+  holidayOvertimeRate?:            number;
+  lateDeductionPerMinute?:         number;
+  lateDeductionBracket1?:          number;
+  lateDeductionBracket2?:          number;
+  lateDeductionBracket3?:          number;
+  absentDeductionPerDay?:          number;
+  earlyLeaveDeductionPerMinute?:   number;
+  bpjsJhtPercent?:                 number;
+  bpjsJpPercent?:                  number;
+  bpjsKesehatanEmployeePercent?:   number;
+  bpjsKesehatanEmployerPercent?:   number;
+  effectiveDate:                   string;
+  endDate?:                        string;
+  isActive?:                       boolean;
+  notes?:                          string;
 }
 export type UpdateSalaryInput = Partial<Omit<CreateSalaryInput, "employeeId">>;
 
@@ -264,16 +274,27 @@ export interface UpdateWarehouseBranchInput   { branchId: string }
 export interface UpdateWarehouseAccurateInput { accurateWarehouseId: number }
 
 // ── Leave Type ─────────────────────────────────────────────────────────
+export type QuotaType = "ANNUAL" | "EVENT_BASED" | "LIFETIME";
+
 export interface LeaveType {
-  id:              string;
-  code:            string;
-  name:            string;
-  maxDaysPerYear:  number;
-  isPaid:          boolean;
-  isActive:        boolean;
+  id:                  string;
+  code:                string;
+  name:                string;
+  quotaType:           QuotaType;
+  maxDaysPerYear:      number;
+  isPaid:              boolean;
+  unusedDayPayoutRate: number;
+  isActive:            boolean;
 }
-export interface CreateLeaveTypeInput { code: string; name: string; maxDaysPerYear?: number; isPaid?: boolean }
-export type UpdateLeaveTypeInput = Partial<CreateLeaveTypeInput> & { isActive?: boolean };
+export interface CreateLeaveTypeInput {
+  code:                string;
+  name:                string;
+  quotaType?:          QuotaType;
+  maxDaysPerYear?:     number;
+  isPaid?:             boolean;
+  unusedDayPayoutRate?: number;
+}
+export type UpdateLeaveTypeInput = Partial<Omit<CreateLeaveTypeInput, "code">> & { isActive?: boolean };
 
 // ── Leave Quota ────────────────────────────────────────────────────────
 export interface LeaveQuota {
@@ -284,7 +305,7 @@ export interface LeaveQuota {
   totalDays:   number;
   usedDays:    number;
   employee:    { id: string; name: string; employeeCode: string | null };
-  leaveType:   { id: string; code: string; name: string; maxDaysPerYear: number; isPaid: boolean };
+  leaveType:   { id: string; code: string; name: string; quotaType: QuotaType; maxDaysPerYear: number; isPaid: boolean };
 }
 export interface AssignQuotaInput {
   employeeId:  string;

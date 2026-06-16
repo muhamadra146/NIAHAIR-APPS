@@ -34,6 +34,8 @@ import { ConsultationFormPage }       from "@/features/consultation/pages/Consul
 import { LeavePage }                  from "@/features/leave/pages/LeavePage";
 import { MyPayslipPage }             from "@/features/payroll/pages/MyPayslipPage";
 import { CorrectionPage }            from "@/features/attendance/pages/CorrectionPage";
+import { PermissionPage }            from "@/features/attendance/pages/PermissionPage";
+import { SickLeavePage }             from "@/features/attendance/pages/SickLeavePage";
 
 export const router = createBrowserRouter([
   // ── Public routes ────────────────────────────────────────────────────
@@ -101,6 +103,10 @@ export const router = createBrowserRouter([
           { path: "/my-payslip", element: <MyPayslipPage /> },
           // Attendance Correction
           { path: "/attendance-corrections", element: <CorrectionPage /> },
+          // Permission (Izin)
+          { path: "/permissions", element: <PermissionPage /> },
+          // Sick Leave (Sakit)
+          { path: "/sick-leaves", element: <SickLeavePage /> },
           // Settings
           { path: "/settings", element: <SettingsPage /> },
         ],

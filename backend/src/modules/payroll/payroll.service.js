@@ -28,7 +28,7 @@ const buildPeriod = (yearMonth) => {
 const HS_RATE_SMALL = 75_000;
 const HS_RATE_LARGE = 50_000;
 
-const buildItems = (salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments = []) => {
+const buildItems = (salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments = [], unusedLeavePayouts = [], approvedLatePermissions = []) => {
   const s = salarySetting;
 
   // Working days = schedules that are WORKING (not OFF)
@@ -41,9 +41,24 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   const absentDays  = Math.max(workingDays - presentDays, 0);
 
   // Sum minutes
-  const totalLateMinutes       = attendances.reduce((acc, a) => acc + (a.lateMinutes       ?? 0), 0);
   const totalEarlyLeaveMinutes = attendances.reduce((acc, a) => acc + (a.earlyLeaveMinutes ?? 0), 0);
   const totalOvertimeMinutes   = attendances.reduce((acc, a) => acc + (a.overtimeMinutes   ?? 0), 0);
+
+  // Bracket-based late deduction — per occurrence, not total × rate
+  // bracket1 = 1–30 min, bracket2 = 31–60 min, bracket3 = 61+ min
+  // Skip if employee has an approved LATE permission for that date
+  const latePerm = new Set(
+    approvedLatePermissions.map((p) => new Date(p.date).toISOString().split("T")[0])
+  );
+  const lateDeductionTotal = attendances.reduce((acc, a) => {
+    const mins = a.lateMinutes ?? 0;
+    if (mins <= 0) return acc;
+    const dateKey = new Date(a.workDate).toISOString().split("T")[0];
+    if (latePerm.has(dateKey)) return acc;  // waived by approved late permission
+    if (mins <= 30) return acc + Number(s.lateDeductionBracket1 ?? 0);
+    if (mins <= 60) return acc + Number(s.lateDeductionBracket2 ?? 0);
+    return acc + Number(s.lateDeductionBracket3 ?? 0);
+  }, 0);
 
   // Transport: daily rate × absent days deducted
   const dailyTransport = workingDays > 0
@@ -58,8 +73,9 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   const overtimeAmount = D(totalOvertimeMinutes).mul(D(s.overtimeRatePerHour)).div(D(60));
 
   // BPJS bases on baseSalary
-  const bpjsJht = D(s.baseSalary).mul(D(s.bpjsJhtPercent)).div(D(100));
-  const bpjsJp  = D(s.baseSalary).mul(D(s.bpjsJpPercent)).div(D(100));
+  const bpjsJht        = D(s.baseSalary).mul(D(s.bpjsJhtPercent)).div(D(100));
+  const bpjsJp         = D(s.baseSalary).mul(D(s.bpjsJpPercent)).div(D(100));
+  const bpjsKesehatan  = D(s.baseSalary).mul(D(s.bpjsKesehatanEmployeePercent ?? 1)).div(D(100));
 
   // Kasbon deduction = sum of monthlyDeduction for each ACTIVE loan
   const kasbonTotal = activeLoans.reduce((acc, l) => acc + Number(l.monthlyDeduction), 0);
@@ -87,13 +103,23 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   addItem("INCOME", "lembur",    "Lembur",                overtimeAmount, totalOvertimeMinutes, D(s.overtimeRatePerHour).div(D(60)));
   addItem("INCOME", "service_charge_hs", "Service Charge Home Service", hsServiceChargeTotal, hsAppointments.length, hsAppointments.length > 0 ? (hsAppointments[0].staffs.length <= 3 ? HS_RATE_SMALL : HS_RATE_LARGE) : 0);
 
+  // Payout cuti tahunan tidak terpakai (hanya bulan Desember)
+  for (const q of unusedLeavePayouts) {
+    const unusedDays = q.totalDays - q.usedDays;
+    if (unusedDays > 0) {
+      const amount = D(unusedDays).mul(D(q.leaveType.unusedDayPayoutRate));
+      addItem("INCOME", "payout_cuti", `Payout Cuti Sisa – ${q.leaveType.name}`, amount, unusedDays, q.leaveType.unusedDayPayoutRate);
+    }
+  }
+
   // DEDUCTION
-  addItem("DEDUCTION", "absen",      "Potongan Absen",         D(s.absentDeductionPerDay).mul(D(absentDays)), absentDays, s.absentDeductionPerDay);
-  addItem("DEDUCTION", "terlambat",  "Potongan Terlambat",     D(s.lateDeductionPerMinute).mul(D(totalLateMinutes)), totalLateMinutes, s.lateDeductionPerMinute);
-  addItem("DEDUCTION", "pulang_cepat", "Potongan Pulang Cepat", D(s.earlyLeaveDeductionPerMinute).mul(D(totalEarlyLeaveMinutes)), totalEarlyLeaveMinutes, s.earlyLeaveDeductionPerMinute);
-  addItem("DEDUCTION", "bpjs_jht",   "BPJS JHT",              bpjsJht);
-  addItem("DEDUCTION", "bpjs_jp",    "BPJS JP",               bpjsJp);
-  addItem("DEDUCTION", "kasbon",     "Potongan Kasbon",        kasbonTotal);
+  addItem("DEDUCTION", "absen",        "Potongan Absen",         D(s.absentDeductionPerDay).mul(D(absentDays)), absentDays, s.absentDeductionPerDay);
+  addItem("DEDUCTION", "terlambat",    "Potongan Terlambat",     lateDeductionTotal);
+  addItem("DEDUCTION", "pulang_cepat", "Potongan Pulang Cepat",  D(s.earlyLeaveDeductionPerMinute).mul(D(totalEarlyLeaveMinutes)), totalEarlyLeaveMinutes, s.earlyLeaveDeductionPerMinute);
+  addItem("DEDUCTION", "bpjs_jht",     "BPJS JHT",              bpjsJht);
+  addItem("DEDUCTION", "bpjs_jp",      "BPJS JP",               bpjsJp);
+  addItem("DEDUCTION", "bpjs_kesehatan", "BPJS Kesehatan",      bpjsKesehatan);
+  addItem("DEDUCTION", "kasbon",       "Potongan Kasbon",        kasbonTotal);
 
   const grossIncome     = items.filter((i) => i.type === "INCOME")    .reduce((a, i) => a.plus(i.amount), D(0));
   const totalDeductions = items.filter((i) => i.type === "DEDUCTION") .reduce((a, i) => a.plus(i.amount), D(0));
@@ -140,14 +166,14 @@ const generate = async ({ employeeId, branchId, yearMonth, periodStart: ps, peri
   const existing = await repo.findByEmployeeAndPeriod(employeeId, periodStart);
   if (existing) throw new AppError("Payroll already exists for this employee and period", StatusCodes.CONFLICT);
 
-  const { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments } =
+  const { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions } =
     await repo.getGenerationData(employeeId, branchId, periodStart, periodEnd);
 
   if (!salarySetting)
     throw new AppError("No active salary setting found for this employee", StatusCodes.BAD_REQUEST);
 
   const { items, grossIncome, totalDeductions, netSalary } =
-    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments);
+    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions);
 
   const payroll = await prisma.payroll.create({
     data: {
@@ -178,14 +204,14 @@ const recalculate = async (id) => {
   if (existing.status !== "DRAFT")
     throw new AppError("Only DRAFT payrolls can be recalculated", StatusCodes.BAD_REQUEST);
 
-  const { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments } =
+  const { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions } =
     await repo.getGenerationData(existing.employeeId, existing.branchId, existing.periodStart, existing.periodEnd);
 
   if (!salarySetting)
     throw new AppError("No active salary setting found", StatusCodes.BAD_REQUEST);
 
   const { items, grossIncome, totalDeductions, netSalary } =
-    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments);
+    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions);
 
   await repo.replaceAutoItems(id, items);
   return repo.update(id, { grossIncome, totalDeductions, netSalary });
@@ -271,21 +297,23 @@ const getBpjsReport = async ({ branchId, yearMonth }) => {
   const getAmt = (items, cat) => Number(items.find((i) => i.category === cat)?.amount ?? 0);
 
   const rows = payrolls.map((p) => ({
-    employee: p.employee,
-    periodStart: p.periodStart,
-    periodEnd:   p.periodEnd,
-    status:      p.status,
-    baseSalary:  getAmt(p.items, "gaji"),
-    bpjsJht:     getAmt(p.items, "bpjs_jht"),
-    bpjsJp:      getAmt(p.items, "bpjs_jp"),
-    totalBpjs:   getAmt(p.items, "bpjs_jht") + getAmt(p.items, "bpjs_jp"),
+    employee:      p.employee,
+    periodStart:   p.periodStart,
+    periodEnd:     p.periodEnd,
+    status:        p.status,
+    baseSalary:    getAmt(p.items, "gaji"),
+    bpjsJht:       getAmt(p.items, "bpjs_jht"),
+    bpjsJp:        getAmt(p.items, "bpjs_jp"),
+    bpjsKesehatan: getAmt(p.items, "bpjs_kesehatan"),
+    totalBpjs:     getAmt(p.items, "bpjs_jht") + getAmt(p.items, "bpjs_jp") + getAmt(p.items, "bpjs_kesehatan"),
   }));
 
   const totals = {
-    baseSalary: rows.reduce((s, r) => s + r.baseSalary, 0),
-    bpjsJht:   rows.reduce((s, r) => s + r.bpjsJht, 0),
-    bpjsJp:    rows.reduce((s, r) => s + r.bpjsJp, 0),
-    totalBpjs: rows.reduce((s, r) => s + r.totalBpjs, 0),
+    baseSalary:    rows.reduce((s, r) => s + r.baseSalary, 0),
+    bpjsJht:       rows.reduce((s, r) => s + r.bpjsJht, 0),
+    bpjsJp:        rows.reduce((s, r) => s + r.bpjsJp, 0),
+    bpjsKesehatan: rows.reduce((s, r) => s + r.bpjsKesehatan, 0),
+    totalBpjs:     rows.reduce((s, r) => s + r.totalBpjs, 0),
   };
 
   return { data: rows, totals, period: { yearMonth, periodStart, periodEnd } };

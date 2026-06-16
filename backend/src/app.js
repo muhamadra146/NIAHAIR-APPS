@@ -48,6 +48,8 @@ const leaveRouter                   = require("./modules/leave/leave.route");
 const leaveTypeRouter               = require("./modules/leaveType/leaveType.route");
 const leaveQuotaRouter              = require("./modules/leaveQuota/leaveQuota.route");
 const correctionRouter              = require("./modules/correction/correction.route");
+const permissionRouter              = require("./modules/permission/permission.route");
+const sickLeaveRouter               = require("./modules/sickLeave/sickLeave.route");
 
 
 const app = express();
@@ -127,6 +129,8 @@ app.use("/leaves",                               leaveRouter);
 app.use("/leave-types",                          leaveTypeRouter);
 app.use("/leave-quotas",                         leaveQuotaRouter);
 app.use("/attendance-corrections",               correctionRouter);
+app.use("/permissions",                          permissionRouter);
+app.use("/sick-leaves",                          sickLeaveRouter);
 
 
 // global error handler — must be last

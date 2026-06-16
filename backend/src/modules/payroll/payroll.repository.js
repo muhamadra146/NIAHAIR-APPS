@@ -41,7 +41,7 @@ const replaceAutoItems = async (payrollId, items) => {
 
 // Data needed for payroll generation
 const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) => {
-  const [salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments] = await Promise.all([
+  const [salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, approvedLatePermissions] = await Promise.all([
     // Active salary setting
     prisma.employeeSalarySettings.findFirst({
       where: { employeeId, isActive: true },
@@ -96,9 +96,37 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) =
         staffs: { select: { employeeId: true } },
       },
     }),
+
+    // Approved LATE permissions in period — used to waive late deductions
+    prisma.permissionRequest.findMany({
+      where: {
+        employeeId,
+        type:   "LATE",
+        status: "APPROVED",
+        date:   { gte: periodStart, lte: periodEnd },
+      },
+      select: { date: true },
+    }),
   ]);
 
-  return { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments };
+  // For December payrolls: fetch ANNUAL leave quotas with payout rate > 0
+  const isDecember = periodEnd.getMonth() === 11;
+  const year       = periodEnd.getFullYear();
+  let unusedLeavePayouts = [];
+  if (isDecember) {
+    unusedLeavePayouts = await prisma.leaveQuota.findMany({
+      where: {
+        employeeId,
+        year,
+        leaveType: { quotaType: "ANNUAL", unusedDayPayoutRate: { gt: 0 } },
+      },
+      include: {
+        leaveType: { select: { id: true, name: true, unusedDayPayoutRate: true } },
+      },
+    });
+  }
+
+  return { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions };
 };
 
 const findByEmployee = ({ skip, take, where }) =>

@@ -52,15 +52,19 @@ export function SalaryHistoryTable({ settings, onEdit }: Props) {
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-3">
-            <Row label="Uang Makan/hari"     value={Rp(Number(s.mealAllowancePerDay))} />
-            <Row label="Transport/bulan"     value={Rp(Number(s.transportAllowance))} />
-            <Row label="Lembur/jam"          value={Rp(Number(s.overtimeRatePerHour))} />
-            <Row label="Lembur libur/jam"    value={Rp(Number(s.holidayOvertimeRate))} />
-            <Row label="Potong terlambat/mnt" value={Rp(Number(s.lateDeductionPerMinute))} />
-            <Row label="Potong absen/hari"   value={Rp(Number(s.absentDeductionPerDay))} />
-            <Row label="Potong pulang cepat/mnt" value={Rp(Number(s.earlyLeaveDeductionPerMinute))} />
-            <Row label="JHT"                 value={`${s.bpjsJhtPercent}%`} />
-            <Row label="JP"                  value={`${s.bpjsJpPercent}%`} />
+            <Row label="Uang Makan/hari"        value={Rp(Number(s.mealAllowancePerDay))} />
+            <Row label="Transport/bulan"         value={Rp(Number(s.transportAllowance))} />
+            <Row label="Lembur/jam"              value={Rp(Number(s.overtimeRatePerHour))} />
+            <Row label="Lembur libur/jam"        value={Rp(Number(s.holidayOvertimeRate))} />
+            <Row label="Potong terlambat 1–30mnt" value={Rp(Number(s.lateDeductionBracket1 ?? 0))} />
+            <Row label="Potong terlambat 31–60mnt" value={Rp(Number(s.lateDeductionBracket2 ?? 0))} />
+            <Row label="Potong terlambat 61+mnt"  value={Rp(Number(s.lateDeductionBracket3 ?? 0))} />
+            <Row label="Potong absen/hari"        value={Rp(Number(s.absentDeductionPerDay))} />
+            <Row label="Potong pulang cepat/mnt"  value={Rp(Number(s.earlyLeaveDeductionPerMinute))} />
+            <Row label="BPJS JHT"                 value={`${s.bpjsJhtPercent}%`} />
+            <Row label="BPJS JP"                  value={`${s.bpjsJpPercent}%`} />
+            <Row label="BPJS Kesehatan karyawan"  value={`${s.bpjsKesehatanEmployeePercent ?? 1}%`} />
+            <Row label="BPJS Kesehatan perusahaan" value={`${s.bpjsKesehatanEmployerPercent ?? 4}%`} />
           </div>
 
           {s.notes && (

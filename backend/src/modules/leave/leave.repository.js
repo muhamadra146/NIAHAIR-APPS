@@ -8,7 +8,7 @@ const INCLUDE = {
       homeBranch: { select: { id: true, code: true, name: true } },
     },
   },
-  leaveType: { select: { id: true, code: true, name: true, isPaid: true } },
+  leaveType: { select: { id: true, code: true, name: true, isPaid: true, quotaType: true } },
 };
 
 const findAll = ({ skip, take, where }) =>

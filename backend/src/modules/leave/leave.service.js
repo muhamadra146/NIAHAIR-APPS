@@ -88,15 +88,23 @@ const createLeave = async (employeeId, { startDate, endDate, reason, leaveTypeId
   const totalDays = calcTotalDays(start, end);
 
   if (leaveTypeId) {
-    const year    = start.getUTCFullYear();
-    const balance = await quotaSvc.getBalance(employeeId, leaveTypeId, year);
-    if (balance) {
-      const remaining = balance.totalDays - balance.usedDays;
-      if (totalDays > remaining)
-        throw new AppError(
-          `Sisa kuota cuti tidak cukup. Sisa: ${remaining} hari, dibutuhkan: ${totalDays} hari`,
-          StatusCodes.BAD_REQUEST
-        );
+    const leaveType = await prisma.leaveType.findUnique({
+      where: { id: leaveTypeId },
+      select: { quotaType: true },
+    });
+    if (!leaveType) throw new AppError("Tipe cuti tidak ditemukan", StatusCodes.NOT_FOUND);
+
+    if (leaveType.quotaType === "ANNUAL") {
+      const year    = start.getUTCFullYear();
+      const balance = await quotaSvc.getBalance(employeeId, leaveTypeId, year);
+      if (balance) {
+        const remaining = balance.totalDays - balance.usedDays;
+        if (totalDays > remaining)
+          throw new AppError(
+            `Sisa kuota cuti tidak cukup. Sisa: ${remaining} hari, dibutuhkan: ${totalDays} hari`,
+            StatusCodes.BAD_REQUEST
+          );
+      }
     }
   }
 
@@ -120,7 +128,7 @@ const approve = async (id, approvedBy) => {
 
   await createLeaveSchedules(leave.employeeId, branchId, leave.startDate, leave.endDate);
 
-  if (leave.leaveTypeId && leave.totalDays) {
+  if (leave.leaveTypeId && leave.totalDays && leave.leaveType?.quotaType === "ANNUAL") {
     const year = new Date(leave.startDate).getUTCFullYear();
     await quotaSvc.incrementUsed(leave.employeeId, leave.leaveTypeId, year, leave.totalDays).catch(() => null);
   }

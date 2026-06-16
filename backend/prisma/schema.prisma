@@ -69,6 +69,8 @@ model Branch {
   payrolls              Payroll[]
   consultationNotes     ClientConsultationNote[]
   correctionRequests    AttendanceCorrectionRequest[]
+  permissionRequests    PermissionRequest[]
+  sickLeaves            SickLeave[]
 
   @@map("branches")
 }
@@ -116,6 +118,8 @@ model User {
   employee Employee @relation(fields: [employeeId], references: [id])
 
   reviewedCorrections AttendanceCorrectionRequest[] @relation("CorrectionReviewer")
+  reviewedPermissions PermissionRequest[]           @relation("PermissionReviewer")
+  reviewedSickLeaves  SickLeave[]                   @relation("SickLeaveReviewer")
 
   @@index([userRoleId])
   @@index([employeeId])
@@ -201,6 +205,8 @@ model Employee {
   payrolls              Payroll[]
   leaveQuotas           LeaveQuota[]
   correctionRequests    AttendanceCorrectionRequest[]
+  permissionRequests    PermissionRequest[]
+  sickLeaves            SickLeave[]
 
   @@index([roleId])
   @@index([homeBranchId])
@@ -1555,6 +1561,12 @@ enum LeaveStatus {
   REJECTED
 }
 
+enum QuotaType {
+  ANNUAL
+  EVENT_BASED
+  LIFETIME
+}
+
 enum CorrectionStatus {
   PENDING
   APPROVED
@@ -1703,11 +1715,13 @@ model Leave {
 model LeaveType {
   id String @id @default(uuid())
 
-  code           String  @unique
-  name           String
-  maxDaysPerYear Int     @default(12)
-  isPaid         Boolean @default(true)
-  isActive       Boolean @default(true)
+  code               String    @unique
+  name               String
+  quotaType          QuotaType @default(ANNUAL)
+  maxDaysPerYear     Int       @default(12)
+  isPaid             Boolean   @default(true)
+  unusedDayPayoutRate Decimal  @default(0) @db.Decimal(18, 2)
+  isActive           Boolean   @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2070,6 +2084,25 @@ enum ScheduleStatus {
   WORKING
   OFF
   LEAVE
+  IZIN
+  SAKIT
+}
+
+enum SickLeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PermissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PermissionType {
+  ABSENCE
+  LATE
 }
 
 model Shift {
@@ -2120,6 +2153,73 @@ model StaffSchedule {
   @@map("staff_schedules")
 }
 
+model PermissionRequest {
+  id String @id @default(uuid())
+
+  employeeId String
+  branchId   String
+
+  type   PermissionType   @default(ABSENCE)
+  date   DateTime
+  reason String
+  notes  String?
+
+  estimatedArrival String?
+
+  status PermissionStatus @default(PENDING)
+
+  reviewedBy String?
+  reviewedAt DateTime?
+  reviewNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  branch   Branch   @relation(fields: [branchId], references: [id])
+  reviewer User?    @relation("PermissionReviewer", fields: [reviewedBy], references: [id])
+
+  @@index([employeeId])
+  @@index([branchId, date])
+  @@index([status])
+  @@map("permission_requests")
+}
+
+model SickLeave {
+  id String @id @default(uuid())
+
+  employeeId String
+  branchId   String
+
+  startDate DateTime
+  endDate   DateTime
+  totalDays Int
+
+  hasLetter  Boolean   @default(false)
+  letterDate DateTime?
+  doctorName String?
+  diagnosis  String?
+  clinicName String?
+
+  status SickLeaveStatus @default(PENDING)
+
+  reviewedBy String?
+  reviewedAt DateTime?
+  reviewNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  branch   Branch   @relation(fields: [branchId], references: [id])
+  reviewer User?    @relation("SickLeaveReviewer", fields: [reviewedBy], references: [id])
+
+  @@index([employeeId])
+  @@index([branchId, startDate])
+  @@index([status])
+  @@map("sick_leaves")
+}
+
 // =====================================================
 // EMPLOYEE SALARY SETTINGS (with history)
 // =====================================================
@@ -2139,6 +2239,11 @@ model EmployeeSalarySettings {
   earlyLeaveDeductionPerMinute Decimal @default(0) @db.Decimal(18, 2)
   bpjsJhtPercent               Decimal @default(2) @db.Decimal(5, 2)
   bpjsJpPercent                Decimal @default(1) @db.Decimal(5, 2)
+  lateDeductionBracket1        Decimal @default(25000) @db.Decimal(18, 2)
+  lateDeductionBracket2        Decimal @default(50000) @db.Decimal(18, 2)
+  lateDeductionBracket3        Decimal @default(75000) @db.Decimal(18, 2)
+  bpjsKesehatanEmployeePercent Decimal @default(1)     @db.Decimal(5, 2)
+  bpjsKesehatanEmployerPercent Decimal @default(4)     @db.Decimal(5, 2)
 
   effectiveDate DateTime
   endDate       DateTime?

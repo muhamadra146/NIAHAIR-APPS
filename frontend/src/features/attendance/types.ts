@@ -1,3 +1,96 @@
+// ── Permission Request ────────────────────────────────────────────────
+export type PermissionStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type PermissionType   = "ABSENCE" | "LATE";
+
+export interface PermissionRequest {
+  id:               string;
+  employeeId:       string;
+  branchId:         string;
+  type:             PermissionType;
+  date:             string;
+  reason:           string;
+  notes:            string | null;
+  estimatedArrival: string | null;
+  status:           PermissionStatus;
+  reviewedBy:       string | null;
+  reviewedAt:       string | null;
+  reviewNote:       string | null;
+  createdAt:        string;
+  updatedAt:        string;
+  employee:   { id: string; name: string; employeeCode: string | null; role: { id: string; name: string } };
+  branch:     { id: string; code: string; name: string };
+  reviewer:   { id: string; name: string } | null;
+}
+
+export interface CreatePermissionInput {
+  type?:             PermissionType;
+  date:              string;
+  reason:            string;
+  notes?:            string;
+  estimatedArrival?: string;
+}
+
+export interface ReviewPermissionInput {
+  reviewNote?: string;
+}
+
+export interface PermissionListParams {
+  page?:       number;
+  limit?:      number;
+  branchId?:   string;
+  employeeId?: string;
+  status?:     PermissionStatus | "";
+}
+
+// ── Sick Leave ────────────────────────────────────────────────────────
+export type SickLeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface SickLeave {
+  id:         string;
+  employeeId: string;
+  branchId:   string;
+  startDate:  string;
+  endDate:    string;
+  totalDays:  number;
+  hasLetter:  boolean;
+  letterDate: string | null;
+  doctorName: string | null;
+  diagnosis:  string | null;
+  clinicName: string | null;
+  status:     SickLeaveStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  createdAt:  string;
+  updatedAt:  string;
+  employee:   { id: string; name: string; employeeCode: string | null; role: { id: string; name: string } };
+  branch:     { id: string; code: string; name: string };
+  reviewer:   { id: string; name: string } | null;
+}
+
+export interface CreateSickLeaveInput {
+  startDate:   string;
+  endDate:     string;
+  hasLetter?:  boolean;
+  letterDate?: string;
+  doctorName?: string;
+  diagnosis?:  string;
+  clinicName?: string;
+}
+
+export interface ReviewSickLeaveInput {
+  reviewNote?: string;
+}
+
+export interface SickLeaveListParams {
+  page?:       number;
+  limit?:      number;
+  branchId?:   string;
+  employeeId?: string;
+  status?:     SickLeaveStatus | "";
+}
+
+// ── Correction Request ────────────────────────────────────────────────
 export type CorrectionStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export interface CorrectionEmployee {
