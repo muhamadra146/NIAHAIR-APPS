@@ -11,7 +11,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { formatDate, formatCurrency } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { AppointmentStatusBadge } from "./AppointmentStatusBadge";
 import { useDeleteAppointment } from "../hooks";
 import { useAuthStore } from "@/stores/authStore";
@@ -26,9 +26,9 @@ interface Props {
 
 function LoadingState() {
   return (
-    <div className="space-y-3 p-4">
+    <div className="space-y-3 p-5">
       {Array.from({ length: 5 }).map((_, i) => (
-        <Skeleton key={i} className="h-14 w-full" />
+        <Skeleton key={i} className="h-14 w-full rounded-xl" />
       ))}
     </div>
   );
@@ -36,7 +36,7 @@ function LoadingState() {
 
 function EmptyState() {
   return (
-    <div className="py-12 text-center text-sm text-muted-foreground">
+    <div className="py-14 text-center text-sm text-slate-400">
       No appointments found.
     </div>
   );
@@ -88,23 +88,23 @@ function MobileCardList({ appointments, canDelete }: { appointments: Appointment
 
   return (
     <>
-      <div className="divide-y divide-border md:hidden">
+      <div className="divide-y divide-slate-100 md:hidden">
         {appointments.map((a) => (
-          <div key={a.id} className="flex items-start justify-between gap-3 px-4 py-3">
+          <div key={a.id} className="flex items-start justify-between gap-3 px-5 py-4 hover:bg-slate-50/60 transition-colors">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <p className="truncate text-sm font-medium">{a.customer.name}</p>
+                <p className="truncate text-sm font-medium text-slate-800">{a.customer.name}</p>
                 {a.type === "HOME_SERVICE" && (
                   <Home className="h-3.5 w-3.5 shrink-0 text-orange-500" />
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">{a.bookingNo}</p>
-              <p className="text-xs text-muted-foreground">{formatDate(a.visitDate)}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{a.bookingNo}</p>
+              <p className="text-xs text-slate-400">{formatDate(a.visitDate)}</p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">
               <AppointmentStatusBadge status={a.status} />
               <div className="flex items-center gap-1">
-                <Button variant="outline" size="sm" className="h-7 px-2 text-xs" asChild>
+                <Button variant="outline" size="sm" className="h-7 rounded-lg px-2 text-xs" asChild>
                   <Link to={`/appointments/${a.id}`}>
                     <Eye className="mr-1 h-3 w-3" />
                     View
@@ -114,7 +114,7 @@ function MobileCardList({ appointments, canDelete }: { appointments: Appointment
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                    className="h-7 w-7 rounded-lg p-0 text-slate-400 hover:bg-red-50 hover:text-red-500"
                     onClick={() => setToDelete(a)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -140,53 +140,54 @@ function DesktopTable({ appointments, canDelete }: { appointments: Appointment[]
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border bg-muted/50">
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Booking No</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Customer</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tipe</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Branch</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Visit Date</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Time</th>
-              {/* <th className="px-4 py-3 text-left font-medium text-muted-foreground">Est. Total</th> */}
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Action</th>
+            <tr className="border-b border-slate-100 bg-slate-50/60">
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Booking No</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Customer</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Tipe</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Branch</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Visit Date</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Time</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Action</th>
             </tr>
           </thead>
           <tbody>
             {appointments.map((a) => (
-              <tr key={a.id} className="border-b border-border transition-colors hover:bg-muted/30">
-                <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{a.bookingNo}</td>
-                <td className="px-4 py-3">
-                  <p className="font-medium">{a.customer.name}</p>
+              <tr key={a.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50/60">
+                <td className="px-5 py-4 font-mono text-xs text-slate-400">{a.bookingNo}</td>
+                <td className="px-5 py-4">
+                  <p className="font-medium text-slate-800">{a.customer.name}</p>
                   {a.customer.mobilePhone && (
-                    <p className="text-xs text-muted-foreground">{a.customer.mobilePhone}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{a.customer.mobilePhone}</p>
                   )}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-5 py-4">
                   {a.type === "HOME_SERVICE" ? (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-orange-600">
                       <Home className="h-3 w-3" /> HS
                     </span>
                   ) : (
-                    <span className="text-xs text-muted-foreground">Salon</span>
+                    <span className="text-xs text-slate-400">Salon</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-muted-foreground">{a.branch.name}</td>
-                <td className="px-4 py-3 text-muted-foreground">{formatDate(a.visitDate)}</td>
-                <td className="px-4 py-3 text-xs text-muted-foreground">
+                <td className="px-5 py-4 text-slate-500 text-sm">{a.branch.name}</td>
+                <td className="px-5 py-4 text-slate-500 text-sm">{formatDate(a.visitDate)}</td>
+                <td className="px-5 py-4 text-xs text-slate-400">
                   {new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                   {" – "}
                   {new Date(a.endTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                 </td>
-                {/* <td className="px-4 py-3 text-muted-foreground">
-                  {a.estimatedTotal ? formatCurrency(a.estimatedTotal) : "—"}
-                </td> */}
-                <td className="px-4 py-3">
+                <td className="px-5 py-4">
                   <AppointmentStatusBadge status={a.status} />
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-5 py-4">
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                      asChild
+                    >
                       <Link to={`/appointments/${a.id}`}>
                         <Eye className="h-4 w-4" />
                       </Link>
@@ -195,7 +196,7 @@ function DesktopTable({ appointments, canDelete }: { appointments: Appointment[]
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-destructive hover:bg-destructive/10"
+                        className="rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500"
                         onClick={() => setToDelete(a)}
                       >
                         <Trash2 className="h-4 w-4" />
