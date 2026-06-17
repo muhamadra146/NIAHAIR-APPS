@@ -17,8 +17,8 @@ const count = (where) => prisma.stockTransfer.count({ where });
 
 const findById = (id) => prisma.stockTransfer.findUnique({ where: { id }, include: INCLUDE });
 
-const create = (data, items) =>
-  prisma.stockTransfer.create({
+const create = (data, items, tx = prisma) =>
+  tx.stockTransfer.create({
     data: {
       ...data,
       items: { create: items },
@@ -29,11 +29,11 @@ const create = (data, items) =>
 const update = (id, data) =>
   prisma.stockTransfer.update({ where: { id }, data, include: INCLUDE });
 
-const findMaxSeqToday = async () => {
+const findMaxSeqToday = async (tx = prisma) => {
   const today = new Date();
   const yyyymmdd = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
   const prefix = `TRF-${yyyymmdd}-`;
-  const last = await prisma.stockTransfer.findFirst({
+  const last = await tx.stockTransfer.findFirst({
     where:   { transferNo: { startsWith: prefix } },
     orderBy: { transferNo: "desc" },
     select:  { transferNo: true },

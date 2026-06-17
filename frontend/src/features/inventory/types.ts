@@ -59,6 +59,8 @@ export interface MovementListParams {
   warehouseId?:   string;
   branchId?:      string;
   type?:          StockMovementType | string;
+  startDate?:     string;
+  endDate?:       string;
 }
 
 // ── Stock Transfer ────────────────────────────────────────────────────

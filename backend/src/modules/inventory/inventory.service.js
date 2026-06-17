@@ -17,7 +17,7 @@ const D = (v) => new Prisma.Decimal(String(v));
 
 // ── List stock movements ──────────────────────────────────────────────
 
-const listStockMovements = async ({ page, limit, referenceType, referenceId, itemId, warehouseId, branchId, type }) => {
+const listStockMovements = async ({ page, limit, referenceType, referenceId, itemId, warehouseId, branchId, type, startDate, endDate }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
@@ -27,6 +27,11 @@ const listStockMovements = async ({ page, limit, referenceType, referenceId, ite
   if (warehouseId)   where.warehouseId   = warehouseId;
   if (branchId)      where.warehouse     = { branchId };
   if (type)          where.type          = type;
+  if (startDate || endDate) {
+    where.createdAt = {};
+    if (startDate) where.createdAt.gte = new Date(startDate);
+    if (endDate)   where.createdAt.lte = new Date(new Date(endDate).setUTCHours(23, 59, 59, 999));
+  }
 
   const [data, total] = await Promise.all([
     findMovements({ skip, take, where }),

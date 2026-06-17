@@ -37,7 +37,7 @@ export function useCreateStockTransfer() {
 export function useUpdateTransferStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => updateTransferStatus(id, status),
+    mutationFn: ({ id, status, branchId }: { id: string; status: string; branchId?: string | null }) => updateTransferStatus(id, status, branchId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["stock-transfers"] });
       qc.invalidateQueries({ queryKey: ["inventories"] });

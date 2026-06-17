@@ -283,6 +283,7 @@ model Membership {
   customerMemberships CustomerMembership[]
   customers           Customer[]
   membershipHistories MembershipHistory[]
+  invoices            Invoice[]
 
   @@map("memberships")
 }
@@ -388,6 +389,7 @@ model CustomerMembership {
 
   @@index([customerId])
   @@index([membershipId])
+  @@index([customerId, status, endDate])
   @@map("customer_memberships")
 }
 
@@ -1195,6 +1197,11 @@ model Invoice {
 
   grandTotal Decimal @db.Decimal(18, 2)
 
+  membershipDiscountTotal Decimal? @default(0) @db.Decimal(15, 2)
+
+  membershipId String?
+  membership   Membership? @relation(fields: [membershipId], references: [id])
+
   paidAmount Decimal @default(0) @db.Decimal(18, 2)
 
   outstandingAmount Decimal @db.Decimal(18, 2)
@@ -1239,6 +1246,7 @@ model Invoice {
   @@index([branchId])
   @@index([appointmentId])
   @@index([createdByEmployeeId])
+  @@index([membershipId])
   @@map("invoices")
 }
 

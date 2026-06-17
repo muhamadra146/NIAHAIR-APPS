@@ -46,13 +46,18 @@ const remove = async (id) => {
   return repo.remove(id);
 };
 
+const getActiveMembership = (customerId) => repo.findActiveMembership(customerId);
+
 const getCustomerMembership = async (customerId) => {
-  const customer = await repo.findCustomerWithMembership(customerId);
+  const [customer, activeRecord] = await Promise.all([
+    prisma.customer.findUnique({ where: { id: customerId }, select: { id: true, name: true } }),
+    repo.findActiveMembership(customerId),
+  ]);
   if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
   return {
     customer: { id: customer.id, name: customer.name },
-    activeMembership: customer.membership ?? null,
-    activeRecord: customer.customerMemberships[0] ?? null,
+    activeMembership: activeRecord?.membership ?? null,
+    activeRecord: activeRecord ?? null,
   };
 };
 
@@ -108,4 +113,4 @@ const cancelMembership = async (customerId) => {
   });
 };
 
-module.exports = { getAll, getById, create, update, remove, getCustomerMembership, assignMembership, cancelMembership };
+module.exports = { getAll, getById, create, update, remove, getActiveMembership, getCustomerMembership, assignMembership, cancelMembership };

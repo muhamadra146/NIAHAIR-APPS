@@ -42,7 +42,12 @@ function MobileCardList({ customers }: { customers: Customer[] }) {
       {customers.map((customer) => (
         <div key={customer.id} className="flex items-center justify-between gap-3 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <p className="truncate font-medium text-sm">{customer.name}</p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="truncate font-medium text-sm">{customer.name}</p>
+              {customer.membership && (
+                <Badge variant="purple">{customer.membership.name}</Badge>
+              )}
+            </div>
             {customer.customerNo && (
               <p className="text-xs text-muted-foreground">{customer.customerNo}</p>
             )}
@@ -84,7 +89,12 @@ function DesktopTable({ customers }: { customers: Customer[] }) {
           {customers.map((customer) => (
             <tr key={customer.id} className="border-b border-border transition-colors hover:bg-muted/30">
               <td className="px-4 py-3">
-                <div className="font-medium">{customer.name}</div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-medium">{customer.name}</span>
+                  {customer.membership && (
+                    <Badge variant="purple">{customer.membership.name}</Badge>
+                  )}
+                </div>
                 {customer.email && (
                   <div className="text-xs text-muted-foreground">{customer.email}</div>
                 )}
