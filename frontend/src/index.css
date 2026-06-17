@@ -37,11 +37,12 @@
     --destructive-foreground: 0 0% 100%;
 
     /* ── Sidebar ────────────────────────────────── */
-    --sidebar-background: 0 0% 100%;         /* white */
-    --sidebar-foreground: 222 47% 15%;       /* slate-800 */
-    --sidebar-primary:    340 52% 60%;       /* rose active */
-    --sidebar-accent:     210 40% 95%;       /* slate-100 hover */
-    --sidebar-border:     214 32% 92%;       /* slate-200 */
+    --sidebar-background: 222 47% 11%;       /* slate-900 */
+    --sidebar-foreground: 210 40% 85%;       /* slate-200 — light text on dark */
+    --sidebar-primary:    340 52% 65%;       /* rose — slightly lighter for dark bg contrast */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent:     222 47% 17%;       /* slate-800 — hover state */
+    --sidebar-border:     222 47% 18%;       /* subtle dark border */
   }
 }
 

@@ -5,6 +5,7 @@ import {
   Scissors, ChevronRight, Banknote,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MetricCard } from "@/components/ui/MetricCard";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAuthStore } from "@/stores/authStore";
 import { formatCurrency } from "@/lib/utils";
@@ -28,60 +29,12 @@ const APPT_STATUS: Record<string, { label: string; color: string }> = {
 };
 
 const KPI_CONFIG = [
-  {
-    icon:     TrendingUp,
-    label:    "Pendapatan",
-    accent:   "from-emerald-500 to-teal-500",
-    light:    "bg-emerald-50 text-emerald-600",
-    bar:      "bg-emerald-400",
-    href:     "/reports",
-    showProgress: true,
-  },
-  {
-    icon:     Receipt,
-    label:    "Total Invoice",
-    accent:   "from-blue-500 to-indigo-500",
-    light:    "bg-blue-50 text-blue-600",
-    bar:      "",
-    href:     "/invoices",
-    showProgress: false,
-  },
-  {
-    icon:     Wallet,
-    label:    "Deposit Masuk",
-    accent:   "from-rose-400 to-pink-500",
-    light:    "bg-rose-50 text-rose-500",
-    bar:      "",
-    href:     "/deposits",
-    showProgress: false,
-  },
-  {
-    icon:     CalendarDays,
-    label:    "Booking",
-    accent:   "from-violet-500 to-purple-500",
-    light:    "bg-violet-50 text-violet-600",
-    bar:      "bg-violet-400",
-    href:     "/appointments",
-    showProgress: true,
-  },
-  {
-    icon:     BadgeDollarSign,
-    label:    "Komisi",
-    accent:   "from-amber-400 to-orange-400",
-    light:    "bg-amber-50 text-amber-600",
-    bar:      "",
-    href:     "/commissions",
-    showProgress: false,
-  },
-  {
-    icon:     Users,
-    label:    "Kasbon Aktif",
-    accent:   "from-slate-500 to-slate-700",
-    light:    "bg-slate-100 text-slate-600",
-    bar:      "",
-    href:     "/loans",
-    showProgress: false,
-  },
+  { icon: TrendingUp,      label: "Pendapatan",   href: "/reports"      },
+  { icon: Receipt,         label: "Total Invoice", href: "/invoices"     },
+  { icon: Wallet,          label: "Deposit Masuk", href: "/deposits"     },
+  { icon: CalendarDays,    label: "Booking",       href: "/appointments" },
+  { icon: BadgeDollarSign, label: "Komisi",        href: "/commissions"  },
+  { icon: Users,           label: "Kasbon Aktif",  href: "/loans"        },
 ] as const;
 
 export function DashboardPage() {
@@ -114,11 +67,11 @@ export function DashboardPage() {
   const paidInv       = summary?.invoices.paid ?? 0;
   const paidPct       = totalInv > 0 ? Math.round((paidInv / totalInv) * 100) : 0;
 
-  const kpiValues = [
-    { value: formatCurrency(summary?.invoices.totalRevenue ?? 0), sub: `${paidInv} invoice lunas`, progress: paidPct },
+  const kpiValues: { value: string; sub: string; progress?: number }[] = [
+    { value: formatCurrency(summary?.invoices.totalRevenue ?? 0), sub: `${paidInv} invoice lunas`,  progress: paidPct },
     { value: String(totalInv),                                    sub: `${totalInv - paidInv} outstanding` },
     { value: formatCurrency(summary?.deposits.totalAmount ?? 0),  sub: `${summary?.deposits.total ?? 0} transaksi` },
-    { value: String(totalAppt),                                   sub: `${completedAppt} selesai`, progress: completedPct },
+    { value: String(totalAppt),                                   sub: `${completedAppt} selesai`,  progress: completedPct },
     { value: formatCurrency(summary?.commissions.totalAmount ?? 0), sub: `${summary?.commissions.total ?? 0} entri` },
     { value: String(summary?.loans.active ?? 0),                  sub: "karyawan aktif" },
   ];
@@ -169,17 +122,14 @@ export function DashboardPage() {
               {KPI_CONFIG.map((cfg, i) => {
                 const v = kpiValues[i];
                 return (
-                  <KpiCard
+                  <MetricCard
                     key={cfg.label}
                     icon={cfg.icon}
                     label={cfg.label}
                     value={v.value}
                     sub={v.sub}
-                    accent={cfg.accent}
-                    light={cfg.light}
-                    bar={cfg.bar}
                     href={cfg.href}
-                    progress={cfg.showProgress ? (v as { progress?: number }).progress : undefined}
+                    progress={v.progress}
                     delay={delays[i]}
                   />
                 );
@@ -303,51 +253,6 @@ export function DashboardPage() {
 
       </div>
     </PageContainer>
-  );
-}
-
-// ── KPI Card ──────────────────────────────────────────────────────────────────
-
-function KpiCard({ icon: Icon, label, value, sub, accent, light, bar, href, progress, delay }: {
-  icon:      React.ElementType;
-  label:     string;
-  value:     string;
-  sub:       string;
-  accent:    string;
-  light:     string;
-  bar:       string;
-  href:      string;
-  progress?: number;
-  delay:     string;
-}) {
-  return (
-    <Link
-      to={href}
-      className={`animate-fade-up ${delay} group block rounded-2xl border border-border/60 bg-card shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 overflow-hidden`}
-    >
-      {/* gradient top strip */}
-      <div className={`h-1 w-full bg-gradient-to-r ${accent}`} />
-
-      <div className="p-5">
-        <div className="flex items-start justify-between mb-4">
-          <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${light}`}>
-            <Icon className="h-[18px] w-[18px]" />
-          </div>
-          <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
-        </div>
-        <p className="text-xs text-muted-foreground mb-1">{label}</p>
-        <p className="text-xl font-semibold tracking-tight truncate">{value}</p>
-        <p className="text-xs text-muted-foreground mt-0.5 truncate">{sub}</p>
-        {progress !== undefined && bar && (
-          <div className="mt-3 h-1 rounded-full bg-muted overflow-hidden">
-            <div
-              className={`h-full rounded-full ${bar} transition-all duration-1000`}
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        )}
-      </div>
-    </Link>
   );
 }
 
