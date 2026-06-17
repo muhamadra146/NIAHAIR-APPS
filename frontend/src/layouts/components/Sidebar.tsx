@@ -28,7 +28,7 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
           collapsed ? "justify-center px-2.5" : "gap-3 px-3",
           active
             ? "bg-sidebar-primary text-white shadow-sm shadow-sidebar-primary/30"
-            : "text-sidebar-foreground/60 hover:bg-slate-100 hover:text-sidebar-foreground"
+            : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
         )}
       >
         {active && !collapsed && (
@@ -53,7 +53,7 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
                   "flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors",
                   pathname === child.href || pathname.startsWith(child.href + "/")
                     ? "text-sidebar-primary font-semibold"
-                    : "text-sidebar-foreground/50 hover:bg-slate-50 hover:text-sidebar-foreground"
+                    : "text-sidebar-foreground/50 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
                 )}
               >
                 <span className={cn(
@@ -80,7 +80,7 @@ function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean 
   }
   return (
     <li className="mb-1 mt-3 px-3">
-      <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 select-none">
+      <span className="text-xs font-semibold uppercase tracking-widest text-sidebar-foreground/40 select-none">
         {label}
       </span>
     </li>
@@ -96,7 +96,7 @@ function UserFooter({ collapsed }: { collapsed: boolean }) {
 
   return (
     <div className={cn(
-      "border-t border-slate-200/80 p-3",
+      "border-t border-sidebar-border/80 p-3",
       collapsed ? "flex justify-center" : ""
     )}>
       {collapsed ? (
@@ -114,7 +114,7 @@ function UserFooter({ collapsed }: { collapsed: boolean }) {
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-semibold text-sidebar-foreground">{displayName}</p>
-            <p className="truncate text-[10px] text-sidebar-foreground/40 uppercase tracking-wide">{user?.roleCode}</p>
+            <p className="truncate text-xs text-sidebar-foreground/40 uppercase tracking-wide">{user?.roleCode}</p>
           </div>
           <button
             onClick={logout}
@@ -154,13 +154,13 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "relative flex h-full flex-col border-r border-slate-200 bg-white transition-[width] duration-200 ease-in-out overflow-visible",
+        "relative flex h-full flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-in-out overflow-visible",
         sidebarCollapsed ? "w-16" : "w-60"
       )}
     >
       {/* ── Logo ─────────────────────────────────────────────── */}
       <div className={cn(
-        "flex h-[68px] shrink-0 items-center border-b border-slate-200/80 overflow-hidden",
+        "flex h-[68px] shrink-0 items-center border-b border-sidebar-border/80 overflow-hidden",
         sidebarCollapsed ? "justify-center px-2" : "justify-center px-5"
       )}>
         {sidebarCollapsed ? (
@@ -171,7 +171,7 @@ export function Sidebar() {
           <img
             src={logoSrc}
             alt="NIA HAIR"
-            className="h-12 w-auto object-contain"
+            className="h-12 w-auto object-contain invert"
             draggable={false}
           />
         )}
