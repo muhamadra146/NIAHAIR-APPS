@@ -12,18 +12,19 @@ const itemSchema = object({
 });
 
 const createInvoiceSchema = object({
-  customerId:          pipe(string(), minLength(1, "customerId is required")),
-  branchId:            optional(string()),
-  appointmentId:       optional(string()),
-  treatmentSessionIds: optional(array(string())),
-  deposits:            optional(array(object({
+  customerId:             pipe(string(), minLength(1, "customerId is required")),
+  branchId:               optional(string()),
+  appointmentId:          optional(string()),
+  treatmentSessionIds:    optional(array(string())),
+  deposits:               optional(array(object({
     depositId: pipe(string(), minLength(1, "depositId is required")),
     amount:    pipe(number(), minValue(0.01, "deposit amount must be greater than 0")),
   }))),
-  notes:               optional(string()),
-  taxable:             optional(boolean()),
-  inclusiveTax:        optional(boolean()),
-  items:               pipe(array(itemSchema), minLength(1, "At least one item is required")),
+  notes:                  optional(string()),
+  taxable:                optional(boolean()),
+  inclusiveTax:           optional(boolean()),
+  membershipDiscountTotal: optional(pipe(number(), minValue(0))),
+  items:                  pipe(array(itemSchema), minLength(1, "At least one item is required")),
 });
 
 const applyDepositSchema = object({

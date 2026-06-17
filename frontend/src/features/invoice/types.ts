@@ -119,14 +119,15 @@ export interface CreateInvoiceItemInput {
 }
 
 export interface CreateInvoiceInput {
-  customerId:           string;
-  appointmentId?:       string;
-  treatmentSessionIds?: string[];
-  items:                CreateInvoiceItemInput[];
-  deposits?:            { depositId: string; amount: number }[];
-  notes?:               string;
-  taxable?:             boolean;
-  inclusiveTax?:        boolean;
+  customerId:              string;
+  appointmentId?:          string;
+  treatmentSessionIds?:    string[];
+  items:                   CreateInvoiceItemInput[];
+  deposits?:               { depositId: string; amount: number }[];
+  notes?:                  string;
+  taxable?:                boolean;
+  inclusiveTax?:           boolean;
+  membershipDiscountTotal?: number;
 }
 
 export interface UpdateInvoiceInput {

@@ -18,12 +18,18 @@ const findInvoiceForSync = async (id) => {
           accurateCustomerId: true,
         },
       },
+      membershipDiscountTotal: true,
+      membershipId:            true,
+      membership: {
+        select: { discountType: true },
+      },
       items: {
         select: {
           id:                      true,
           qty:                     true,
           price:                   true,
           discount:                true,
+          discountType:            true,
           taxable:                 true,
           accurateInvoiceDetailId: true,
           item: {
@@ -59,19 +65,6 @@ const findInvoiceForSync = async (id) => {
       },
     },
   });
-
-  if (!invoice) return null;
-
-  // discountType column exists in DB (migration applied) but not yet in Prisma client
-  // (pending prisma generate). Read it via raw SQL and merge into items.
-  const rawItems = await prisma.$queryRaw`
-    SELECT id, "discountType" FROM invoice_items WHERE "invoiceId" = ${id}
-  `;
-  const discountTypeMap = Object.fromEntries(rawItems.map((r) => [r.id, r.discountType]));
-  invoice.items = invoice.items.map((item) => ({
-    ...item,
-    discountType: discountTypeMap[item.id] ?? "AMOUNT",
-  }));
 
   return invoice;
 };

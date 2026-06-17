@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Trash2, ChevronDown, ChevronUp, Plus, Loader2, Receipt, Pencil, CalendarDays, ShoppingBag } from "lucide-react";
+import { Search, Trash2, ChevronDown, ChevronUp, Plus, Loader2, Receipt, Pencil, CalendarDays, ShoppingBag, Check, AlertCircle, RefreshCw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { fetchAppointments } from "@/features/appointment/api/appointment.api";
@@ -29,6 +30,8 @@ import type {
   CreateInvoiceItemInput,
   UpdateInvoiceInput,
 } from "../types";
+
+const MEMBERSHIP_EXPIRY_WARNING_DAYS = 7;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -177,16 +180,59 @@ export function CreateInvoiceDialog({
   const [error, setError]                       = useState<string | null>(null);
   const [submitting, setSubmitting]             = useState(false);
   const [membershipDiscApplied, setMembershipDiscApplied] = useState(false);
+  const [fixedMembershipDiscount, setFixedMembershipDiscount] = useState("0");
+  const prevMembershipRecordIdRef = useRef<string | null>(null);
 
   const activeCustomerId = mode === "walkin" ? selectedCustomer?.id : selectedAppt?.customerId;
 
-  const { data: custMembership } = useQuery({
+  const {
+    data:    custMembership,
+    isLoading: membershipLoading,
+    isError:   membershipError,
+    refetch:   refetchMembership,
+  } = useQuery({
     queryKey:  ["memberships", "customer", activeCustomerId],
     queryFn:   () => fetchCustomerMembership(activeCustomerId!),
     enabled:   Boolean(activeCustomerId),
     staleTime: 30_000,
+    retry:     1,
   });
   const activeMembership = custMembership?.activeMembership ?? null;
+
+  const membershipDaysLeft = custMembership?.activeRecord
+    ? Math.ceil(
+        (new Date(custMembership.activeRecord.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+      )
+    : null;
+  const membershipExpiring =
+    membershipDaysLeft !== null &&
+    membershipDaysLeft >= 0 &&
+    membershipDaysLeft <= MEMBERSHIP_EXPIRY_WARNING_DAYS;
+
+  // Auto-apply membership discounts when a new membership is detected
+  useEffect(() => {
+    const recordId = custMembership?.activeRecord?.id ?? null;
+    if (recordId === prevMembershipRecordIdRef.current) return;
+    prevMembershipRecordIdRef.current = recordId;
+
+    if (activeMembership) {
+      setMembershipDiscApplied(true);
+      if (activeMembership.discountType === "PERCENTAGE") {
+        setLines((prev) => prev.map((l) => applyDiscountToLine(l, activeMembership)));
+        setFixedMembershipDiscount("0");
+      } else {
+        // FIXED_AMOUNT: clear any stale per-item discounts from previous membership
+        setLines((prev) =>
+          prev.map((l) => ({ ...l, discount: "0", discountType: "AMOUNT" as const }))
+        );
+        setFixedMembershipDiscount(String(activeMembership.discountValue));
+      }
+    } else {
+      setMembershipDiscApplied(false);
+      setFixedMembershipDiscount("0");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [custMembership?.activeRecord?.id, activeMembership]);
 
   // Sync initial prop when dialog opens (pre-checked by parent)
   useEffect(() => {
@@ -259,6 +305,8 @@ export function CreateInvoiceDialog({
     setLines([]); setItemSearch(""); setItemResults([]);
     setSelectedDeps([]); setDepOpen(false);
     setMembershipDiscApplied(false);
+    setFixedMembershipDiscount("0");
+    prevMembershipRecordIdRef.current = null;
     setTaxable(false); setInclusive(false); setNotes(""); setError(null);
     setEditMode(false); setApptSearch("");
   }
@@ -320,28 +368,39 @@ export function CreateInvoiceDialog({
     if (lines.find((l) => l.itemId === serviceItem.id)) return;
     try {
       const full = await fetchFullItem(serviceItem.id);
-      const line = buildLineFromItem(full, branchId);
+      let line = buildLineFromItem(full, branchId);
       if (!line) return;
-      setLines((prev) => [...prev, line]);
+      if (membershipDiscApplied && activeMembership) {
+        line = applyDiscountToLine(line, activeMembership);
+      }
+      setLines((prev) => [...prev, line!]);
     } catch {
       // can't fetch item details
     }
   }
 
   function applyDiscountToLine(line: LineItem, m: NonNullable<typeof activeMembership>): LineItem {
-    if (m.discountType === "PERCENTAGE") {
+    if (m.discountType === "PERCENTAGE" && line.itemType === "SERVICE") {
       return { ...line, discountType: "PERCENT", discount: String(m.discountValue) };
     }
-    return { ...line, discountType: "AMOUNT", discount: String(m.discountValue) };
+    return line; // FIXED_AMOUNT handled at invoice level; non-SERVICE items unchanged
   }
 
   function toggleMembershipDiscount() {
     if (!activeMembership) return;
     if (membershipDiscApplied) {
-      setLines((prev) => prev.map((l) => ({ ...l, discount: "0", discountType: "AMOUNT" })));
+      if (activeMembership.discountType === "PERCENTAGE") {
+        setLines((prev) => prev.map((l) => ({ ...l, discount: "0", discountType: "AMOUNT" as const })));
+      } else {
+        setFixedMembershipDiscount("0");
+      }
       setMembershipDiscApplied(false);
     } else {
-      setLines((prev) => prev.map((l) => applyDiscountToLine(l, activeMembership)));
+      if (activeMembership.discountType === "PERCENTAGE") {
+        setLines((prev) => prev.map((l) => applyDiscountToLine(l, activeMembership)));
+      } else {
+        setFixedMembershipDiscount(String(activeMembership.discountValue));
+      }
       setMembershipDiscApplied(true);
     }
   }
@@ -403,9 +462,13 @@ export function CreateInvoiceDialog({
     return sum + Math.max(0, gross);
   }, 0);
   const taxEst         = taxable && !inclusiveTax ? subtotalEst * 0.11 : 0;
-  const grandEst       = subtotalEst + taxEst;
+  const fixedMembershipDiscountAmt =
+    activeMembership?.discountType === "FIXED_AMOUNT" && membershipDiscApplied
+      ? parseFloat(fixedMembershipDiscount) || 0
+      : 0;
+  const grandEst        = Math.max(0, subtotalEst + taxEst - fixedMembershipDiscountAmt);
   const totalDepApplied = selectedDeps.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
-  const outstandingEst = Math.max(0, grandEst - totalDepApplied);
+  const outstandingEst  = Math.max(0, grandEst - totalDepApplied);
 
   // ── Enter edit mode — fetch full item details to populate form ────────
   async function enterEditMode() {
@@ -505,6 +568,25 @@ export function CreateInvoiceDialog({
         amount:    parseFloat(d.amount),
       }));
 
+      // Build membershipDiscountTotal override signal
+      let membershipDiscountTotalValue: number | undefined;
+      if (activeMembership) {
+        if (!membershipDiscApplied) {
+          membershipDiscountTotalValue = 0;
+        } else if (activeMembership.discountType === "FIXED_AMOUNT") {
+          membershipDiscountTotalValue = parseFloat(fixedMembershipDiscount) || 0;
+        } else {
+          // PERCENTAGE: compute sum of per-item SERVICE discounts
+          membershipDiscountTotalValue = lines.reduce((sum, l) => {
+            if (l.itemType !== "SERVICE" || l.discountType !== "PERCENT") return sum;
+            const price = parseFloat(l.price) || 0;
+            const qty   = parseFloat(l.qty)   || 1;
+            const pct   = parseFloat(l.discount) || 0;
+            return sum + (price * qty * pct) / 100;
+          }, 0);
+        }
+      }
+
       const input: CreateInvoiceInput = {
         customerId:    mode === "booking" ? selectedAppt!.customerId : selectedCustomer!.id,
         appointmentId: mode === "booking" ? selectedAppt!.id : undefined,
@@ -513,6 +595,7 @@ export function CreateInvoiceDialog({
         notes:         notes || undefined,
         taxable,
         inclusiveTax:  taxable ? inclusiveTax : undefined,
+        ...(membershipDiscountTotalValue !== undefined && { membershipDiscountTotal: membershipDiscountTotalValue }),
       };
 
       const invoice = await createInvoice(input);
@@ -984,33 +1067,92 @@ export function CreateInvoiceDialog({
             )}
 
             {/* ── Membership discount banner ── */}
+            {(!existingInvoiceId || editMode) && activeCustomerId && membershipLoading && (
+              <Skeleton className="h-10 w-full rounded-lg" />
+            )}
+            {(!existingInvoiceId || editMode) && activeCustomerId && membershipError && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs text-amber-700">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  <span>Gagal memuat data membership</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => refetchMembership()}
+                  className="text-xs text-amber-700 underline hover:no-underline flex items-center gap-1"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  Coba lagi
+                </button>
+              </div>
+            )}
             {(!existingInvoiceId || editMode) && activeMembership && (
               <div className={cn(
-                "rounded-lg border px-3 py-2.5 flex items-center justify-between gap-2",
+                "rounded-lg border px-3 py-2.5 space-y-2",
                 membershipDiscApplied
                   ? "border-purple-300 bg-purple-50"
                   : "border-border bg-muted/30"
               )}>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-sm font-medium text-purple-800 truncate">{activeMembership.name}</span>
-                  <span className="text-xs text-purple-600 shrink-0">
-                    {activeMembership.discountType === "PERCENTAGE"
-                      ? `${activeMembership.discountValue}% off`
-                      : `Rp ${Number(activeMembership.discountValue).toLocaleString("id-ID")} off`}
-                  </span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                    <span className="text-sm font-medium text-purple-800 truncate">{activeMembership.name}</span>
+                    <span className="text-xs text-purple-600 shrink-0">
+                      {activeMembership.discountType === "PERCENTAGE"
+                        ? `Diskon ${activeMembership.discountValue}%`
+                        : `Diskon Rp ${Number(activeMembership.discountValue).toLocaleString("id-ID")}`}
+                    </span>
+                    {membershipExpiring && membershipDaysLeft !== null && (
+                      <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300 shrink-0">
+                        {membershipDaysLeft === 0 ? "Berakhir hari ini" : `Berakhir ${membershipDaysLeft} hari lagi`}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleMembershipDiscount}
+                    aria-pressed={membershipDiscApplied}
+                    aria-label={membershipDiscApplied
+                      ? `Hapus diskon ${activeMembership.name}`
+                      : `Terapkan diskon ${activeMembership.name}`}
+                    className={cn(
+                      "shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors flex items-center gap-1",
+                      membershipDiscApplied
+                        ? "bg-purple-600 text-white border-purple-600"
+                        : "text-purple-700 border-purple-300 hover:bg-purple-50"
+                    )}
+                  >
+                    {membershipDiscApplied && <Check className="h-3 w-3" />}
+                    {membershipDiscApplied ? "Diterapkan" : "Terapkan Diskon"}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={toggleMembershipDiscount}
-                  className={cn(
-                    "shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors",
-                    membershipDiscApplied
-                      ? "bg-purple-600 text-white border-purple-600"
-                      : "text-purple-700 border-purple-300 hover:bg-purple-50"
-                  )}
-                >
-                  {membershipDiscApplied ? "✓ Diterapkan" : "Terapkan Diskon"}
-                </button>
+                {activeMembership.discountType === "FIXED_AMOUNT" && membershipDiscApplied && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="fixed-membership-discount" className="text-xs text-purple-700 shrink-0">
+                        Nominal diskon (Rp)
+                      </label>
+                      <Input
+                        id="fixed-membership-discount"
+                        type="number"
+                        min={0}
+                        value={fixedMembershipDiscount}
+                        onChange={(e) => setFixedMembershipDiscount(e.target.value)}
+                        className={cn(
+                          "h-7 text-xs w-36 focus-visible:ring-purple-400",
+                          (parseFloat(fixedMembershipDiscount) || 0) > subtotalEst
+                            ? "border-red-400"
+                            : "border-purple-300"
+                        )}
+                      />
+                    </div>
+                    {(parseFloat(fixedMembershipDiscount) || 0) > subtotalEst && (
+                      <p className="text-xs text-red-600 flex items-center gap-1 ml-[110px]">
+                        <AlertCircle className="h-3 w-3 shrink-0" />
+                        Diskon melebihi subtotal
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1201,6 +1343,12 @@ export function CreateInvoiceDialog({
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">PPN 11%</span>
                         <span>{formatCurrency(taxEst)}</span>
+                      </div>
+                    )}
+                    {fixedMembershipDiscountAmt > 0 && (
+                      <div className="flex justify-between text-purple-700">
+                        <span>Diskon membership</span>
+                        <span>- {formatCurrency(fixedMembershipDiscountAmt)}</span>
                       </div>
                     )}
                     {totalDepApplied > 0 && (
