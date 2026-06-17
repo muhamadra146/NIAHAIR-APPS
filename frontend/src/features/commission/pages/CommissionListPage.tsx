@@ -25,11 +25,14 @@ const STATUS_LABEL: Record<string, string> = {
   PAID:     "Dibayar",
 };
 
-const STATUS_COLOR: Record<string, string> = {
-  PENDING:  "text-yellow-600 border-yellow-300",
-  APPROVED: "text-blue-600 border-blue-300",
-  PAID:     "text-green-600 border-green-300",
+const STATUS_BADGE: Record<string, string> = {
+  PENDING:  "bg-yellow-50 text-yellow-700 border-yellow-200",
+  APPROVED: "bg-blue-50 text-blue-700 border-blue-200",
+  PAID:     "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
+
+const filterInputCls =
+  "h-9 rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md focus-visible:shadow-md focus-visible:ring-ring/30";
 
 export function CommissionListPage() {
   const { user, branchId } = useAuthStore();
@@ -55,7 +58,6 @@ export function CommissionListPage() {
   const meta        = data?.meta;
   const totalPages  = meta ? Math.ceil(meta.total / 20) : 1;
 
-  // Summary counts
   const counts = commissions.reduce(
     (acc, c) => { acc[c.status] = (acc[c.status] ?? 0) + 1; return acc; },
     {} as Record<string, number>,
@@ -66,7 +68,8 @@ export function CommissionListPage() {
 
   return (
     <PageContainer>
-      <div className="space-y-4 sm:space-y-6">
+      <div className="space-y-5 sm:space-y-6">
+
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -79,25 +82,26 @@ export function CommissionListPage() {
 
         {/* Summary cards */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <SummaryCard icon={<Filter className="h-4 w-4" />} label="Total Ditampilkan" value={String(commissions.length)} color="text-foreground" />
-          <SummaryCard icon={<Clock className="h-4 w-4" />} label="Pending" value={String(counts["PENDING"] ?? 0)} color="text-yellow-600" />
-          <SummaryCard icon={<CheckCircle className="h-4 w-4" />} label="Disetujui" value={String(counts["APPROVED"] ?? 0)} color="text-blue-600" />
-          <SummaryCard icon={<DollarSign className="h-4 w-4" />} label="Total Komisi" value={formatCurrency(totalAmount)} color="text-green-600" />
+          <SummaryCard icon={<Filter className="h-4 w-4" />}      label="Ditampilkan" value={String(commissions.length)} iconColor="text-slate-500"   bgColor="bg-slate-50"   />
+          <SummaryCard icon={<Clock className="h-4 w-4" />}       label="Pending"     value={String(counts["PENDING"] ?? 0)} iconColor="text-yellow-600" bgColor="bg-yellow-50" />
+          <SummaryCard icon={<CheckCircle className="h-4 w-4" />} label="Disetujui"   value={String(counts["APPROVED"] ?? 0)} iconColor="text-blue-600"   bgColor="bg-blue-50"   />
+          <SummaryCard icon={<DollarSign className="h-4 w-4" />}  label="Total Komisi" value={formatCurrency(totalAmount)} iconColor="text-emerald-600" bgColor="bg-emerald-50" />
         </div>
 
-        {/* Filters */}
-        <Card>
-          <CardHeader className="pb-3 pt-4">
+        {/* Filter + table */}
+        <Card className="rounded-2xl border border-slate-100/80 bg-white shadow-sm overflow-hidden">
+          <CardHeader className="border-b border-slate-100 pb-4 pt-4">
+
             {/* Status tabs */}
-            <div className="flex gap-1 flex-wrap mb-3">
+            <div className="flex gap-1 flex-wrap mb-4">
               {STATUS_TABS.map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => { setStatus(tab.key); setPage(1); }}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     status === tab.key
                       ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
                   }`}
                 >
                   {tab.label}
@@ -106,41 +110,44 @@ export function CommissionListPage() {
             </div>
 
             {/* Date range */}
-            <div className="flex flex-wrap gap-3">
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs text-muted-foreground">Dari</Label>
-                <Input type="date" value={startDate} onChange={(e) => { setStart(e.target.value); setPage(1); }} className="h-9 w-36" />
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Dari</Label>
+                <Input type="date" value={startDate} onChange={(e) => { setStart(e.target.value); setPage(1); }} className={`${filterInputCls} w-36`} />
               </div>
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs text-muted-foreground">Sampai</Label>
-                <Input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className="h-9 w-36" />
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Sampai</Label>
+                <Input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className={`${filterInputCls} w-36`} />
               </div>
               {(startDate || endDate) && (
-                <div className="flex items-end">
-                  <Button variant="ghost" size="sm" onClick={() => { setStart(""); setEnd(""); setPage(1); }} className="h-9 text-xs">Reset</Button>
-                </div>
+                <Button variant="ghost" size="sm" onClick={() => { setStart(""); setEnd(""); setPage(1); }} className="h-9 text-xs text-slate-500 hover:text-slate-800">
+                  Reset
+                </Button>
               )}
             </div>
           </CardHeader>
+
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="space-y-3 p-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+              <div className="space-y-3 p-5">
+                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
+              </div>
             ) : commissions.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted-foreground">Tidak ada komisi.</p>
+              <p className="py-14 text-center text-sm text-slate-400">Tidak ada komisi.</p>
             ) : (
               <>
                 {/* Desktop table */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-border bg-muted/50">
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Karyawan</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Invoice</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tipe</th>
-                        <th className="px-4 py-3 text-right font-medium text-muted-foreground">Komisi</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tanggal</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-                        {isSuperAdmin && <th className="px-4 py-3"></th>}
+                      <tr className="border-b border-slate-100 bg-slate-50/60">
+                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Karyawan</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Invoice</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Tipe</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Komisi</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Tanggal</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
+                        {isSuperAdmin && <th className="px-5 py-3" />}
                       </tr>
                     </thead>
                     <tbody>
@@ -160,7 +167,7 @@ export function CommissionListPage() {
                 </div>
 
                 {/* Mobile cards */}
-                <div className="md:hidden divide-y divide-border">
+                <div className="md:hidden divide-y divide-slate-100">
                   {commissions.map((c) => (
                     <CommissionCard
                       key={c.id}
@@ -178,9 +185,10 @@ export function CommissionListPage() {
           </CardContent>
         </Card>
 
+        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Halaman {page} dari {totalPages}</span>
+            <span className="text-slate-400">Halaman {page} dari {totalPages}</span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Sebelumnya</Button>
               <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Berikutnya</Button>
@@ -192,12 +200,23 @@ export function CommissionListPage() {
   );
 }
 
-function SummaryCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
+function SummaryCard({
+  icon, label, value, iconColor, bgColor,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  iconColor: string;
+  bgColor: string;
+}) {
   return (
-    <Card>
-      <CardContent className="pt-4 pb-4">
-        <div className={`flex items-center gap-2 mb-1 ${color}`}>{icon}<span className="text-xs font-medium">{label}</span></div>
-        <p className="text-lg font-bold">{value}</p>
+    <Card className="rounded-2xl border border-slate-100/80 bg-white shadow-sm">
+      <CardContent className="p-4">
+        <div className={`inline-flex items-center justify-center h-8 w-8 rounded-lg ${bgColor} ${iconColor} mb-2`}>
+          {icon}
+        </div>
+        <p className="text-xs font-medium uppercase tracking-wider text-slate-400">{label}</p>
+        <p className="mt-1 text-lg font-bold text-slate-800">{value}</p>
       </CardContent>
     </Card>
   );
@@ -214,28 +233,35 @@ interface CommissionActionProps {
 
 function CommissionRow({ commission: c, isSuperAdmin, onApprove, onPay, approving, paying }: CommissionActionProps) {
   return (
-    <tr className="border-b border-border transition-colors hover:bg-muted/30">
-      <td className="px-4 py-3">
-        <p className="font-medium">{c.employee?.name ?? "—"}</p>
-        {c.employee?.employeeCode && <p className="text-xs text-muted-foreground">{c.employee.employeeCode}</p>}
+    <tr className="border-b border-slate-100 transition-colors hover:bg-slate-50/60">
+      <td className="px-5 py-4">
+        <p className="font-medium text-slate-800">{c.employee?.name ?? "—"}</p>
+        {c.employee?.employeeCode && (
+          <p className="text-xs text-slate-400 mt-0.5">{c.employee.employeeCode}</p>
+        )}
       </td>
-      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{c.invoiceId.slice(-8).toUpperCase()}</td>
-      <td className="px-4 py-3">
-        <span className="text-xs text-muted-foreground">
+      <td className="px-5 py-4 font-mono text-xs text-slate-400">{c.invoiceId.slice(-8).toUpperCase()}</td>
+      <td className="px-5 py-4">
+        <span className="text-xs text-slate-500">
           {c.commissionType === "PERCENTAGE"
             ? `${Number(c.commissionValue)}%`
             : formatCurrency(c.commissionValue)}
         </span>
       </td>
-      <td className="px-4 py-3 text-right font-semibold text-primary">{formatCurrency(c.commissionAmount)}</td>
-      <td className="px-4 py-3 text-sm text-muted-foreground">{formatDate(c.createdAt)}</td>
-      <td className="px-4 py-3">
-        <Badge variant="outline" className={`text-xs ${STATUS_COLOR[c.status] ?? ""}`}>
+      <td className="px-5 py-4 text-right font-semibold text-slate-800 whitespace-nowrap">
+        {formatCurrency(c.commissionAmount)}
+      </td>
+      <td className="px-5 py-4 text-sm text-slate-500">{formatDate(c.createdAt)}</td>
+      <td className="px-5 py-4">
+        <Badge
+          variant="outline"
+          className={`text-xs rounded-lg px-2 py-0.5 font-medium ${STATUS_BADGE[c.status] ?? ""}`}
+        >
           {STATUS_LABEL[c.status] ?? c.status}
         </Badge>
       </td>
       {isSuperAdmin && (
-        <td className="px-4 py-3">
+        <td className="px-5 py-4">
           <ActionButtons
             status={c.status}
             onApprove={onApprove}
@@ -251,19 +277,22 @@ function CommissionRow({ commission: c, isSuperAdmin, onApprove, onPay, approvin
 
 function CommissionCard({ commission: c, isSuperAdmin, onApprove, onPay, approving, paying }: CommissionActionProps) {
   return (
-    <div className="px-4 py-3 space-y-2">
+    <div className="px-5 py-4 space-y-2 hover:bg-slate-50/60 transition-colors">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="font-medium text-sm">{c.employee?.name ?? "—"}</p>
-          <p className="text-xs text-muted-foreground font-mono">Invoice …{c.invoiceId.slice(-8).toUpperCase()}</p>
+          <p className="font-medium text-sm text-slate-800">{c.employee?.name ?? "—"}</p>
+          <p className="text-xs text-slate-400 font-mono mt-0.5">Invoice …{c.invoiceId.slice(-8).toUpperCase()}</p>
         </div>
-        <Badge variant="outline" className={`text-xs shrink-0 ${STATUS_COLOR[c.status] ?? ""}`}>
+        <Badge
+          variant="outline"
+          className={`text-xs rounded-lg px-2 py-0.5 font-medium shrink-0 ${STATUS_BADGE[c.status] ?? ""}`}
+        >
           {STATUS_LABEL[c.status] ?? c.status}
         </Badge>
       </div>
       <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">{formatDate(c.createdAt)}</span>
-        <span className="font-semibold text-primary">{formatCurrency(c.commissionAmount)}</span>
+        <span className="text-slate-400">{formatDate(c.createdAt)}</span>
+        <span className="font-semibold text-slate-800">{formatCurrency(c.commissionAmount)}</span>
       </div>
       {isSuperAdmin && (
         <div className="flex gap-2 pt-1">
@@ -289,14 +318,14 @@ function ActionButtons({ status, onApprove, onPay, approving, paying }: {
 }) {
   if (status === "PENDING") {
     return (
-      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onApprove} disabled={approving}>
+      <Button size="sm" variant="outline" className="h-7 rounded-lg text-xs" onClick={onApprove} disabled={approving}>
         {approving ? "…" : "Setujui"}
       </Button>
     );
   }
   if (status === "APPROVED") {
     return (
-      <Button size="sm" className="h-7 text-xs" onClick={onPay} disabled={paying}>
+      <Button size="sm" className="h-7 rounded-lg text-xs" onClick={onPay} disabled={paying}>
         {paying ? "…" : "Bayar"}
       </Button>
     );

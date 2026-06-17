@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1.0] — 2026-06-17
+
+### Changed
+- **Premium table design — Invoice/POS** — `ManagementView` table and `KasirPOSView` search input now use `rounded-xl` inputs with `shadow-sm`, `bg-slate-50/60` header rows, `border-slate-100` dividers, and pastel `STATUS_BADGE` for `UNPAID/PAID/CANCELLED` statuses. Cashier card grid gains collapsible paid section and branded stat cards.
+- **Premium table design — Appointments** — `AppointmentListPage` filter card upgraded to `rounded-2xl border-slate-100/80` with uppercase tracking labels. `AppointmentTable` desktop/mobile layouts now use `bg-slate-50/60` headers, `px-5 py-4` row padding, and `rounded-lg` action buttons.
+- **Premium status badges — Appointments** — `AppointmentStatusBadge` switched from shadcn variant system to explicit pastel `bg-{color}-50 text-{color}-700 border-{color}-200` classes with `rounded-lg`, covering all 7 statuses (BOOKED → NO_SHOW).
+- **Premium table design — Commissions** — `CommissionListPage` gains `rounded-2xl` summary cards with icon badges, status tab buttons with `rounded-lg`, and a full premium table/mobile-card layout using `STATUS_BADGE` for PENDING/APPROVED/PAID.
+- **Premium table design — Payroll** — `PayrollPage` payroll list cards use `rounded-2xl border-slate-100/80 shadow-sm` with hover shadow. `StatusBadge` adds `rounded-lg`. `GenerateDialog` selects use `rounded-xl border-slate-200`. Detail view summary cards are unified to `rounded-2xl`.
+- **DepositListPage blueprint applied** — `filterInputCls` (`h-9 rounded-xl border-slate-200 bg-white shadow-sm`) and `STATUS_BADGE` pastel pattern established in Deposit page now consistently applied across all 5 operational pages.
+
 ## [0.1.0] — 2026-06-17
 
 ### Added
