@@ -843,9 +843,9 @@ export function SettingsPage() {
         <p className="text-sm text-slate-500">Manage employees, users, branches, and configuration</p>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab} className="mt-6">
+      <Tabs value={tab} onValueChange={setTab} orientation="vertical" className="mt-6">
         {/* â"€â"€ Mobile: native select â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-        <div className="md:hidden">
+        <div className="md:hidden mb-4">
           <select
             value={tab}
             onChange={(e) => setTab(e.target.value)}
@@ -857,33 +857,37 @@ export function SettingsPage() {
           </select>
         </div>
 
-        {/* Desktop: wrap tab bar */}
-        <TabsList className="hidden md:flex h-auto w-full flex-wrap items-end justify-start gap-0 rounded-none border-b border-slate-200 bg-transparent p-0">
-          {TABS.map((t) => (
-            <TabsTrigger
-              key={t.value}
-              value={t.value}
-              className="rounded-none border-b-2 border-transparent bg-transparent px-4 pb-3 pt-2 text-sm font-medium text-slate-500 shadow-none transition-colors hover:text-slate-900 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none"
-            >
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        {/* Desktop: vertical split-pane */}
+        <div className="md:flex md:min-h-[calc(100vh-12rem)]">
+          <TabsList className="hidden md:flex flex-col w-48 shrink-0 border-r border-border bg-card h-auto items-start justify-start gap-0 rounded-none p-0 pt-1">
+            {TABS.map((t) => (
+              <TabsTrigger
+                key={t.value}
+                value={t.value}
+                className="w-full justify-start rounded-none px-4 py-2.5 text-sm font-medium text-slate-500 bg-transparent shadow-none border-l-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-primary/5 data-[state=active]:text-slate-900 hover:text-slate-900 hover:bg-muted/50 transition-colors"
+              >
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-        <TabsContent value="employees"       className="mt-6"><EmployeeTab /></TabsContent>
-        <TabsContent value="users"           className="mt-6"><UserTab /></TabsContent>
-        <TabsContent value="branches"        className="mt-6"><BranchTab /></TabsContent>
-        <TabsContent value="payment-methods" className="mt-6"><PaymentMethodTab /></TabsContent>
-        <TabsContent value="cash-accounts"   className="mt-6"><CashAccountTab /></TabsContent>
-        <TabsContent value="warehouses"      className="mt-6"><WarehouseTab /></TabsContent>
-        <TabsContent value="shifts"          className="mt-6"><ShiftTab /></TabsContent>
-        <TabsContent value="salary"          className="mt-6"><SalaryTab /></TabsContent>
-        <TabsContent value="loans"           className="mt-6"><LoanTab /></TabsContent>
-        <TabsContent value="komisi"          className="mt-6"><CommissionSettingsTab /></TabsContent>
-        <TabsContent value="leave-types"     className="mt-6"><LeaveTypeTab /></TabsContent>
-        <TabsContent value="leave-quotas"    className="mt-6"><LeaveQuotaTab /></TabsContent>
-        <TabsContent value="memberships"     className="mt-6"><MembershipTab /></TabsContent>
-        <TabsContent value="accurate"        className="mt-6"><AccuratePanel /></TabsContent>
+          <div className="flex-1 min-w-0">
+            <TabsContent value="employees"       className="mt-0 p-6"><EmployeeTab /></TabsContent>
+            <TabsContent value="users"           className="mt-0 p-6"><UserTab /></TabsContent>
+            <TabsContent value="branches"        className="mt-0 p-6"><BranchTab /></TabsContent>
+            <TabsContent value="payment-methods" className="mt-0 p-6"><PaymentMethodTab /></TabsContent>
+            <TabsContent value="cash-accounts"   className="mt-0 p-6"><CashAccountTab /></TabsContent>
+            <TabsContent value="warehouses"      className="mt-0 p-6"><WarehouseTab /></TabsContent>
+            <TabsContent value="shifts"          className="mt-0 p-6"><ShiftTab /></TabsContent>
+            <TabsContent value="salary"          className="mt-0 p-6"><SalaryTab /></TabsContent>
+            <TabsContent value="loans"           className="mt-0 p-6"><LoanTab /></TabsContent>
+            <TabsContent value="komisi"          className="mt-0 p-6"><CommissionSettingsTab /></TabsContent>
+            <TabsContent value="leave-types"     className="mt-0 p-6"><LeaveTypeTab /></TabsContent>
+            <TabsContent value="leave-quotas"    className="mt-0 p-6"><LeaveQuotaTab /></TabsContent>
+            <TabsContent value="memberships"     className="mt-0 p-6"><MembershipTab /></TabsContent>
+            <TabsContent value="accurate"        className="mt-0 p-6"><AccuratePanel /></TabsContent>
+          </div>
+        </div>
       </Tabs>
     </PageContainer>
   );
