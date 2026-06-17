@@ -29,6 +29,7 @@ const {
   deleteWithTransaction,
   findMaxInvoiceSeqToday,
 } = require("./invoice.repository");
+const { getActiveMembership } = require("../membership/membership.service");
 
 const D = (v) => new Prisma.Decimal(String(v));
 
@@ -85,14 +86,27 @@ const buildInvoiceNo = async () => {
 // ── Create ────────────────────────────────────────────────────────────
 
 const createInvoice = async (body, userId, branchId, createdByEmployeeId = null) => {
+  // Key-existence check distinguishes "absent = auto-apply" from "present as 0 = staff override"
+  const membershipDiscountOverride = 'membershipDiscountTotal' in body;
   const { customerId, appointmentId, treatmentSessionIds, deposits = [], items, notes,
           taxable = false, inclusiveTax = false } = body;
+  const bodyMembershipDiscount = membershipDiscountOverride ? D(body.membershipDiscountTotal ?? 0) : null;
 
   const customer = await findCustomerById(customerId);
   if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
 
   const branch = await findBranchById(branchId);
   if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
+
+  // Always fetch active membership — needed to determine discountType for grandTotal adjustment
+  // even when override is present. The loop guard (!membershipDiscountOverride) prevents
+  // auto-apply when the frontend has already handled the discount.
+  let activeMembership = null;
+  try {
+    activeMembership = await getActiveMembership(customerId);
+  } catch (err) {
+    console.warn(`[invoice create] membership fetch failed for customer ${customerId}: ${err.message}`);
+  }
 
   if (treatmentSessionIds && treatmentSessionIds.length > 0) {
     const sessions = await findTreatmentSessionsByIds(treatmentSessionIds);
@@ -110,7 +124,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
 
   // Resolve price and build line items
   const itemsData    = [];
-  const discountTypes = []; // parallel array — saved via raw SQL after create
+  let membershipDiscountRunning = D("0");
   let totalSubtotal = D("0");
   let totalDiscount = D("0");
   let totalTax      = D("0");
@@ -147,9 +161,25 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
     const qty             = D(line.qty);
     const discountType    = line.discountType ?? "AMOUNT";
     const discountPercent = discountType === "PERCENT" ? D(line.discountPercent ?? 0) : null;
-    const discount        = discountType === "PERCENT"
+    let discount          = discountType === "PERCENT"
       ? price.mul(qty).mul(discountPercent).div(D("100")).toDecimalPlaces(2)
       : D(line.discountAmount ?? 0);
+
+    // Apply PERCENTAGE membership discount on SERVICE items — must be before grossLine
+    // so invoice_items.subtotal is correct and totalTax isn't overstated for taxable items
+    if (
+      !membershipDiscountOverride &&
+      activeMembership?.membership?.discountType === "PERCENTAGE" &&
+      item.itemType === "SERVICE"
+    ) {
+      const membershipItemDiscount = price.mul(qty)
+        .mul(D(activeMembership.membership.discountValue))
+        .div(D("100"))
+        .toDecimalPlaces(0);
+      discount = discount.add(membershipItemDiscount);
+      membershipDiscountRunning = membershipDiscountRunning.add(membershipItemDiscount);
+    }
+
     const grossLine       = price.mul(qty).sub(discount);
 
     const lineTaxable = taxable && (line.taxable ?? false);
@@ -172,21 +202,50 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
     totalDiscount = totalDiscount.add(discount);
     totalTax      = totalTax.add(itemTax);
 
-    discountTypes.push(discountType);
     itemsData.push({
-      itemId:   line.itemId,
-      unitId:   line.unitId,
+      itemId:         line.itemId,
+      unitId:         line.unitId,
       qty,
       price,
       discount,
-      subtotal: lineSubtotal,
-      taxable:  lineTaxable,
-      taxName:  lineTaxable ? "PPN" : null,
-      taxRate:  lineTaxable ? D("11") : D("0"),
+      discountType,
+      discountPercent: discountType === "PERCENT" ? discountPercent : null,
+      subtotal:        lineSubtotal,
+      taxable:         lineTaxable,
+      taxName:         lineTaxable ? "PPN" : null,
+      taxRate:         lineTaxable ? D("11") : D("0"),
     });
   }
 
-  const grandTotal = totalSubtotal.add(totalTax);
+  // Compute membership discount total and final grandTotal
+  let membershipDiscountTotal = D("0");
+  const membershipId = activeMembership?.membership?.id ?? null;
+
+  if (membershipDiscountOverride) {
+    membershipDiscountTotal = bodyMembershipDiscount;
+  } else if (activeMembership) {
+    if (activeMembership.membership.discountType === "PERCENTAGE") {
+      membershipDiscountTotal = membershipDiscountRunning;
+      // grandTotal unaffected here — PERCENTAGE was folded into per-item discount above
+    } else if (activeMembership.membership.discountType === "FIXED_AMOUNT") {
+      const preDiscountTotal = totalSubtotal.add(totalTax);
+      const discountValue    = D(activeMembership.membership.discountValue);
+      membershipDiscountTotal = discountValue.gt(preDiscountTotal) ? preDiscountTotal : discountValue;
+    }
+  }
+
+  // For FIXED_AMOUNT: deduct membership discount from grandTotal at invoice level.
+  // This applies for both auto-apply and override cases — the frontend does NOT bake
+  // FIXED_AMOUNT into per-item subtotals, so we must deduct here.
+  // For PERCENTAGE: grandTotal is already correct (discount baked into per-item subtotals).
+  const preDiscountGrandTotal = totalSubtotal.add(totalTax);
+  const isFixedAmount         = activeMembership?.membership?.discountType === "FIXED_AMOUNT";
+  const fixedAmountApplied    = isFixedAmount && membershipDiscountTotal.gt(D("0"));
+  const grandTotal = fixedAmountApplied
+    ? (preDiscountGrandTotal.sub(membershipDiscountTotal).gt(D("0"))
+        ? preDiscountGrandTotal.sub(membershipDiscountTotal)
+        : D("0"))
+    : preDiscountGrandTotal;
 
   // ── Validate and apply deposits ───────────────────────────────────────
   let totalDeposit = D("0");
@@ -270,19 +329,21 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   const invoiceData = {
     customerId,
     branchId,
-    appointmentId:       appointmentId ?? null,
+    appointmentId:          appointmentId ?? null,
     invoiceNo,
-    invoiceDate:         new Date(),
-    subtotal:            totalSubtotal,
+    invoiceDate:            new Date(),
+    subtotal:               totalSubtotal,
     totalDiscount,
     totalTax,
     totalDeposit,
     grandTotal,
-    paidAmount:          D("0"),
+    membershipDiscountTotal,
+    membershipId,
+    paidAmount:             D("0"),
     outstandingAmount,
-    status:              invoiceStatus,
-    notes:               notes ?? null,
-    createdByEmployeeId: createdByEmployeeId ?? null,
+    status:                 invoiceStatus,
+    notes:                  notes ?? null,
+    createdByEmployeeId:    createdByEmployeeId ?? null,
     taxable,
     inclusiveTax,
   };
@@ -294,22 +355,6 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
     depositsData,
     userId,
   });
-
-  // Save discountType via raw SQL — Prisma client doesn't know this column yet
-  // (pending `npx prisma generate` after migration). Match by itemId+unitId+price
-  // which is unique per invoice line.
-  for (let i = 0; i < discountTypes.length; i++) {
-    if (discountTypes[i] === "PERCENT") {
-      await prisma.$executeRaw`
-        UPDATE invoice_items
-        SET "discountType" = 'PERCENT'
-        WHERE "invoiceId" = ${invoice.id}
-          AND "itemId"    = ${itemsData[i].itemId}
-          AND "unitId"    = ${itemsData[i].unitId}
-          AND price       = ${itemsData[i].price}
-      `;
-    }
-  }
 
   // Stock OUT on invoice creation — physical goods are consumed at this point
   await generateStockMovement(invoice.id);
@@ -346,7 +391,6 @@ const updateInvoice = async (id, body, userId) => {
 
   // Re-resolve prices and build new line items (same logic as createInvoice)
   const itemsData    = [];
-  const discountTypes = [];
   let totalSubtotal = D("0");
   let totalDiscount = D("0");
   let totalTax      = D("0");
@@ -397,17 +441,18 @@ const updateInvoice = async (id, body, userId) => {
     totalDiscount = totalDiscount.add(discount);
     totalTax      = totalTax.add(itemTax);
 
-    discountTypes.push(discountType);
     itemsData.push({
-      itemId:   line.itemId,
-      unitId:   line.unitId,
+      itemId:          line.itemId,
+      unitId:          line.unitId,
       qty,
       price,
       discount,
-      subtotal: lineSubtotal,
-      taxable:  lineTaxable,
-      taxName:  lineTaxable ? "PPN" : null,
-      taxRate:  lineTaxable ? D("11") : D("0"),
+      discountType,
+      discountPercent: discountType === "PERCENT" ? discountPercent : null,
+      subtotal:        lineSubtotal,
+      taxable:         lineTaxable,
+      taxName:         lineTaxable ? "PPN" : null,
+      taxRate:         lineTaxable ? D("11") : D("0"),
     });
   }
 
@@ -440,20 +485,6 @@ const updateInvoice = async (id, body, userId) => {
     oldStatus: existing.status,
     userId,
   });
-
-  // Save discountType via raw SQL — Prisma client doesn't know this column yet
-  for (let i = 0; i < discountTypes.length; i++) {
-    if (discountTypes[i] === "PERCENT") {
-      await prisma.$executeRaw`
-        UPDATE invoice_items
-        SET "discountType" = 'PERCENT'
-        WHERE "invoiceId" = ${id}
-          AND "itemId"    = ${itemsData[i].itemId}
-          AND "unitId"    = ${itemsData[i].unitId}
-          AND price       = ${itemsData[i].price}
-      `;
-    }
-  }
 
   // Re-sync to Accurate
   await createSyncJob({ entityType: "INVOICE", entityId: id, direction: "APP_TO_ACCURATE" });

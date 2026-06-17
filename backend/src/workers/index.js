@@ -1,6 +1,8 @@
-const { processSyncQueue } = require("./accurateSync.worker");
+const { processSyncQueue }  = require("./accurateSync.worker");
+const { expireMemberships } = require("./membershipExpiry.worker");
 
-let syncWorkerStarted = false;
+let syncWorkerStarted   = false;
+let expiryWorkerStarted = false;
 
 const startWorkers = () => {
   if (process.env.ENABLE_WORKER !== "true") {
@@ -31,6 +33,26 @@ const startWorkers = () => {
       console.error("[worker] sync queue error:", err.message);
     }
   }, 60_000);
+
+  // ── Membership expiry worker ─────────────────────────────────────────
+  if (!expiryWorkerStarted) {
+    expiryWorkerStarted = true;
+    console.log("[worker] Membership expiry worker started (interval: 24h)");
+
+    setTimeout(() => {
+      expireMemberships().catch((err) =>
+        console.error("[expiry worker] startup run error:", err.message)
+      );
+    }, 5000);
+
+    setInterval(async () => {
+      try {
+        await expireMemberships();
+      } catch (err) {
+        console.error("[expiry worker] error:", err.message);
+      }
+    }, 86_400_000);
+  }
 };
 
 module.exports = { startWorkers };

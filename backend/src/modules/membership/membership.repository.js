@@ -36,7 +36,18 @@ const findActiveCustomerMembership = (customerId) =>
     orderBy: { createdAt: "desc" },
   });
 
+const findActiveMembership = (customerId) =>
+  prisma.customerMembership.findFirst({
+    where: {
+      customerId,
+      status: "ACTIVE",
+      endDate: { gt: new Date() },
+    },
+    include: { membership: true },
+    orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
+  });
+
 module.exports = {
   findAll, count, findById, create, update, remove, countCustomers,
-  findCustomerWithMembership, findActiveCustomerMembership,
+  findCustomerWithMembership, findActiveCustomerMembership, findActiveMembership,
 };
