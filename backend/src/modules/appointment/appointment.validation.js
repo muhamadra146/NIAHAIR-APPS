@@ -51,8 +51,16 @@ const updateAppointmentSchema = object({
 });
 
 const changeStatusSchema = object({
-  status: picklist(APPOINTMENT_STATUSES, "Invalid appointment status"),
-  notes:  optional(string()),
+  status:       picklist(APPOINTMENT_STATUSES, "Invalid appointment status"),
+  notes:        optional(string()),
+  cancelReason: optional(string()),
 });
 
-module.exports = { createAppointmentSchema, updateAppointmentSchema, changeStatusSchema };
+const rescheduleSchema = object({
+  visitDate: pipe(string(), minLength(1, "visitDate is required")),
+  startTime: pipe(string(), regex(HH_MM, "startTime must be HH:MM (e.g. 09:00)")),
+  endTime:   pipe(string(), regex(HH_MM, "endTime must be HH:MM (e.g. 12:00)")),
+  reason:    pipe(string(), minLength(1, "reason is required")),
+});
+
+module.exports = { createAppointmentSchema, updateAppointmentSchema, changeStatusSchema, rescheduleSchema };

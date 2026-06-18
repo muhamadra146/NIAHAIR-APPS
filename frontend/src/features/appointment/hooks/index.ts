@@ -5,6 +5,7 @@ import {
   createAppointment,
   updateAppointment,
   changeAppointmentStatus,
+  rescheduleAppointment,
   deleteAppointment,
 } from "../api/appointment.api";
 import type {
@@ -12,6 +13,7 @@ import type {
   CreateAppointmentInput,
   UpdateAppointmentInput,
   ChangeStatusInput,
+  RescheduleInput,
 } from "../types";
 
 export const useAppointments = (params: AppointmentListParams) =>
@@ -51,6 +53,17 @@ export const useChangeAppointmentStatus = (id: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: ChangeStatusInput) => changeAppointmentStatus(id, input),
+    onSuccess:  (data) => {
+      qc.setQueryData(["appointments", id], data);
+      qc.invalidateQueries({ queryKey: ["appointments"] });
+    },
+  });
+};
+
+export const useRescheduleAppointment = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RescheduleInput) => rescheduleAppointment(id, input),
     onSuccess:  (data) => {
       qc.setQueryData(["appointments", id], data);
       qc.invalidateQueries({ queryKey: ["appointments"] });

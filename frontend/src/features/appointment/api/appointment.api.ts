@@ -6,6 +6,7 @@ import type {
   CreateAppointmentInput,
   UpdateAppointmentInput,
   ChangeStatusInput,
+  RescheduleInput,
 } from "../types";
 
 export interface ServiceItem {
@@ -64,6 +65,11 @@ export const updateAppointment = async (id: string, body: UpdateAppointmentInput
 
 export const changeAppointmentStatus = async (id: string, body: ChangeStatusInput) => {
   const res = await api.patch<ApiResponse<Appointment>>(`/appointments/${id}/status`, body);
+  return res.data.data;
+};
+
+export const rescheduleAppointment = async (id: string, body: RescheduleInput) => {
+  const res = await api.patch<ApiResponse<Appointment>>(`/appointments/${id}/reschedule`, body);
   return res.data.data;
 };
 

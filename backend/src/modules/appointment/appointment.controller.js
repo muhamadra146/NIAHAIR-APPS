@@ -5,6 +5,7 @@ const {
   createAppointment,
   updateAppointmentById,
   changeAppointmentStatus,
+  rescheduleAppointment,
   deleteAppointmentById,
 } = require("./appointment.service");
 
@@ -57,6 +58,15 @@ const changeStatusController = async (req, res, next) => {
   }
 };
 
+const rescheduleController = async (req, res, next) => {
+  try {
+    const result = await rescheduleAppointment(req.params.id, req.body, req.user.id);
+    return success(res, result, "Appointment rescheduled");
+  } catch (err) {
+    next(err);
+  }
+};
+
 const deleteController = async (req, res, next) => {
   try {
     await deleteAppointmentById(req.params.id);
@@ -72,5 +82,6 @@ module.exports = {
   createController,
   updateController,
   changeStatusController,
+  rescheduleController,
   deleteController,
 };

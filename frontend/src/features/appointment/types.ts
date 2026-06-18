@@ -63,6 +63,20 @@ export interface TreatmentSessionRef {
   notes:       string | null;
 }
 
+export interface AppointmentRescheduleHistory {
+  id:             string;
+  appointmentId:  string;
+  oldVisitDate:   string;
+  oldStartTime:   string;
+  oldEndTime:     string;
+  newVisitDate:   string;
+  newStartTime:   string;
+  newEndTime:     string;
+  reason:         string;
+  changedByUserId: string | null;
+  createdAt:      string;
+}
+
 export interface Appointment {
   id:                  string;
   customerId:          string;
@@ -78,6 +92,9 @@ export interface Appointment {
   notes:               string | null;
   estimatedTotal:      string | null;
   createdByEmployeeId: string | null;
+  cancelReason:        string | null;
+  cancelledAt:         string | null;
+  cancelledByUserId:   string | null;
   createdAt:           string;
   updatedAt:           string;
   customer:            AppointmentCustomer;
@@ -86,6 +103,7 @@ export interface Appointment {
   services:            AppointmentService[];
   staffs:              AppointmentStaff[];
   statusHistories:     AppointmentStatusHistory[];
+  rescheduleHistories: AppointmentRescheduleHistory[];
   treatmentSessions:   TreatmentSessionRef[];
   photos?:             { id: string; url: string; type: string; notes: string | null; createdAt: string }[];
 }
@@ -181,6 +199,14 @@ export interface TreatmentSession {
 }
 
 export interface ChangeStatusInput {
-  status: AppointmentStatus;
-  notes?: string;
+  status:        AppointmentStatus;
+  notes?:        string;
+  cancelReason?: string;
+}
+
+export interface RescheduleInput {
+  visitDate: string;
+  startTime: string;
+  endTime:   string;
+  reason:    string;
 }

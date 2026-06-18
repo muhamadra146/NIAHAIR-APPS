@@ -939,6 +939,10 @@ model Appointment {
 
   createdByEmployeeId String?
 
+  cancelReason      String?
+  cancelledAt       DateTime?
+  cancelledByUserId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -956,6 +960,8 @@ model Appointment {
 
   statusHistories AppointmentStatusHistory[]
 
+  rescheduleHistories AppointmentRescheduleHistory[]
+
   treatmentSessions TreatmentSession[]
 
   photos AppointmentPhoto[]
@@ -965,6 +971,29 @@ model Appointment {
   @@index([visitDate])
   @@index([createdByEmployeeId])
   @@map("appointments")
+}
+
+model AppointmentRescheduleHistory {
+  id            String @id @default(uuid())
+  appointmentId String
+
+  oldVisitDate DateTime
+  oldStartTime DateTime
+  oldEndTime   DateTime
+
+  newVisitDate DateTime
+  newStartTime DateTime
+  newEndTime   DateTime
+
+  reason          String
+  changedByUserId String?
+
+  createdAt DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+
+  @@index([appointmentId])
+  @@map("appointment_reschedule_histories")
 }
 
 model AppointmentPhoto {

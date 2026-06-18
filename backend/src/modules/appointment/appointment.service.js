@@ -13,6 +13,7 @@ const {
   updateAppointment,
   updateWithStaff,
   changeStatusWithTransaction,
+  rescheduleWithTransaction,
 } = require("./appointment.repository");
 const { getAvailableStaff } = require("../staffSchedule/staffSchedule.service");
 
@@ -222,7 +223,7 @@ const changeAppointmentStatus = async (id, body, userId) => {
   const appointment = await findById(id);
   if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
 
-  const { status: newStatus, notes } = body;
+  const { status: newStatus, notes, cancelReason } = body;
   const currentStatus = appointment.status;
 
   if (newStatus === currentStatus) {
@@ -240,7 +241,31 @@ const changeAppointmentStatus = async (id, body, userId) => {
     );
   }
 
-  return changeStatusWithTransaction({ appointment, newStatus, notes, userId });
+  if (newStatus === "CANCELLED" && !cancelReason) {
+    throw new AppError("cancelReason is required when cancelling", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
+  return changeStatusWithTransaction({ appointment, newStatus, notes, cancelReason, userId });
+};
+
+const rescheduleAppointment = async (id, body, userId) => {
+  const appointment = await findById(id);
+  if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+
+  if (["COMPLETED", "CANCELLED"].includes(appointment.status)) {
+    throw new AppError(
+      `Cannot reschedule a ${appointment.status.toLowerCase()} appointment`,
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
+  const { visitDate, startTime, endTime, reason } = body;
+
+  const newVisitDate  = new Date(visitDate);
+  const newStartTime  = combineDatetime(visitDate, startTime);
+  const newEndTime    = combineDatetime(visitDate, endTime);
+
+  return rescheduleWithTransaction({ appointment, newVisitDate, newStartTime, newEndTime, reason, userId });
 };
 
 const deleteAppointmentById = async (id) => {
@@ -264,5 +289,6 @@ module.exports = {
   createAppointment,
   updateAppointmentById,
   changeAppointmentStatus,
+  rescheduleAppointment,
   deleteAppointmentById,
 };

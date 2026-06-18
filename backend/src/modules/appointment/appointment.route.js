@@ -8,6 +8,7 @@ const {
   createAppointmentSchema,
   updateAppointmentSchema,
   changeStatusSchema,
+  rescheduleSchema,
 } = require("./appointment.validation");
 const {
   getAllController,
@@ -15,6 +16,7 @@ const {
   createController,
   updateController,
   changeStatusController,
+  rescheduleController,
   deleteController,
 } = require("./appointment.controller");
 
@@ -54,6 +56,14 @@ router.patch(
   authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
   validate(changeStatusSchema),
   changeStatusController
+);
+
+router.patch(
+  "/:id/reschedule",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  validate(rescheduleSchema),
+  rescheduleController
 );
 
 module.exports = router;

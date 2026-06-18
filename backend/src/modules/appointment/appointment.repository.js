@@ -25,6 +25,9 @@ const INCLUDE = {
   statusHistories: {
     orderBy: { createdAt: "asc" },
   },
+  rescheduleHistories: {
+    orderBy: { createdAt: "asc" },
+  },
   treatmentSessions: {
     select: { id: true, startedAt: true, completedAt: true, notes: true },
   },
@@ -125,11 +128,18 @@ const updateWithStaff = (id, data, staffsBySlot) =>
 
 // ── Change status ─────────────────────────────────────────────────────
 
-const changeStatusWithTransaction = ({ appointment, newStatus, notes, userId }) =>
+const changeStatusWithTransaction = ({ appointment, newStatus, notes, cancelReason, userId }) =>
   prisma.$transaction(async (tx) => {
+    const updateData = { status: newStatus };
+    if (newStatus === "CANCELLED") {
+      updateData.cancelReason      = cancelReason ?? null;
+      updateData.cancelledAt       = new Date();
+      updateData.cancelledByUserId = userId ?? null;
+    }
+
     await tx.appointment.update({
       where: { id: appointment.id },
-      data:  { status: newStatus },
+      data:  updateData,
     });
 
     await tx.appointmentStatusHistory.create({
@@ -140,6 +150,30 @@ const changeStatusWithTransaction = ({ appointment, newStatus, notes, userId }) 
         notes:         notes ?? null,
         createdBy:     userId ?? null,
       },
+    });
+
+    return tx.appointment.findUnique({ where: { id: appointment.id }, include: INCLUDE });
+  });
+
+const rescheduleWithTransaction = ({ appointment, newVisitDate, newStartTime, newEndTime, reason, userId }) =>
+  prisma.$transaction(async (tx) => {
+    await tx.appointmentRescheduleHistory.create({
+      data: {
+        appointmentId:   appointment.id,
+        oldVisitDate:    appointment.visitDate,
+        oldStartTime:    appointment.startTime,
+        oldEndTime:      appointment.endTime,
+        newVisitDate,
+        newStartTime,
+        newEndTime,
+        reason,
+        changedByUserId: userId ?? null,
+      },
+    });
+
+    await tx.appointment.update({
+      where: { id: appointment.id },
+      data:  { visitDate: newVisitDate, startTime: newStartTime, endTime: newEndTime },
     });
 
     return tx.appointment.findUnique({ where: { id: appointment.id }, include: INCLUDE });
@@ -156,4 +190,5 @@ module.exports = {
   updateAppointment,
   updateWithStaff,
   changeStatusWithTransaction,
+  rescheduleWithTransaction,
 };
