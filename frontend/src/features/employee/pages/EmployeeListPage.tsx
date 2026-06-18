@@ -11,8 +11,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/stores/authStore";
 import { fetchAllBranches } from "@/features/settings/api/branch.api";
 import { useEmployees, useCreateEmployee } from "../hooks";
+import { updateEmployeeBranches } from "../api";
 import { EmployeeCreateForm } from "../components/EmployeeForm";
 import type { CreateEmployeeFormValues } from "../schemas/employee.schema";
+
+function apiErr(err: unknown, fallback = "Terjadi kesalahan"): string {
+  if (err && typeof err === "object" && "response" in err) {
+    const r = (err as { response?: { data?: { message?: string } } }).response;
+    if (r?.data?.message) return r.data.message;
+  }
+  return err instanceof Error ? err.message : fallback;
+}
 
 export function EmployeeListPage() {
   const { branchId: sessionBranchId, user } = useAuthStore();
@@ -55,7 +64,7 @@ export function EmployeeListPage() {
   async function handleCreate(values: CreateEmployeeFormValues) {
     setFormError(null);
     try {
-      await createMutation.mutateAsync({
+      const created = await createMutation.mutateAsync({
         name:              values.name,
         roleId:            values.roleId,
         employeeCode:      values.employeeCode     || undefined,
@@ -68,9 +77,12 @@ export function EmployeeListPage() {
         commissionEnabled: values.commissionEnabled,
         homeBranchId:      values.homeBranchId     || undefined,
       });
+      if ((values.branchIds ?? []).length > 0) {
+        await updateEmployeeBranches(created.id, { branchIds: values.branchIds });
+      }
       setFormOpen(false);
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Gagal menambahkan karyawan");
+      setFormError(apiErr(err, "Gagal menambahkan karyawan"));
     }
   }
 

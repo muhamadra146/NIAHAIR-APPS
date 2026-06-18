@@ -6,6 +6,7 @@ const {
   count,
   findById,
   findByEmployeeCode,
+  findLastEmployeeCode,
   findByEmail,
   findRoleById,
   create,
@@ -13,6 +14,17 @@ const {
   updateBranches,
   softDelete,
 } = require("./employee.repository");
+
+const generateNextCode = async () => {
+  const last = await findLastEmployeeCode();
+  let num = last ? (parseInt(last.employeeCode.replace(/^EMP0*/, ""), 10) || 0) : 0;
+  let code;
+  do {
+    num += 1;
+    code = "EMP" + String(num).padStart(3, "0");
+  } while (await findByEmployeeCode(code));
+  return code;
+};
 
 const getAll = async ({ page, limit, search, isActive, branchId }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -63,11 +75,15 @@ const getById = async (id) => {
   return employee;
 };
 
+const getNextCode = async () => generateNextCode();
+
 const createEmployee = async (body) => {
   const role = await findRoleById(body.roleId);
   if (!role) throw new AppError("Employee role not found", StatusCodes.NOT_FOUND);
 
-  if (body.employeeCode) {
+  if (!body.employeeCode) {
+    body.employeeCode = await generateNextCode();
+  } else {
     const existing = await findByEmployeeCode(body.employeeCode);
     if (existing) throw new AppError("Employee code already exists", StatusCodes.CONFLICT);
   }
@@ -120,4 +136,4 @@ const deleteEmployee = async (id) => {
   return softDelete(id);
 };
 
-module.exports = { getAll, getById, createEmployee, updateEmployee, updateEmployeeBranches, deleteEmployee };
+module.exports = { getAll, getById, getNextCode, createEmployee, updateEmployee, updateEmployeeBranches, deleteEmployee };

@@ -7,6 +7,7 @@ import type {
   EmployeeListParams,
   CreateEmployeeInput,
   UpdateEmployeeInput,
+  UpdateEmployeeBranchesInput,
   CreateSalarySettingInput,
   UpdateSalarySettingInput,
 } from "./types";
@@ -41,11 +42,24 @@ export async function updateEmployee(
   return data.data;
 }
 
+export async function updateEmployeeBranches(
+  id: string,
+  input: UpdateEmployeeBranchesInput,
+): Promise<Employee> {
+  const { data } = await api.patch<ApiResponse<Employee>>(`/employees/${id}/branches`, input);
+  return data.data;
+}
+
 // ── Employee Roles ────────────────────────────────────────────────────────────
 
 export async function fetchEmployeeRoles(): Promise<EmployeeRole[]> {
-  const { data } = await api.get<ApiResponse<EmployeeRole[]>>("/employee-roles");
-  return data.data;
+  const { data } = await api.get<ApiResponse<{ data: EmployeeRole[] }>>("/employee-roles");
+  return data.data.data;
+}
+
+export async function fetchNextEmployeeCode(): Promise<string> {
+  const { data } = await api.get<ApiResponse<{ code: string }>>("/employees/next-code");
+  return data.data.code;
 }
 
 // ── Salary Settings ───────────────────────────────────────────────────────────

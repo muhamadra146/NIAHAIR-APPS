@@ -1,12 +1,21 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { formatDate } from "@/lib/utils";
-import { CreditCard, Calendar, BadgePercent } from "lucide-react";
+import { formatDate, formatCurrency } from "@/lib/utils";
+import {
+  CreditCard, Calendar, BadgePercent, FileText, Wallet,
+  Scissors, Clock, CalendarDays,
+} from "lucide-react";
 import type { Customer } from "../types";
 import { useAllMemberships, useCustomerMembership, useAssignMembership, useCancelCustomerMembership } from "@/features/settings/hooks";
+import { useAppointments } from "@/features/appointment/hooks";
+import { AppointmentStatusBadge } from "@/features/appointment/components/AppointmentStatusBadge";
+import { useInvoices, useDeposits } from "@/features/invoice/hooks";
+import { useTreatments } from "@/features/treatment/hooks";
 
 interface CustomerDetailTabsProps {
   customer: Customer;
@@ -225,13 +234,212 @@ function MembershipTab({ customer }: { customer: Customer }) {
   );
 }
 
-function PlaceholderTab({ label }: { label: string }) {
+// ── Status badge maps ─────────────────────────────────────────────────
+
+const INVOICE_BADGE: Record<string, string> = {
+  UNPAID:   "bg-yellow-50 text-yellow-700 border-yellow-200",
+  PAID:     "bg-emerald-50 text-emerald-700 border-emerald-200",
+  CANCELLED: "bg-red-50 text-red-600 border-red-200",
+};
+const INVOICE_LABEL: Record<string, string> = {
+  UNPAID: "Belum Bayar", PAID: "Lunas", CANCELLED: "Dibatalkan",
+};
+
+const DEPOSIT_BADGE: Record<string, string> = {
+  UNPAID:       "bg-yellow-50 text-yellow-700 border-yellow-200",
+  PAID:         "bg-emerald-50 text-emerald-700 border-emerald-200",
+  PARTIAL_USED: "bg-blue-50 text-blue-700 border-blue-200",
+  USED:         "bg-slate-50 text-slate-500 border-slate-200",
+};
+const DEPOSIT_LABEL: Record<string, string> = {
+  UNPAID: "Belum Bayar", PAID: "Tersedia", PARTIAL_USED: "Sebagian", USED: "Habis",
+};
+
+// ── Empty state ───────────────────────────────────────────────────────
+
+function EmptyState({ icon, message }: { icon: React.ReactNode; message: string }) {
   return (
-    <div className="rounded-md border border-border bg-card py-12 text-center text-sm text-muted-foreground">
-      {label} will appear here.
+    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-14 text-center">
+      <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+        {icon}
+      </div>
+      <p className="text-sm text-slate-400">{message}</p>
     </div>
   );
 }
+
+function TabSkeleton() {
+  return (
+    <div className="space-y-3">
+      {[1, 2, 3].map((i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
+    </div>
+  );
+}
+
+// ── Appointments tab ──────────────────────────────────────────────────
+
+function AppointmentsTab({ customerId }: { customerId: string }) {
+  const { data, isLoading } = useAppointments({ customerId, limit: 50 });
+  const appointments = data?.appointments ?? [];
+
+  if (isLoading) return <TabSkeleton />;
+  if (appointments.length === 0)
+    return <EmptyState icon={<CalendarDays className="h-5 w-5" />} message="Belum ada appointment." />;
+
+  return (
+    <div className="space-y-2">
+      {appointments.map((a) => (
+        <div
+          key={a.id}
+          className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm hover:shadow-md transition-shadow"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-xs text-slate-400">{a.bookingNo}</span>
+              <AppointmentStatusBadge status={a.status} />
+            </div>
+            <div className="mt-1 flex items-center gap-3 text-xs text-slate-500">
+              <span className="flex items-center gap-1">
+                <CalendarDays className="h-3 w-3" />
+                {formatDate(a.visitDate)}
+              </span>
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            </div>
+            {a.services.length > 0 && (
+              <p className="mt-0.5 text-xs text-slate-400 truncate">
+                {a.services.map((s) => s.serviceItem.name).join(", ")}
+              </p>
+            )}
+          </div>
+          <Button variant="ghost" size="sm" className="shrink-0 rounded-lg text-xs" asChild>
+            <Link to={`/appointments/${a.id}`}>Detail</Link>
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Deposits tab ──────────────────────────────────────────────────────
+
+function DepositsTab({ customerId }: { customerId: string }) {
+  const { data, isLoading } = useDeposits({ customerId, limit: 50 });
+  const deposits = data?.data ?? [];
+
+  if (isLoading) return <TabSkeleton />;
+  if (deposits.length === 0)
+    return <EmptyState icon={<Wallet className="h-5 w-5" />} message="Belum ada deposit." />;
+
+  return (
+    <div className="space-y-2">
+      {deposits.map((d) => (
+        <div
+          key={d.id}
+          className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-sm text-slate-800">{formatCurrency(Number(d.amount))}</span>
+              <Badge variant="outline" className={`text-xs rounded-lg px-2 py-0.5 ${DEPOSIT_BADGE[d.status] ?? ""}`}>
+                {DEPOSIT_LABEL[d.status] ?? d.status}
+              </Badge>
+            </div>
+            <div className="mt-0.5 flex gap-3 text-xs text-slate-400">
+              <span>Sisa: {formatCurrency(Number(d.remainingAmount))}</span>
+              {d.notes && <span className="truncate">{d.notes}</span>}
+            </div>
+          </div>
+          <span className="shrink-0 text-xs text-slate-400">{formatDate(d.createdAt)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Invoices tab ──────────────────────────────────────────────────────
+
+function InvoicesTab({ customerId }: { customerId: string }) {
+  const { data, isLoading } = useInvoices({ customerId, limit: 50 });
+  const invoices = data?.data ?? [];
+
+  if (isLoading) return <TabSkeleton />;
+  if (invoices.length === 0)
+    return <EmptyState icon={<FileText className="h-5 w-5" />} message="Belum ada invoice." />;
+
+  return (
+    <div className="space-y-2">
+      {invoices.map((inv) => (
+        <div
+          key={inv.id}
+          className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm hover:shadow-md transition-shadow"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-xs text-slate-400">{inv.invoiceNo}</span>
+              <Badge variant="outline" className={`text-xs rounded-lg px-2 py-0.5 ${INVOICE_BADGE[inv.status] ?? ""}`}>
+                {INVOICE_LABEL[inv.status] ?? inv.status}
+              </Badge>
+            </div>
+            <div className="mt-1 flex items-center gap-3 text-xs text-slate-500">
+              <span>{formatDate(inv.invoiceDate)}</span>
+              <span className="font-semibold text-slate-700">{formatCurrency(Number(inv.grandTotal))}</span>
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" className="shrink-0 rounded-lg text-xs" asChild>
+            <Link to={`/invoices/${inv.id}`}>Detail</Link>
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Treatment History tab ─────────────────────────────────────────────
+
+function TreatmentHistoryTab({ customerId }: { customerId: string }) {
+  const { data, isLoading } = useTreatments({ customerId, limit: 50 });
+  const sessions = data?.data ?? [];
+
+  if (isLoading) return <TabSkeleton />;
+  if (sessions.length === 0)
+    return <EmptyState icon={<Scissors className="h-5 w-5" />} message="Belum ada riwayat treatment." />;
+
+  return (
+    <div className="space-y-2">
+      {sessions.map((s) => (
+        <div
+          key={s.id}
+          className="rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm"
+        >
+          <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
+            {s.startedAt && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {formatDate(s.startedAt)}
+              </span>
+            )}
+            {s.completedAt && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 rounded-full bg-emerald-50 text-emerald-700 border-emerald-200">
+                Selesai
+              </Badge>
+            )}
+          </div>
+          {s.items && s.items.length > 0 && (
+            <p className="mt-1 text-xs text-slate-600 truncate">
+              {s.items.map((it) => it.item?.name).filter(Boolean).join(", ")}
+            </p>
+          )}
+          {s.notes && <p className="mt-0.5 text-xs text-slate-400 truncate">{s.notes}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Main tabs component ───────────────────────────────────────────────
 
 export function CustomerDetailTabs({ customer }: CustomerDetailTabsProps) {
   return (
@@ -254,19 +462,19 @@ export function CustomerDetailTabs({ customer }: CustomerDetailTabsProps) {
       </TabsContent>
 
       <TabsContent value="appointments">
-        <PlaceholderTab label="Appointments" />
+        <AppointmentsTab customerId={customer.id} />
       </TabsContent>
 
       <TabsContent value="deposits">
-        <PlaceholderTab label="Deposits" />
+        <DepositsTab customerId={customer.id} />
       </TabsContent>
 
       <TabsContent value="invoices">
-        <PlaceholderTab label="Invoices" />
+        <InvoicesTab customerId={customer.id} />
       </TabsContent>
 
       <TabsContent value="history">
-        <PlaceholderTab label="Treatment History" />
+        <TreatmentHistoryTab customerId={customer.id} />
       </TabsContent>
     </Tabs>
   );

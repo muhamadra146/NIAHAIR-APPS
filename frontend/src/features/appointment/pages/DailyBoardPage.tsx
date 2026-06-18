@@ -80,11 +80,11 @@ const GRID_ROW1 = [BOARD_COLUMNS[0], BOARD_COLUMNS[3], BOARD_COLUMNS[4]];
 const GRID_ROW2 = [BOARD_COLUMNS[1], BOARD_COLUMNS[2]];
 
 const BOARD_FILTER_TABS = [
-  { key: "ACTIVE",    label: "Aktif" },
-  { key: "COMPLETED", label: "Selesai" },
-  { key: "CANCELLED", label: "Dibatalkan" },
-  { key: "NO_SHOW",   label: "No Show" },
-  { key: "ALL",       label: "Semua" },
+  { key: "ACTIVE",      label: "Aktif" },
+  { key: "COMPLETED",   label: "Selesai" },
+  { key: "CANCELLED",   label: "Dibatalkan" },
+  { key: "RESCHEDULED", label: "Reschedule" },
+  { key: "ALL",         label: "Semua" },
 ] as const;
 type BoardFilter = (typeof BOARD_FILTER_TABS)[number]["key"];
 
@@ -1153,10 +1153,10 @@ export function DailyBoardPage() {
 
   // Filtered appointments for flat views
   const filteredAppointments = (() => {
-    if (boardFilter === "ACTIVE")    return appointments.filter((a) => ["BOOKED","CONFIRMED","CHECK_IN","IN_PROGRESS","COMPLETED"].includes(a.status));
-    if (boardFilter === "COMPLETED") return appointments.filter((a) => a.status === "COMPLETED");
-    if (boardFilter === "CANCELLED") return appointments.filter((a) => a.status === "CANCELLED");
-    if (boardFilter === "NO_SHOW")   return appointments.filter((a) => a.status === "NO_SHOW");
+    if (boardFilter === "ACTIVE")      return appointments.filter((a) => ["BOOKED","CONFIRMED","CHECK_IN","IN_PROGRESS","COMPLETED"].includes(a.status));
+    if (boardFilter === "COMPLETED")   return appointments.filter((a) => a.status === "COMPLETED");
+    if (boardFilter === "CANCELLED")   return appointments.filter((a) => a.status === "CANCELLED");
+    if (boardFilter === "RESCHEDULED") return appointments.filter((a) => (a.rescheduleHistories ?? []).length > 0);
     return appointments; // ALL
   })();
 
@@ -1337,6 +1337,8 @@ export function DailyBoardPage() {
               ? appointments.filter((a) => ["BOOKED","CONFIRMED","CHECK_IN","IN_PROGRESS","COMPLETED"].includes(a.status)).length
               : tab.key === "ALL"
               ? appointments.length
+              : tab.key === "RESCHEDULED"
+              ? appointments.filter((a) => (a.rescheduleHistories ?? []).length > 0).length
               : appointments.filter((a) => a.status === tab.key).length;
             const isActive = boardFilter === tab.key;
             return (

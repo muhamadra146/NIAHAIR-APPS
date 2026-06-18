@@ -11,6 +11,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   useEmployee,
   useUpdateEmployee,
+  useUpdateEmployeeBranches,
   useSalarySettings,
   useCreateSalarySetting,
   useUpdateSalarySetting,
@@ -20,10 +21,19 @@ import { SalarySettingForm } from "../components/SalarySettingForm";
 import type { UpdateEmployeeFormValues, SalarySettingFormValues } from "../schemas/employee.schema";
 import type { SalarySetting } from "../types";
 
+function apiErr(err: unknown, fallback = "Terjadi kesalahan"): string {
+  if (err && typeof err === "object" && "response" in err) {
+    const r = (err as { response?: { data?: { message?: string } } }).response;
+    if (r?.data?.message) return r.data.message;
+  }
+  return err instanceof Error ? err.message : fallback;
+}
+
 export function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: employee, isLoading, isError } = useEmployee(id!);
-  const updateMutation = useUpdateEmployee(id!);
+  const updateMutation       = useUpdateEmployee(id!);
+  const updateBranchMutation = useUpdateEmployeeBranches(id!);
   const { data: salarySettings = [], isLoading: salaryLoading } = useSalarySettings(id!);
 
   const [editOpen, setEditOpen]       = useState(false);
@@ -41,20 +51,21 @@ export function EmployeeDetailPage() {
       await updateMutation.mutateAsync({
         name:              values.name,
         roleId:            values.roleId,
-        employeeCode:      values.employeeCode  || undefined,
-        phone:             values.phone         || undefined,
-        email:             values.email         || undefined,
-        hireDate:          values.hireDate      || undefined,
-        birthDate:         values.birthDate     || undefined,
-        address:           values.address       || undefined,
+        employeeCode:      values.employeeCode     || undefined,
+        phone:             values.phone            || undefined,
+        email:             values.email            || undefined,
+        hireDate:          values.hireDate         || undefined,
+        birthDate:         values.birthDate        || undefined,
+        address:           values.address          || undefined,
         emergencyContact:  values.emergencyContact || undefined,
         commissionEnabled: values.commissionEnabled,
         isActive:          values.isActive,
-        homeBranchId:      values.homeBranchId  || null,
+        homeBranchId:      values.homeBranchId     || null,
       });
+      await updateBranchMutation.mutateAsync({ branchIds: values.branchIds ?? [] });
       setEditOpen(false);
     } catch (err: unknown) {
-      setEditError(err instanceof Error ? err.message : "Gagal memperbarui");
+      setEditError(apiErr(err, "Gagal memperbarui"));
     }
   }
 
@@ -100,7 +111,7 @@ export function EmployeeDetailPage() {
       setSsOpen(false);
       setEditSs(null);
     } catch (err: unknown) {
-      setSsError(err instanceof Error ? err.message : "Gagal menyimpan setting gaji");
+      setSsError(apiErr(err, "Gagal menyimpan setting gaji"));
     }
   }
 

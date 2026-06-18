@@ -12,6 +12,7 @@ export const createEmployeeSchema = z.object({
   emergencyContact:  z.string().optional().or(z.literal("")),
   commissionEnabled: z.boolean().default(false),
   homeBranchId:      z.string().optional().or(z.literal("")),
+  branchIds:         z.array(z.string()).default([]),
 });
 
 export const updateEmployeeSchema = createEmployeeSchema.partial().extend({

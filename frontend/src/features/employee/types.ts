@@ -10,6 +10,7 @@ export interface EmployeeBranch {
   branchId:  string;
   isPrimary: boolean;
   isActive:  boolean;
+  branch:    { id: string; code: string; name: string };
 }
 
 export interface Employee {
@@ -73,6 +74,10 @@ export interface CreateEmployeeInput {
   emergencyContact?: string;
   commissionEnabled?: boolean;
   homeBranchId?:     string | null;
+}
+
+export interface UpdateEmployeeBranchesInput {
+  branchIds: string[];
 }
 
 export interface UpdateEmployeeInput {

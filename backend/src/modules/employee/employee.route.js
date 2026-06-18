@@ -9,6 +9,7 @@ const {
   updateEmployeeBranchesSchema,
 } = require("./employee.validation");
 const {
+  getNextCodeController,
   getAllController,
   getByIdController,
   createController,
@@ -19,7 +20,8 @@ const {
 
 const router = Router();
 
-router.get("/",    authenticate, getAllController);
+router.get("/next-code", authenticate, getNextCodeController);
+router.get("/",          authenticate, getAllController);
 router.post("/",   authenticate, validate(createEmployeeSchema), createController);
 router.get("/:id", authenticate, getByIdController);
 router.put("/:id", authenticate, validate(updateEmployeeSchema), updateController);

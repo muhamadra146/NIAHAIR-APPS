@@ -21,6 +21,13 @@ const findById = (id) =>
 const findByEmployeeCode = (employeeCode) =>
   prisma.employee.findUnique({ where: { employeeCode } });
 
+const findLastEmployeeCode = () =>
+  prisma.employee.findFirst({
+    where:   { employeeCode: { startsWith: "EMP" } },
+    orderBy: { employeeCode: "desc" },
+    select:  { employeeCode: true },
+  });
+
 const findByEmail = (email) =>
   prisma.employee.findUnique({ where: { email } });
 
@@ -78,7 +85,7 @@ const softDelete = (id) =>
 
 module.exports = {
   findAll, count, findById,
-  findByEmployeeCode, findByEmail,
+  findByEmployeeCode, findLastEmployeeCode, findByEmail,
   findRoleById,
   create, update, updateBranches, softDelete,
 };

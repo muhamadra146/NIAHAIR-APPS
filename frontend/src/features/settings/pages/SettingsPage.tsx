@@ -1,5 +1,4 @@
 ﻿import { useState } from "react";
-import { useAuthStore } from "@/stores/authStore";
 import { Plus, Search } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -9,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/common/Pagination";
 
 import {
-  useEmployees, useCreateEmployee, useUpdateEmployee, useUpdateEmployeeBranches, useDeleteEmployee,
   useEmployeeRoles, useCreateEmployeeRole, useUpdateEmployeeRole, useDeleteEmployeeRole,
   useUsers, useCreateUser, useUpdateUser, useResetUserPassword, useDeactivateUser,
   useBranches, useCreateBranch, useUpdateBranch, useDeleteBranch,
@@ -19,8 +17,6 @@ import {
   useShiftMasters, useCreateShift, useUpdateShift, useDeleteShift,
 } from "../hooks";
 
-import { EmployeeTable }     from "../components/employee/EmployeeTable";
-import { EmployeeForm }      from "../components/employee/EmployeeForm";
 import { EmployeeRoleTable } from "../components/employeeRole/EmployeeRoleTable";
 import { EmployeeRoleForm }  from "../components/employeeRole/EmployeeRoleForm";
 import { UserTable }         from "../components/user/UserTable";
@@ -44,8 +40,7 @@ import { LeaveTypeTab }          from "../components/leaveType/LeaveTypeTab";
 import { LeaveQuotaTab }         from "../components/leaveQuota/LeaveQuotaTab";
 import { MembershipTab }         from "../components/membership/MembershipTab";
 
-import type { Employee, EmployeeRole, User, Branch, PaymentMethod, CashAccount, Warehouse, ShiftMaster } from "../types";
-import type { EmployeeFormValues } from "../schemas/employee.schema";
+import type { EmployeeRole, User, Branch, PaymentMethod, CashAccount, Warehouse, ShiftMaster } from "../types";
 import type { EmployeeRoleFormValues } from "../schemas/employeeRole.schema";
 import type { CreateUserFormValues, UpdateUserFormValues, ResetPasswordFormValues } from "../schemas/user.schema";
 import type { BranchFormValues } from "../schemas/branch.schema";
@@ -66,98 +61,16 @@ function apiErr(err: unknown, fallback = "Terjadi kesalahan"): string {
 // Tab 1 â€" Employee Management
 // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function EmployeeTab() {
-  const { branchId, user } = useAuthStore();
-  const isSuperAdmin = user?.role?.code === "SUPER_ADMIN";
+  const [roleFormOpen, setRoleForm] = useState(false);
+  const [editRole, setEditRole]     = useState<EmployeeRole | null>(null);
+  const [roleError, setRoleError]   = useState<string | null>(null);
 
-  const [search, setSearch]         = useState("");
-  const [debouncedSearch, setDebounced] = useState("");
-  const [empPage, setEmpPage]       = useState(1);
-  const [empFormOpen, setEmpForm]   = useState(false);
-  const [editEmp, setEditEmp]       = useState<Employee | null>(null);
-  const [empError, setEmpError]     = useState<string | null>(null);
-
-  const [roleFormOpen, setRoleForm]   = useState(false);
-  const [editRole, setEditRole]       = useState<EmployeeRole | null>(null);
-  const [roleError, setRoleError]     = useState<string | null>(null);
-
-  const branchFilter = isSuperAdmin ? undefined : (branchId ?? undefined);
-
-  const { data: empData, isLoading: empLoading } = useEmployees({
-    page: empPage, limit: 20, search: debouncedSearch || undefined, branchId: branchFilter,
-  });
-  const { data: empCountData } = useEmployees({ limit: 1, branchId: branchFilter });
   const { data: roleData, isLoading: roleLoading } = useEmployeeRoles({ limit: 100 });
+  const roles = roleData?.data ?? [];
 
-  const employees = empData?.data ?? [];
-  const roles     = roleData?.data ?? [];
-  const empMeta   = empData?.meta;
-
-  const nextEmployeeCode = `EMP${String((empCountData?.meta?.total ?? 0) + 1).padStart(3, "0")}`;
-
-  const createEmpMut    = useCreateEmployee();
-  const updateEmpMut    = useUpdateEmployee(editEmp?.id ?? "");
-  const updateBranchMut = useUpdateEmployeeBranches(editEmp?.id ?? "");
-  const deleteEmpMut    = useDeleteEmployee();
-  const createRoleMut   = useCreateEmployeeRole();
-  const updateRoleMut   = useUpdateEmployeeRole(editRole?.id ?? "");
-  const deleteRoleMut   = useDeleteEmployeeRole();
-
-  const empPending  = createEmpMut.isPending || updateEmpMut.isPending || updateBranchMut.isPending;
-
-  function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setSearch(e.target.value);
-    setEmpPage(1);
-    clearTimeout((window as unknown as { _empSearchTimer?: ReturnType<typeof setTimeout> })._empSearchTimer);
-    (window as unknown as { _empSearchTimer?: ReturnType<typeof setTimeout> })._empSearchTimer =
-      setTimeout(() => setDebounced(e.target.value), 400);
-  }
-
-  function openCreateEmp() {
-    setEditEmp(null);
-    setEmpError(null);
-    setEmpForm(true);
-  }
-
-  function openEditEmp(emp: Employee) {
-    setEditEmp(emp);
-    setEmpError(null);
-    setEmpForm(true);
-  }
-
-  async function handleEmpSubmit(values: EmployeeFormValues) {
-    setEmpError(null);
-    try {
-      const branchIds    = values.branchIds ?? [];
-      const homeBranchId = values.homeBranchId || null;
-      if (editEmp) {
-        await updateEmpMut.mutateAsync({
-          name:         values.name,
-          roleId:       values.roleId || undefined,
-          employeeCode: values.employeeCode || undefined,
-          phone:        values.phone || undefined,
-          email:        values.email || undefined,
-          homeBranchId,
-        });
-        await updateBranchMut.mutateAsync({ branchIds });
-      } else {
-        const created = await createEmpMut.mutateAsync({
-          name:         values.name,
-          roleId:       values.roleId,
-          employeeCode: values.employeeCode || undefined,
-          phone:        values.phone || undefined,
-          email:        values.email || undefined,
-          homeBranchId: homeBranchId ?? undefined,
-        });
-        if (branchIds.length > 0) {
-          const { updateEmployeeBranches } = await import("../api/employee.api");
-          await updateEmployeeBranches(created.id, { branchIds });
-        }
-      }
-      setEmpForm(false);
-    } catch (err: unknown) {
-      setEmpError(apiErr(err, "Gagal menyimpan karyawan"));
-    }
-  }
+  const createRoleMut = useCreateEmployeeRole();
+  const updateRoleMut = useUpdateEmployeeRole(editRole?.id ?? "");
+  const deleteRoleMut = useDeleteEmployeeRole();
 
   function openCreateRole() {
     setEditRole(null);
@@ -185,55 +98,24 @@ function EmployeeTab() {
     }
   }
 
-  async function handleDeleteEmp(emp: Employee) {
-    try { await deleteEmpMut.mutateAsync(emp.id); } catch { /* ignored */ }
-  }
-
   async function handleDeleteRole(role: EmployeeRole) {
     try { await deleteRoleMut.mutateAsync(role.id); } catch { /* ignored */ }
   }
 
   return (
     <div className="space-y-6">
-      {/* Employee section */}
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Redirect card */}
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 py-5">
           <div>
-            <h2 className="text-base font-semibold">Employees</h2>
-            <p className="text-sm text-muted-foreground">{empMeta ? `${empMeta.total} total` : ""}</p>
+            <p className="font-semibold text-sm">Data Karyawan</p>
+            <p className="text-sm text-muted-foreground">Tambah, edit, dan kelola karyawan di halaman Karyawan.</p>
           </div>
-          <Button size="sm" onClick={openCreateEmp}>
-            <Plus className="mr-2 h-4 w-4" />New Employee
+          <Button size="sm" asChild>
+            <a href="/employees">Buka Halaman Karyawan →</a>
           </Button>
-        </div>
-
-        <Card>
-          <CardHeader className="pb-3 pt-4">
-            <div className="relative w-full sm:max-w-xs">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search name, code, phoneâ€¦"
-                value={search}
-                onChange={handleSearchChange}
-                className="pl-9"
-              />
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <EmployeeTable employees={employees} isLoading={empLoading} onEdit={openEditEmp} onDelete={handleDeleteEmp} />
-          </CardContent>
-        </Card>
-
-        {empMeta && (
-          <Pagination
-            page={empMeta.page}
-            limit={empMeta.limit}
-            total={empMeta.total}
-            totalPages={empMeta.totalPages}
-            onPageChange={setEmpPage}
-          />
-        )}
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Divider */}
       <div className="border-t border-border" />
@@ -257,16 +139,6 @@ function EmployeeTab() {
         </Card>
       </div>
 
-      {/* Forms */}
-      <EmployeeForm
-        open={empFormOpen}
-        onOpenChange={setEmpForm}
-        onSubmit={handleEmpSubmit}
-        isPending={empPending}
-        defaultValues={editEmp}
-        error={empError}
-        nextCode={editEmp ? undefined : nextEmployeeCode}
-      />
       <EmployeeRoleForm
         open={roleFormOpen}
         onOpenChange={setRoleForm}

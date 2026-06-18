@@ -5,7 +5,9 @@ import {
   fetchEmployee,
   createEmployee,
   updateEmployee,
+  updateEmployeeBranches,
   fetchEmployeeRoles,
+  fetchNextEmployeeCode,
   fetchSalarySettings,
   fetchActiveSalarySetting,
   createSalarySetting,
@@ -15,6 +17,7 @@ import type {
   EmployeeListParams,
   CreateEmployeeInput,
   UpdateEmployeeInput,
+  UpdateEmployeeBranchesInput,
   CreateSalarySettingInput,
   UpdateSalarySettingInput,
 } from "./types";
@@ -44,6 +47,14 @@ export function useEmployeeRoles() {
   });
 }
 
+export function useNextEmployeeCode() {
+  return useQuery({
+    queryKey: ["employee-next-code"],
+    queryFn:  fetchNextEmployeeCode,
+    staleTime: 0,
+  });
+}
+
 // ── Employee mutations ────────────────────────────────────────────────────────
 
 export function useCreateEmployee() {
@@ -67,6 +78,14 @@ export function useUpdateEmployee(id: string) {
       toast.success("Data karyawan diperbarui");
     },
     onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useUpdateEmployeeBranches(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateEmployeeBranchesInput) => updateEmployeeBranches(id, input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); },
   });
 }
 
