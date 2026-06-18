@@ -223,6 +223,7 @@ export function SchedulePage() {
           data={gridData}
           shifts={shifts}
           branchId={branchId}
+          viewMode={viewMode}
           isPending={rosterLoading || bulkMut.isPending}
           onCellSave={handleCellSave}
         />

@@ -247,7 +247,7 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave }: Pr
           {/* ── Column headers ──────────────────────────────────────────── */}
           <thead>
             <tr className="border-b border-border">
-              <th className={`sticky left-0 z-10 bg-card px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide ${viewMode === "month" ? "min-w-[160px]" : "w-[160px]"}`}>
+              <th className={`sticky left-0 z-30 bg-card px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide ${viewMode === "month" ? "min-w-[160px]" : "w-[160px]"}`}>
                 Staff Names
               </th>
               {dates.map((date) => {
@@ -274,7 +274,7 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave }: Pr
 
             {/* Sub-header: daily working/off summary ──────────────────── */}
             <tr className="border-b border-border bg-muted/20">
-              <td className={`${viewMode === "month" ? "sticky left-0 z-10 bg-muted/20 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)]" : "sticky left-0 z-10 bg-muted/20"} px-4 py-2 text-xs font-semibold text-muted-foreground`}>
+              <td className="sticky left-0 z-30 bg-card shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)] px-4 py-2 text-xs font-semibold text-muted-foreground">
                 Staff Member
               </td>
               {dailyStats.map(({ date, working, off }) => (
@@ -303,10 +303,10 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave }: Pr
               </tr>
             )}
             {rows.map((row) => (
-              <tr key={row.employee.id} className="group">
+              <tr key={row.employee.id}>
                 {/* Name cell — card style */}
-                <td className="sticky left-0 z-10 bg-card px-3 py-2.5">
-                  <div className="flex items-center gap-2.5 rounded-xl border border-border bg-white px-3 py-2.5 shadow-sm transition-shadow group-hover:shadow-md">
+                <td className="sticky left-0 z-30 bg-card px-3 py-2.5">
+                  <div className="flex items-center gap-2.5 rounded-xl border border-border bg-white px-3 py-2.5 shadow-sm transition-shadow hover:shadow-md">
                     <EmployeeAvatar name={row.employee.name} />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold leading-tight">{row.employee.name}</p>
@@ -334,7 +334,7 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave }: Pr
           {/* ── Footer ──────────────────────────────────────────────────── */}
           <tfoot>
             <tr className="border-t-2 border-border bg-muted/20">
-              <td className="sticky left-0 z-10 bg-muted/20 px-4 py-2.5 text-xs font-semibold text-muted-foreground">
+              <td className="sticky left-0 z-30 bg-card shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)] px-4 py-2.5 text-xs font-semibold text-muted-foreground">
                 Daily Count
               </td>
               {dailyStats.map(({ date, working, off }) => (
@@ -346,7 +346,7 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave }: Pr
             </tr>
 
             <tr className="border-t border-border bg-muted/10">
-              <td className="sticky left-0 z-10 bg-muted/10 px-4 py-2.5 text-xs font-semibold text-muted-foreground">
+              <td className="sticky left-0 z-30 bg-card shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)] px-4 py-2.5 text-xs font-semibold text-muted-foreground">
                 Weekly Hours
               </td>
               {dailyStats.map(({ date, hours }) => (
