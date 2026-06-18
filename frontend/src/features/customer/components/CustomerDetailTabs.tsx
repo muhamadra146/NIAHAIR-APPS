@@ -16,6 +16,7 @@ import { useAppointments } from "@/features/appointment/hooks";
 import { AppointmentStatusBadge } from "@/features/appointment/components/AppointmentStatusBadge";
 import { useInvoices, useDeposits } from "@/features/invoice/hooks";
 import { useTreatments } from "@/features/treatment/hooks";
+import { useConsultationNotes } from "@/features/consultation/hooks";
 
 interface CustomerDetailTabsProps {
   customer: Customer;
@@ -76,7 +77,6 @@ function OverviewTab({ customer }: { customer: Customer }) {
           value={<span className="text-destructive text-xs">{customer.syncError}</span>}
         />
       )}
-      {customer.notes && <InfoRow label="Notes" value={customer.notes} />}
     </div>
   );
 }
@@ -412,29 +412,122 @@ function TreatmentHistoryTab({ customerId }: { customerId: string }) {
       {sessions.map((s) => (
         <div
           key={s.id}
-          className="rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm"
+          className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm hover:shadow-md transition-shadow"
         >
-          <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
-            {s.startedAt && (
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                {formatDate(s.startedAt)}
-              </span>
-            )}
-            {s.completedAt && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 rounded-full bg-emerald-50 text-emerald-700 border-emerald-200">
-                Selesai
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              {s.startedAt && (
+                <span className="flex items-center gap-1 text-xs text-slate-500">
+                  <Clock className="h-3 w-3" />
+                  {formatDate(s.startedAt)}
+                </span>
+              )}
+              <Badge
+                variant="outline"
+                className={`text-[10px] px-1.5 py-0 rounded-full ${
+                  s.completedAt
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-amber-50 text-amber-700 border-amber-200"
+                }`}
+              >
+                {s.completedAt ? "Selesai" : "Belum selesai"}
               </Badge>
+            </div>
+            {s.items && s.items.length > 0 && (
+              <p className="mt-1 text-xs text-slate-600 truncate">
+                {s.items.map((it) => it.item?.name).filter(Boolean).join(", ")}
+              </p>
+            )}
+            {s.notes && (
+              <p className="mt-0.5 text-xs text-slate-400 truncate">{s.notes}</p>
             )}
           </div>
-          {s.items && s.items.length > 0 && (
-            <p className="mt-1 text-xs text-slate-600 truncate">
-              {s.items.map((it) => it.item?.name).filter(Boolean).join(", ")}
-            </p>
-          )}
-          {s.notes && <p className="mt-0.5 text-xs text-slate-400 truncate">{s.notes}</p>}
+          <Button variant="ghost" size="sm" className="shrink-0 rounded-lg text-xs" asChild>
+            <Link to={`/treatments/${s.id}`}>Detail</Link>
+          </Button>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── Catatan Klien tab ─────────────────────────────────────────────────
+
+function CatatanKlienTab({ customerId }: { customerId: string }) {
+  const { data, isLoading } = useConsultationNotes({ customerId, limit: 50 });
+  const notes = data?.data ?? [];
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3 pt-4">
+        {[...Array(3)].map((_, i) => (
+          <Skeleton key={i} className="h-20 w-full rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+
+  if (notes.length === 0) {
+    return (
+      <div className="py-12 text-center text-sm text-muted-foreground">
+        Belum ada catatan klien.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 pt-4">
+      {notes.map((note) => {
+        const stylists = note.invoice?.treatmentSessions
+          ?.flatMap((s) =>
+            s.treatmentItems?.flatMap((ti) =>
+              ti.assignments?.map((a) => a.employee?.name).filter(Boolean) ?? []
+            ) ?? []
+          )
+          .filter((v, i, arr) => arr.indexOf(v) === i)
+          .join(", ");
+
+        return (
+          <div key={note.id} className="rounded-lg border bg-card p-4 text-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <CalendarDays className="h-3.5 w-3.5" />
+                <span>{formatDate(note.filledAt)}</span>
+                {note.invoice?.invoiceNo && (
+                  <>
+                    <span className="text-slate-300">·</span>
+                    <span className="font-mono">{note.invoice.invoiceNo}</span>
+                  </>
+                )}
+                {stylists && (
+                  <>
+                    <span className="text-slate-300">·</span>
+                    <span>{stylists}</span>
+                  </>
+                )}
+              </div>
+              <Link
+                to={`/consultation-notes/${note.id}/edit`}
+                className="shrink-0 text-xs text-primary hover:underline"
+              >
+                Lihat
+              </Link>
+            </div>
+
+            {note.interestingNote && (
+              <p className="mt-2 line-clamp-3 border-l-2 border-primary/40 pl-3 italic text-slate-600">
+                "{note.interestingNote}"
+              </p>
+            )}
+
+            {note.filledByEmployee && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Diisi: {note.filledByEmployee.name}
+              </p>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -451,6 +544,7 @@ export function CustomerDetailTabs({ customer }: CustomerDetailTabsProps) {
         <TabsTrigger value="deposits">Deposits</TabsTrigger>
         <TabsTrigger value="invoices">Invoices</TabsTrigger>
         <TabsTrigger value="history">Treatment History</TabsTrigger>
+        <TabsTrigger value="catatan">Catatan Klien</TabsTrigger>
       </TabsList>
 
       <TabsContent value="overview">
@@ -475,6 +569,10 @@ export function CustomerDetailTabs({ customer }: CustomerDetailTabsProps) {
 
       <TabsContent value="history">
         <TreatmentHistoryTab customerId={customer.id} />
+      </TabsContent>
+
+      <TabsContent value="catatan">
+        <CatatanKlienTab customerId={customer.id} />
       </TabsContent>
     </Tabs>
   );

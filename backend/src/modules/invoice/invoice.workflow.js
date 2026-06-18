@@ -37,7 +37,13 @@ const completeInvoiceWorkflow = async (invoiceId, userId) => {
 // Stock movement is generated at invoice creation — not here
 const handleInvoicePaid = async (invoiceId, userId) => {
   await completeInvoiceWorkflow(invoiceId, userId);
-  await generateCommission(invoiceId);
+  try {
+    await generateCommission(invoiceId);
+  } catch (err) {
+    // Commissions may have been generated manually before payment — skip silently
+    if (err && err.isOperational && err.statusCode === 422) return;
+    throw err;
+  }
 };
 
 module.exports = { handleInvoicePaid };

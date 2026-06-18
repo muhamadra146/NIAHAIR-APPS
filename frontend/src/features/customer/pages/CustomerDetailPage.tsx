@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ChevronLeft, Pencil } from "lucide-react";
+import { ChevronLeft, Pencil, StickyNote, Check, X } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,111 @@ import { useUpdateCustomer } from "../hooks/useUpdateCustomer";
 import { CustomerDetailTabs } from "../components/CustomerDetailTabs";
 import { CustomerForm } from "../components/CustomerForm";
 import type { CustomerFormValues } from "../schemas/customer.schema";
+
+// ── Inline notes card ─────────────────────────────────────────────────────────
+
+interface ClientNotesCardProps {
+  notes:     string | null;
+  onSave:    (notes: string) => Promise<void>;
+  isPending: boolean;
+}
+
+function ClientNotesCard({ notes, onSave, isPending }: ClientNotesCardProps) {
+  const [editing, setEditing]   = useState(false);
+  const [draft, setDraft]       = useState(notes ?? "");
+  const [error, setError]       = useState<string | null>(null);
+  const textareaRef             = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      setDraft(notes ?? "");
+      setTimeout(() => textareaRef.current?.focus(), 50);
+    }
+  }, [editing, notes]);
+
+  async function handleSave() {
+    setError(null);
+    try {
+      await onSave(draft);
+      setEditing(false);
+    } catch {
+      setError("Gagal menyimpan catatan.");
+    }
+  }
+
+  function handleCancel() {
+    setDraft(notes ?? "");
+    setEditing(false);
+    setError(null);
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card shadow-sm">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <StickyNote className="h-4 w-4 text-amber-500" />
+          Catatan Client
+        </div>
+        {!editing && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => setEditing(true)}
+          >
+            <Pencil className="mr-1 h-3 w-3" />
+            Edit
+          </Button>
+        )}
+      </div>
+
+      <div className="px-4 py-3">
+        {editing ? (
+          <div className="space-y-2">
+            <textarea
+              ref={textareaRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={4}
+              placeholder="Tambahkan catatan tentang client ini…"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <div className="flex gap-2 justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 px-3 text-xs"
+                onClick={handleCancel}
+                disabled={isPending}
+              >
+                <X className="mr-1 h-3 w-3" />
+                Batal
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 px-3 text-xs"
+                onClick={handleSave}
+                disabled={isPending}
+              >
+                <Check className="mr-1 h-3 w-3" />
+                {isPending ? "Menyimpan…" : "Simpan"}
+              </Button>
+            </div>
+          </div>
+        ) : notes ? (
+          <p className="text-sm text-foreground whitespace-pre-wrap">{notes}</p>
+        ) : (
+          <p className="text-sm text-muted-foreground italic">Belum ada catatan. Klik Edit untuk menambahkan.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -37,6 +142,10 @@ export function CustomerDetailPage() {
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Failed to update customer");
     }
+  }
+
+  async function handleNoteSave(notes: string) {
+    await updateMutation.mutateAsync({ notes: notes || undefined });
   }
 
   if (isLoading) {

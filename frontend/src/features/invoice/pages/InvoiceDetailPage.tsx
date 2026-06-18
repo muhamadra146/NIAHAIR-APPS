@@ -348,7 +348,13 @@ function AddPaymentDialog({
     try {
       await onSubmit({ paymentMethodId: methodId, amount: amt, referenceNo: refNo || undefined, notes: notes || undefined });
       reset();
-    } catch (err: unknown) { setError(err instanceof Error ? err.message : "Gagal mencatat pembayaran"); }
+    } catch (err: unknown) {
+      const apiMsg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      setError(apiMsg ?? (err instanceof Error ? err.message : "Gagal mencatat pembayaran"));
+    }
   }
 
   return (

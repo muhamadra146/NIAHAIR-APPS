@@ -61,7 +61,7 @@ router.patch(
 router.patch(
   "/:id/reschedule",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.ADMIN, ROLES.MANAGER, ROLES.CASHIER),
   validate(rescheduleSchema),
   rescheduleController
 );

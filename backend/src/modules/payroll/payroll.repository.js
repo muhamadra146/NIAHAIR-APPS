@@ -52,7 +52,7 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) =
     prisma.staffSchedule.findMany({
       where: {
         employeeId,
-        scheduleDate: { gte: periodStart, lte: periodEnd },
+        workDate: { gte: periodStart, lte: periodEnd },
       },
       include: {
         shift: { select: { id: true, startTime: true, endTime: true } },

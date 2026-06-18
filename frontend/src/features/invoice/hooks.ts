@@ -110,7 +110,13 @@ export function useAddPayment(invoiceId: string) {
       qc.invalidateQueries({ queryKey: ["payments", invoiceId] });
       toast.success("Pembayaran dicatat");
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: unknown) => {
+      const apiMsg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      toast.error(apiMsg ?? (err instanceof Error ? err.message : "Gagal mencatat pembayaran"));
+    },
   });
 }
 

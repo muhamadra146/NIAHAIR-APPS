@@ -383,8 +383,12 @@ function RescheduleDialog({
       await rescheduleAppointment(appointment.id, { visitDate, startTime, endTime, reason: reason.trim() });
       onSuccess();
       onClose();
-    } catch {
-      setError("Gagal reschedule. Coba lagi.");
+    } catch (err: unknown) {
+      const apiMsg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      setError(apiMsg ?? (err instanceof Error ? err.message : "Gagal reschedule. Coba lagi."));
     } finally {
       setSaving(false);
     }
