@@ -52,6 +52,7 @@ const permissionRouter              = require("./modules/permission/permission.r
 const sickLeaveRouter               = require("./modules/sickLeave/sickLeave.route");
 const membershipRouter              = require("./modules/membership/membership.route");
 const stockTransferRouter           = require("./modules/stockTransfer/stockTransfer.route");
+const settingRouter                 = require("./modules/setting/setting.route");
 
 
 const app = express();
@@ -135,6 +136,7 @@ app.use("/permissions",                          permissionRouter);
 app.use("/sick-leaves",                          sickLeaveRouter);
 app.use("/memberships",                          membershipRouter);
 app.use("/stock-transfers",                      stockTransferRouter);
+app.use("/app-settings",                         settingRouter);
 
 
 // global error handler — must be last

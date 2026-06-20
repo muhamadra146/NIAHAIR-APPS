@@ -39,6 +39,7 @@ import { CommissionSettingsTab } from "../components/commission/CommissionSettin
 import { LeaveTypeTab }          from "../components/leaveType/LeaveTypeTab";
 import { LeaveQuotaTab }         from "../components/leaveQuota/LeaveQuotaTab";
 import { MembershipTab }         from "../components/membership/MembershipTab";
+import { AttendanceSettingsTab } from "../components/attendance/AttendanceSettingsTab";
 
 import type { EmployeeRole, User, Branch, PaymentMethod, CashAccount, Warehouse, ShiftMaster } from "../types";
 import type { EmployeeRoleFormValues } from "../schemas/employeeRole.schema";
@@ -301,25 +302,25 @@ function BranchTab() {
 
   async function handleSubmit(values: BranchFormValues) {
     setFormError(null);
+    const latParsed  = values.latitude     ? parseFloat(values.latitude)       : NaN;
+    const lngParsed  = values.longitude    ? parseFloat(values.longitude)      : NaN;
+    const radParsed  = values.radiusMeters ? parseInt(values.radiusMeters, 10) : NaN;
+    const payload = {
+      code:         values.code,
+      name:         values.name,
+      address:      values.address  || undefined,
+      city:         values.city     || undefined,
+      province:     values.province || undefined,
+      phone:        values.phone    || undefined,
+      latitude:     isNaN(latParsed) ? undefined : latParsed,
+      longitude:    isNaN(lngParsed) ? undefined : lngParsed,
+      radiusMeters: isNaN(radParsed) ? undefined : radParsed,
+    };
     try {
       if (editBranch) {
-        await updateMut.mutateAsync({
-          code:     values.code,
-          name:     values.name,
-          address:  values.address || undefined,
-          city:     values.city || undefined,
-          province: values.province || undefined,
-          phone:    values.phone || undefined,
-        });
+        await updateMut.mutateAsync(payload);
       } else {
-        await createMut.mutateAsync({
-          code:     values.code,
-          name:     values.name,
-          address:  values.address || undefined,
-          city:     values.city || undefined,
-          province: values.province || undefined,
-          phone:    values.phone || undefined,
-        });
+        await createMut.mutateAsync(payload);
       }
       setFormOpen(false);
     } catch (err: unknown) {
@@ -702,6 +703,7 @@ const TABS = [
   { value: "leave-types",     label: "Tipe Cuti" },
   { value: "leave-quotas",    label: "Kuota Cuti" },
   { value: "memberships",     label: "Membership" },
+  { value: "attendance",      label: "Absensi" },
   { value: "accurate",        label: "Accurate" },
 ] as const;
 
@@ -757,6 +759,7 @@ export function SettingsPage() {
             <TabsContent value="leave-types"     className="mt-0 p-6"><LeaveTypeTab /></TabsContent>
             <TabsContent value="leave-quotas"    className="mt-0 p-6"><LeaveQuotaTab /></TabsContent>
             <TabsContent value="memberships"     className="mt-0 p-6"><MembershipTab /></TabsContent>
+            <TabsContent value="attendance"      className="mt-0 p-6"><AttendanceSettingsTab /></TabsContent>
             <TabsContent value="accurate"        className="mt-0 p-6"><AccuratePanel /></TabsContent>
           </div>
         </div>

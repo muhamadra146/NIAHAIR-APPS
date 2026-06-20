@@ -1,13 +1,16 @@
 // ── Branch ────────────────────────────────────────────────────────────
 export interface Branch {
-  id:       string;
-  code:     string;
-  name:     string;
-  address:  string | null;
-  city:     string | null;
-  province: string | null;
-  phone:    string | null;
-  isActive: boolean;
+  id:           string;
+  code:         string;
+  name:         string;
+  address:      string | null;
+  city:         string | null;
+  province:     string | null;
+  phone:        string | null;
+  latitude:     number | null;
+  longitude:    number | null;
+  radiusMeters: number;
+  isActive:     boolean;
 }
 
 // ── Employee Role (job title) ──────────────────────────────────────────
@@ -261,7 +264,7 @@ export interface CreateUserInput { employeeId: string; email: string; password: 
 export interface UpdateUserInput { email?: string; userRoleId?: string }
 export interface ResetPasswordInput { password: string }
 
-export interface CreateBranchInput { code: string; name: string; address?: string; city?: string; province?: string; phone?: string }
+export interface CreateBranchInput { code: string; name: string; address?: string; city?: string; province?: string; phone?: string; latitude?: number | null; longitude?: number | null; radiusMeters?: number }
 export type UpdateBranchInput = Partial<CreateBranchInput> & { isActive?: boolean };
 
 export interface CreatePaymentMethodInput { code: string; name: string; cashAccountId?: string }

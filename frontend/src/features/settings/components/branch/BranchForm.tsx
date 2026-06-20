@@ -24,24 +24,30 @@ export function BranchForm({ open, onOpenChange, onSubmit, isPending, defaultVal
   const { register, handleSubmit, reset, formState: { errors } } = useForm<BranchFormValues>({
     resolver: zodResolver(branchSchema),
     defaultValues: {
-      code:     defaultValues?.code ?? "",
-      name:     defaultValues?.name ?? "",
-      address:  defaultValues?.address ?? "",
-      city:     defaultValues?.city ?? "",
-      province: defaultValues?.province ?? "",
-      phone:    defaultValues?.phone ?? "",
+      code:         defaultValues?.code ?? "",
+      name:         defaultValues?.name ?? "",
+      address:      defaultValues?.address ?? "",
+      city:         defaultValues?.city ?? "",
+      province:     defaultValues?.province ?? "",
+      phone:        defaultValues?.phone ?? "",
+      latitude:     defaultValues?.latitude != null ? String(defaultValues.latitude) : "",
+      longitude:    defaultValues?.longitude != null ? String(defaultValues.longitude) : "",
+      radiusMeters: defaultValues?.radiusMeters != null ? String(defaultValues.radiusMeters) : "100",
     },
   });
 
   useEffect(() => {
     if (open) {
       reset({
-        code:     defaultValues?.code ?? "",
-        name:     defaultValues?.name ?? "",
-        address:  defaultValues?.address ?? "",
-        city:     defaultValues?.city ?? "",
-        province: defaultValues?.province ?? "",
-        phone:    defaultValues?.phone ?? "",
+        code:         defaultValues?.code ?? "",
+        name:         defaultValues?.name ?? "",
+        address:      defaultValues?.address ?? "",
+        city:         defaultValues?.city ?? "",
+        province:     defaultValues?.province ?? "",
+        phone:        defaultValues?.phone ?? "",
+        latitude:     defaultValues?.latitude != null ? String(defaultValues.latitude) : "",
+        longitude:    defaultValues?.longitude != null ? String(defaultValues.longitude) : "",
+        radiusMeters: defaultValues?.radiusMeters != null ? String(defaultValues.radiusMeters) : "100",
       });
     }
   }, [open, defaultValues, reset]);
@@ -90,6 +96,27 @@ export function BranchForm({ open, onOpenChange, onSubmit, isPending, defaultVal
               <div className="sm:col-span-2 space-y-1.5">
                 <Label>Phone</Label>
                 <Input {...register("phone")} placeholder="02112345678" inputMode="tel" />
+              </div>
+
+              {/* Location / Geofencing */}
+              <div className="sm:col-span-2 pt-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">Lokasi & Geofencing</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Latitude</Label>
+                <Input {...register("latitude")} placeholder="-6.2234" inputMode="decimal" />
+                {errors.latitude && <p className="text-xs text-destructive">{errors.latitude.message}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Longitude</Label>
+                <Input {...register("longitude")} placeholder="106.8132" inputMode="decimal" />
+                {errors.longitude && <p className="text-xs text-destructive">{errors.longitude.message}</p>}
+              </div>
+              <div className="sm:col-span-2 space-y-1.5">
+                <Label>Radius Absen (meter)</Label>
+                <Input {...register("radiusMeters")} placeholder="100" inputMode="numeric" />
+                <p className="text-xs text-slate-400">Karyawan harus absen dalam radius ini dari koordinat cabang</p>
+                {errors.radiusMeters && <p className="text-xs text-destructive">{errors.radiusMeters.message}</p>}
               </div>
             </div>
           </div>

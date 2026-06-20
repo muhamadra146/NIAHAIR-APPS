@@ -3,6 +3,41 @@ const AppError                           = require("../../common/errors/AppError
 const { paginate, paginationMeta }       = require("../../utils/pagination");
 const prisma                             = require("../../config/prisma");
 const repo                               = require("./attendance.repository");
+const settingRepo                        = require("../setting/setting.repository");
+
+const GEOFENCE_EXEMPT_KEY = "attendance_geofence_exempt_roles";
+
+const haversineMeters = (lat1, lon1, lat2, lon2) => {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const checkGeofence = async (branchId, employeeId, latitude, longitude) => {
+  if (!latitude || !longitude) return; // no GPS, allow
+  const [branch, employee, exemptSetting] = await Promise.all([
+    prisma.branch.findUnique({ where: { id: branchId }, select: { latitude: true, longitude: true, radiusMeters: true } }),
+    prisma.employee.findUnique({ where: { id: employeeId }, select: { role: { select: { code: true } } } }),
+    settingRepo.findByKey(GEOFENCE_EXEMPT_KEY),
+  ]);
+  if (!branch?.latitude || !branch?.longitude) return; // branch has no coordinates, allow
+  const exemptCodes = exemptSetting?.value ? JSON.parse(exemptSetting.value) : [];
+  if (exemptCodes.includes(employee?.role?.code)) return; // role is exempt
+  const dist = haversineMeters(
+    Number(branch.latitude), Number(branch.longitude),
+    Number(latitude), Number(longitude)
+  );
+  const radius = branch.radiusMeters ?? 100;
+  if (dist > radius) {
+    throw new AppError(
+      `Lokasi terlalu jauh dari cabang (${Math.round(dist)}m, radius ${radius}m)`,
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -112,6 +147,8 @@ const checkIn = async ({ staffScheduleId, latitude, longitude, photoUrl, notes }
     include: { shift: true },
   });
   if (!schedule) throw new AppError("Schedule not found", StatusCodes.NOT_FOUND);
+
+  await checkGeofence(schedule.branchId, schedule.employeeId, latitude, longitude);
 
   const now = new Date();
   const computed = computeStatus(now, null, schedule.shift);

@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Plus, CheckCircle, XCircle, X, Thermometer, AlertTriangle, Paperclip, FileImage, ExternalLink } from "lucide-react";
+import { Plus, CheckCircle, XCircle, X, Thermometer, AlertTriangle, Paperclip, FileImage } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,8 +33,30 @@ function apiErr(err: unknown) {
   return err instanceof Error ? err.message : "Terjadi kesalahan";
 }
 
+// ── Photo lightbox ────────────────────────────────────────────────────
+function PhotoLightbox({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+      <div className="relative rounded-xl shadow-2xl">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -right-3 -top-3 z-10 rounded-full bg-gray-800 p-1 text-white hover:bg-gray-700"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <img
+          src={url}
+          alt="Foto Dokumen"
+          className="max-h-[40dvh] max-w-[38vw] rounded-lg object-contain"
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── Review dialog ─────────────────────────────────────────────────────
-function ReviewDialog({ sl, onClose }: { sl: SickLeave; onClose: () => void }) {
+function ReviewDialog({ sl, onClose, onViewPhoto }: { sl: SickLeave; onClose: () => void; onViewPhoto: (url: string) => void }) {
   const [note, setNote] = useState("");
   const [err,  setErr ] = useState<string | null>(null);
   const approveMut = useApproveSickLeave();
@@ -72,10 +94,13 @@ function ReviewDialog({ sl, onClose }: { sl: SickLeave; onClose: () => void }) {
             {sl.diagnosis   && <p className="text-muted-foreground">Diagnosa: {sl.diagnosis}</p>}
             {sl.clinicName  && <p className="text-muted-foreground">Klinik: {sl.clinicName}</p>}
             {sl.letterPhotoUrl && (
-              <a href={sl.letterPhotoUrl} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+              <button
+                type="button"
+                onClick={() => onViewPhoto(sl.letterPhotoUrl!)}
+                className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+              >
                 <FileImage className="h-3.5 w-3.5" /> Lihat Foto Dokumen
-              </a>
+              </button>
             )}
           </div>
           <div className="space-y-1.5">
@@ -262,6 +287,7 @@ export function SickLeavePage() {
   const [createOpen,   setCreateOpen  ] = useState(false);
   const [reviewing,    setReviewing   ] = useState<SickLeave | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [lightboxUrl,  setLightboxUrl ] = useState<string | null>(null);
 
   const myQuery  = useMySickLeaves({ status: (statusFilter as SickLeave["status"]) || undefined });
   const allQuery = useSickLeaves({ status: (statusFilter as SickLeave["status"]) || undefined });
@@ -363,12 +389,14 @@ export function SickLeavePage() {
                   {sl.diagnosis  && <p className="mt-1 text-sm text-muted-foreground">Diagnosa: {sl.diagnosis}</p>}
                   {sl.doctorName && <p className="mt-0.5 text-xs text-muted-foreground">dr. {sl.doctorName}{sl.clinicName ? ` — ${sl.clinicName}` : ""}</p>}
                   {sl.letterPhotoUrl && (
-                    <a href={sl.letterPhotoUrl} target="_blank" rel="noopener noreferrer"
-                      className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700 hover:bg-blue-100 transition-colors">
+                    <button
+                      type="button"
+                      onClick={() => setLightboxUrl(sl.letterPhotoUrl!)}
+                      className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700 hover:bg-blue-100 transition-colors"
+                    >
                       <FileImage className="h-3 w-3" />
                       Lihat Foto Dokumen
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
+                    </button>
                   )}
                   {sl.reviewNote && (
                     <p className="mt-1 text-xs rounded-md bg-muted/50 px-2 py-1">
@@ -401,8 +429,9 @@ export function SickLeavePage() {
         </div>
       )}
 
-      {createOpen && <CreateForm onClose={() => setCreateOpen(false)} noLetterCount={noLetterCount} />}
-      {reviewing  && <ReviewDialog sl={reviewing} onClose={() => setReviewing(null)} />}
+      {createOpen    && <CreateForm onClose={() => setCreateOpen(false)} noLetterCount={noLetterCount} />}
+      {reviewing     && <ReviewDialog sl={reviewing} onClose={() => setReviewing(null)} onViewPhoto={setLightboxUrl} />}
+      {lightboxUrl   && <PhotoLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
     </div>
   );
 }
