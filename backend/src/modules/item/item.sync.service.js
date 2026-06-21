@@ -11,6 +11,7 @@ const {
   findActiveGlobalPrice,
   deactivatePriceById,
   createItemPrice,
+  findCategoryByAccurateId,
 } = require("./item.sync.repository");
 
 const ACCURATE_ITEM_LIST   = "/item/list.do";
@@ -20,7 +21,8 @@ const ACCURATE_ITEM_DETAIL = "/item/detail.do";
 const ACCURATE_FIELDS =
   "id,name,no,itemType,suspended," +
   "unit1,unit2,unit3,unit4,unit5," +
-  "ratio2,ratio3,ratio4,ratio5";
+  "ratio2,ratio3,ratio4,ratio5," +
+  "itemCategory";
 const ACCURATE_DETAIL_FIELDS = "detailSellingPrice";
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -180,7 +182,18 @@ const syncItemsFromAccurate = async () => {
           defaultUnitId = localUnit?.id ?? null;
         }
 
+        // Resolve categoryId — categories must be synced first via POST /item-categories/sync
+        let categoryId = null;
+        if (item.itemCategory?.id) {
+          const localCat = await findCategoryByAccurateId(parseInt(item.itemCategory.id, 10));
+          categoryId = localCat?.id ?? null;
+          if (!localCat) {
+            console.warn(`CATEGORY NOT FOUND (run /item-categories/sync first): id=${item.itemCategory.id} name=${item.itemCategory.name}`);
+          }
+        }
+
         const mapped = mapAccurateToItem(item, defaultUnitId);
+        if (categoryId) mapped.categoryId = categoryId;
 
         // Track active/inactive before any DB write so counts are honest
         // even if the write fails.

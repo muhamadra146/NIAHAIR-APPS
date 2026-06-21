@@ -319,4 +319,19 @@ const getBpjsReport = async ({ branchId, yearMonth }) => {
   return { data: rows, totals, period: { yearMonth, periodStart, periodEnd } };
 };
 
-module.exports = { getAll, getById, generate, recalculate, submitForApproval, approve, markAsPaid, updateNotes, getMy, getBpjsReport };
+const deletePayroll = async (id) => {
+  const payroll = await repo.findById(id);
+  if (!payroll) throw new AppError("Payroll not found", StatusCodes.NOT_FOUND);
+
+  if (payroll.status !== "DRAFT") {
+    throw new AppError(
+      "Hanya payroll dengan status Draft yang dapat dihapus",
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
+  await repo.remove(id);
+  return { deleted: true };
+};
+
+module.exports = { getAll, getById, generate, recalculate, submitForApproval, approve, markAsPaid, updateNotes, getMy, getBpjsReport, deletePayroll };

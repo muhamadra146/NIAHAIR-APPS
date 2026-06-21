@@ -89,7 +89,8 @@ export const sidebarNav: NavItem[] = [
     roles: POS_ROLES,
     group: "Operasional",
     children: [
-      { label: "Invoices", href: "/invoices", roles: POS_ROLES },
+      { label: "Invoices",            href: "/invoices",         roles: POS_ROLES },
+      { label: "Pembayaran Invoice",  href: "/invoice-payments", roles: POS_ROLES },
     ],
   },
   {

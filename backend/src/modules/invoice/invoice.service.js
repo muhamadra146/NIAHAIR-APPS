@@ -718,6 +718,14 @@ const deleteInvoice = async (id) => {
     throw new AppError("Invoice yang sudah lunas tidak dapat dihapus", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
+  const paymentCount = await prisma.payment.count({ where: { invoiceId: id } });
+  if (paymentCount > 0) {
+    throw new AppError(
+      "Hapus semua pembayaran invoice terlebih dahulu sebelum menghapus invoice ini",
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
   // Delete from Accurate first if it was synced
   if (invoice.accurateInvoiceId) {
     try {

@@ -1,5 +1,5 @@
 const { success, created } = require("../../common/responses/apiResponse");
-const { listPayments, getPaymentById, createPayment } = require("./payment.service");
+const { listPayments, getPaymentById, createPayment, deletePayment, getPaymentSummary } = require("./payment.service");
 
 const getAllController = async (req, res, next) => {
   try {
@@ -35,4 +35,22 @@ const createController = async (req, res, next) => {
   }
 };
 
-module.exports = { getAllController, getByIdController, createController };
+const deleteController = async (req, res, next) => {
+  try {
+    const result = await deletePayment(req.params.id, req.user.id);
+    return success(res, result, "Payment deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+const summaryController = async (req, res, next) => {
+  try {
+    const result = await getPaymentSummary(req.query);
+    return success(res, result, "Payment summary fetched");
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getAllController, getByIdController, createController, deleteController, summaryController };

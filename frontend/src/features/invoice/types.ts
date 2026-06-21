@@ -52,13 +52,20 @@ export interface InvoiceDeposit {
 export interface InvoicePayment {
   id:              string;
   invoiceId:       string;
+  paymentNo:       string;
   paymentMethodId: string;
   amount:          string;
   paymentDate:     string;
   referenceNo:     string | null;
   notes:           string | null;
+  branchId:        string | null;
   createdAt:       string;
-  paymentMethod?:  { id: string; name: string };
+  paymentMethod?:  { id: string; name: string; code: string };
+  invoice?:        {
+    id: string; invoiceNo: string; status: string; grandTotal: string;
+    customer?: { id: string; name: string; customerNo: string; mobilePhone: string | null };
+  };
+  branch?:         { id: string; code: string; name: string };
 }
 
 export interface Invoice {

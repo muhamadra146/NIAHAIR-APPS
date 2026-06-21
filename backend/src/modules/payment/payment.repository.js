@@ -1,7 +1,13 @@
-const prisma = require("../../config/prisma");
+const { Prisma } = require("@prisma/client");
+const prisma     = require("../../config/prisma");
 
 const INCLUDE = {
-  invoice:           { select: { id: true, invoiceNo: true, status: true, grandTotal: true } },
+  invoice: {
+    select: {
+      id: true, invoiceNo: true, status: true, grandTotal: true,
+      customer: { select: { id: true, name: true, customerNo: true, mobilePhone: true } },
+    },
+  },
   paymentMethod:     { select: { id: true, name: true, code: true } },
   branch:            { select: { id: true, code: true, name: true } },
   createdByEmployee: { select: { id: true, employeeCode: true, name: true } },
@@ -113,6 +119,56 @@ const findPaymentById = (id) =>
     },
   });
 
+// ── Invoice lookup for delete recalc ─────────────────────────────────
+
+const findInvoiceForDelete = (id) =>
+  prisma.invoice.findUnique({
+    where: { id },
+    select: {
+      id:                true,
+      status:            true,
+      paidAmount:        true,
+      outstandingAmount: true,
+      grandTotal:        true,
+      totalDeposit:      true,
+    },
+  });
+
+// ── Delete (atomic) ───────────────────────────────────────────────────
+
+const deleteWithTransaction = ({ payment, invoice, D, userId }) =>
+  prisma.$transaction(async (tx) => {
+    await tx.payment.delete({ where: { id: payment.id } });
+
+    const newPaidAmount   = D(invoice.paidAmount).sub(D(payment.amount));
+    const newOutstanding  = Prisma.Decimal.max(
+      D("0"),
+      D(invoice.grandTotal).sub(D(invoice.totalDeposit)).sub(newPaidAmount),
+    );
+    const newStatus = newOutstanding.lte(D("0")) ? "PAID" : "UNPAID";
+
+    await tx.invoice.update({
+      where: { id: invoice.id },
+      data:  {
+        paidAmount:        newPaidAmount,
+        outstandingAmount: newOutstanding,
+        status:            newStatus,
+      },
+    });
+
+    if (invoice.status !== newStatus) {
+      await tx.invoiceStatusHistory.create({
+        data: {
+          invoiceId: invoice.id,
+          oldStatus: invoice.status,
+          newStatus,
+          notes:     "Payment deleted",
+          createdBy: userId ?? null,
+        },
+      });
+    }
+  });
+
 // ── Create (atomic) ───────────────────────────────────────────────────
 
 const createWithTransaction = ({
@@ -158,6 +214,8 @@ module.exports = {
   findPaymentById,
   countToday,
   findInvoiceForPayment,
+  findInvoiceForDelete,
+  deleteWithTransaction,
   findPaymentMethodById,
   findInvoiceWithRelations,
   completeInvoiceRelations,

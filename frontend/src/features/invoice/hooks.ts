@@ -8,6 +8,7 @@ import {
   deleteInvoice,
   fetchPayments,
   addPayment,
+  deletePayment,
   applyDeposit,
   fetchDeposits,
   fetchDeposit,
@@ -25,6 +26,8 @@ import {
   fetchDepositPaymentSummary,
   resyncDeposit,
   resyncDepositPayment,
+  fetchAllInvoicePayments,
+  fetchInvoicePaymentSummary,
 } from "./api";
 import type {
   InvoiceListParams,
@@ -36,7 +39,7 @@ import type {
   UpdateDepositInput,
   CreateDepositPaymentInput,
 } from "./types";
-import type { DepositPaymentListParams } from "./api";
+import type { DepositPaymentListParams, InvoicePaymentListParams } from "./api";
 
 // ── Invoices ──────────────────────────────────────────────────────────────────
 
@@ -106,8 +109,9 @@ export function useAddPayment(invoiceId: string) {
   return useMutation({
     mutationFn: (input: AddPaymentInput) => addPayment(invoiceId, input),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["invoices", invoiceId] });
+      qc.invalidateQueries({ queryKey: ["invoices"] });
       qc.invalidateQueries({ queryKey: ["payments", invoiceId] });
+      qc.invalidateQueries({ queryKey: ["invoice-payments"] });
       toast.success("Pembayaran dicatat");
     },
     onError: (err: unknown) => {
@@ -120,12 +124,26 @@ export function useAddPayment(invoiceId: string) {
   });
 }
 
+export function useDeletePayment(invoiceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (paymentId: string) => deletePayment(paymentId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["invoice-payments"] });
+      qc.invalidateQueries({ queryKey: ["payments", invoiceId] });
+      toast.success("Pembayaran dihapus");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
 export function useApplyDeposit(invoiceId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: ApplyDepositInput) => applyDeposit(invoiceId, input),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["invoices", invoiceId] });
+      qc.invalidateQueries({ queryKey: ["invoices"] });
       qc.invalidateQueries({ queryKey: ["deposits"] });
       toast.success("Deposit diterapkan");
     },
@@ -302,6 +320,22 @@ export function useResyncDepositPayment() {
       else              toast.success("Sinkronisasi pembayaran dijadwalkan ulang");
     },
     onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useAllInvoicePayments(params: InvoicePaymentListParams = {}) {
+  return useQuery({
+    queryKey: ["invoice-payments", "all", params],
+    queryFn:  () => fetchAllInvoicePayments(params),
+  });
+}
+
+export function useInvoicePaymentSummary(
+  params: { startDate?: string; endDate?: string; paymentMethodId?: string; branchId?: string } = {},
+) {
+  return useQuery({
+    queryKey: ["invoice-payments", "summary", params],
+    queryFn:  () => fetchInvoicePaymentSummary(params),
   });
 }
 

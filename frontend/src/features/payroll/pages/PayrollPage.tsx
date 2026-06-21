@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   ChevronLeft, Plus, RefreshCw, CheckCircle2, Send, Banknote,
-  AlertCircle, Clock, XCircle,
+  AlertCircle, Clock, XCircle, Trash2,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button }        from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { useAllBranches } from "@/features/settings/hooks";
 import {
   usePayrolls, useGeneratePayroll,
   useRecalculatePayroll, useSubmitPayroll, useApprovePayroll, useMarkPayrollAsPaid,
+  useDeletePayroll,
 } from "../hooks";
 import { toast } from "@/lib/toast";
 import type { Payroll, PayrollStatus, PayrollItem, GeneratePayrollInput } from "../types";
@@ -52,6 +53,8 @@ function StatusBadge({ status }: { status: PayrollStatus }) {
     </Badge>
   );
 }
+
+const CAN_DELETE: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
 
 const filterInputCls =
   "rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md focus-visible:shadow-md focus-visible:ring-ring/30";
@@ -208,12 +211,16 @@ function ItemTable({ items, type }: { items: PayrollItem[]; type: "INCOME" | "DE
 // ── Payroll Detail Panel ──────────────────────────────────────────────────────
 
 function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => void }) {
+  const { user } = useAuthStore();
   const recalcMut  = useRecalculatePayroll(payroll.id);
   const submitMut  = useSubmitPayroll(payroll.id);
   const approveMut = useApprovePayroll(payroll.id);
   const paidMut    = useMarkPayrollAsPaid(payroll.id);
+  const deleteMut  = useDeletePayroll();
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const isActing = recalcMut.isPending || submitMut.isPending || approveMut.isPending || paidMut.isPending;
+  const canDelete = user ? CAN_DELETE.includes(user.roleCode) : false;
+  const isActing = recalcMut.isPending || submitMut.isPending || approveMut.isPending || paidMut.isPending || deleteMut.isPending;
 
   const handle = async (action: () => Promise<unknown>, msg: string) => {
     try { await action(); toast.success(msg); }
@@ -245,6 +252,11 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
               <Button size="sm" className="rounded-lg" onClick={() => handle(submitMut.mutateAsync, "Dikirim untuk approval")} disabled={isActing}>
                 <Send className="h-3 w-3 mr-1" /> Submit Approval
               </Button>
+              {canDelete && (
+                <Button size="sm" variant="destructive" className="rounded-lg" onClick={() => setDeleteOpen(true)} disabled={isActing}>
+                  <Trash2 className="h-3 w-3 mr-1" /> Hapus
+                </Button>
+              )}
             </>
           )}
           {payroll.status === "PENDING_APPROVAL" && (
@@ -309,6 +321,36 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
         </CardContent>
       </Card>
 
+      {/* Delete confirm dialog */}
+      <Dialog open={deleteOpen} onOpenChange={(v) => { if (!v) setDeleteOpen(false); }}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-xl sm:rounded-lg">
+          <DialogHeader><DialogTitle>Hapus Payroll</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            Yakin ingin menghapus payroll <span className="font-medium text-foreground">{payroll.employee.name}</span> periode <span className="font-medium text-foreground">{fmtPeriod(payroll.periodStart)}</span>? Tindakan ini tidak dapat dibatalkan.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} className="flex-1 sm:flex-none">Batal</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMut.isPending}
+              className="flex-1 sm:flex-none"
+              onClick={async () => {
+                try {
+                  await deleteMut.mutateAsync(payroll.id);
+                  toast.success("Payroll dihapus");
+                  setDeleteOpen(false);
+                  onBack();
+                } catch (e: any) {
+                  toast.error(e?.response?.data?.message ?? "Gagal menghapus payroll");
+                }
+              }}
+            >
+              {deleteMut.isPending ? "Menghapus…" : "Hapus"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {payroll.approvedAt && (
         <p className="text-xs text-slate-400">
           Disetujui: {fmtDate(payroll.approvedAt)}
@@ -328,11 +370,15 @@ const currentMonth = () => {
 };
 
 export function PayrollPage() {
-  const { branchId } = useAuthStore();
+  const { branchId, user } = useAuthStore();
   const [genOpen, setGenOpen]           = useState(false);
   const [selectedPayroll, setSelected]  = useState<Payroll | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Payroll | null>(null);
   const [yearMonth, setYearMonth]       = useState(currentMonth());
   const [statusFilter, setStatus]       = useState<PayrollStatus | "">("");
+
+  const canDelete = user ? CAN_DELETE.includes(user.roleCode) : false;
+  const deleteMut = useDeletePayroll();
 
   const { data, isLoading } = usePayrolls({
     branchId:   branchId ?? undefined,
@@ -434,6 +480,17 @@ export function PayrollPage() {
                       <p className="font-bold tabular-nums text-primary">{fmtRp(p.netSalary)}</p>
                     </div>
                   </div>
+
+                  {canDelete && p.status === "DRAFT" && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }}
+                      className="inline-flex items-center justify-center rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+                      title="Hapus payroll"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </CardContent>
               </Card>
             ))
@@ -442,6 +499,39 @@ export function PayrollPage() {
       </div>
 
       <GenerateDialog open={genOpen} onClose={() => setGenOpen(false)} />
+
+      {/* Delete confirm dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-xl sm:rounded-lg">
+          <DialogHeader><DialogTitle>Hapus Payroll</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            Yakin ingin menghapus payroll{" "}
+            <span className="font-medium text-foreground">{deleteTarget?.employee.name}</span>{" "}
+            periode <span className="font-medium text-foreground">{deleteTarget ? fmtPeriod(deleteTarget.periodStart) : ""}</span>?{" "}
+            Tindakan ini tidak dapat dibatalkan.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} className="flex-1 sm:flex-none">Batal</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMut.isPending}
+              className="flex-1 sm:flex-none"
+              onClick={async () => {
+                if (!deleteTarget) return;
+                try {
+                  await deleteMut.mutateAsync(deleteTarget.id);
+                  toast.success("Payroll dihapus");
+                  setDeleteTarget(null);
+                } catch (e: any) {
+                  toast.error(e?.response?.data?.message ?? "Gagal menghapus payroll");
+                }
+              }}
+            >
+              {deleteMut.isPending ? "Menghapus…" : "Hapus"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }

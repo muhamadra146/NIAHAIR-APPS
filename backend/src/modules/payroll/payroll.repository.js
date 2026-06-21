@@ -157,8 +157,14 @@ const findBpjsData = ({ branchId, periodStart, periodEnd }) =>
     orderBy: { employee: { name: "asc" } },
   });
 
+const remove = (id) =>
+  prisma.$transaction([
+    prisma.payrollItem.deleteMany({ where: { payrollId: id } }),
+    prisma.payroll.delete({ where: { id } }),
+  ]);
+
 module.exports = {
   findAll, count, findById, findByEmployeeAndPeriod,
   create, update, replaceAutoItems, getGenerationData,
-  findByEmployee, countByEmployee, findBpjsData,
+  findByEmployee, countByEmployee, findBpjsData, remove,
 };

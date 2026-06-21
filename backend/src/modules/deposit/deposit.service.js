@@ -189,6 +189,14 @@ const deleteDeposit = async (id) => {
     );
   }
 
+  const dpCount = await prisma.depositPayment.count({ where: { depositId: id } });
+  if (dpCount > 0) {
+    throw new AppError(
+      "Hapus semua pembayaran deposit terlebih dahulu sebelum menghapus deposit ini",
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
   if (deposit.accurateDepositId) {
     await deleteDepositFromAccurate(deposit.accurateDepositId);
   }

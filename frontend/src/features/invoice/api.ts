@@ -183,6 +183,46 @@ export async function createDepositPayment(
   return data.data;
 }
 
+export async function deletePayment(id: string): Promise<void> {
+  await api.delete(`/payments/${id}`);
+}
+
+// ── All invoice payments (global list + summary) ─────────────────────────────
+
+export interface InvoicePaymentListParams {
+  page?:            number;
+  limit?:           number;
+  invoiceId?:       string;
+  paymentMethodId?: string;
+  branchId?:        string;
+  startDate?:       string;
+  endDate?:         string;
+}
+
+export interface InvoicePaymentListData {
+  data: InvoicePayment[];
+  meta: PaginatedResponse<InvoicePayment>["meta"];
+}
+
+export interface InvoicePaymentSummary {
+  today:  { count: number; total: string };
+  period: { count: number; total: string };
+}
+
+export async function fetchAllInvoicePayments(
+  params: InvoicePaymentListParams = {},
+): Promise<InvoicePaymentListData> {
+  const { data } = await api.get<ApiResponse<InvoicePaymentListData>>("/payments", { params });
+  return data.data;
+}
+
+export async function fetchInvoicePaymentSummary(
+  params: { startDate?: string; endDate?: string; paymentMethodId?: string; branchId?: string } = {},
+): Promise<InvoicePaymentSummary> {
+  const { data } = await api.get<ApiResponse<InvoicePaymentSummary>>("/payments/summary", { params });
+  return data.data;
+}
+
 // ── Deposit / payment summary & resync ───────────────────────────────────────
 
 export interface DepositSummary {

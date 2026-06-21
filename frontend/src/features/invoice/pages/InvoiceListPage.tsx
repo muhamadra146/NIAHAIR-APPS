@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Plus, Eye, Search, CreditCard, Receipt,
-  TrendingUp, Clock, CheckCircle2, ChevronDown, ChevronUp,
+  TrendingUp, Clock, CheckCircle2, ChevronDown, ChevronUp, Trash2,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -11,11 +11,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAuthStore } from "@/stores/authStore";
 import { formatDate, formatCurrency, cn } from "@/lib/utils";
-import { useInvoices } from "../hooks";
+import { useInvoices, useDeleteInvoice } from "../hooks";
 import { CreateInvoiceDialog } from "../components/CreateInvoiceDialog";
 import type { Invoice, InvoiceStatus } from "../types";
+
+const CAN_DELETE: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
 
 // ── Shared ────────────────────────────────────────────────────────────────────
 
@@ -325,12 +328,16 @@ function KasirPOSView() {
 // ── Management Table View ─────────────────────────────────────────────────────
 
 function ManagementView() {
-  const { branchId } = useAuthStore();
-  const [page, setPage]         = useState(1);
-  const [status, setStatus]     = useState<InvoiceStatus | "">("");
-  const [startDate, setStart]   = useState("");
-  const [endDate, setEnd]       = useState("");
-  const [formOpen, setFormOpen] = useState(false);
+  const { branchId, user } = useAuthStore();
+  const [page, setPage]               = useState(1);
+  const [status, setStatus]           = useState<InvoiceStatus | "">("");
+  const [startDate, setStart]         = useState("");
+  const [endDate, setEnd]             = useState("");
+  const [formOpen, setFormOpen]       = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null);
+
+  const deleteMutation = useDeleteInvoice(deleteTarget?.id ?? "");
+  const canDelete = user ? CAN_DELETE.includes(user.roleCode) : false;
 
   const { data, isLoading } = useInvoices({
     page, limit: 20,
@@ -422,9 +429,20 @@ function ManagementView() {
                       <div className="flex shrink-0 flex-col items-end gap-1.5">
                         <InvoiceStatusBadge status={inv.status} />
                         <p className="text-xs font-semibold text-slate-800">{formatCurrency(inv.grandTotal)}</p>
-                        <Button variant="outline" size="sm" className="h-7 rounded-lg px-2 text-xs" asChild>
-                          <Link to={`/invoices/${inv.id}`}><Eye className="mr-1 h-3 w-3" />Detail</Link>
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button variant="outline" size="sm" className="h-7 rounded-lg px-2 text-xs" asChild>
+                            <Link to={`/invoices/${inv.id}`}><Eye className="mr-1 h-3 w-3" />Detail</Link>
+                          </Button>
+                          {canDelete && inv.status !== "PAID" && (
+                            <Button
+                              variant="ghost" size="sm"
+                              className="h-7 rounded-lg px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => setDeleteTarget(inv)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -441,6 +459,7 @@ function ManagementView() {
                         <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Total</th>
                         <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Sisa Bayar</th>
                         <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
+                        <th className="px-5 py-3" />
                         <th className="px-5 py-3" />
                       </tr>
                     </thead>
@@ -464,6 +483,18 @@ function ManagementView() {
                             <Button variant="ghost" size="icon" className="rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100" asChild>
                               <Link to={`/invoices/${inv.id}`}><Eye className="h-4 w-4" /></Link>
                             </Button>
+                          </td>
+                          <td className="px-5 py-4">
+                            {canDelete && inv.status !== "PAID" && (
+                              <Button
+                                variant="ghost" size="icon"
+                                className="rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => setDeleteTarget(inv)}
+                                title="Hapus invoice"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -492,6 +523,34 @@ function ManagementView() {
         onOpenChange={setFormOpen}
         branchId={branchId ?? ""}
       />
+
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-xl sm:rounded-lg">
+          <DialogHeader><DialogTitle>Hapus Invoice?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            Invoice{" "}
+            <span className="font-mono font-medium text-foreground">{deleteTarget?.invoiceNo}</span>
+            {" "}atas nama{" "}
+            <span className="font-medium text-foreground">{deleteTarget?.customer?.name}</span>
+            {" "}akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} className="flex-1 sm:flex-none">Batal</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              className="flex-1 sm:flex-none"
+              onClick={async () => {
+                if (!deleteTarget) return;
+                await deleteMutation.mutateAsync();
+                setDeleteTarget(null);
+              }}
+            >
+              {deleteMutation.isPending ? "Menghapus…" : "Ya, Hapus"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }

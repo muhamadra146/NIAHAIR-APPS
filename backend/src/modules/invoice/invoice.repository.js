@@ -1,7 +1,7 @@
 const prisma = require("../../config/prisma");
 
 const INCLUDE = {
-  customer:          { select: { id: true, name: true, customerNo: true } },
+  customer:          { select: { id: true, name: true, customerNo: true, mobilePhone: true } },
   branch:            { select: { id: true, code: true, name: true } },
   createdByEmployee: { select: { id: true, employeeCode: true, name: true } },
   items: {
@@ -284,10 +284,10 @@ const deleteWithTransaction = (invoiceId) =>
       await tx.treatmentSession.deleteMany({ where: { id: { in: sessionIds } } });
     }
 
+    await tx.commission.deleteMany({ where: { invoiceId } });
     await tx.invoiceDeposit.deleteMany({ where: { invoiceId } });
     await tx.invoiceStatusHistory.deleteMany({ where: { invoiceId } });
     await tx.payment.deleteMany({ where: { invoiceId } });
-    await tx.commission.deleteMany({ where: { invoiceId } });
     await tx.invoiceItem.deleteMany({ where: { invoiceId } });
     await tx.invoice.delete({ where: { id: invoiceId } });
   });

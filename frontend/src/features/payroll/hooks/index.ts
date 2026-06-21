@@ -3,7 +3,7 @@ import {
   fetchPayrolls, fetchPayroll,
   generatePayroll, recalculatePayroll,
   submitPayroll, approvePayroll, markPayrollAsPaid,
-  fetchMyPayrolls, fetchBpjsReport,
+  fetchMyPayrolls, fetchBpjsReport, deletePayroll,
 } from "../api/payroll.api";
 import type { PayrollListParams, GeneratePayrollInput, BpjsReportParams } from "../types";
 
@@ -57,6 +57,14 @@ export const useMarkPayrollAsPaid = (id: string) => {
   return useMutation({
     mutationFn: () => markPayrollAsPaid(id),
     onSuccess:  () => invalidate(qc, id),
+  });
+};
+
+export const useDeletePayroll = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deletePayroll(id),
+    onSuccess:  () => invalidate(qc),
   });
 };
 

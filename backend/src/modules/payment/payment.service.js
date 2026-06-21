@@ -2,8 +2,10 @@ const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const prisma          = require("../../config/prisma");
 const { handleInvoicePaid } = require("../invoice/invoice.workflow");
-const { createSyncJob }    = require("../syncQueue/syncQueue.service");
+const { createSyncJob }            = require("../syncQueue/syncQueue.service");
+const { deletePaymentFromAccurate } = require("./payment.sync.service");
 const {
   findAll,
   count,
@@ -11,8 +13,10 @@ const {
   findPaymentById,
   countToday,
   findInvoiceForPayment,
+  findInvoiceForDelete,
   findPaymentMethodById,
   createWithTransaction,
+  deleteWithTransaction,
 } = require("./payment.repository");
 
 const D = (v) => new Prisma.Decimal(String(v));
@@ -31,17 +35,18 @@ const buildPaymentNo = async () => {
 
 // ── List ──────────────────────────────────────────────────────────────
 
-const listPayments = async ({ page, limit, invoiceId, paymentMethodId, startDate, endDate }) => {
+const listPayments = async ({ page, limit, invoiceId, paymentMethodId, branchId, startDate, endDate }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
   if (invoiceId)       where.invoiceId       = invoiceId;
   if (paymentMethodId) where.paymentMethodId = paymentMethodId;
+  if (branchId)        where.branchId        = branchId;
 
   if (startDate || endDate) {
-    where.createdAt = {};
-    if (startDate) where.createdAt.gte = new Date(startDate);
-    if (endDate)   where.createdAt.lte = new Date(endDate);
+    where.paymentDate = {};
+    if (startDate) where.paymentDate.gte = new Date(startDate);
+    if (endDate)   where.paymentDate.lte = new Date(endDate + "T23:59:59");
   }
 
   const [data, total] = await Promise.all([
@@ -50,6 +55,52 @@ const listPayments = async ({ page, limit, invoiceId, paymentMethodId, startDate
   ]);
 
   return { data, meta: paginationMeta(total, pageNum, limitNum) };
+};
+
+// ── Delete ────────────────────────────────────────────────────────────
+
+const deletePayment = async (id, userId) => {
+  const payment = await findById(id);
+  if (!payment) throw new AppError("Payment not found", StatusCodes.NOT_FOUND);
+
+  const invoice = await findInvoiceForDelete(payment.invoiceId);
+  if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+
+  if (payment.accurateReceiptId) {
+    await deletePaymentFromAccurate(payment.accurateReceiptId);
+  }
+
+  await deleteWithTransaction({ payment, invoice, D, userId });
+  return { deleted: true };
+};
+
+// ── Summary ───────────────────────────────────────────────────────────
+
+const getPaymentSummary = async ({ startDate, endDate, paymentMethodId, branchId } = {}) => {
+  const today    = new Date(); today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const baseWhere = {};
+  if (paymentMethodId) baseWhere.paymentMethodId = paymentMethodId;
+  if (branchId)        baseWhere.branchId        = branchId;
+
+  const todayWhere  = { ...baseWhere, paymentDate: { gte: today, lt: tomorrow } };
+  const periodWhere = { ...baseWhere };
+  if (startDate || endDate) {
+    periodWhere.paymentDate = {};
+    if (startDate) periodWhere.paymentDate.gte = new Date(startDate);
+    if (endDate)   periodWhere.paymentDate.lte = new Date(endDate + "T23:59:59");
+  }
+
+  const [todayAgg, periodAgg] = await Promise.all([
+    prisma.payment.aggregate({ where: todayWhere,  _count: { id: true }, _sum: { amount: true } }),
+    prisma.payment.aggregate({ where: periodWhere, _count: { id: true }, _sum: { amount: true } }),
+  ]);
+
+  return {
+    today:  { count: todayAgg._count.id,  total: String(todayAgg._sum.amount  ?? 0) },
+    period: { count: periodAgg._count.id, total: String(periodAgg._sum.amount ?? 0) },
+  };
 };
 
 // ── Single ────────────────────────────────────────────────────────────
@@ -143,4 +194,4 @@ const createPayment = async (
   return findPaymentById(payment.id);
 };
 
-module.exports = { listPayments, getPaymentById, createPayment };
+module.exports = { listPayments, getPaymentById, createPayment, deletePayment, getPaymentSummary };

@@ -74,8 +74,15 @@ const getBpjsReportController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const deleteController = async (req, res, next) => {
+  try {
+    const result = await svc.deletePayroll(req.params.id);
+    return success(res, result, "Payroll dihapus");
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   getAllController, getByIdController, generateController, recalculateController,
   submitController, approveController, markAsPaidController, updateNotesController,
-  getMyController, getBpjsReportController,
+  getMyController, getBpjsReportController, deleteController,
 };

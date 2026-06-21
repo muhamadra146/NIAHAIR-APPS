@@ -26,6 +26,6 @@ export interface SyncQueueListParams {
   direction?:  SyncDirection | "";
 }
 
-export type MasterSyncEntity = "CUSTOMER" | "ITEM" | "UNIT" | "WAREHOUSE" | "INVENTORY";
+export type MasterSyncEntity = "CUSTOMER" | "ITEM" | "UNIT" | "WAREHOUSE" | "INVENTORY" | "ITEM_CATEGORY";
 export type SyncState        = "idle" | "loading" | "success" | "error";
 export type SyncResult       = Record<string, number | string>;

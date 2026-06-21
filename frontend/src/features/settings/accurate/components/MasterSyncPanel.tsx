@@ -18,6 +18,11 @@ const SYNC_CARDS: SyncCardDef[] = [
     description: "Pull all active customers from Accurate Online into the app.",
   },
   {
+    entity:      "ITEM_CATEGORY",
+    title:       "Item Category Sync",
+    description: "Pull item categories from Accurate Online. Sync this before Item Sync.",
+  },
+  {
     entity:      "ITEM",
     title:       "Item Sync",
     description: "Sync products and service items from Accurate Online.",

@@ -2,7 +2,8 @@ const { accurateRequest }   = require("../accurate/accurate.client");
 const { findPaymentForSync, markPaymentSynced } = require("./payment.sync.repository");
 const { mapPaymentToAccurate }                  = require("./payment.sync.mapper");
 
-const ACCURATE_RECEIPT_SAVE = "/sales-receipt/save.do";
+const ACCURATE_RECEIPT_SAVE   = "/sales-receipt/save.do";
+const ACCURATE_RECEIPT_DELETE = "/sales-receipt/delete.do";
 
 const syncPaymentToAccurate = async (paymentId) => {
   console.log(`[payment sync] start paymentId=${paymentId}`);
@@ -67,4 +68,21 @@ const syncPaymentToAccurate = async (paymentId) => {
   return { synced: true, accurateReceiptId, accurateReceiptNumber };
 };
 
-module.exports = { syncPaymentToAccurate };
+const deletePaymentFromAccurate = async (accurateReceiptId) => {
+  console.log(`[payment sync] delete from Accurate accurateReceiptId=${accurateReceiptId}`);
+  try {
+    const response = await accurateRequest(ACCURATE_RECEIPT_DELETE, {
+      method: "POST",
+      body:   { id: accurateReceiptId },
+    });
+    if (!response.s) {
+      console.warn(`[payment sync] Accurate delete failed (ignored): ${JSON.stringify(response)}`);
+    } else {
+      console.log(`[payment sync] deleted from Accurate accurateReceiptId=${accurateReceiptId}`);
+    }
+  } catch (err) {
+    console.warn(`[payment sync] Accurate delete error (ignored): ${err.message}`);
+  }
+};
+
+module.exports = { syncPaymentToAccurate, deletePaymentFromAccurate };

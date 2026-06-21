@@ -9,14 +9,23 @@ const {
   getAllController,
   getByIdController,
   createController,
+  deleteController,
+  summaryController,
 } = require("./payment.controller");
 
 // mergeParams: true — inherits :invoiceId when mounted at
 // app.use("/invoices/:invoiceId/payments", router)
 const router = Router({ mergeParams: true });
 
-router.get("/",    authenticate, getAllController);
-router.get("/:id", authenticate, getByIdController);
+router.get("/summary",    authenticate, summaryController);
+router.get("/",           authenticate, getAllController);
+router.get("/:id",        authenticate, getByIdController);
+router.delete(
+  "/:id",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER),
+  deleteController,
+);
 
 router.post(
   "/",

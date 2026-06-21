@@ -7,7 +7,7 @@ const { generateSchema, updateNotesSchema } = require("./payroll.validation");
 const {
   getAllController, getByIdController, generateController, recalculateController,
   submitController, approveController, markAsPaidController, updateNotesController,
-  getMyController, getBpjsReportController,
+  getMyController, getBpjsReportController, deleteController,
 } = require("./payroll.controller");
 
 const router = Router();
@@ -44,6 +44,10 @@ router.post("/:id/mark-paid",
 
 router.patch("/:id/notes",
   authenticate, authorize(...ALL_ADMIN), validate(updateNotesSchema), updateNotesController,
+);
+
+router.delete("/:id",
+  authenticate, authorize(...APPROVERS), deleteController,
 );
 
 module.exports = router;
