@@ -13,8 +13,9 @@ import type { UserRole } from "@/types/auth";
 function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   const { pathname }     = useLocation();
   const { closeSidebar } = useLayout();
+  const hasChildren = (item.children?.length ?? 0) > 0;
   const active = pathname === item.href
-    || pathname.startsWith(item.href + "/")
+    || (hasChildren && pathname.startsWith(item.href + "/"))
     || (item.children?.some((c) => pathname === c.href || pathname.startsWith(c.href + "/")) ?? false);
   const Icon = item.icon;
 

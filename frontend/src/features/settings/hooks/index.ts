@@ -25,6 +25,7 @@ import {
   fetchMemberships, fetchAllMemberships, createMembership, updateMembership, deleteMembership,
   fetchCustomerMembership, assignMembership, cancelCustomerMembership,
 } from "../api/membership.api";
+import { fetchHolidays, createHoliday, updateHoliday, deleteHoliday } from "../api/holiday.api";
 import type {
   EmployeeListParams, EmployeeRoleListParams, UserListParams, BranchListParams,
   PaymentMethodListParams, CashAccountListParams, WarehouseListParams,
@@ -41,6 +42,7 @@ import type {
   CreateLeaveTypeInput, UpdateLeaveTypeInput,
   AssignQuotaInput, LeaveQuotaParams,
   CreateMembershipInput, UpdateMembershipInput, MembershipListParams,
+  CreateHolidayInput, UpdateHolidayInput,
 } from "../types";
 
 // ── Employees ─────────────────────────────────────────────────────────
@@ -479,5 +481,33 @@ export const useCancelCustomerMembership = (customerId: string) => {
       qc.invalidateQueries({ queryKey: ["memberships", "customer", customerId] });
       qc.invalidateQueries({ queryKey: ["customers"] });
     },
+  });
+};
+
+// ── Holidays ──────────────────────────────────────────────────────────
+export const useHolidays = (year?: number) =>
+  useQuery({ queryKey: ["holidays", year], queryFn: () => fetchHolidays(year) });
+
+export const useCreateHoliday = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateHolidayInput) => createHoliday(input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["holidays"] }); },
+  });
+};
+
+export const useUpdateHoliday = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateHolidayInput) => updateHoliday(id, input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["holidays"] }); },
+  });
+};
+
+export const useDeleteHoliday = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteHoliday(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["holidays"] }); },
   });
 };

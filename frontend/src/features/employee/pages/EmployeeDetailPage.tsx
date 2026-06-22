@@ -61,6 +61,7 @@ export function EmployeeDetailPage() {
         nikKtp:            values.nikKtp           || undefined,
         resignDate:        values.resignDate        || undefined,
         commissionEnabled: values.commissionEnabled,
+        payDay:            values.payDay ?? null,
         isActive:          values.isActive,
         homeBranchId:      values.homeBranchId     || null,
         ktpFile:           files.ktpFile           ?? undefined,
@@ -76,41 +77,33 @@ export function EmployeeDetailPage() {
   async function handleSalarySave(values: SalarySettingFormValues) {
     setSsError(null);
     try {
+      const shared = {
+        baseSalary:                   values.baseSalary,
+        mealAllowancePerDay:          values.mealAllowancePerDay,
+        tunjangan:                    values.tunjangan,
+        transportAllowance:           values.transportAllowance,
+        overtimeRatePerHour:          values.overtimeRatePerHour,
+        holidayRatePerDay:            values.holidayRatePerDay,
+        lateDeductionBracket1:        values.lateDeductionBracket1,
+        lateDeductionBracket2:        values.lateDeductionBracket2,
+        lateDeductionBracket3:        values.lateDeductionBracket3,
+        absentDeductionPerDay:        values.absentDeductionPerDay,
+        earlyLeaveDeductionPerMinute: values.earlyLeaveDeductionPerMinute,
+        bpjsJhtPercent:               values.bpjsJhtPercent,
+        bpjsJhtEmployerPercent:       values.bpjsJhtEmployerPercent,
+        bpjsJpPercent:                values.bpjsJpPercent,
+        bpjsJpEmployerPercent:        values.bpjsJpEmployerPercent,
+        bpjsKesehatanEmployeePercent: values.bpjsKesehatanEmployeePercent,
+        bpjsKesehatanEmployerPercent: values.bpjsKesehatanEmployerPercent,
+        effectiveDate:                values.effectiveDate,
+        endDate:                      values.endDate || undefined,
+        isActive:                     values.isActive,
+        notes:                        values.notes || undefined,
+      };
       if (editSs) {
-        await updateSsMutation.mutateAsync({
-          baseSalary:                   values.baseSalary,
-          mealAllowancePerDay:          values.mealAllowancePerDay,
-          transportAllowance:           values.transportAllowance,
-          overtimeRatePerHour:          values.overtimeRatePerHour,
-          holidayOvertimeRate:          values.holidayOvertimeRate,
-          lateDeductionPerMinute:       values.lateDeductionPerMinute,
-          absentDeductionPerDay:        values.absentDeductionPerDay,
-          earlyLeaveDeductionPerMinute: values.earlyLeaveDeductionPerMinute,
-          bpjsJhtPercent:               values.bpjsJhtPercent,
-          bpjsJpPercent:                values.bpjsJpPercent,
-          effectiveDate:                values.effectiveDate,
-          endDate:                      values.endDate || undefined,
-          isActive:                     values.isActive,
-          notes:                        values.notes || undefined,
-        });
+        await updateSsMutation.mutateAsync(shared);
       } else {
-        await createSsMutation.mutateAsync({
-          employeeId:                   id!,
-          baseSalary:                   values.baseSalary,
-          mealAllowancePerDay:          values.mealAllowancePerDay,
-          transportAllowance:           values.transportAllowance,
-          overtimeRatePerHour:          values.overtimeRatePerHour,
-          holidayOvertimeRate:          values.holidayOvertimeRate,
-          lateDeductionPerMinute:       values.lateDeductionPerMinute,
-          absentDeductionPerDay:        values.absentDeductionPerDay,
-          earlyLeaveDeductionPerMinute: values.earlyLeaveDeductionPerMinute,
-          bpjsJhtPercent:               values.bpjsJhtPercent,
-          bpjsJpPercent:                values.bpjsJpPercent,
-          effectiveDate:                values.effectiveDate,
-          endDate:                      values.endDate || undefined,
-          isActive:                     values.isActive,
-          notes:                        values.notes || undefined,
-        });
+        await createSsMutation.mutateAsync({ employeeId: id!, ...shared });
       }
       setSsOpen(false);
       setEditSs(null);
@@ -194,6 +187,7 @@ export function EmployeeDetailPage() {
                 <Row label="Alamat"          value={employee.address} />
                 <Row label="Kontak Darurat"  value={employee.emergencyContact} />
                 <Row label="Komisi"          value={employee.commissionEnabled ? "Aktif" : "Nonaktif"} />
+                <Row label="Tanggal Gajian" value={employee.payDay ? `Tanggal ${employee.payDay}` : null} />
                 <Row
                   label="Foto KTP"
                   value={employee.ktpFileUrl
@@ -301,13 +295,16 @@ function SalarySettingCard({ setting, onEdit }: { setting: SalarySetting; onEdit
         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3 text-xs">
           <SalRow label="Gaji Pokok"        value={formatCurrency(setting.baseSalary)} />
           <SalRow label="Uang Makan/Hari"   value={formatCurrency(setting.mealAllowancePerDay)} />
+          <SalRow label="Tunjangan"         value={formatCurrency(setting.tunjangan ?? "0")} />
           <SalRow label="Transport"         value={formatCurrency(setting.transportAllowance)} />
-          <SalRow label="Lembur/Jam"        value={formatCurrency(setting.overtimeRatePerHour)} />
-          <SalRow label="Potongan Absen"    value={formatCurrency(setting.absentDeductionPerDay)} />
-          <SalRow label="Pot. Terlambat"    value={`${formatCurrency(setting.lateDeductionPerMinute)}/mnt`} />
-          <SalRow label="Pot. Pulang Cepat" value={`${formatCurrency(setting.earlyLeaveDeductionPerMinute)}/mnt`} />
-          <SalRow label="BPJS JHT"          value={`${setting.bpjsJhtPercent}%`} />
-          <SalRow label="BPJS JP"           value={`${setting.bpjsJpPercent}%`} />
+          <SalRow label="Lembur/Jam"          value={formatCurrency(setting.overtimeRatePerHour)} />
+          <SalRow label="Potongan Absen"      value={formatCurrency(setting.absentDeductionPerDay)} />
+          <SalRow label="Terlambat 1–30 mnt"  value={formatCurrency(setting.lateDeductionBracket1 ?? 25000)} />
+          <SalRow label="Terlambat 31–60 mnt" value={formatCurrency(setting.lateDeductionBracket2 ?? 50000)} />
+          <SalRow label="Terlambat 61+ mnt"   value={formatCurrency(setting.lateDeductionBracket3 ?? 75000)} />
+          <SalRow label="Pot. Pulang Cepat"   value={`${formatCurrency(setting.earlyLeaveDeductionPerMinute)}/mnt`} />
+          <SalRow label="JHT Kar/Per"         value={`${setting.bpjsJhtPercent}% / ${setting.bpjsJhtEmployerPercent ?? 3.7}%`} />
+          <SalRow label="JP Kar/Per"          value={`${setting.bpjsJpPercent}% / ${setting.bpjsJpEmployerPercent ?? 2}%`} />
         </div>
         {setting.notes && (
           <p className="mt-2 text-xs text-muted-foreground italic">{setting.notes}</p>

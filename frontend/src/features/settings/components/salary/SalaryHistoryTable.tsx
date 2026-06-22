@@ -53,9 +53,10 @@ export function SalaryHistoryTable({ settings, onEdit }: Props) {
 
           <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-3">
             <Row label="Uang Makan/hari"        value={Rp(Number(s.mealAllowancePerDay))} />
+            <Row label="Tunjangan/bulan"         value={Rp(Number(s.tunjangan ?? 0))} />
             <Row label="Transport/bulan"         value={Rp(Number(s.transportAllowance))} />
             <Row label="Lembur/jam"              value={Rp(Number(s.overtimeRatePerHour))} />
-            <Row label="Lembur libur/jam"        value={Rp(Number(s.holidayOvertimeRate))} />
+            <Row label="Kerja hari libur/hari"    value={Rp(Number(s.holidayRatePerDay))} />
             <Row label="Potong terlambat 1–30mnt" value={Rp(Number(s.lateDeductionBracket1 ?? 0))} />
             <Row label="Potong terlambat 31–60mnt" value={Rp(Number(s.lateDeductionBracket2 ?? 0))} />
             <Row label="Potong terlambat 61+mnt"  value={Rp(Number(s.lateDeductionBracket3 ?? 0))} />

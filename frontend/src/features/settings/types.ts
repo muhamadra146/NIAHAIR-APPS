@@ -123,9 +123,10 @@ export interface SalarySetting {
   employeeId:                      string;
   baseSalary:                      number;
   mealAllowancePerDay:             number;
+  tunjangan:                       number;
   transportAllowance:              number;
   overtimeRatePerHour:             number;
-  holidayOvertimeRate:             number;
+  holidayRatePerDay:               number;
   lateDeductionPerMinute:          number;
   lateDeductionBracket1:           number;
   lateDeductionBracket2:           number;
@@ -133,7 +134,9 @@ export interface SalarySetting {
   absentDeductionPerDay:           number;
   earlyLeaveDeductionPerMinute:    number;
   bpjsJhtPercent:                  number;
+  bpjsJhtEmployerPercent:          number;
   bpjsJpPercent:                   number;
+  bpjsJpEmployerPercent:           number;
   bpjsKesehatanEmployeePercent:    number;
   bpjsKesehatanEmployerPercent:    number;
   effectiveDate:                   string;
@@ -148,9 +151,10 @@ export interface CreateSalaryInput {
   employeeId:                      string;
   baseSalary:                      number;
   mealAllowancePerDay?:            number;
+  tunjangan?:                      number;
   transportAllowance?:             number;
   overtimeRatePerHour?:            number;
-  holidayOvertimeRate?:            number;
+  holidayRatePerDay?:              number;
   lateDeductionPerMinute?:         number;
   lateDeductionBracket1?:          number;
   lateDeductionBracket2?:          number;
@@ -158,7 +162,9 @@ export interface CreateSalaryInput {
   absentDeductionPerDay?:          number;
   earlyLeaveDeductionPerMinute?:   number;
   bpjsJhtPercent?:                 number;
+  bpjsJhtEmployerPercent?:         number;
   bpjsJpPercent?:                  number;
+  bpjsJpEmployerPercent?:          number;
   bpjsKesehatanEmployeePercent?:   number;
   bpjsKesehatanEmployerPercent?:   number;
   effectiveDate:                   string;
@@ -167,6 +173,26 @@ export interface CreateSalaryInput {
   notes?:                          string;
 }
 export type UpdateSalaryInput = Partial<Omit<CreateSalaryInput, "employeeId">>;
+
+// ── Holiday ────────────────────────────────────────────────────────────
+export interface Holiday {
+  id:        string;
+  date:      string;
+  name:      string;
+  year:      number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateHolidayInput {
+  date: string;
+  name: string;
+}
+
+export interface UpdateHolidayInput {
+  date?: string;
+  name?: string;
+}
 
 // ── Loan (Kasbon) ─────────────────────────────────────────────────────
 export type LoanStatus = "ACTIVE" | "PAID_OFF" | "CANCELLED";

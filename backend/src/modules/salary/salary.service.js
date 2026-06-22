@@ -23,14 +23,19 @@ const createSetting = async (body) => {
     employeeId:                  body.employeeId,
     baseSalary:                  body.baseSalary,
     mealAllowancePerDay:         body.mealAllowancePerDay         ?? 0,
+    tunjangan:                   body.tunjangan                   ?? 0,
     transportAllowance:          body.transportAllowance          ?? 0,
     overtimeRatePerHour:         body.overtimeRatePerHour         ?? 0,
-    holidayOvertimeRate:         body.holidayOvertimeRate         ?? 0,
+    holidayRatePerDay:           body.holidayRatePerDay           ?? 0,
     lateDeductionPerMinute:      body.lateDeductionPerMinute      ?? 0,
     absentDeductionPerDay:       body.absentDeductionPerDay       ?? 0,
     earlyLeaveDeductionPerMinute: body.earlyLeaveDeductionPerMinute ?? 0,
     bpjsJhtPercent:              body.bpjsJhtPercent              ?? 2,
+    bpjsJhtEmployerPercent:      body.bpjsJhtEmployerPercent      ?? 3.7,
     bpjsJpPercent:               body.bpjsJpPercent               ?? 1,
+    bpjsJpEmployerPercent:       body.bpjsJpEmployerPercent       ?? 2,
+    bpjsKesehatanEmployeePercent: body.bpjsKesehatanEmployeePercent ?? 1,
+    bpjsKesehatanEmployerPercent: body.bpjsKesehatanEmployerPercent ?? 4,
     effectiveDate:               new Date(body.effectiveDate),
     endDate:                     body.endDate ? new Date(body.endDate) : null,
     isActive:                    body.isActive ?? true,
@@ -53,10 +58,13 @@ const updateSetting = async (id, body) => {
 
   const data = {};
   const fields = [
-    "baseSalary", "mealAllowancePerDay", "transportAllowance",
-    "overtimeRatePerHour", "holidayOvertimeRate", "lateDeductionPerMinute",
+    "baseSalary", "mealAllowancePerDay", "tunjangan", "transportAllowance",
+    "overtimeRatePerHour", "holidayRatePerDay", "lateDeductionPerMinute",
     "absentDeductionPerDay", "earlyLeaveDeductionPerMinute",
-    "bpjsJhtPercent", "bpjsJpPercent", "notes",
+    "bpjsJhtPercent", "bpjsJhtEmployerPercent",
+    "bpjsJpPercent",  "bpjsJpEmployerPercent",
+    "bpjsKesehatanEmployeePercent", "bpjsKesehatanEmployerPercent",
+    "notes",
   ];
   fields.forEach((f) => { if (body[f] !== undefined) data[f] = body[f]; });
 

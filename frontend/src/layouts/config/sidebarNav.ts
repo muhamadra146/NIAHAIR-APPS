@@ -138,6 +138,13 @@ export const sidebarNav: NavItem[] = [
     roles: [...MANAGEMENT_ROLES, "FINANCE"],
     group: "Keuangan",
   },
+  {
+    label: "Laporan BPJS",
+    href:  "/payroll/bpjs",
+    icon:  FileText,
+    roles: [...MANAGEMENT_ROLES, "FINANCE"],
+    group: "Keuangan",
+  },
 
   // ── Data ──────────────────────────────────────────────────────────────
   {

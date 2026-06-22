@@ -10,16 +10,19 @@ import type { SalarySetting, Employee } from "../../types";
 const schema = z.object({
   baseSalary:                    z.number({ error: "Wajib diisi" }).min(0),
   mealAllowancePerDay:           z.number().min(0).optional().default(0),
+  tunjangan:                     z.number().min(0).optional().default(0),
   transportAllowance:            z.number().min(0).optional().default(0),
   overtimeRatePerHour:           z.number().min(0).optional().default(0),
-  holidayOvertimeRate:           z.number().min(0).optional().default(0),
+  holidayRatePerDay:           z.number().min(0).optional().default(0),
   lateDeductionBracket1:         z.number().min(0).optional().default(25000),
   lateDeductionBracket2:         z.number().min(0).optional().default(50000),
   lateDeductionBracket3:         z.number().min(0).optional().default(75000),
   absentDeductionPerDay:         z.number().min(0).optional().default(0),
   earlyLeaveDeductionPerMinute:  z.number().min(0).optional().default(0),
   bpjsJhtPercent:                z.number().min(0).max(100).optional().default(2),
+  bpjsJhtEmployerPercent:        z.number().min(0).max(100).optional().default(3.7),
   bpjsJpPercent:                 z.number().min(0).max(100).optional().default(1),
+  bpjsJpEmployerPercent:         z.number().min(0).max(100).optional().default(2),
   bpjsKesehatanEmployeePercent:  z.number().min(0).max(100).optional().default(1),
   bpjsKesehatanEmployerPercent:  z.number().min(0).max(100).optional().default(4),
   effectiveDate:                 z.string().min(1, "Tanggal berlaku wajib diisi"),
@@ -39,9 +42,10 @@ interface Props {
 const CURRENCY_FIELDS: { key: keyof SalaryFormValues; label: string }[] = [
   { key: "baseSalary",                   label: "Gaji Pokok (Rp)" },
   { key: "mealAllowancePerDay",          label: "Uang Makan / Hari (Rp)" },
-  { key: "transportAllowance",           label: "Tunjangan Transport / Bulan (Rp)" },
+  { key: "tunjangan",                    label: "Tunjangan / Bulan (Rp)" },
+  { key: "transportAllowance",           label: "Transport / Bulan (Rp)" },
   { key: "overtimeRatePerHour",          label: "Rate Lembur / Jam (Rp)" },
-  { key: "holidayOvertimeRate",          label: "Rate Lembur Hari Libur / Jam (Rp)" },
+  { key: "holidayRatePerDay",            label: "Rate Kerja Hari Libur / Hari (Rp)" },
 ];
 
 const DEDUCTION_FIELDS: { key: keyof SalaryFormValues; label: string; step?: number }[] = [
@@ -60,16 +64,19 @@ export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }:
     defaultValues: {
       baseSalary:                    0,
       mealAllowancePerDay:           0,
+      tunjangan:                     0,
       transportAllowance:            0,
       overtimeRatePerHour:           0,
-      holidayOvertimeRate:           0,
+      holidayRatePerDay:           0,
       lateDeductionBracket1:         25000,
       lateDeductionBracket2:         50000,
       lateDeductionBracket3:         75000,
       absentDeductionPerDay:         0,
       earlyLeaveDeductionPerMinute:  0,
       bpjsJhtPercent:                2,
+      bpjsJhtEmployerPercent:        3.7,
       bpjsJpPercent:                 1,
+      bpjsJpEmployerPercent:         2,
       bpjsKesehatanEmployeePercent:  1,
       bpjsKesehatanEmployerPercent:  4,
       effectiveDate:                 new Date().toISOString().split("T")[0],
@@ -82,16 +89,19 @@ export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }:
       reset({
         baseSalary:                    Number(editing.baseSalary),
         mealAllowancePerDay:           Number(editing.mealAllowancePerDay),
+        tunjangan:                     Number(editing.tunjangan ?? 0),
         transportAllowance:            Number(editing.transportAllowance),
         overtimeRatePerHour:           Number(editing.overtimeRatePerHour),
-        holidayOvertimeRate:           Number(editing.holidayOvertimeRate),
+        holidayRatePerDay:           Number(editing.holidayRatePerDay),
         lateDeductionBracket1:         Number(editing.lateDeductionBracket1 ?? 25000),
         lateDeductionBracket2:         Number(editing.lateDeductionBracket2 ?? 50000),
         lateDeductionBracket3:         Number(editing.lateDeductionBracket3 ?? 75000),
         absentDeductionPerDay:         Number(editing.absentDeductionPerDay),
         earlyLeaveDeductionPerMinute:  Number(editing.earlyLeaveDeductionPerMinute),
         bpjsJhtPercent:                Number(editing.bpjsJhtPercent),
+        bpjsJhtEmployerPercent:        Number(editing.bpjsJhtEmployerPercent ?? 3.7),
         bpjsJpPercent:                 Number(editing.bpjsJpPercent),
+        bpjsJpEmployerPercent:         Number(editing.bpjsJpEmployerPercent ?? 2),
         bpjsKesehatanEmployeePercent:  Number(editing.bpjsKesehatanEmployeePercent ?? 1),
         bpjsKesehatanEmployerPercent:  Number(editing.bpjsKesehatanEmployerPercent ?? 4),
         effectiveDate:                 editing.effectiveDate.split("T")[0],
@@ -152,29 +162,43 @@ export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }:
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">BPJS Ketenagakerjaan (%)</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <Label className="text-xs">Iuran JHT (%)</Label>
+            <Label className="text-xs">JHT Karyawan (%)</Label>
             <Input type="number" min={0} max={100} step={0.1}
               {...register("bpjsJhtPercent", { valueAsNumber: true })} className="mt-1" />
+            <p className="mt-0.5 text-xs text-muted-foreground">Dipotong dari gaji (default 2%)</p>
           </div>
           <div>
-            <Label className="text-xs">Iuran JP (%)</Label>
+            <Label className="text-xs">JHT Perusahaan (%)</Label>
+            <Input type="number" min={0} max={100} step={0.1}
+              {...register("bpjsJhtEmployerPercent", { valueAsNumber: true })} className="mt-1" />
+            <p className="mt-0.5 text-xs text-muted-foreground">Tanggungan perusahaan (default 3.7%)</p>
+          </div>
+          <div>
+            <Label className="text-xs">JP Karyawan (%)</Label>
             <Input type="number" min={0} max={100} step={0.1}
               {...register("bpjsJpPercent", { valueAsNumber: true })} className="mt-1" />
+            <p className="mt-0.5 text-xs text-muted-foreground">Dipotong dari gaji (default 1%)</p>
+          </div>
+          <div>
+            <Label className="text-xs">JP Perusahaan (%)</Label>
+            <Input type="number" min={0} max={100} step={0.1}
+              {...register("bpjsJpEmployerPercent", { valueAsNumber: true })} className="mt-1" />
+            <p className="mt-0.5 text-xs text-muted-foreground">Tanggungan perusahaan (default 2%)</p>
           </div>
         </div>
         <p className="mt-3 mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">BPJS Kesehatan (%)</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <Label className="text-xs">Tanggungan Karyawan (%)</Label>
+            <Label className="text-xs">Kesehatan Karyawan (%)</Label>
             <Input type="number" min={0} max={100} step={0.1}
               {...register("bpjsKesehatanEmployeePercent", { valueAsNumber: true })} className="mt-1" />
-            <p className="mt-0.5 text-xs text-muted-foreground">Default 1%</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Dipotong dari gaji (default 1%)</p>
           </div>
           <div>
-            <Label className="text-xs">Tanggungan Perusahaan (%)</Label>
+            <Label className="text-xs">Kesehatan Perusahaan (%)</Label>
             <Input type="number" min={0} max={100} step={0.1}
               {...register("bpjsKesehatanEmployerPercent", { valueAsNumber: true })} className="mt-1" />
-            <p className="mt-0.5 text-xs text-muted-foreground">Default 4% (tidak dipotong dari gaji)</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Tanggungan perusahaan (default 4%)</p>
           </div>
         </div>
       </div>

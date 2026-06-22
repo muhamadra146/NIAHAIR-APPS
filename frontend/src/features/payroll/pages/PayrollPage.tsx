@@ -16,10 +16,10 @@ import { useAllBranches } from "@/features/settings/hooks";
 import {
   usePayrolls, useGeneratePayroll,
   useRecalculatePayroll, useSubmitPayroll, useApprovePayroll, useMarkPayrollAsPaid,
-  useDeletePayroll,
+  useDeletePayroll, useBulkGeneratePayroll,
 } from "../hooks";
 import { toast } from "@/lib/toast";
-import type { Payroll, PayrollStatus, PayrollItem, GeneratePayrollInput } from "../types";
+import type { Payroll, PayrollStatus, PayrollItem, GeneratePayrollInput, BulkGenerateResult } from "../types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -181,6 +181,125 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
   );
 }
 
+// ── Bulk Generate Dialog ──────────────────────────────────────────────────────
+
+function BulkGenerateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { branchId: sessionBranchId } = useAuthStore();
+  const { data: branchData } = useAllBranches();
+  const branches = branchData ?? [];
+
+  const now       = new Date();
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  const [branchId, setBranch]   = useState(sessionBranchId ?? "");
+  const [payDay,   setPayDay]   = useState("");
+  const [yearMonth, setMonth]   = useState(thisMonth);
+  const [notes,    setNotes]    = useState("");
+  const [result,   setResult]   = useState<BulkGenerateResult | null>(null);
+
+  const bulkMut = useBulkGeneratePayroll();
+
+  const handleSubmit = async () => {
+    if (!branchId || !yearMonth) { toast.error("Pilih cabang dan periode"); return; }
+    try {
+      const res = await bulkMut.mutateAsync({
+        branchId,
+        yearMonth,
+        payDay:  payDay ? Number(payDay) : undefined,
+        notes:   notes || undefined,
+      });
+      setResult(res);
+      toast.success(`${res.summary.created} payroll berhasil dibuat`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? "Gagal bulk generate payroll");
+    }
+  };
+
+  function handleClose() {
+    setResult(null);
+    onClose();
+  }
+
+  const selectCls = "mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring/30";
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base">Bulk Generate Payroll</DialogTitle>
+        </DialogHeader>
+
+        {result ? (
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="rounded-xl border p-3">
+                <p className="text-2xl font-bold">{result.summary.total}</p>
+                <p className="text-xs text-muted-foreground">Total</p>
+              </div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-2xl font-bold text-emerald-700">{result.summary.created}</p>
+                <p className="text-xs text-emerald-600">Berhasil</p>
+              </div>
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+                <p className="text-2xl font-bold text-red-600">{result.summary.errors}</p>
+                <p className="text-xs text-red-500">Gagal</p>
+              </div>
+            </div>
+            {result.summary.errors > 0 && (
+              <div className="max-h-40 overflow-y-auto space-y-1 rounded-lg border p-2 text-xs">
+                {result.results.filter((r) => r.status === "error").map((r) => (
+                  <p key={r.employeeId} className="text-red-600">
+                    {r.employeeName}: {r.message}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3 py-1">
+            <div>
+              <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Cabang *</Label>
+              <select value={branchId} onChange={(e) => setBranch(e.target.value)} className={selectCls}>
+                <option value="">Pilih cabang…</option>
+                {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Periode *</Label>
+              <Input type="month" value={yearMonth} onChange={(e) => setMonth(e.target.value)} className={`mt-1 ${filterInputCls}`} />
+            </div>
+            <div>
+              <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Filter Tanggal Gajian (opsional)</Label>
+              <Input
+                type="number" min={1} max={31} placeholder="cth: 7 (kosongkan = semua)"
+                value={payDay}
+                onChange={(e) => setPayDay(e.target.value)}
+                className={`mt-1 ${filterInputCls}`}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Isi untuk generate hanya karyawan dengan tanggal gajian tertentu</p>
+            </div>
+            <div>
+              <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Catatan</Label>
+              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opsional" className={`mt-1 ${filterInputCls}`} />
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={handleClose}>
+            {result ? "Tutup" : "Batal"}
+          </Button>
+          {!result && (
+            <Button size="sm" onClick={handleSubmit} disabled={bulkMut.isPending || !branchId || !yearMonth}>
+              {bulkMut.isPending ? "Memproses…" : "Generate Semua"}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Item breakdown table ──────────────────────────────────────────────────────
 
 function ItemTable({ items, type }: { items: PayrollItem[]; type: "INCOME" | "DEDUCTION" }) {
@@ -321,6 +440,37 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
         </CardContent>
       </Card>
 
+      {/* Commission breakdown */}
+      {payroll.commissionBreakdown && payroll.commissionBreakdown.length > 0 && (
+        <Card className="rounded-2xl border-slate-100/80 bg-white shadow-sm">
+          <CardContent className="p-4">
+            <h4 className="text-sm font-semibold mb-3 text-blue-700">Detail Komisi</h4>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-xs text-slate-400">
+                  <th className="text-left pb-2 font-medium">Treatment</th>
+                  <th className="text-right pb-2 font-medium">Tanggal</th>
+                  <th className="text-right pb-2 font-medium">Komisi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {payroll.commissionBreakdown.map((c) => (
+                  <tr key={c.id}>
+                    <td className="py-2 pr-4 text-slate-700">{c.treatmentName}</td>
+                    <td className="py-2 pr-4 text-right text-slate-400 text-xs">
+                      {fmtDate(c.approvedAt)}
+                    </td>
+                    <td className="py-2 text-right tabular-nums font-medium text-blue-700">
+                      {fmtRp(c.commissionAmount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Delete confirm dialog */}
       <Dialog open={deleteOpen} onOpenChange={(v) => { if (!v) setDeleteOpen(false); }}>
         <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-xl sm:rounded-lg">
@@ -371,7 +521,8 @@ const currentMonth = () => {
 
 export function PayrollPage() {
   const { branchId, user } = useAuthStore();
-  const [genOpen, setGenOpen]           = useState(false);
+  const [genOpen,     setGenOpen]       = useState(false);
+  const [bulkOpen,    setBulkOpen]      = useState(false);
   const [selectedPayroll, setSelected]  = useState<Payroll | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Payroll | null>(null);
   const [yearMonth, setYearMonth]       = useState(currentMonth());
@@ -432,9 +583,14 @@ export function PayrollPage() {
               ))}
             </select>
           </div>
-          <Button size="sm" className="rounded-xl ml-auto gap-1" onClick={() => setGenOpen(true)}>
-            <Plus className="h-3 w-3" /> Generate Payroll
-          </Button>
+          <div className="ml-auto flex gap-2">
+            <Button size="sm" variant="outline" className="rounded-xl gap-1" onClick={() => setBulkOpen(true)}>
+              <Plus className="h-3 w-3" /> Bulk Generate
+            </Button>
+            <Button size="sm" className="rounded-xl gap-1" onClick={() => setGenOpen(true)}>
+              <Plus className="h-3 w-3" /> Generate Payroll
+            </Button>
+          </div>
         </div>
 
         {/* Payroll list */}
@@ -499,6 +655,7 @@ export function PayrollPage() {
       </div>
 
       <GenerateDialog open={genOpen} onClose={() => setGenOpen(false)} />
+      <BulkGenerateDialog open={bulkOpen} onClose={() => setBulkOpen(false)} />
 
       {/* Delete confirm dialog */}
       <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>

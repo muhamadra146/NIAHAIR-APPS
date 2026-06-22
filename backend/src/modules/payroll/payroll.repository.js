@@ -25,6 +25,17 @@ const findById = (id) =>
 const findByEmployeeAndPeriod = (employeeId, periodStart) =>
   prisma.payroll.findUnique({ where: { employeeId_periodStart: { employeeId, periodStart } }, include: PAYROLL_INCLUDE });
 
+// Overlap check: find any payroll for this employee whose date range overlaps [start, end]
+const findOverlapping = (employeeId, periodStart, periodEnd, excludeId) =>
+  prisma.payroll.findFirst({
+    where: {
+      employeeId,
+      id:          excludeId ? { not: excludeId } : undefined,
+      periodStart: { lt: periodEnd },
+      periodEnd:   { gt: periodStart },
+    },
+  });
+
 const create = (data) =>
   prisma.payroll.create({ data, include: PAYROLL_INCLUDE });
 
@@ -41,14 +52,14 @@ const replaceAutoItems = async (payrollId, items) => {
 
 // Data needed for payroll generation
 const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) => {
-  const [salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, approvedLatePermissions] = await Promise.all([
+  const [salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, approvedLatePermissions, holidays] = await Promise.all([
     // Active salary setting
     prisma.employeeSalarySettings.findFirst({
       where: { employeeId, isActive: true },
       orderBy: { effectiveDate: "desc" },
     }),
 
-    // Staff schedules in period for this employee at any branch (for attendance linking)
+    // Staff schedules in period for this employee
     prisma.staffSchedule.findMany({
       where: {
         employeeId,
@@ -68,14 +79,25 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) =
       },
     }),
 
-    // Approved commissions in period
+    // Approved commissions in period — include detail for breakdown
     prisma.commission.findMany({
       where: {
         employeeId,
-        status: "APPROVED",
+        status:     "APPROVED",
         approvedAt: { gte: periodStart, lte: periodEnd },
       },
-      select: { id: true, commissionAmount: true },
+      select: {
+        id:               true,
+        commissionAmount: true,
+        approvedAt:       true,
+        treatmentAssignment: {
+          select: {
+            treatmentItem: {
+              select: { item: { select: { name: true } } },
+            },
+          },
+        },
+      },
     }),
 
     // Active loans for monthly deduction
@@ -84,6 +106,7 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) =
     }),
 
     // Home service appointments in period where this employee was staff
+    // Fixed: explicitly filter by visitDate within period
     prisma.appointment.findMany({
       where: {
         type:      "HOME_SERVICE",
@@ -107,6 +130,12 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) =
       },
       select: { date: true },
     }),
+
+    // Public holidays in period
+    prisma.holiday.findMany({
+      where: { date: { gte: periodStart, lte: periodEnd } },
+      select: { date: true },
+    }),
   ]);
 
   // For December payrolls: fetch ANNUAL leave quotas with payout rate > 0
@@ -126,7 +155,7 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) =
     });
   }
 
-  return { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions };
+  return { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays };
 };
 
 const findByEmployee = ({ skip, take, where }) =>
@@ -141,7 +170,7 @@ const countByEmployee = (where) => prisma.payroll.count({ where });
 const findBpjsData = ({ branchId, periodStart, periodEnd }) =>
   prisma.payroll.findMany({
     where: {
-      branchId,
+      ...(branchId ? { branchId } : {}),
       periodStart: { gte: periodStart, lte: periodEnd },
       status: { in: ["APPROVED", "PAID"] },
     },
@@ -150,6 +179,15 @@ const findBpjsData = ({ branchId, periodStart, periodEnd }) =>
         select: {
           id: true, name: true, employeeCode: true,
           role: { select: { name: true } },
+          salarySettings: {
+            where:  { isActive: true },
+            select: {
+              bpjsJhtEmployerPercent:       true,
+              bpjsJpEmployerPercent:        true,
+              bpjsKesehatanEmployerPercent: true,
+            },
+            take: 1,
+          },
         },
       },
       items: true,
@@ -163,8 +201,20 @@ const remove = (id) =>
     prisma.payroll.delete({ where: { id } }),
   ]);
 
+// Bulk: fetch employees with payDay set, for bulk generate
+const findEmployeesForBulkGenerate = ({ branchId, payDay }) =>
+  prisma.employee.findMany({
+    where: {
+      isActive: true,
+      payDay,
+      ...(branchId ? { homeBranchId: branchId } : {}),
+    },
+    select: { id: true, name: true, employeeCode: true, homeBranchId: true },
+  });
+
 module.exports = {
-  findAll, count, findById, findByEmployeeAndPeriod,
+  findAll, count, findById, findByEmployeeAndPeriod, findOverlapping,
   create, update, replaceAutoItems, getGenerationData,
   findByEmployee, countByEmployee, findBpjsData, remove,
+  findEmployeesForBulkGenerate,
 };

@@ -184,6 +184,8 @@ model Employee {
 
   isActive Boolean @default(true)
 
+  payDay Int? // tanggal gajian: 1, 7, 14, dst.
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2286,14 +2288,17 @@ model EmployeeSalarySettings {
 
   baseSalary                   Decimal @db.Decimal(18, 2)
   mealAllowancePerDay          Decimal @default(0) @db.Decimal(18, 2)
+  tunjangan                    Decimal @default(0) @db.Decimal(18, 2)
   transportAllowance           Decimal @default(0) @db.Decimal(18, 2)
   overtimeRatePerHour          Decimal @default(0) @db.Decimal(18, 2)
-  holidayOvertimeRate          Decimal @default(0) @db.Decimal(18, 2)
+  holidayRatePerDay            Decimal @default(0) @db.Decimal(18, 2)
   lateDeductionPerMinute       Decimal @default(0) @db.Decimal(18, 2)
   absentDeductionPerDay        Decimal @default(0) @db.Decimal(18, 2)
   earlyLeaveDeductionPerMinute Decimal @default(0) @db.Decimal(18, 2)
-  bpjsJhtPercent               Decimal @default(2) @db.Decimal(5, 2)
-  bpjsJpPercent                Decimal @default(1) @db.Decimal(5, 2)
+  bpjsJhtPercent               Decimal @default(2)   @db.Decimal(5, 2)
+  bpjsJhtEmployerPercent       Decimal @default(3.7) @db.Decimal(5, 2)
+  bpjsJpPercent                Decimal @default(1)   @db.Decimal(5, 2)
+  bpjsJpEmployerPercent        Decimal @default(2)   @db.Decimal(5, 2)
   lateDeductionBracket1        Decimal @default(25000) @db.Decimal(18, 2)
   lateDeductionBracket2        Decimal @default(50000) @db.Decimal(18, 2)
   lateDeductionBracket3        Decimal @default(75000) @db.Decimal(18, 2)
@@ -2416,6 +2421,15 @@ model Payroll {
   approvedAt DateTime?
 
   paidAt DateTime?
+  paidBy String?
+
+  submittedBy String?
+  submittedAt DateTime?
+
+  createdBy String?
+
+  lastRecalculatedBy String?
+  lastRecalculatedAt DateTime?
 
   notes String?
 
@@ -2456,6 +2470,25 @@ model PayrollItem {
 
   @@index([payrollId])
   @@map("payroll_items")
+}
+
+// =====================================================
+// HOLIDAYS (Libur Nasional)
+// =====================================================
+
+model Holiday {
+  id   String @id @default(uuid())
+
+  date DateTime @db.Date
+  name String
+  year Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([date])
+  @@index([year])
+  @@map("holidays")
 }
 
 // =====================================================

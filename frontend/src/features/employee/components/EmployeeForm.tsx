@@ -39,7 +39,7 @@ export function EmployeeCreateForm({ open, onOpenChange, onSubmit, isPending, er
       name: "", roleId: "", employeeCode: "", phone: "", email: "",
       hireDate: "", birthDate: "", address: "", emergencyContact: "",
       nikKtp: "", resignDate: "",
-      commissionEnabled: false, homeBranchId: "", branchIds: [],
+      commissionEnabled: false, payDay: null, homeBranchId: "", branchIds: [],
     },
   });
 
@@ -416,6 +416,17 @@ function EmployeeFormFields({
         </Field>
       )}
 
+      {/* Tanggal Gajian */}
+      <Field label="Tanggal Gajian (1-31)" error={errs.payDay?.message}>
+        <Input
+          {...register("payDay", { setValueAs: (v) => (v === "" ? null : Number(v)) })}
+          type="number"
+          min={1}
+          max={31}
+          placeholder="Cth: 7"
+        />
+      </Field>
+
       {/* Aktifkan Komisi */}
       <div className="sm:col-span-2 flex items-center gap-3">
         <Switch
@@ -457,6 +468,7 @@ function employeeToForm(e: Employee): UpdateEmployeeFormValues {
     nikKtp:            e.nikKtp ?? "",
     resignDate:        e.resignDate ? e.resignDate.split("T")[0] : "",
     commissionEnabled: e.commissionEnabled,
+    payDay:            e.payDay ?? null,
     isActive:          e.isActive,
     homeBranchId:      e.homeBranchId ?? "",
     branchIds:         e.employeeBranches?.map((eb) => eb.branch.id) ?? [],

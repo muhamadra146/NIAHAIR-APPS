@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronLeft, Banknote, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { ChevronLeft, Banknote, Clock, CheckCircle2, AlertCircle, Printer } from "lucide-react";
 import { PageContainer }             from "@/components/layout/PageContainer";
 import { Card, CardContent }         from "@/components/ui/card";
 import { Skeleton }                  from "@/components/ui/skeleton";
@@ -37,6 +37,72 @@ function StatusBadge({ status }: { status: PayrollStatus }) {
       <Icon className="h-3 w-3" />{label}
     </span>
   );
+}
+
+// ── Print helper ─────────────────────────────────────────────────────────────
+
+function printPayslip(p: Payroll) {
+  const fmt = (n: number) =>
+    new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
+  const fmtDt = (iso: string) =>
+    new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+  const period = fmtPeriod(p.periodStart, p.periodEnd);
+
+  const incomes  = p.items.filter(i => i.type === "INCOME");
+  const deducts  = p.items.filter(i => i.type === "DEDUCTION");
+  const totInc   = incomes.reduce((s, i) => s + i.amount, 0);
+  const totDed   = deducts.reduce((s, i) => s + i.amount, 0);
+
+  const rows = (items: PayrollItem[], color: string) =>
+    items.map(it => `<tr>
+      <td style="padding:4px 0;color:#374151">${it.label}${it.quantity != null && it.rate != null
+        ? `<br><small style="color:#9ca3af">${it.quantity} × ${fmt(it.rate)}</small>` : ""}</td>
+      <td style="text-align:right;font-weight:600;color:${color}">${fmt(it.amount)}</td>
+    </tr>`).join("");
+
+  const html = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8">
+<title>Slip Gaji – ${p.employee.name} – ${period}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Arial,sans-serif;font-size:13px;color:#111;padding:24px;max-width:480px;margin:auto}
+.hd{text-align:center;border-bottom:2px solid #111;padding-bottom:12px;margin-bottom:16px}
+.hd h1{font-size:18px;font-weight:700;margin-bottom:4px}
+.hd p{font-size:12px;color:#555}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-bottom:16px;font-size:12px}
+.meta span:first-child{color:#555}
+table{width:100%;border-collapse:collapse}
+.st{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:8px 0 4px;border-top:1px solid #e5e7eb}
+.sub td{border-top:1px dashed #d1d5db;padding-top:6px;font-weight:700}
+.net{margin-top:16px;border:2px solid #111;padding:10px 14px;display:flex;justify-content:space-between;align-items:center}
+.net .lbl{font-weight:600}
+.net .val{font-weight:700;font-size:17px}
+.foot{margin-top:24px;font-size:11px;color:#9ca3af;text-align:center}
+@media print{body{padding:0}}
+</style></head><body>
+<div class="hd"><h1>SLIP GAJI</h1><p>${p.branch.name}</p></div>
+<div class="meta">
+  <span>Nama</span><span><b>${p.employee.name}</b></span>
+  <span>Jabatan</span><span>${p.employee.role.name}</span>
+  <span>Periode</span><span>${period}</span>
+  <span>Status</span><span>${p.status === "PAID" ? "Sudah Dibayar" : p.status === "APPROVED" ? "Disetujui" : "Diproses"}</span>
+  ${p.paidAt ? `<span>Dibayarkan</span><span>${fmtDt(p.paidAt)}</span>` : ""}
+</div>
+${incomes.length > 0 ? `
+<div class="st" style="color:#059669">Pendapatan</div>
+<table>${rows(incomes,"#059669")}<tr class="sub"><td>Total Pendapatan</td><td style="text-align:right;color:#059669">${fmt(totInc)}</td></tr></table>` : ""}
+${deducts.length > 0 ? `
+<div class="st" style="color:#dc2626">Potongan</div>
+<table>${rows(deducts,"#dc2626")}<tr class="sub"><td>Total Potongan</td><td style="text-align:right;color:#dc2626">${fmt(totDed)}</td></tr></table>` : ""}
+<div class="net"><span class="lbl">Gaji Bersih Diterima</span><span class="val">${fmt(p.netSalary)}</span></div>
+<div class="foot">Dicetak pada ${new Date().toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric"})}</div>
+</body></html>`;
+
+  const w = window.open("", "_blank", "width=520,height=700");
+  if (!w) return;
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 300);
 }
 
 // ── Payslip detail ────────────────────────────────────────────────────────────
@@ -85,8 +151,11 @@ function PayslipDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
           </h2>
           <p className="text-xs text-slate-500">{payroll.branch.name}</p>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           <StatusBadge status={payroll.status} />
+          <Button variant="outline" size="icon" onClick={() => printPayslip(payroll)} title="Print / Download PDF">
+            <Printer className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 

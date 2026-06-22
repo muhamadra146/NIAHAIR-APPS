@@ -54,6 +54,7 @@ const membershipRouter              = require("./modules/membership/membership.r
 const stockTransferRouter           = require("./modules/stockTransfer/stockTransfer.route");
 const settingRouter                 = require("./modules/setting/setting.route");
 const itemCategoryRouter            = require("./modules/itemCategory/itemCategory.route");
+const holidayRouter                 = require("./modules/holiday/holiday.route");
 
 
 const app = express();
@@ -127,6 +128,7 @@ app.use("/attendance",                           attendanceRouter);
 app.use("/salary-settings",                      salaryRouter);
 app.use("/loans",                                loanRouter);
 app.use("/payroll",                              payrollRouter);
+app.use("/holidays",                             holidayRouter);
 app.use("/reports",                              reportRouter);
 app.use("/consultation-notes",                   consultationRouter);
 app.use("/leaves",                               leaveRouter);

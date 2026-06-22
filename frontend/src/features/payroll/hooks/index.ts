@@ -3,9 +3,9 @@ import {
   fetchPayrolls, fetchPayroll,
   generatePayroll, recalculatePayroll,
   submitPayroll, approvePayroll, markPayrollAsPaid,
-  fetchMyPayrolls, fetchBpjsReport, deletePayroll,
+  fetchMyPayrolls, fetchBpjsReport, deletePayroll, bulkGeneratePayroll,
 } from "../api/payroll.api";
-import type { PayrollListParams, GeneratePayrollInput, BpjsReportParams } from "../types";
+import type { PayrollListParams, GeneratePayrollInput, BpjsReportParams, BulkGenerateInput } from "../types";
 
 const QK = "payrolls";
 
@@ -75,5 +75,13 @@ export const useBpjsReport = (params: BpjsReportParams) =>
   useQuery({
     queryKey: ["bpjsReport", params],
     queryFn:  () => fetchBpjsReport(params),
-    enabled:  !!params.branchId && !!params.yearMonth,
+    enabled:  !!params.yearMonth,
   });
+
+export const useBulkGeneratePayroll = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BulkGenerateInput) => bulkGeneratePayroll(input),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: [QK] }); },
+  });
+};

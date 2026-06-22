@@ -40,6 +40,7 @@ import { LeaveTypeTab }          from "../components/leaveType/LeaveTypeTab";
 import { LeaveQuotaTab }         from "../components/leaveQuota/LeaveQuotaTab";
 import { MembershipTab }         from "../components/membership/MembershipTab";
 import { AttendanceSettingsTab } from "../components/attendance/AttendanceSettingsTab";
+import { HolidayTab }            from "../components/holiday/HolidayTab";
 
 import type { EmployeeRole, User, Branch, PaymentMethod, CashAccount, Warehouse, ShiftMaster } from "../types";
 import type { EmployeeRoleFormValues } from "../schemas/employeeRole.schema";
@@ -703,6 +704,7 @@ const TABS = [
   { value: "leave-types",     label: "Tipe Cuti" },
   { value: "leave-quotas",    label: "Kuota Cuti" },
   { value: "memberships",     label: "Membership" },
+  { value: "holidays",        label: "Hari Libur" },
   { value: "attendance",      label: "Absensi" },
   { value: "accurate",        label: "Accurate" },
 ] as const;
@@ -759,6 +761,7 @@ export function SettingsPage() {
             <TabsContent value="leave-types"     className="mt-0 p-6"><LeaveTypeTab /></TabsContent>
             <TabsContent value="leave-quotas"    className="mt-0 p-6"><LeaveQuotaTab /></TabsContent>
             <TabsContent value="memberships"     className="mt-0 p-6"><MembershipTab /></TabsContent>
+            <TabsContent value="holidays"        className="mt-0 p-6"><HolidayTab /></TabsContent>
             <TabsContent value="attendance"      className="mt-0 p-6"><AttendanceSettingsTab /></TabsContent>
             <TabsContent value="accurate"        className="mt-0 p-6"><AccuratePanel /></TabsContent>
           </div>

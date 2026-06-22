@@ -1,7 +1,6 @@
 const { success, created } = require("../../common/responses/apiResponse");
 const svc = require("./payroll.service");
 
-
 const getAllController = async (req, res, next) => {
   try {
     const { page = 1, limit = 20, employeeId, branchId, status, yearMonth } = req.query;
@@ -19,21 +18,28 @@ const getByIdController = async (req, res, next) => {
 
 const generateController = async (req, res, next) => {
   try {
-    const result = await svc.generate(req.body);
+    const result = await svc.generate(req.body, req.user.id);
     return created(res, result, "Payroll generated");
+  } catch (err) { next(err); }
+};
+
+const bulkGenerateController = async (req, res, next) => {
+  try {
+    const result = await svc.bulkGenerate(req.body, req.user.id);
+    return created(res, result, "Bulk payroll generated");
   } catch (err) { next(err); }
 };
 
 const recalculateController = async (req, res, next) => {
   try {
-    const result = await svc.recalculate(req.params.id);
+    const result = await svc.recalculate(req.params.id, req.user.id);
     return success(res, result, "Payroll recalculated");
   } catch (err) { next(err); }
 };
 
 const submitController = async (req, res, next) => {
   try {
-    const result = await svc.submitForApproval(req.params.id);
+    const result = await svc.submitForApproval(req.params.id, req.user.id);
     return success(res, result, "Payroll submitted for approval");
   } catch (err) { next(err); }
 };
@@ -47,7 +53,7 @@ const approveController = async (req, res, next) => {
 
 const markAsPaidController = async (req, res, next) => {
   try {
-    const result = await svc.markAsPaid(req.params.id);
+    const result = await svc.markAsPaid(req.params.id, req.user.id);
     return success(res, result, "Payroll marked as paid");
   } catch (err) { next(err); }
 };
@@ -82,7 +88,7 @@ const deleteController = async (req, res, next) => {
 };
 
 module.exports = {
-  getAllController, getByIdController, generateController, recalculateController,
-  submitController, approveController, markAsPaidController, updateNotesController,
-  getMyController, getBpjsReportController, deleteController,
+  getAllController, getByIdController, generateController, bulkGenerateController,
+  recalculateController, submitController, approveController, markAsPaidController,
+  updateNotesController, getMyController, getBpjsReportController, deleteController,
 };

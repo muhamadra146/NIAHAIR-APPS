@@ -1,4 +1,4 @@
-const { object, string, pipe, email, optional, nullable, boolean, minLength, array } = require("valibot");
+const { object, string, pipe, email, optional, nullable, boolean, minLength, array, number, integer, minValue, maxValue } = require("valibot");
 
 const createEmployeeSchema = object({
   name:              pipe(string(), minLength(1, "Name is required")),
@@ -14,6 +14,7 @@ const createEmployeeSchema = object({
   resignDate:        optional(string()),
   commissionEnabled: optional(boolean()),
   homeBranchId:      optional(nullable(string())),
+  payDay:            optional(nullable(pipe(number(), integer(), minValue(1), maxValue(31)))),
 });
 
 const updateEmployeeSchema = object({
@@ -31,6 +32,7 @@ const updateEmployeeSchema = object({
   commissionEnabled: optional(boolean()),
   isActive:          optional(boolean()),
   homeBranchId:      optional(nullable(string())),
+  payDay:            optional(nullable(pipe(number(), integer(), minValue(1), maxValue(31)))),
 });
 
 const updateEmployeeBranchesSchema = object({

@@ -5,9 +5,9 @@ const validate     = require("../../middlewares/validate.middleware");
 const { ROLES }   = require("../../common/constants/role.constant");
 const { generateSchema, updateNotesSchema } = require("./payroll.validation");
 const {
-  getAllController, getByIdController, generateController, recalculateController,
-  submitController, approveController, markAsPaidController, updateNotesController,
-  getMyController, getBpjsReportController, deleteController,
+  getAllController, getByIdController, generateController, bulkGenerateController,
+  recalculateController, submitController, approveController, markAsPaidController,
+  updateNotesController, getMyController, getBpjsReportController, deleteController,
 } = require("./payroll.controller");
 
 const router = Router();
@@ -24,6 +24,10 @@ router.get("/:id", authenticate, authorize(...ALL_ADMIN), getByIdController);
 
 router.post("/generate",
   authenticate, authorize(...ALL_ADMIN), validate(generateSchema), generateController,
+);
+
+router.post("/bulk-generate",
+  authenticate, authorize(...ALL_ADMIN), bulkGenerateController,
 );
 
 router.post("/:id/recalculate",

@@ -34,6 +34,7 @@ import { ConsultationListPage }       from "@/features/consultation/pages/Consul
 import { ConsultationFormPage }       from "@/features/consultation/pages/ConsultationFormPage";
 import { LeavePage }                  from "@/features/leave/pages/LeavePage";
 import { MyPayslipPage }             from "@/features/payroll/pages/MyPayslipPage";
+import { BpjsReportPage }           from "@/features/payroll/pages/BpjsReportPage";
 import { CorrectionPage }            from "@/features/attendance/pages/CorrectionPage";
 import { PermissionPage }            from "@/features/attendance/pages/PermissionPage";
 import { SickLeavePage }             from "@/features/attendance/pages/SickLeavePage";
@@ -71,7 +72,8 @@ export const router = createBrowserRouter([
           // Team / Attendance
           { path: "/attendance", element: <TeamPage /> },
           // Payroll
-          { path: "/payroll", element: <PayrollPage /> },
+          { path: "/payroll",      element: <PayrollPage /> },
+          { path: "/payroll/bpjs", element: <BpjsReportPage /> },
           // Employees
           { path: "/employees",     element: <EmployeeListPage /> },
           { path: "/employees/:id", element: <EmployeeDetailPage /> },

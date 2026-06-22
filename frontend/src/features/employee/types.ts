@@ -33,6 +33,7 @@ export interface Employee {
   role:             EmployeeRole;
   commissionEnabled: boolean;
   isActive:         boolean;
+  payDay:           number | null;
   homeBranchId:     string | null;
   employeeBranches: EmployeeBranch[];
   createdAt:        string;
@@ -40,24 +41,31 @@ export interface Employee {
 }
 
 export interface SalarySetting {
-  id:                           string;
-  employeeId:                   string;
-  baseSalary:                   string;
-  mealAllowancePerDay:          string;
-  transportAllowance:           string;
-  overtimeRatePerHour:          string;
-  holidayOvertimeRate:          string;
-  lateDeductionPerMinute:       string;
-  absentDeductionPerDay:        string;
-  earlyLeaveDeductionPerMinute: string;
-  bpjsJhtPercent:               string;
-  bpjsJpPercent:                string;
-  effectiveDate:                string;
-  endDate:                      string | null;
-  isActive:                     boolean;
-  notes:                        string | null;
-  createdAt:                    string;
-  updatedAt:                    string;
+  id:                            string;
+  employeeId:                    string;
+  baseSalary:                    string;
+  mealAllowancePerDay:           string;
+  tunjangan:                     string;
+  transportAllowance:            string;
+  overtimeRatePerHour:           string;
+  holidayRatePerDay:             string;
+  lateDeductionBracket1:         string;
+  lateDeductionBracket2:         string;
+  lateDeductionBracket3:         string;
+  absentDeductionPerDay:         string;
+  earlyLeaveDeductionPerMinute:  string;
+  bpjsJhtPercent:                string;
+  bpjsJhtEmployerPercent:        string;
+  bpjsJpPercent:                 string;
+  bpjsJpEmployerPercent:         string;
+  bpjsKesehatanEmployeePercent:  string;
+  bpjsKesehatanEmployerPercent:  string;
+  effectiveDate:                 string;
+  endDate:                       string | null;
+  isActive:                      boolean;
+  notes:                         string | null;
+  createdAt:                     string;
+  updatedAt:                     string;
 }
 
 export interface EmployeeListParams {
@@ -81,6 +89,7 @@ export interface CreateEmployeeInput {
   nikKtp?:           string;
   resignDate?:       string;
   commissionEnabled?: boolean;
+  payDay?:           number | null;
   homeBranchId?:     string | null;
   ktpFile?:          File;
   contractFile?:     File;
@@ -104,6 +113,7 @@ export interface UpdateEmployeeInput {
   resignDate?:        string;
   commissionEnabled?: boolean;
   isActive?:          boolean;
+  payDay?:            number | null;
   homeBranchId?:      string | null;
   ktpFile?:           File;
   contractFile?:      File;
@@ -113,14 +123,21 @@ export interface CreateSalarySettingInput {
   employeeId:                    string;
   baseSalary:                    number;
   mealAllowancePerDay?:          number;
+  tunjangan?:                    number;
   transportAllowance?:           number;
   overtimeRatePerHour?:          number;
-  holidayOvertimeRate?:          number;
-  lateDeductionPerMinute?:       number;
+  holidayRatePerDay?:            number;
+  lateDeductionBracket1?:        number;
+  lateDeductionBracket2?:        number;
+  lateDeductionBracket3?:        number;
   absentDeductionPerDay?:        number;
   earlyLeaveDeductionPerMinute?: number;
   bpjsJhtPercent?:               number;
+  bpjsJhtEmployerPercent?:       number;
   bpjsJpPercent?:                number;
+  bpjsJpEmployerPercent?:        number;
+  bpjsKesehatanEmployeePercent?: number;
+  bpjsKesehatanEmployerPercent?: number;
   effectiveDate:                 string;
   endDate?:                      string;
   isActive?:                     boolean;

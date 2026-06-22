@@ -14,6 +14,13 @@ export interface PayrollItem {
   notes:     string | null;
 }
 
+export interface CommissionBreakdownItem {
+  id:               string;
+  commissionAmount: number;
+  approvedAt:       string;
+  treatmentName:    string;
+}
+
 export interface Payroll {
   id:             string;
   employeeId:     string;
@@ -39,6 +46,7 @@ export interface Payroll {
   };
   branch: { id: string; code: string; name: string };
   items:  PayrollItem[];
+  commissionBreakdown?: CommissionBreakdownItem[];
 }
 
 export interface GeneratePayrollInput {
@@ -66,22 +74,59 @@ export interface BpjsReportRow {
     employeeCode: string | null;
     role:         { name: string };
   };
-  periodStart: string;
-  periodEnd:   string;
-  status:      PayrollStatus;
-  baseSalary:  number;
-  bpjsJht:     number;
-  bpjsJp:      number;
-  totalBpjs:   number;
+  periodStart:           string;
+  periodEnd:             string;
+  status:                PayrollStatus;
+  baseSalary:            number;
+  bpjsJht:               number;
+  bpjsJhtEmployer:       number;
+  bpjsJp:                number;
+  bpjsJpEmployer:        number;
+  bpjsKesehatan:         number;
+  bpjsKesehatanEmployer: number;
+  totalEmployee:         number;
+  totalEmployer:         number;
+  totalBpjs:             number;
+}
+
+export interface BpjsReportTotals {
+  baseSalary:            number;
+  bpjsJht:               number;
+  bpjsJhtEmployer:       number;
+  bpjsJp:                number;
+  bpjsJpEmployer:        number;
+  bpjsKesehatan:         number;
+  bpjsKesehatanEmployer: number;
+  totalEmployee:         number;
+  totalEmployer:         number;
+  totalBpjs:             number;
 }
 
 export interface BpjsReportResult {
   data:    BpjsReportRow[];
-  totals:  { baseSalary: number; bpjsJht: number; bpjsJp: number; totalBpjs: number };
+  totals:  BpjsReportTotals;
   period:  { yearMonth: string; periodStart: string; periodEnd: string };
 }
 
 export interface BpjsReportParams {
   branchId?:  string;
   yearMonth:  string;
+}
+
+export interface BulkGenerateInput {
+  branchId:  string;
+  payDay?:   number;
+  yearMonth: string;
+  notes?:    string;
+}
+
+export interface BulkGenerateResult {
+  summary: { total: number; created: number; errors: number };
+  results: Array<{
+    employeeId:   string;
+    employeeName: string;
+    status:       "created" | "error";
+    message?:     string;
+    payrollId?:   string;
+  }>;
 }
