@@ -93,8 +93,9 @@ const createEmployee = async (body) => {
     if (existing) throw new AppError("Email already exists", StatusCodes.CONFLICT);
   }
 
-  if (body.hireDate) body.hireDate = new Date(body.hireDate);
-  if (body.birthDate) body.birthDate = new Date(body.birthDate);
+  if (body.hireDate)   body.hireDate   = new Date(body.hireDate);
+  if (body.birthDate)  body.birthDate  = new Date(body.birthDate);
+  if (body.resignDate) body.resignDate = new Date(body.resignDate);
 
   return create(body);
 };
@@ -118,8 +119,9 @@ const updateEmployee = async (id, body) => {
     if (existing) throw new AppError("Email already exists", StatusCodes.CONFLICT);
   }
 
-  if (body.hireDate) body.hireDate = new Date(body.hireDate);
-  if (body.birthDate) body.birthDate = new Date(body.birthDate);
+  if (body.hireDate)   body.hireDate   = new Date(body.hireDate);
+  if (body.birthDate)  body.birthDate  = new Date(body.birthDate);
+  if (body.resignDate) body.resignDate = new Date(body.resignDate);
 
   return update(id, body);
 };

@@ -28,6 +28,7 @@ const {
   cancelWithTransaction,
   deleteWithTransaction,
   findMaxInvoiceSeqToday,
+  findDailyAssignment,
 } = require("./invoice.repository");
 const { getActiveMembership } = require("../membership/membership.service");
 
@@ -746,4 +747,23 @@ const deleteInvoice = async (id) => {
   await deleteWithTransaction(id);
 };
 
-module.exports = { listInvoices, getInvoiceById, createInvoice, updateInvoice, applyDepositToInvoice, cancelInvoice, deleteInvoice, setupTreatmentSession };
+// ── Daily Assignment ─────────────────────────────────────────────────
+
+const getDailyAssignment = async ({ date, branchId }) => {
+  if (!date) throw new AppError("Query param 'date' (YYYY-MM-DD) is required", StatusCodes.BAD_REQUEST);
+
+  // Build WIB (UTC+7) day boundaries
+  const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+  const localDay = new Date(`${date}T00:00:00.000Z`);
+  const start = new Date(localDay.getTime() - WIB_OFFSET_MS); // 00:00 WIB = 17:00 UTC prev day
+  const end   = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1); // 23:59:59.999 WIB
+
+  const invoices = await findDailyAssignment({ start, end, branchId });
+
+  const LIMIT = 100;
+  const truncated = invoices.length >= LIMIT;
+
+  return { data: invoices, truncated, date };
+};
+
+module.exports = { listInvoices, getInvoiceById, createInvoice, updateInvoice, applyDepositToInvoice, cancelInvoice, deleteInvoice, setupTreatmentSession, getDailyAssignment };

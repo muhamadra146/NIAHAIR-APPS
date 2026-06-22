@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Paperclip, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,10 +16,12 @@ import type { Employee } from "../types";
 
 // ── Create ────────────────────────────────────────────────────────────────────
 
+export type EmployeeFiles = { ktpFile?: File | null; contractFile?: File | null };
+
 interface CreateProps {
   open:         boolean;
   onOpenChange: (v: boolean) => void;
-  onSubmit:     (v: CreateEmployeeFormValues) => Promise<void>;
+  onSubmit:     (v: CreateEmployeeFormValues, files: EmployeeFiles) => Promise<void>;
   isPending:    boolean;
   error:        string | null;
 }
@@ -28,18 +30,21 @@ export function EmployeeCreateForm({ open, onOpenChange, onSubmit, isPending, er
   const { data: roles = [] }  = useEmployeeRoles();
   const { data: nextCode }    = useNextEmployeeCode();
   const { data: branches = [] } = useQuery({ queryKey: ["branches-all"], queryFn: fetchAllBranches });
+  const [ktpFile,      setKtpFile]      = useState<File | null>(null);
+  const [contractFile, setContractFile] = useState<File | null>(null);
 
   const form = useForm<CreateEmployeeFormValues>({
     resolver: zodResolver(createEmployeeSchema),
     defaultValues: {
       name: "", roleId: "", employeeCode: "", phone: "", email: "",
       hireDate: "", birthDate: "", address: "", emergencyContact: "",
+      nikKtp: "", resignDate: "",
       commissionEnabled: false, homeBranchId: "", branchIds: [],
     },
   });
 
   useEffect(() => {
-    if (!open) form.reset();
+    if (!open) { form.reset(); setKtpFile(null); setContractFile(null); }
   }, [open, form]);
 
   return (
@@ -48,12 +53,19 @@ export function EmployeeCreateForm({ open, onOpenChange, onSubmit, isPending, er
         <DialogHeader className="shrink-0 border-b px-5 py-4">
           <DialogTitle>Tambah Karyawan</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-1 flex-col overflow-hidden">
+        <form
+          onSubmit={form.handleSubmit((v) => onSubmit(v, { ktpFile, contractFile }))}
+          className="flex flex-1 flex-col overflow-hidden"
+        >
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
             {error && (
               <div className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
             )}
-            <EmployeeFormFields form={form} roles={roles} branches={branches} nextCode={nextCode} isEdit={false} />
+            <EmployeeFormFields
+              form={form} roles={roles} branches={branches} nextCode={nextCode} isEdit={false}
+              ktpFile={ktpFile} setKtpFile={setKtpFile}
+              contractFile={contractFile} setContractFile={setContractFile}
+            />
           </div>
           <DialogFooter className="shrink-0 border-t px-5 py-4 flex gap-2">
             <Button type="button" variant="outline" className="flex-1 sm:flex-none" onClick={() => onOpenChange(false)} disabled={isPending}>
@@ -74,7 +86,7 @@ export function EmployeeCreateForm({ open, onOpenChange, onSubmit, isPending, er
 interface UpdateProps {
   open:         boolean;
   onOpenChange: (v: boolean) => void;
-  onSubmit:     (v: UpdateEmployeeFormValues) => Promise<void>;
+  onSubmit:     (v: UpdateEmployeeFormValues, files: EmployeeFiles) => Promise<void>;
   isPending:    boolean;
   error:        string | null;
   employee:     Employee;
@@ -83,6 +95,8 @@ interface UpdateProps {
 export function EmployeeUpdateForm({ open, onOpenChange, onSubmit, isPending, error, employee }: UpdateProps) {
   const { data: roles = [] }    = useEmployeeRoles();
   const { data: branches = [] } = useQuery({ queryKey: ["branches-all"], queryFn: fetchAllBranches });
+  const [ktpFile,      setKtpFile]      = useState<File | null>(null);
+  const [contractFile, setContractFile] = useState<File | null>(null);
 
   const form = useForm<UpdateEmployeeFormValues>({
     resolver: zodResolver(updateEmployeeSchema),
@@ -90,7 +104,7 @@ export function EmployeeUpdateForm({ open, onOpenChange, onSubmit, isPending, er
   });
 
   useEffect(() => {
-    if (open) form.reset(employeeToForm(employee));
+    if (open) { form.reset(employeeToForm(employee)); setKtpFile(null); setContractFile(null); }
   }, [open, employee, form]);
 
   return (
@@ -99,12 +113,21 @@ export function EmployeeUpdateForm({ open, onOpenChange, onSubmit, isPending, er
         <DialogHeader className="shrink-0 border-b px-5 py-4">
           <DialogTitle>Edit Karyawan</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-1 flex-col overflow-hidden">
+        <form
+          onSubmit={form.handleSubmit((v) => onSubmit(v, { ktpFile, contractFile }))}
+          className="flex flex-1 flex-col overflow-hidden"
+        >
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
             {error && (
               <div className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
             )}
-            <EmployeeFormFields form={form} roles={roles} branches={branches} isEdit={true} />
+            <EmployeeFormFields
+              form={form} roles={roles} branches={branches} isEdit={true}
+              ktpFile={ktpFile} setKtpFile={setKtpFile}
+              contractFile={contractFile} setContractFile={setContractFile}
+              existingKtpUrl={employee.ktpFileUrl}
+              existingContractUrl={employee.contractFileUrl}
+            />
             <div className="flex items-center gap-3">
               <Switch
                 id="isActive"
@@ -141,15 +164,29 @@ function EmployeeFormFields({
   branches,
   nextCode,
   isEdit,
+  ktpFile,
+  setKtpFile,
+  contractFile,
+  setContractFile,
+  existingKtpUrl,
+  existingContractUrl,
 }: {
   form:      UseFormReturn<CreateEmployeeFormValues | UpdateEmployeeFormValues>;
   roles:     EmployeeRole[];
   branches:  Branch[];
   nextCode?: string;
   isEdit:    boolean;
+  ktpFile:          File | null;
+  setKtpFile:       (f: File | null) => void;
+  contractFile:     File | null;
+  setContractFile:  (f: File | null) => void;
+  existingKtpUrl?:      string | null;
+  existingContractUrl?: string | null;
 }) {
   const { register, formState: { errors }, watch, setValue } = form;
   const [openBranch, setOpenBranch] = useState(false);
+  const ktpInputRef      = useRef<HTMLInputElement>(null);
+  const contractInputRef = useRef<HTMLInputElement>(null);
 
   const selectedBranchIds = (watch("branchIds") as string[]) ?? [];
   const homeBranchId      = watch("homeBranchId") ?? "";
@@ -231,6 +268,88 @@ function EmployeeFormFields({
           placeholder="Alamat lengkap"
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
+      </Field>
+
+      {/* NIK KTP */}
+      <Field label="NIK KTP" error={errs.nikKtp?.message}>
+        <Input {...register("nikKtp")} placeholder="16 digit NIK" inputMode="numeric" />
+      </Field>
+
+      {/* Tanggal Resign */}
+      <Field label="Tanggal Resign" error={errs.resignDate?.message}>
+        <Input {...register("resignDate")} type="date" />
+      </Field>
+
+      {/* Upload Foto KTP */}
+      <Field label="Foto KTP" full>
+        <input
+          ref={ktpInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+          className="hidden"
+          onChange={(e) => setKtpFile(e.target.files?.[0] ?? null)}
+        />
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => ktpInputRef.current?.click()}
+          >
+            <Paperclip className="mr-1.5 h-3.5 w-3.5" />
+            {ktpFile ? "Ganti File" : existingKtpUrl ? "Ganti File" : "Pilih File"}
+          </Button>
+          {ktpFile ? (
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              <span className="truncate max-w-[160px]">{ktpFile.name}</span>
+              <button type="button" onClick={() => { setKtpFile(null); if (ktpInputRef.current) ktpInputRef.current.value = ""; }}>
+                <X className="h-3.5 w-3.5 hover:text-destructive" />
+              </button>
+            </div>
+          ) : existingKtpUrl ? (
+            <a href={existingKtpUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">
+              Lihat file saat ini
+            </a>
+          ) : (
+            <span className="text-xs text-muted-foreground">Belum ada file</span>
+          )}
+        </div>
+      </Field>
+
+      {/* Upload File Kontrak */}
+      <Field label="File Kontrak" full>
+        <input
+          ref={contractInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+          className="hidden"
+          onChange={(e) => setContractFile(e.target.files?.[0] ?? null)}
+        />
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => contractInputRef.current?.click()}
+          >
+            <Paperclip className="mr-1.5 h-3.5 w-3.5" />
+            {contractFile ? "Ganti File" : existingContractUrl ? "Ganti File" : "Pilih File"}
+          </Button>
+          {contractFile ? (
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              <span className="truncate max-w-[160px]">{contractFile.name}</span>
+              <button type="button" onClick={() => { setContractFile(null); if (contractInputRef.current) contractInputRef.current.value = ""; }}>
+                <X className="h-3.5 w-3.5 hover:text-destructive" />
+              </button>
+            </div>
+          ) : existingContractUrl ? (
+            <a href={existingContractUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">
+              Lihat file saat ini
+            </a>
+          ) : (
+            <span className="text-xs text-muted-foreground">Belum ada file</span>
+          )}
+        </div>
       </Field>
 
       {/* Home Branch */}
@@ -331,10 +450,12 @@ function employeeToForm(e: Employee): UpdateEmployeeFormValues {
     employeeCode:      e.employeeCode ?? "",
     phone:             e.phone ?? "",
     email:             e.email ?? "",
-    hireDate:          e.hireDate ? e.hireDate.split("T")[0] : "",
-    birthDate:         e.birthDate ? e.birthDate.split("T")[0] : "",
+    hireDate:          e.hireDate   ? e.hireDate.split("T")[0]   : "",
+    birthDate:         e.birthDate  ? e.birthDate.split("T")[0]  : "",
     address:           e.address ?? "",
     emergencyContact:  e.emergencyContact ?? "",
+    nikKtp:            e.nikKtp ?? "",
+    resignDate:        e.resignDate ? e.resignDate.split("T")[0] : "",
     commissionEnabled: e.commissionEnabled,
     isActive:          e.isActive,
     homeBranchId:      e.homeBranchId ?? "",

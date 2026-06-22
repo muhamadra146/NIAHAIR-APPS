@@ -1,171 +1,17 @@
-import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { api } from "@/lib/axios";
 import { toast } from "@/lib/toast";
 import { formatCurrency } from "@/lib/utils";
-import type { ApiResponse } from "@/types/api";
-import type { TreatmentSession, TreatmentItem, TreatmentAssignment } from "@/features/appointment/types";
 import type { Appointment } from "@/features/appointment/types";
-
-const SLOT_OPTIONS = [
-  { key: "stylist",  label: "Stylist"  },
-  { key: "asisten",  label: "Asisten"  },
-  { key: "colorist", label: "Colorist" },
-];
-
-// ── API helpers ───────────────────────────────────────────────────────
-
-async function setupTreatment(invoiceId: string): Promise<TreatmentSession> {
-  const { data } = await api.post<ApiResponse<TreatmentSession>>(`/invoices/${invoiceId}/setup-treatment`);
-  return data.data;
-}
-
-async function createAssignment(
-  treatmentItemId: string,
-  body: { employeeId: string; slotKey: string; workQty: number; notes?: string },
-): Promise<TreatmentAssignment> {
-  const { data } = await api.post<ApiResponse<TreatmentAssignment>>(
-    `/treatment-items/${treatmentItemId}/assignments`,
-    body,
-  );
-  return data.data;
-}
-
-async function deleteAssignment(id: string): Promise<void> {
-  await api.delete(`/treatment-assignments/${id}`);
-}
-
-async function generateCommission(invoiceId: string): Promise<{ created: number }> {
-  const { data } = await api.post<ApiResponse<{ created: number }>>(`/invoices/${invoiceId}/generate-commission`);
-  return data.data;
-}
-
-async function fetchTreatmentSession(invoiceId: string): Promise<TreatmentSession | null> {
-  const { data } = await api.get<ApiResponse<{ data: TreatmentSession[] }>>("/treatment-sessions", {
-    params: { invoiceId, limit: 1 },
-  });
-  return data.data?.data?.[0] ?? null;
-}
-
-// ── Assignment row form ───────────────────────────────────────────────
-
-function AssignmentForm({
-  treatmentItem,
-  appointment,
-  onAdded,
-}: {
-  treatmentItem: TreatmentItem;
-  appointment:   Appointment | null;
-  onAdded:       () => void;
-}) {
-  const [employeeId, setEmployeeId] = useState("");
-  const [slotKey,    setSlotKey]    = useState("");
-  const [workQty,    setWorkQty]    = useState("");
-  const [saving,     setSaving]     = useState(false);
-
-  const maxWork = Number(treatmentItem.qty) * Number(treatmentItem.conversionSnapshot);
-
-  // Pre-populate staff options from appointment if available
-  const staffOptions = appointment?.staffs ?? [];
-
-  async function handleAdd() {
-    if (!employeeId || !slotKey || !workQty || Number(workQty) <= 0) return;
-    setSaving(true);
-    try {
-      await createAssignment(treatmentItem.id, {
-        employeeId,
-        slotKey,
-        workQty: Number(workQty),
-      });
-      setEmployeeId(""); setSlotKey(""); setWorkQty("");
-      onAdded();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Gagal menambah assignment");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="flex flex-wrap gap-2 items-end">
-      {/* Staff picker */}
-      <div className="space-y-1">
-        <Label className="text-xs">Staff</Label>
-        {staffOptions.length > 0 ? (
-          <select
-            value={employeeId}
-            onChange={(e) => {
-              const emp = appointment?.staffs.find((s) => s.employee.id === e.target.value);
-              setEmployeeId(e.target.value);
-              if (emp?.slotKey) setSlotKey(emp.slotKey);
-            }}
-            className="h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="">Pilih staff…</option>
-            {staffOptions.map((s) => (
-              <option key={s.employee.id} value={s.employee.id}>
-                {s.employee.name} {s.slotKey ? `(${s.slotKey})` : ""}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <Input
-            className="h-8 w-48 text-sm"
-            placeholder="Employee ID…"
-            value={employeeId}
-            onChange={(e) => setEmployeeId(e.target.value)}
-          />
-        )}
-      </div>
-
-      {/* Slot key */}
-      <div className="space-y-1">
-        <Label className="text-xs">Job</Label>
-        <select
-          value={slotKey}
-          onChange={(e) => setSlotKey(e.target.value)}
-          className="h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="">Pilih job…</option>
-          {SLOT_OPTIONS.map((o) => (
-            <option key={o.key} value={o.key}>{o.label}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Work qty */}
-      <div className="space-y-1">
-        <Label className="text-xs">
-          Qty {maxWork > 0 && <span className="text-muted-foreground">(max {maxWork.toLocaleString("id-ID")})</span>}
-        </Label>
-        <Input
-          type="number"
-          min={0.01}
-          max={maxWork}
-          step={0.01}
-          className="h-8 w-28 text-sm"
-          placeholder={`max ${maxWork}`}
-          value={workQty}
-          onChange={(e) => setWorkQty(e.target.value)}
-        />
-      </div>
-
-      <Button
-        size="sm"
-        className="h-8"
-        disabled={!employeeId || !slotKey || !workQty || Number(workQty) <= 0 || saving}
-        onClick={handleAdd}
-      >
-        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-      </Button>
-    </div>
-  );
-}
+import {
+  fetchTreatmentSession,
+  setupTreatment,
+  generateCommission,
+  deleteAssignment,
+} from "../api/treatmentAssignment.api";
+import { AssignmentForm } from "./shared/AssignmentForm";
 
 // ── Main component ────────────────────────────────────────────────────
 

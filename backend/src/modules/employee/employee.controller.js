@@ -30,7 +30,13 @@ const getByIdController = async (req, res, next) => {
 
 const createController = async (req, res, next) => {
   try {
-    const employee = await createEmployee(req.body);
+    const files = req.files ?? {};
+    const body  = {
+      ...req.body,
+      ...(files.ktpFile?.[0]      && { ktpFileUrl: files.ktpFile[0].path, ktpFilePublicId: files.ktpFile[0].filename }),
+      ...(files.contractFile?.[0] && { contractFileUrl: files.contractFile[0].path, contractFilePublicId: files.contractFile[0].filename }),
+    };
+    const employee = await createEmployee(body);
     return created(res, employee, "Employee created");
   } catch (err) {
     next(err);
@@ -39,7 +45,13 @@ const createController = async (req, res, next) => {
 
 const updateController = async (req, res, next) => {
   try {
-    const result = await updateEmployee(req.params.id, req.body);
+    const files = req.files ?? {};
+    const body  = {
+      ...req.body,
+      ...(files.ktpFile?.[0]      && { ktpFileUrl: files.ktpFile[0].path, ktpFilePublicId: files.ktpFile[0].filename }),
+      ...(files.contractFile?.[0] && { contractFileUrl: files.contractFile[0].path, contractFilePublicId: files.contractFile[0].filename }),
+    };
+    const result = await updateEmployee(req.params.id, body);
     return success(res, result, "Employee updated");
   } catch (err) {
     next(err);

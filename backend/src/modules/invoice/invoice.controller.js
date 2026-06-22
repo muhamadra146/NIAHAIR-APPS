@@ -8,6 +8,7 @@ const {
   cancelInvoice,
   deleteInvoice,
   setupTreatmentSession,
+  getDailyAssignment,
 } = require("./invoice.service");
 const { generateCommission } = require("../commission/commission.service");
 
@@ -92,6 +93,15 @@ const generateCommissionController = async (req, res, next) => {
   }
 };
 
+const dailyAssignmentController = async (req, res, next) => {
+  try {
+    const result = await getDailyAssignment({ date: req.query.date, branchId: req.query.branchId });
+    return success(res, result, "Daily assignment fetched");
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getAllController,
   getByIdController,
@@ -102,4 +112,5 @@ module.exports = {
   deleteController,
   setupTreatmentController,
   generateCommissionController,
+  dailyAssignmentController,
 };

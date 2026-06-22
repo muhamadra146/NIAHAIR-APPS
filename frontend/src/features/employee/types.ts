@@ -23,6 +23,12 @@ export interface Employee {
   birthDate:        string | null;
   address:          string | null;
   emergencyContact: string | null;
+  nikKtp:               string | null;
+  ktpFileUrl:           string | null;
+  ktpFilePublicId:      string | null;
+  resignDate:           string | null;
+  contractFileUrl:      string | null;
+  contractFilePublicId: string | null;
   roleId:           string;
   role:             EmployeeRole;
   commissionEnabled: boolean;
@@ -72,8 +78,12 @@ export interface CreateEmployeeInput {
   birthDate?:        string;
   address?:          string;
   emergencyContact?: string;
+  nikKtp?:           string;
+  resignDate?:       string;
   commissionEnabled?: boolean;
   homeBranchId?:     string | null;
+  ktpFile?:          File;
+  contractFile?:     File;
 }
 
 export interface UpdateEmployeeBranchesInput {
@@ -90,9 +100,13 @@ export interface UpdateEmployeeInput {
   birthDate?:         string;
   address?:           string;
   emergencyContact?:  string;
+  nikKtp?:            string;
+  resignDate?:        string;
   commissionEnabled?: boolean;
   isActive?:          boolean;
   homeBranchId?:      string | null;
+  ktpFile?:           File;
+  contractFile?:      File;
 }
 
 export interface CreateSalarySettingInput {

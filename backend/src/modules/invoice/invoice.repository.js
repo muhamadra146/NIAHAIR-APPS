@@ -30,6 +30,40 @@ const INCLUDE = {
   },
 };
 
+// ── Daily assignment INCLUDE (heavier — treatmentItems + assignments) ──
+
+const DAILY_INCLUDE = {
+  customer: { select: { id: true, name: true, customerNo: true } },
+  treatmentSessions: {
+    include: {
+      treatmentItems: {
+        include: {
+          item: { select: { id: true, name: true, itemCode: true } },
+          unit: { select: { id: true, name: true } },
+          assignments: {
+            include: {
+              employee: { select: { id: true, name: true, employeeCode: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  },
+  _count: { select: { commissions: true } },
+};
+
+const findDailyAssignment = ({ start, end, branchId }) => {
+  const where = { invoiceDate: { gte: start, lte: end } };
+  if (branchId) where.branchId = branchId;
+  return prisma.invoice.findMany({
+    where,
+    include:  DAILY_INCLUDE,
+    orderBy:  { createdAt: "asc" },
+    take:     100,
+  });
+};
+
 // ── List / single ─────────────────────────────────────────────────────
 
 const findAll = ({ skip, take, where }) =>
@@ -335,4 +369,5 @@ module.exports = {
   applyDepositWithTransaction,
   updateWithTransaction,
   cancelWithTransaction,
+  findDailyAssignment,
 };

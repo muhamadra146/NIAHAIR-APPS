@@ -62,6 +62,34 @@ Deferred items from CEO review (2026-06-17). Each item has context for pickup in
 
 ---
 
+## P2 — Assignment Harian: Staff Picker from Appointment
+
+**What:** Include appointment staffs in the `GET /invoices/daily-assignment` response so `AssignmentForm` shows a staff dropdown instead of a plain Employee ID text input.
+
+**Why:** Currently `appointment={null}` is passed in AssignmentHarianPage, which degrades `AssignmentForm` to a text input (`<Input placeholder="Employee ID…" />`). Booking Harian and Invoice Detail pre-populate a dropdown from `appointment.staffs`. The daily-assignment page is the primary assignment workflow — it should have the best UX.
+
+**Current state:** The design doc acknowledged `appointment={null}` as Phase 1 acceptable. The daily-assignment Prisma query can include `appointment: { select: { staffs: { include: { employee: { select: { id, name } } } } } }` on each invoice to supply the staff list.
+
+**Where to start:** In `findDailyAssignment()` in `invoice.repository.js`, add `appointment: { select: { staffs: { include: { employee: { select: { id, name, employeeCode: true } } } } } }` to the Prisma include. Pass `appointment={invoice.appointment}` to the embedded assignment component in `AssignmentHarianPage`.
+
+**Effort:** S (human ~30min / CC ~5min) | **Priority:** P2 | **Depends on:** Assignment Harian page shipped
+
+---
+
+## P3 — Timezone Fix: Invoice Date Filters (WIB UTC+7)
+
+**What:** All invoice date filters (`invoice.service.js:47-55`, commission filter, etc.) use `new Date(dateStr)` which is UTC. NIA Hair operates in WIB (UTC+7). An invoice created at 23:30 WIB is stored as 16:30 UTC with the previous calendar date. A date query for June 18 misses invoices created after ~17:00 WIB.
+
+**Why:** Managers filtering "today's invoices" get incomplete results for late-evening slots. The `GET /invoices/daily-assignment` endpoint was fixed with a WIB offset (+7h), but Invoice List, Commission List, and other date-filtered endpoints still use UTC. This creates inconsistency: Assignment Harian shows the correct set, Invoice List does not.
+
+**Current state:** `invoice.service.js:47-55` — `where.invoiceDate.gte = new Date(startDate)` (UTC). Assignment Harian endpoint fixed in-session. All other date filters are still UTC.
+
+**Where to start:** Extract a `toWIBDateRange(dateStr)` helper that returns `{ gte, lte }` with +7h offset. Replace all `new Date(startDate)` / `end.setUTCHours(23,59,59,999)` patterns in invoice, commission, and other service files.
+
+**Effort:** M (human ~2h / CC ~10min) | **Priority:** P3 | **Depends on:** none, can be done anytime
+
+---
+
 ## P3 — Membership Analytics Dashboard
 
 **What:** Manager/owner dashboard showing member vs. non-member revenue, membership utilization, churn risk, and tier performance.

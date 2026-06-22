@@ -171,6 +171,15 @@ model Employee {
 
   emergencyContact String?
 
+  nikKtp               String?
+  ktpFileUrl           String?
+  ktpFilePublicId      String?
+
+  resignDate           DateTime?
+
+  contractFileUrl      String?
+  contractFilePublicId String?
+
   commissionEnabled Boolean @default(true)
 
   isActive Boolean @default(true)

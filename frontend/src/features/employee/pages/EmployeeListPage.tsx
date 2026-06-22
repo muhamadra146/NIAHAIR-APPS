@@ -61,7 +61,7 @@ export function EmployeeListPage() {
   const meta       = data?.meta;
   const totalPages = meta?.totalPages ?? 1;
 
-  async function handleCreate(values: CreateEmployeeFormValues) {
+  async function handleCreate(values: CreateEmployeeFormValues, files: { ktpFile?: File | null; contractFile?: File | null }) {
     setFormError(null);
     try {
       const created = await createMutation.mutateAsync({
@@ -74,8 +74,12 @@ export function EmployeeListPage() {
         birthDate:         values.birthDate        || undefined,
         address:           values.address          || undefined,
         emergencyContact:  values.emergencyContact || undefined,
+        nikKtp:            values.nikKtp           || undefined,
+        resignDate:        values.resignDate        || undefined,
         commissionEnabled: values.commissionEnabled,
         homeBranchId:      values.homeBranchId     || undefined,
+        ktpFile:           files.ktpFile           ?? undefined,
+        contractFile:      files.contractFile      ?? undefined,
       });
       if ((values.branchIds ?? []).length > 0) {
         await updateEmployeeBranches(created.id, { branchIds: values.branchIds });

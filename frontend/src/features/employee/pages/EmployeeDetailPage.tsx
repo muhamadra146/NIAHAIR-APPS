@@ -45,7 +45,7 @@ export function EmployeeDetailPage() {
   const createSsMutation = useCreateSalarySetting(id!);
   const updateSsMutation = useUpdateSalarySetting(id!, editSs?.id ?? "");
 
-  async function handleUpdate(values: UpdateEmployeeFormValues) {
+  async function handleUpdate(values: UpdateEmployeeFormValues, files: { ktpFile?: File | null; contractFile?: File | null }) {
     setEditError(null);
     try {
       await updateMutation.mutateAsync({
@@ -58,9 +58,13 @@ export function EmployeeDetailPage() {
         birthDate:         values.birthDate        || undefined,
         address:           values.address          || undefined,
         emergencyContact:  values.emergencyContact || undefined,
+        nikKtp:            values.nikKtp           || undefined,
+        resignDate:        values.resignDate        || undefined,
         commissionEnabled: values.commissionEnabled,
         isActive:          values.isActive,
         homeBranchId:      values.homeBranchId     || null,
+        ktpFile:           files.ktpFile           ?? undefined,
+        contractFile:      files.contractFile      ?? undefined,
       });
       await updateBranchMutation.mutateAsync({ branchIds: values.branchIds ?? [] });
       setEditOpen(false);
@@ -183,11 +187,25 @@ export function EmployeeDetailPage() {
                 <Row label="Role"            value={employee.role.name} />
                 <Row label="No. HP"          value={employee.phone} />
                 <Row label="Email"           value={employee.email} />
+                <Row label="NIK KTP"         value={employee.nikKtp} />
                 <Row label="Tanggal Masuk"   value={employee.hireDate ? formatDate(employee.hireDate) : null} />
                 <Row label="Tanggal Lahir"   value={employee.birthDate ? formatDate(employee.birthDate) : null} />
+                <Row label="Tanggal Resign"  value={employee.resignDate ? formatDate(employee.resignDate) : null} />
                 <Row label="Alamat"          value={employee.address} />
                 <Row label="Kontak Darurat"  value={employee.emergencyContact} />
                 <Row label="Komisi"          value={employee.commissionEnabled ? "Aktif" : "Nonaktif"} />
+                <Row
+                  label="Foto KTP"
+                  value={employee.ktpFileUrl
+                    ? <a href={employee.ktpFileUrl} target="_blank" rel="noreferrer" className="text-primary underline">Lihat File</a>
+                    : null}
+                />
+                <Row
+                  label="File Kontrak"
+                  value={employee.contractFileUrl
+                    ? <a href={employee.contractFileUrl} target="_blank" rel="noreferrer" className="text-primary underline">Lihat File</a>
+                    : null}
+                />
               </CardContent>
             </Card>
           </TabsContent>

@@ -10,6 +10,8 @@ export const createEmployeeSchema = z.object({
   birthDate:         z.string().optional().or(z.literal("")),
   address:           z.string().optional().or(z.literal("")),
   emergencyContact:  z.string().optional().or(z.literal("")),
+  nikKtp:            z.string().optional().or(z.literal("")),
+  resignDate:        z.string().optional().or(z.literal("")),
   commissionEnabled: z.boolean().default(false),
   homeBranchId:      z.string().optional().or(z.literal("")),
   branchIds:         z.array(z.string()).default([]),

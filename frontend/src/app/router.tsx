@@ -37,6 +37,7 @@ import { MyPayslipPage }             from "@/features/payroll/pages/MyPayslipPag
 import { CorrectionPage }            from "@/features/attendance/pages/CorrectionPage";
 import { PermissionPage }            from "@/features/attendance/pages/PermissionPage";
 import { SickLeavePage }             from "@/features/attendance/pages/SickLeavePage";
+import { AssignmentHarianPage }      from "@/features/invoice/pages/AssignmentHarianPage";
 
 export const router = createBrowserRouter([
   // ── Public routes ────────────────────────────────────────────────────
@@ -87,7 +88,8 @@ export const router = createBrowserRouter([
           { path: "/deposit-payments",      element: <DepositPaymentListPage /> },
           { path: "/invoice-payments",      element: <InvoicePaymentListPage /> },
           // Commissions
-          { path: "/commissions", element: <CommissionListPage /> },
+          { path: "/commissions",       element: <CommissionListPage /> },
+          { path: "/assignment-harian", element: <AssignmentHarianPage /> },
           // Inventory
           { path: "/inventory", element: <InventoryPage /> },
           // Reports

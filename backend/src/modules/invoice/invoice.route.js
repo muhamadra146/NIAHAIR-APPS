@@ -15,12 +15,18 @@ const {
   deleteController,
   setupTreatmentController,
   generateCommissionController,
+  dailyAssignmentController,
 } = require("./invoice.controller");
+
+const MANAGER_ROLES        = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER];
+const DAILY_ASSIGN_ROLES   = [...MANAGER_ROLES, ROLES.STAFF, ROLES.THERAPIST];
 
 const router = Router();
 
-router.get("/",    authenticate, getAllController);
-router.get("/:id", authenticate, getByIdController);
+router.get("/",                 authenticate, getAllController);
+// Literal-path routes MUST come before /:id — Express matches first-registered-wins
+router.get("/daily-assignment", authenticate, authorize(...DAILY_ASSIGN_ROLES), dailyAssignmentController);
+router.get("/:id",              authenticate, getByIdController);
 router.post("/",   authenticate, requireBranch, validate(createInvoiceSchema), createController);
 router.patch("/:id", authenticate, validate(updateInvoiceSchema), updateController);
 router.post("/:invoiceId/deposits", authenticate, validate(applyDepositSchema), applyDepositController);

@@ -10,6 +10,8 @@ const createEmployeeSchema = object({
   birthDate:         optional(string()),
   address:           optional(string()),
   emergencyContact:  optional(string()),
+  nikKtp:            optional(string()),
+  resignDate:        optional(string()),
   commissionEnabled: optional(boolean()),
   homeBranchId:      optional(nullable(string())),
 });
@@ -24,6 +26,8 @@ const updateEmployeeSchema = object({
   birthDate:         optional(string()),
   address:           optional(string()),
   emergencyContact:  optional(string()),
+  nikKtp:            optional(string()),
+  resignDate:        optional(string()),
   commissionEnabled: optional(boolean()),
   isActive:          optional(boolean()),
   homeBranchId:      optional(nullable(string())),
