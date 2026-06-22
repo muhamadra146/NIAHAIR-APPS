@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -195,12 +196,12 @@ export function Sidebar() {
         <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-3">
           <ul className="space-y-0.5">
             {grouped.map((group, gi) => (
-              <>
-                {gi > 0 && <SectionLabel key={`sep-${group.label}`} label={group.label} collapsed={sidebarCollapsed} />}
+              <Fragment key={group.label}>
+                {gi > 0 && <SectionLabel label={group.label} collapsed={sidebarCollapsed} />}
                 {group.items.map((item) => (
                   <NavLink key={item.href} item={item} collapsed={sidebarCollapsed} />
                 ))}
-              </>
+              </Fragment>
             ))}
           </ul>
         </nav>
