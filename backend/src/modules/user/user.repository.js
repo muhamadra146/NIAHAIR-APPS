@@ -16,6 +16,7 @@ const EMPLOYEE_BRANCH_SELECT = {
 const USER_SELECT = {
   id:         true,
   email:      true,
+  username:   true,
   isActive:   true,
   employeeId: true,
   createdAt:  true,
@@ -44,6 +45,12 @@ const findById = (id) =>
 const findByEmail = (email) =>
   prisma.user.findUnique({ where: { email }, select: { id: true } });
 
+const findByUsername = (username) =>
+  prisma.user.findUnique({ where: { username }, select: { id: true } });
+
+const findByIdWithPassword = (id) =>
+  prisma.user.findUnique({ where: { id }, select: { id: true, passwordHash: true } });
+
 const findByEmployeeId = (employeeId) =>
   prisma.user.findUnique({ where: { employeeId }, select: { id: true } });
 
@@ -57,9 +64,10 @@ const findEmployeeById = (id) =>
 
 // ── Write ─────────────────────────────────────────────────────────────
 
-const create = ({ email, passwordHash, userRoleId, employeeId }) =>
+const create = ({ username, email, passwordHash, userRoleId, employeeId }) =>
   prisma.user.create({
     data: {
+      username,
       email,
       passwordHash,
       userRoleId,
@@ -85,8 +93,11 @@ const updatePassword = (id, passwordHash) =>
 const deactivate = (id) =>
   prisma.user.update({ where: { id }, data: { isActive: false }, select: USER_SELECT });
 
+const deleteById = (id) =>
+  prisma.user.delete({ where: { id } });
+
 module.exports = {
-  findAll, count, findById, findByEmail, findByEmployeeId,
+  findAll, count, findById, findByEmail, findByUsername, findByEmployeeId, findByIdWithPassword,
   findUserRoleById, findEmployeeById,
-  create, update, updatePassword, deactivate,
+  create, update, updatePassword, deactivate, deleteById,
 };

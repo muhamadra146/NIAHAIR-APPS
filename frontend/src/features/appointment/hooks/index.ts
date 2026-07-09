@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/lib/toast";
 import {
   fetchAppointments,
   fetchAppointment,
@@ -76,5 +77,6 @@ export const useDeleteAppointment = () => {
   return useMutation({
     mutationFn: (id: string) => deleteAppointment(id),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ["appointments"] }); },
+    onError:    (err: Error) => toast.error(err.message),
   });
 };

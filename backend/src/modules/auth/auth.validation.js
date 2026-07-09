@@ -1,8 +1,8 @@
-const { object, string, pipe, email, minLength } = require("valibot");
+const { object, string, pipe, minLength } = require("valibot");
 
 const loginSchema = object({
-  email: pipe(string(), email("Invalid email address")),
-  password: pipe(string(), minLength(1, "Password is required")),
+  identifier: pipe(string(), minLength(1, "Email atau username wajib diisi")),
+  password:   pipe(string(), minLength(1, "Password is required")),
 });
 
 module.exports = { loginSchema };

@@ -52,8 +52,10 @@ function DeleteConfirmDialog({
   const deleteMutation = useDeleteAppointment();
 
   const handleConfirm = async () => {
-    await deleteMutation.mutateAsync(appointment.id);
-    onClose();
+    try {
+      await deleteMutation.mutateAsync(appointment.id);
+      onClose();
+    } catch { /* error shown by hook onError toast */ }
   };
 
   return (

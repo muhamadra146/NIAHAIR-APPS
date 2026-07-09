@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Trash2, ChevronDown, ChevronUp, Plus, Loader2, Receipt, Pencil, CalendarDays, ShoppingBag, Check, AlertCircle, RefreshCw } from "lucide-react";
+import { Search, Trash2, ChevronDown, ChevronUp, Plus, Loader2, Receipt, Pencil, CalendarDays, ShoppingBag, Check, AlertCircle, RefreshCw, Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -129,6 +129,7 @@ export interface CreateInvoiceDialogProps {
   branchId:                  string;
   preselectedAppointment?:   Appointment | null;
   initialExistingInvoiceId?: string | null;
+  startInEditMode?:          boolean;
   onSuccess?:                (invoiceId: string) => void;
 }
 
@@ -140,6 +141,7 @@ export function CreateInvoiceDialog({
   branchId,
   preselectedAppointment,
   initialExistingInvoiceId,
+  startInEditMode = false,
   onSuccess,
 }: CreateInvoiceDialogProps) {
   const qc = useQueryClient();
@@ -247,6 +249,18 @@ export function CreateInvoiceDialog({
     queryFn:  () => fetchInvoice(existingInvoiceId!),
     enabled:  !!existingInvoiceId && open,
   });
+
+  // When existing invoice loads: set correct mode and auto-enter edit mode if requested
+  useEffect(() => {
+    if (!existingInvoice) return;
+    // Set mode based on how invoice was originally created
+    setMode(existingInvoice.appointmentId ? "booking" : "walkin");
+    // Auto-enter edit mode when opened from detail page edit button
+    if (startInEditMode && !editMode) {
+      enterEditMode();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingInvoice?.id]);
 
   const [apptSearch, setApptSearch] = useState("");
 
@@ -541,7 +555,7 @@ export function CreateInvoiceDialog({
         discountType:    l.discountType,
         discountAmount:  l.discountType === "AMOUNT" ? (parseFloat(l.discount) || 0) : 0,
         discountPercent: l.discountType === "PERCENT" ? (parseFloat(l.discount) || 0) : undefined,
-        taxable:         false,
+        taxable,
       }));
 
       // ── Update existing invoice ──
@@ -555,6 +569,8 @@ export function CreateInvoiceDialog({
         await updateInvoice(existingInvoiceId, input);
         await qc.invalidateQueries({ queryKey: ["invoices", existingInvoiceId] });
         await qc.invalidateQueries({ queryKey: ["invoices"] });
+        await qc.invalidateQueries({ queryKey: ["inventories"] });
+        await qc.invalidateQueries({ queryKey: ["stock-movements"] });
         toast.success("Invoice berhasil diupdate");
         setEditMode(false);
         setLines([]);
@@ -600,6 +616,8 @@ export function CreateInvoiceDialog({
 
       const invoice = await createInvoice(input);
       await qc.invalidateQueries({ queryKey: ["invoices"] });
+      await qc.invalidateQueries({ queryKey: ["inventories"] });
+      await qc.invalidateQueries({ queryKey: ["stock-movements"] });
       toast.success("Invoice berhasil dibuat");
       reset();
       onOpenChange(false);
@@ -727,7 +745,20 @@ export function CreateInvoiceDialog({
             )}
 
             {/* ── Booking selection ── */}
-            {mode === "booking" && (
+            {mode === "booking" && editMode && existingInvoice && (
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Booking</Label>
+                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 flex items-center gap-2 text-muted-foreground">
+                  <Lock className="h-3.5 w-3.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{existingInvoice.customer?.name ?? "—"}</p>
+                    <p className="text-[11px]">Booking tidak dapat diubah saat edit</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {mode === "booking" && !editMode && (
             <div className="space-y-2">
               <Label className="text-sm font-semibold">Booking <span className="text-destructive">*</span></Label>
 
@@ -1166,7 +1197,7 @@ export function CreateInvoiceDialog({
                   onChange={handleItemSearch}
                   placeholder="Cari layanan atau produk…"
                   className="pl-8"
-                  disabled={mode === "booking" ? !selectedAppt : !selectedCustomer}
+                  disabled={!editMode && (mode === "booking" ? !selectedAppt : !selectedCustomer)}
                 />
                 {itemResults.length > 0 && (
                   <div className="absolute z-20 mt-1 w-full rounded-md border border-input bg-background shadow-lg max-h-48 overflow-y-auto">
@@ -1190,10 +1221,10 @@ export function CreateInvoiceDialog({
                   </div>
                 )}
               </div>
-              {mode === "booking" && !selectedAppt && (
+              {!editMode && mode === "booking" && !selectedAppt && (
                 <p className="text-xs text-muted-foreground">Pilih booking terlebih dahulu.</p>
               )}
-              {mode === "walkin" && !selectedCustomer && (
+              {!editMode && mode === "walkin" && !selectedCustomer && (
                 <p className="text-xs text-muted-foreground">Pilih customer terlebih dahulu.</p>
               )}
 
@@ -1379,7 +1410,10 @@ export function CreateInvoiceDialog({
               <>
                 <Button
                   type="button" variant="outline"
-                  onClick={() => { setEditMode(false); setLines([]); setError(null); }}
+                  onClick={() => {
+                    if (startInEditMode) { handleClose(false); return; }
+                    setEditMode(false); setLines([]); setError(null);
+                  }}
                   disabled={submitting}
                 >
                   Batal Edit

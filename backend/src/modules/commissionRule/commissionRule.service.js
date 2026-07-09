@@ -1,6 +1,14 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const { resolveOrderBy } = require("../../utils/sort");
+
+const ORDER_MAP = {
+  createdAt:    { createdAt: "asc" },
+  "-createdAt": { createdAt: "desc" },
+  isActive:     { isActive: "asc" },
+  "-isActive":  { isActive: "desc" },
+};
 const {
   findAll,
   count,
@@ -14,8 +22,9 @@ const {
   deleteById,
 } = require("./commissionRule.repository");
 
-const getAll = async ({ page, limit, search, employeeId, commissionCategoryId, isActive }) => {
+const getAll = async ({ page, limit, search, employeeId, commissionCategoryId, isActive, sortBy }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const orderBy = resolveOrderBy(sortBy, ORDER_MAP);
   const where = {};
 
   if (search) {
@@ -34,7 +43,7 @@ const getAll = async ({ page, limit, search, employeeId, commissionCategoryId, i
   }
 
   const [rules, total] = await Promise.all([
-    findAll({ skip, take, where }),
+    findAll({ skip, take, where, orderBy }),
     count(where),
   ]);
 

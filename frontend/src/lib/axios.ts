@@ -2,13 +2,18 @@ import axios from "axios";
 import { useAuthStore } from "@/stores/authStore";
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:3000/api",
+  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:3000",
   headers: { "Content-Type": "application/json" },
 });
 
-// Request interceptor — attach Authorization and X-Branch-Id
+// Request interceptor — prefix /api/v1, attach Authorization and X-Branch-Id
 api.interceptors.request.use((config) => {
   const { token, branchId } = useAuthStore.getState();
+
+  // Prefix all API paths with /api/v1 unless already versioned
+  if (config.url && !config.url.startsWith("/api/")) {
+    config.url = `/api/v1${config.url}`;
+  }
 
   if (token) {
     config.headers["Authorization"] = `Bearer ${token}`;
@@ -28,6 +33,7 @@ api.interceptors.response.use(
       useAuthStore.getState().logout();
       window.location.href = "/login";
     }
-    return Promise.reject(error);
+    const message = error.response?.data?.message ?? error.message;
+    return Promise.reject(new Error(message));
   }
 );

@@ -91,8 +91,6 @@ export interface CreateEmployeeInput {
   commissionEnabled?: boolean;
   payDay?:           number | null;
   homeBranchId?:     string | null;
-  ktpFile?:          File;
-  contractFile?:     File;
 }
 
 export interface UpdateEmployeeBranchesInput {
@@ -115,8 +113,11 @@ export interface UpdateEmployeeInput {
   isActive?:          boolean;
   payDay?:            number | null;
   homeBranchId?:      string | null;
-  ktpFile?:           File;
-  contractFile?:      File;
+}
+
+export interface UploadEmployeeFilesInput {
+  ktpFile?:      File | null;
+  contractFile?: File | null;
 }
 
 export interface CreateSalarySettingInput {

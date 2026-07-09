@@ -1,6 +1,7 @@
 const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
+const cloudinary      = require("../../config/cloudinary");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const prisma                                                       = require("../../config/prisma");
 const { createSyncJob }                                            = require("../syncQueue/syncQueue.service");
@@ -24,11 +25,11 @@ const D = (v) => new Prisma.Decimal(String(v));
 // ── Payment number generator: DPAY-YYYYMMDD-XXXX ─────────────────────
 
 const buildPaymentNo = async () => {
-  const now        = new Date();
-  const yyyy       = now.getFullYear();
-  const mm         = String(now.getMonth() + 1).padStart(2, "0");
-  const dd         = String(now.getDate()).padStart(2, "0");
-  const startOfDay = new Date(yyyy, now.getMonth(), now.getDate());
+  const now        = new Date(Date.now() + 7 * 3600 * 1000); // WIB (UTC+7)
+  const yyyy       = now.getUTCFullYear();
+  const mm         = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const dd         = String(now.getUTCDate()).padStart(2, "0");
+  const startOfDay = new Date(Date.UTC(yyyy, now.getUTCMonth(), now.getUTCDate()) - 7 * 3600 * 1000);
   const todayCount = await countToday(startOfDay);
   return `DPAY-${yyyy}${mm}${dd}-${String(todayCount + 1).padStart(4, "0")}`;
 };
@@ -125,6 +126,18 @@ const deleteDepositPayment = async (id) => {
   // Best-effort: hapus dari Accurate jika sudah di-sync
   if (dp.accurateReceiptId) {
     await deleteDepositPaymentFromAccurate(dp.accurateReceiptId);
+  }
+
+  // Best-effort: hapus bukti transfer dari Cloudinary jika ada
+  if (dp.transferProofPublicId) {
+    try {
+      await cloudinary.uploader.destroy(dp.transferProofPublicId, {
+        resource_type: "image",
+        invalidate:    true,
+      });
+    } catch {
+      // Non-critical — lanjut hapus DB walaupun Cloudinary gagal
+    }
   }
 
   // Hapus payment lalu kembalikan deposit ke UNPAID

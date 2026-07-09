@@ -1,6 +1,7 @@
-const { Router }   = require("express");
-const authenticate = require("../../middlewares/auth.middleware");
-const authorize    = require("../../middlewares/role.middleware");
+const { Router }      = require("express");
+const authenticate    = require("../../middlewares/auth.middleware");
+const authorize       = require("../../middlewares/role.middleware");
+const requireBranch   = require("../../middlewares/branch.middleware");
 const validate     = require("../../middlewares/validate.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
 const { object, picklist, optional, string } = require("valibot");
@@ -22,6 +23,6 @@ const updateStatusSchema = object({
 router.get("/",     authenticate, getAllController);
 router.get("/:id",  authenticate, getByIdController);
 router.post("/",    authenticate, authorize(...MANAGER_ROLES), validate(createTransferSchema), createController);
-router.patch("/:id/status", authenticate, authorize(...MANAGER_ROLES), validate(updateStatusSchema), updateStatusController);
+router.patch("/:id/status", authenticate, authorize(...MANAGER_ROLES), requireBranch, validate(updateStatusSchema), updateStatusController);
 
 module.exports = router;

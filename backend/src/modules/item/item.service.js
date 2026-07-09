@@ -1,11 +1,22 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
-const { findAll, count, findById, findByItemCode, findCommissionCategoryById, create, update } = require("./item.repository");
-const { pushItemToAccurate } = require("./item.push.service");
+const { resolveOrderBy } = require("../../utils/sort");
+const { findAll, count, findById, findByItemCode, findCommissionCategoryById, create, update, findServiceMaterials } = require("./item.repository");
+const { createSyncJob } = require("../syncQueue/syncQueue.service");
 
-const getAll = async ({ page, limit, search, isActive, itemType }) => {
+const ORDER_MAP = {
+  name:         { name: "asc" },
+  "-name":      { name: "desc" },
+  itemCode:     { itemCode: "asc" },
+  "-itemCode":  { itemCode: "desc" },
+  createdAt:    { createdAt: "asc" },
+  "-createdAt": { createdAt: "desc" },
+};
+
+const getAll = async ({ page, limit, search, isActive, itemType, sortBy }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const orderBy = resolveOrderBy(sortBy, ORDER_MAP);
 
   const where = {};
 
@@ -25,7 +36,7 @@ const getAll = async ({ page, limit, search, isActive, itemType }) => {
   }
 
   const [items, total] = await Promise.all([
-    findAll({ skip, take, where }),
+    findAll({ skip, take, where, orderBy }),
     count(where),
   ]);
 
@@ -47,14 +58,9 @@ const createItem = async (body) => {
 
   const item = await create(body);
 
-  // TODO: move to background sync job
-  try {
-    await pushItemToAccurate(item.id);
-    const synced = await findById(item.id);
-    return { item: synced, message: "Item created and synced to Accurate" };
-  } catch (_err) {
-    return { item, message: "Item created but pending Accurate sync" };
-  }
+  await createSyncJob({ entityType: "ITEM", entityId: item.id, direction: "APP_TO_ACCURATE" });
+
+  return { item, message: "Item created and queued for Accurate sync" };
 };
 
 const updateItem = async (id, body) => {
@@ -74,4 +80,10 @@ const updateItem = async (id, body) => {
   return update(id, body);
 };
 
-module.exports = { getAll, getById, createItem, updateItem };
+const getServiceMaterials = async (serviceItemId) => {
+  const item = await findById(serviceItemId);
+  if (!item) throw new AppError("Item not found", StatusCodes.NOT_FOUND);
+  return findServiceMaterials(serviceItemId);
+};
+
+module.exports = { getAll, getById, createItem, updateItem, getServiceMaterials };

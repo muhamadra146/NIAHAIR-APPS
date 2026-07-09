@@ -1,5 +1,7 @@
-export type StockMovementType = "IN" | "OUT";
-export type ReferenceType     = "INVOICE" | "MANUAL" | string;
+export type InventoryMovementType =
+  | "PURCHASE" | "SALE" | "SERVICE_USAGE" | "PRODUCTION"
+  | "TRANSFER_IN" | "TRANSFER_OUT" | "ADJUSTMENT"
+  | "OPENING_BALANCE" | "RETURN" | "SYNC";
 
 export interface InventoryItemRef {
   id:       string;
@@ -17,29 +19,31 @@ export interface InventoryBalance {
   id:           string;
   warehouseId:  string;
   itemId:       string;
-  availableQty: number | string;
-  reservedQty:  number | string;
-  minimumQty:   number | string;
+  qtyOnHand:    number | string;
+  qtyReserved:  number | string;
+  qtyAvailable: number | string;
   updatedAt:    string;
   item:         InventoryItemRef;
   warehouse:    InventoryWarehouseRef;
 }
 
 export interface StockMovement {
-  id:            string;
-  warehouseId:   string;
-  itemId:        string;
-  invoiceItemId: string | null;
-  type:          StockMovementType;
-  qty:           number | string;
-  balanceBefore: number | string;
-  balanceAfter:  number | string;
-  referenceType: ReferenceType;
-  referenceId:   string;
-  notes:         string | null;
-  createdAt:     string;
-  item:          InventoryItemRef;
-  warehouse:     InventoryWarehouseRef;
+  id:           string;
+  movementType: InventoryMovementType;
+  qtyChange:    number | string;
+  qtyBefore:    number | string;
+  qtyAfter:     number | string;
+  referenceType: string | null;
+  referenceId:  string | null;
+  referenceNo:  string | null;
+  notes:        string | null;
+  createdAt:    string;
+  inventory: {
+    id:        string;
+    item:      InventoryItemRef;
+    warehouse: InventoryWarehouseRef;
+  };
+  createdByEmployee: { id: string; name: string; employeeCode: string } | null;
 }
 
 export interface InventoryListParams {
@@ -48,6 +52,7 @@ export interface InventoryListParams {
   warehouseId?: string;
   branchId?:    string;
   itemId?:      string;
+  search?:      string;
 }
 
 export interface MovementListParams {
@@ -58,7 +63,7 @@ export interface MovementListParams {
   itemId?:        string;
   warehouseId?:   string;
   branchId?:      string;
-  type?:          StockMovementType | string;
+  direction?:     "IN" | "OUT" | "";
   startDate?:     string;
   endDate?:       string;
 }

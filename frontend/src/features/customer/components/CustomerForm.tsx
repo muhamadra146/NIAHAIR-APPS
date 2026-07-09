@@ -73,14 +73,13 @@ export function CustomerForm({
   function handleFormSubmit(values: CustomerFormValues) {
     onSubmit({
       ...values,
-      mobilePhone: values.mobilePhone || undefined,
-      email:       values.email || undefined,
-      gender:      values.gender || undefined,
-      birthDate:   values.birthDate || undefined,
-      address:     values.address || undefined,
-      city:        values.city || undefined,
-      province:    values.province || undefined,
-      notes:       values.notes || undefined,
+      email:     values.email     || undefined,
+      gender:    values.gender    || undefined,
+      birthDate: values.birthDate || undefined,
+      address:   values.address   || undefined,
+      city:      values.city      || undefined,
+      province:  values.province  || undefined,
+      notes:     values.notes     || undefined,
     } as CustomerFormValues);
   }
 
@@ -127,7 +126,9 @@ export function CustomerForm({
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="mobilePhone">Phone</Label>
+                <Label htmlFor="mobilePhone">
+                  No. HP <span className="text-destructive">*</span>
+                </Label>
                 <Input id="mobilePhone" {...register("mobilePhone")} placeholder="08123456789" inputMode="tel" />
                 {errors.mobilePhone && (
                   <p className="text-xs text-destructive">{errors.mobilePhone.message}</p>

@@ -1,7 +1,18 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const prisma          = require("../../config/prisma");
+const cloudinary      = require("../../config/cloudinary");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const { resolveOrderBy } = require("../../utils/sort");
+
+const ORDER_MAP = {
+  visitDate:    { visitDate: "asc" },
+  "-visitDate": { visitDate: "desc" },
+  createdAt:    { createdAt: "asc" },
+  "-createdAt": { createdAt: "desc" },
+  status:       { status: "asc" },
+  "-status":    { status: "desc" },
+};
 const {
   findAll,
   count,
@@ -15,7 +26,6 @@ const {
   changeStatusWithTransaction,
   rescheduleWithTransaction,
 } = require("./appointment.repository");
-const { getAvailableStaff } = require("../staffSchedule/staffSchedule.service");
 
 // ── Status transition rules ───────────────────────────────────────────
 //
@@ -36,12 +46,12 @@ const VALID_TRANSITIONS = {
 // ── Booking number generator: BKG-YYYYMMDD-XXXX ───────────────────────
 
 const buildBookingNo = async () => {
-  const now  = new Date();
-  const yyyy = now.getFullYear();
-  const mm   = String(now.getMonth() + 1).padStart(2, "0");
-  const dd   = String(now.getDate()).padStart(2, "0");
+  const now  = new Date(Date.now() + 7 * 3600 * 1000); // WIB (UTC+7)
+  const yyyy = now.getUTCFullYear();
+  const mm   = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const dd   = String(now.getUTCDate()).padStart(2, "0");
 
-  const startOfDay = new Date(yyyy, now.getMonth(), now.getDate());
+  const startOfDay = new Date(Date.UTC(yyyy, now.getUTCMonth(), now.getUTCDate()) - 7 * 3600 * 1000);
   const todayCount = await countToday(startOfDay);
 
   return `BKG-${yyyy}${mm}${dd}-${String(todayCount + 1).padStart(4, "0")}`;
@@ -49,8 +59,9 @@ const buildBookingNo = async () => {
 
 // ── List ──────────────────────────────────────────────────────────────
 
-const listAppointments = async ({ page, limit, customerId, branchId, status, startDate, endDate }) => {
+const listAppointments = async ({ page, limit, customerId, branchId, status, startDate, endDate, sortBy }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const orderBy = resolveOrderBy(sortBy, ORDER_MAP, "-visitDate");
 
   const where = {};
   if (customerId) where.customerId = customerId;
@@ -64,7 +75,7 @@ const listAppointments = async ({ page, limit, customerId, branchId, status, sta
   }
 
   const [data, total] = await Promise.all([
-    findAll({ skip, take, where }),
+    findAll({ skip, take, where, orderBy }),
     count(where),
   ]);
 
@@ -85,7 +96,7 @@ const getAppointmentById = async (id) => {
 // We combine them here so the DB stores a proper DateTime.
 
 const combineDatetime = (dateStr, timeStr) =>
-  new Date(`${dateStr.split("T")[0]}T${timeStr}:00`);
+  new Date(`${dateStr.split("T")[0]}T${timeStr}:00+07:00`);
 
 // ── Create ────────────────────────────────────────────────────────────
 
@@ -101,16 +112,6 @@ const createAppointment = async (body, userId, createdByEmployeeId = null) => {
 
   const branch = await findBranchById(branchId);
   if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
-
-  if (staffsBySlot.length > 0) {
-    const employeeIds  = staffsBySlot.map((s) => s.employeeId);
-    const available    = await getAvailableStaff({ date: visitDate, branchId, startTime, endTime });
-    const availableSet = new Set(available.map((s) => s.employeeId));
-    const unavailable  = employeeIds.filter((id) => !availableSet.has(id));
-    if (unavailable.length > 0) {
-      throw new AppError("Staff not available at selected time", StatusCodes.UNPROCESSABLE_ENTITY);
-    }
-  }
 
   const bookingNo = await buildBookingNo();
 
@@ -155,9 +156,6 @@ const createAppointment = async (body, userId, createdByEmployeeId = null) => {
 
 // ── Update fields ─────────────────────────────────────────────────────
 
-const pad    = (n)  => String(n).padStart(2, "0");
-const toHHMM = (dt) => `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
-
 const updateAppointmentById = async (id, body, userId) => {
   const appointment = await findById(id);
   if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
@@ -175,29 +173,6 @@ const updateAppointmentById = async (id, body, userId) => {
 
   if (!hasUpdate) {
     throw new AppError("No fields to update", StatusCodes.UNPROCESSABLE_ENTITY);
-  }
-
-  // Validate staff availability when staffsBySlot are being set
-  if (staffsBySlot !== undefined && staffsBySlot.length > 0) {
-    const employeeIds      = staffsBySlot.map((s) => s.employeeId);
-    const effectiveDateStr = visitDate
-      ? visitDate.split("T")[0]
-      : appointment.visitDate.toISOString().split("T")[0];
-    const effectiveStart = startTime ?? toHHMM(appointment.startTime);
-    const effectiveEnd   = endTime   ?? toHHMM(appointment.endTime);
-
-    const available    = await getAvailableStaff({
-      date:                 effectiveDateStr,
-      branchId:             appointment.branchId,
-      startTime:            effectiveStart,
-      endTime:              effectiveEnd,
-      excludeAppointmentId: id,
-    });
-    const availableSet = new Set(available.map((s) => s.employeeId));
-    const unavailable  = employeeIds.filter((empId) => !availableSet.has(empId));
-    if (unavailable.length > 0) {
-      throw new AppError("Staff not available at selected time", StatusCodes.UNPROCESSABLE_ENTITY);
-    }
   }
 
   // Use the new visitDate if provided, otherwise keep the existing one as base for time combination
@@ -272,10 +247,18 @@ const deleteAppointmentById = async (id) => {
   const appointment = await findById(id);
   if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
 
+  // Hapus foto dari Cloudinary sebelum delete DB (best-effort, tidak membatalkan delete jika gagal)
+  const photos = await prisma.appointmentPhoto.findMany({
+    where:  { appointmentId: id },
+    select: { publicId: true },
+  });
+  await Promise.allSettled(photos.map((p) => cloudinary.uploader.destroy(p.publicId)));
+
   await prisma.$transaction([
     prisma.appointmentStaff.deleteMany({ where: { appointmentId: id } }),
     prisma.appointmentService.deleteMany({ where: { appointmentId: id } }),
     prisma.appointmentStatusHistory.deleteMany({ where: { appointmentId: id } }),
+    prisma.appointmentRescheduleHistory.deleteMany({ where: { appointmentId: id } }),
     prisma.deposit.updateMany({ where: { appointmentId: id }, data: { appointmentId: null } }),
     prisma.invoice.updateMany({ where: { appointmentId: id }, data: { appointmentId: null } }),
     prisma.treatmentSession.updateMany({ where: { appointmentId: id }, data: { appointmentId: null } }),

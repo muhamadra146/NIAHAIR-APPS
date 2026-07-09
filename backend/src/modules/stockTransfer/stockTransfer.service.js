@@ -5,18 +5,19 @@ const { paginate, paginationMeta } = require("../../utils/pagination");
 const prisma          = require("../../config/prisma");
 const repo            = require("./stockTransfer.repository");
 const { createSyncJob } = require("../syncQueue/syncQueue.service");
+const { validatePeriodOpen } = require("../inventory/inventory.period.service");
 
 const D = (v) => new Prisma.Decimal(String(v));
 
 // ── Transfer number generator: TRF-YYYYMMDD-XXXX ─────────────────────
 // Accepts a transaction client so seq lookup + insert are atomic (Serializable)
 const buildTransferNo = async (tx) => {
-  const today    = new Date();
-  const yyyy     = today.getFullYear();
-  const mm       = String(today.getMonth() + 1).padStart(2, "0");
-  const dd       = String(today.getDate()).padStart(2, "0");
+  const today    = new Date(Date.now() + 7 * 3600 * 1000); // WIB (UTC+7)
+  const yyyy     = today.getUTCFullYear();
+  const mm       = String(today.getUTCMonth() + 1).padStart(2, "0");
+  const dd       = String(today.getUTCDate()).padStart(2, "0");
   const prefix   = `TRF-${yyyy}${mm}${dd}-`;
-  const maxSeq   = await repo.findMaxSeqToday(tx);
+  const maxSeq   = await repo.findMaxSeqToday(prefix, tx);
   return `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
 };
 
@@ -96,7 +97,14 @@ const updateStatus = async (id, newStatus, userRole, actingBranchId) => {
     RECEIVED:   [],
   };
 
-  if (!validTransitions[transfer.status]?.includes(newStatus)) {
+  if (!validTransitions[transfer.status]) {
+    throw new AppError(
+      `Status transfer "${transfer.status}" tidak dikenali`,
+      StatusCodes.BAD_REQUEST
+    );
+  }
+
+  if (!validTransitions[transfer.status].includes(newStatus)) {
     throw new AppError(
       `Tidak bisa mengubah status dari ${transfer.status} ke ${newStatus}`,
       StatusCodes.BAD_REQUEST
@@ -138,6 +146,8 @@ const updateStatus = async (id, newStatus, userRole, actingBranchId) => {
 // ── Generate TRANSFER_OUT movements (deduct from source warehouse) ────
 // Status update is inside the transaction — if any movement fails the status stays PENDING
 const generateTransferOutMovements = async (transfer) => {
+  await validatePeriodOpen(new Date());
+
   await prisma.$transaction(async (tx) => {
     await tx.stockTransfer.update({ where: { id: transfer.id }, data: { status: "IN_TRANSIT" } });
 
@@ -146,40 +156,45 @@ const generateTransferOutMovements = async (transfer) => {
 
       const qty = D(item.qty);
 
-      const inv = await tx.inventory.upsert({
+      const inventory = await tx.inventory.upsert({
         where:  { warehouseId_itemId: { warehouseId: transfer.sourceWarehouseId, itemId: item.itemId } },
-        create: { warehouseId: transfer.sourceWarehouseId, itemId: item.itemId, availableQty: 0, reservedQty: 0, minimumQty: 0 },
+        create: { warehouseId: transfer.sourceWarehouseId, itemId: item.itemId, qtyOnHand: 0, qtyReserved: 0, qtyAvailable: 0 },
         update: {},
-        select: { availableQty: true },
+        select: { id: true, qtyOnHand: true, qtyReserved: true, qtyAvailable: true },
       });
 
-      const balanceBefore = D(inv.availableQty);
-      const balanceAfter  = balanceBefore.sub(qty);
+      const qtyBefore = D(inventory.qtyOnHand);
+      const qtyAfter  = qtyBefore.sub(qty);
 
-      if (balanceAfter.lessThan(0)) {
+      if (qtyAfter.lessThan(0)) {
         throw new AppError(
-          `Stok "${item.item.name}" tidak mencukupi. Tersedia: ${balanceBefore}, dibutuhkan: ${qty}`,
+          `Stok "${item.item.name}" tidak mencukupi. Tersedia: ${qtyBefore}, dibutuhkan: ${qty}`,
           StatusCodes.BAD_REQUEST,
         );
       }
 
-      await tx.stockMovement.create({
+      await tx.inventoryMovement.create({
         data: {
+          inventoryId:   inventory.id,
+          movementType:  "TRANSFER_OUT",
+          sourceModule:  "TRANSFER",
+          createdSource: "USER",
           warehouseId:   transfer.sourceWarehouseId,
-          itemId:        item.itemId,
-          type:          "TRANSFER_OUT",
-          qty:           qty.negated(),
-          balanceBefore,
-          balanceAfter,
-          referenceType: "STOCK_TRANSFER",
+          qtyBefore,
+          qtyChange:     qty.negated(),
+          qtyAfter,
+          referenceType: "TRANSFER",
           referenceId:   transfer.id,
+          referenceNo:   transfer.transferNo,
           notes:         `Transfer out to ${transfer.destinationWarehouse.name}: ${item.item.name}`,
         },
       });
 
+      const reservedOut  = D(inventory.qtyReserved ?? 0);
+      const availableOut = qtyAfter.sub(reservedOut);
       await tx.inventory.update({
-        where: { warehouseId_itemId: { warehouseId: transfer.sourceWarehouseId, itemId: item.itemId } },
-        data:  { availableQty: balanceAfter },
+        where: { id: inventory.id },
+        data:  { qtyOnHand: qtyAfter, qtyAvailable: availableOut },
       });
     }
   });
@@ -188,6 +203,8 @@ const generateTransferOutMovements = async (transfer) => {
 // ── Generate TRANSFER_IN movements (add to destination warehouse) ─────
 // Status update is inside the transaction — if any movement fails the status stays IN_TRANSIT
 const generateTransferInMovements = async (transfer) => {
+  await validatePeriodOpen(new Date());
+
   await prisma.$transaction(async (tx) => {
     await tx.stockTransfer.update({ where: { id: transfer.id }, data: { status: "RECEIVED" } });
 
@@ -196,33 +213,38 @@ const generateTransferInMovements = async (transfer) => {
 
       const qty = D(item.qty);
 
-      const inv = await tx.inventory.upsert({
+      const inventory = await tx.inventory.upsert({
         where:  { warehouseId_itemId: { warehouseId: transfer.destinationWarehouseId, itemId: item.itemId } },
-        create: { warehouseId: transfer.destinationWarehouseId, itemId: item.itemId, availableQty: 0, reservedQty: 0, minimumQty: 0 },
+        create: { warehouseId: transfer.destinationWarehouseId, itemId: item.itemId, qtyOnHand: 0, qtyReserved: 0, qtyAvailable: 0 },
         update: {},
-        select: { availableQty: true },
+        select: { id: true, qtyOnHand: true, qtyReserved: true, qtyAvailable: true },
       });
 
-      const balanceBefore = D(inv.availableQty);
-      const balanceAfter  = balanceBefore.add(qty);
+      const qtyBefore = D(inventory.qtyOnHand);
+      const qtyAfter  = qtyBefore.add(qty);
 
-      await tx.stockMovement.create({
+      await tx.inventoryMovement.create({
         data: {
+          inventoryId:   inventory.id,
+          movementType:  "TRANSFER_IN",
+          sourceModule:  "TRANSFER",
+          createdSource: "USER",
           warehouseId:   transfer.destinationWarehouseId,
-          itemId:        item.itemId,
-          type:          "TRANSFER_IN",
-          qty,
-          balanceBefore,
-          balanceAfter,
-          referenceType: "STOCK_TRANSFER",
+          qtyBefore,
+          qtyChange:     qty,
+          qtyAfter,
+          referenceType: "TRANSFER",
           referenceId:   transfer.id,
+          referenceNo:   transfer.transferNo,
           notes:         `Transfer in from ${transfer.sourceWarehouse.name}: ${item.item.name}`,
         },
       });
 
+      const reservedIn  = D(inventory.qtyReserved ?? 0);
+      const availableIn = qtyAfter.sub(reservedIn);
       await tx.inventory.update({
-        where: { warehouseId_itemId: { warehouseId: transfer.destinationWarehouseId, itemId: item.itemId } },
-        data:  { availableQty: balanceAfter },
+        where: { id: inventory.id },
+        data:  { qtyOnHand: qtyAfter, qtyAvailable: availableIn },
       });
     }
   });

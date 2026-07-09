@@ -11,8 +11,8 @@ const INCLUDE = {
   leaveType: { select: { id: true, code: true, name: true, isPaid: true, quotaType: true } },
 };
 
-const findAll = ({ skip, take, where }) =>
-  prisma.leave.findMany({ where, include: INCLUDE, orderBy: { createdAt: "desc" }, skip, take });
+const findAll = ({ skip, take, where, orderBy }) =>
+  prisma.leave.findMany({ where, include: INCLUDE, orderBy: orderBy ?? { createdAt: "desc" }, skip, take });
 
 const count = (where) => prisma.leave.count({ where });
 

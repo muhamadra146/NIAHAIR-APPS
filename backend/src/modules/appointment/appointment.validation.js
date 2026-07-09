@@ -3,7 +3,7 @@ const {
   picklist, number, minValue, array,
 } = require("valibot");
 
-const SLOT_KEYS = ["stylist", "asisten", "colorist"];
+const SLOT_KEYS = ["pemasang", "asisten", "colorist"];
 
 const staffSlotSchema = object({
   employeeId: pipe(string(), minLength(1, "employeeId is required")),

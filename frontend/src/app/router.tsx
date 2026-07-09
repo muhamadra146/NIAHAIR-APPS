@@ -18,6 +18,8 @@ import { EmployeeListPage }       from "@/features/employee/pages/EmployeeListPa
 import { EmployeeDetailPage }     from "@/features/employee/pages/EmployeeDetailPage";
 import { TreatmentListPage }      from "@/features/treatment/pages/TreatmentListPage";
 import { TreatmentDetailPage }    from "@/features/treatment/pages/TreatmentDetailPage";
+import { TreatmentActivePage }    from "@/features/treatment/pages/TreatmentActivePage";
+import { TreatmentCompletedPage } from "@/features/treatment/pages/TreatmentCompletedPage";
 import { InvoiceListPage }        from "@/features/invoice/pages/InvoiceListPage";
 import { InvoiceDetailPage }      from "@/features/invoice/pages/InvoiceDetailPage";
 import { DepositListPage }        from "@/features/invoice/pages/DepositListPage";
@@ -78,8 +80,10 @@ export const router = createBrowserRouter([
           { path: "/employees",     element: <EmployeeListPage /> },
           { path: "/employees/:id", element: <EmployeeDetailPage /> },
           // Treatments
-          { path: "/treatments",     element: <TreatmentListPage /> },
-          { path: "/treatments/:id", element: <TreatmentDetailPage /> },
+          { path: "/treatments",           element: <TreatmentListPage /> },
+          { path: "/treatments/active",    element: <TreatmentActivePage /> },
+          { path: "/treatments/completed", element: <TreatmentCompletedPage /> },
+          { path: "/treatments/:id",       element: <TreatmentDetailPage /> },
           // Invoices / POS
           { path: "/invoices",     element: <InvoiceListPage /> },
           { path: "/invoices/:id", element: <InvoiceDetailPage /> },

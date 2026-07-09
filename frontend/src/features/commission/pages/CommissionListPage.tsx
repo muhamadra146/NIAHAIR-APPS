@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle, DollarSign, Clock, Filter } from "lucide-react";
+import { CheckCircle, DollarSign, Clock, Filter, RefreshCw, Edit2, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,9 +7,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import { useAuthStore } from "@/stores/authStore";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { useCommissions, useApproveCommission, usePayCommission } from "../hooks";
+import { MasterItemTab } from "../components/MasterItemTab";
+import {
+  useCommissions,
+  useApproveCommission,
+  usePayCommission,
+  useOverrideCommission,
+  useRegenerateCommission,
+  useDeleteCommission,
+} from "../hooks";
 import type { Commission, CommissionStatus } from "../types";
 
 const STATUS_TABS: { key: string; label: string }[] = [
@@ -34,14 +45,23 @@ const STATUS_BADGE: Record<string, string> = {
 const filterInputCls =
   "h-9 rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md focus-visible:shadow-md focus-visible:ring-ring/30";
 
+interface OverrideTarget { id: string; currentAmount: number; }
+
 export function CommissionListPage() {
   const { user, branchId } = useAuthStore();
   const isSuperAdmin = user?.role?.code === "SUPER_ADMIN";
+
+  const [activeTab, setActiveTab] = useState<"commissions" | "items">("commissions");
 
   const [page, setPage]         = useState(1);
   const [status, setStatus]     = useState("");
   const [startDate, setStart]   = useState("");
   const [endDate, setEnd]       = useState("");
+  const [invoiceId, setInvoiceId] = useState("");
+
+  const [overrideTarget, setOverrideTarget] = useState<OverrideTarget | null>(null);
+  const [overrideAmount, setOverrideAmount] = useState("");
+  const [overrideNotes, setOverrideNotes]   = useState("");
 
   const { data, isLoading } = useCommissions({
     page, limit: 20,
@@ -49,10 +69,16 @@ export function CommissionListPage() {
     status:    status    || undefined,
     startDate: startDate || undefined,
     endDate:   endDate   || undefined,
+    invoiceId: invoiceId || undefined,
   });
 
-  const approveMutation = useApproveCommission();
-  const payMutation     = usePayCommission();
+  const approveMutation    = useApproveCommission();
+  const payMutation        = usePayCommission();
+  const overrideMutation   = useOverrideCommission();
+  const regenerateMutation = useRegenerateCommission();
+  const deleteMutation     = useDeleteCommission();
+
+  const [deleteTarget, setDeleteTarget] = useState<Commission | null>(null);
 
   const commissions = data?.data ?? [];
   const meta        = data?.meta;
@@ -66,6 +92,22 @@ export function CommissionListPage() {
     (sum, c) => sum + Number(c.commissionAmount), 0,
   );
 
+  function openOverride(c: Commission) {
+    setOverrideTarget({ id: c.id, currentAmount: Number(c.commissionAmount) });
+    setOverrideAmount(String(Number(c.commissionAmount)));
+    setOverrideNotes("");
+  }
+
+  function submitOverride() {
+    if (!overrideTarget) return;
+    const amount = parseFloat(overrideAmount);
+    if (isNaN(amount) || amount < 0) return;
+    overrideMutation.mutate(
+      { id: overrideTarget.id, body: { commissionAmount: amount, notes: overrideNotes || undefined } },
+      { onSuccess: () => setOverrideTarget(null) },
+    );
+  }
+
   return (
     <PageContainer>
       <div className="space-y-5 sm:space-y-6">
@@ -74,11 +116,32 @@ export function CommissionListPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Komisi</h1>
-            <p className="text-sm text-muted-foreground">
-              {meta ? `${meta.total} komisi` : "Kelola komisi karyawan"}
-            </p>
+            <p className="text-sm text-muted-foreground">Kelola komisi karyawan</p>
           </div>
         </div>
+
+        {/* Page tabs */}
+        <div className="flex gap-1 border-b border-border">
+          {([
+            { key: "commissions", label: "Komisi" },
+            { key: "items",       label: "Master Item" },
+          ] as const).map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                activeTab === tab.key
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "items" && <MasterItemTab />}
+        {activeTab === "commissions" && (<>
 
         {/* Summary cards */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -109,7 +172,7 @@ export function CommissionListPage() {
               ))}
             </div>
 
-            {/* Date range */}
+            {/* Filters row */}
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Dari</Label>
@@ -119,8 +182,29 @@ export function CommissionListPage() {
                 <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Sampai</Label>
                 <Input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className={`${filterInputCls} w-36`} />
               </div>
-              {(startDate || endDate) && (
-                <Button variant="ghost" size="sm" onClick={() => { setStart(""); setEnd(""); setPage(1); }} className="h-9 text-xs text-slate-500 hover:text-slate-800">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Invoice ID</Label>
+                <Input
+                  value={invoiceId}
+                  onChange={(e) => { setInvoiceId(e.target.value.trim()); setPage(1); }}
+                  placeholder="Filter invoice…"
+                  className={`${filterInputCls} w-44`}
+                />
+              </div>
+              {isSuperAdmin && invoiceId && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 gap-1.5 text-xs self-end"
+                  disabled={regenerateMutation.isPending}
+                  onClick={() => regenerateMutation.mutate(invoiceId)}
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
+                  {regenerateMutation.isPending ? "…" : "Regenerate"}
+                </Button>
+              )}
+              {(startDate || endDate || invoiceId) && (
+                <Button variant="ghost" size="sm" onClick={() => { setStart(""); setEnd(""); setInvoiceId(""); setPage(1); }} className="h-9 text-xs text-slate-500 hover:text-slate-800 self-end">
                   Reset
                 </Button>
               )}
@@ -158,6 +242,8 @@ export function CommissionListPage() {
                           isSuperAdmin={isSuperAdmin}
                           onApprove={() => approveMutation.mutate(c.id)}
                           onPay={() => payMutation.mutate(c.id)}
+                          onOverride={() => openOverride(c)}
+                          onDelete={() => setDeleteTarget(c)}
                           approving={approveMutation.isPending}
                           paying={payMutation.isPending}
                         />
@@ -175,6 +261,7 @@ export function CommissionListPage() {
                       isSuperAdmin={isSuperAdmin}
                       onApprove={() => approveMutation.mutate(c.id)}
                       onPay={() => payMutation.mutate(c.id)}
+                      onOverride={() => openOverride(c)}
                       approving={approveMutation.isPending}
                       paying={payMutation.isPending}
                     />
@@ -195,7 +282,87 @@ export function CommissionListPage() {
             </div>
           </div>
         )}
+        </>)}
       </div>
+
+      {/* Override dialog */}
+      <Dialog open={!!overrideTarget} onOpenChange={(open) => { if (!open) setOverrideTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Override Komisi</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Nominal Komisi (Rp)</Label>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={overrideAmount}
+                onChange={(e) => setOverrideAmount(e.target.value)}
+                placeholder="0"
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Catatan (opsional)</Label>
+              <Input
+                value={overrideNotes}
+                onChange={(e) => setOverrideNotes(e.target.value)}
+                placeholder="Alasan perubahan…"
+                className="h-9"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setOverrideTarget(null)}>Batal</Button>
+            <Button
+              size="sm"
+              disabled={overrideMutation.isPending || overrideAmount === ""}
+              onClick={submitOverride}
+            >
+              {overrideMutation.isPending ? "…" : "Simpan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm delete dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-600">
+              <Trash2 className="h-4 w-4" /> Hapus Komisi
+            </DialogTitle>
+          </DialogHeader>
+          {deleteTarget && (
+            <div className="py-1 space-y-1 text-sm text-slate-600">
+              <p>Yakin ingin menghapus komisi ini?</p>
+              <div className="mt-3 rounded-lg bg-rose-50 border border-rose-100 px-4 py-3 space-y-1">
+                <p><span className="text-slate-400">Karyawan:</span> <strong>{deleteTarget.employee?.name ?? "—"}</strong></p>
+                <p><span className="text-slate-400">Invoice:</span> <span className="font-mono text-xs">…{deleteTarget.invoiceId.slice(-8).toUpperCase()}</span></p>
+                <p><span className="text-slate-400">Komisi:</span> <strong>{formatCurrency(deleteTarget.commissionAmount)}</strong></p>
+              </div>
+              <p className="text-xs text-rose-500 mt-2">Hanya komisi berstatus PENDING yang bisa dihapus. Aksi ini tidak bisa dibatalkan.</p>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>Batal</Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (deleteTarget) {
+                  deleteMutation.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) });
+                }
+              }}
+            >
+              {deleteMutation.isPending ? "Menghapus…" : "Ya, Hapus"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }
@@ -227,11 +394,36 @@ interface CommissionActionProps {
   isSuperAdmin: boolean;
   onApprove:   () => void;
   onPay:       () => void;
+  onOverride:  () => void;
+  onDelete:    () => void;
   approving:   boolean;
   paying:      boolean;
 }
 
-function CommissionRow({ commission: c, isSuperAdmin, onApprove, onPay, approving, paying }: CommissionActionProps) {
+function CommissionStatusBadges({ commission: c }: { commission: Commission }) {
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      <Badge
+        variant="outline"
+        className={`text-xs rounded-lg px-2 py-0.5 font-medium ${STATUS_BADGE[c.status] ?? ""}`}
+      >
+        {STATUS_LABEL[c.status] ?? c.status}
+      </Badge>
+      {c.isForfeit && (
+        <Badge variant="outline" className="text-xs rounded-lg px-2 py-0.5 font-medium bg-red-50 text-red-700 border-red-200">
+          Hangus
+        </Badge>
+      )}
+      {c.isManualOverride && (
+        <Badge variant="outline" className="text-xs rounded-lg px-2 py-0.5 font-medium bg-purple-50 text-purple-700 border-purple-200">
+          Manual
+        </Badge>
+      )}
+    </div>
+  );
+}
+
+function CommissionRow({ commission: c, isSuperAdmin, onApprove, onPay, onOverride, onDelete, approving, paying }: CommissionActionProps) {
   return (
     <tr className="border-b border-slate-100 transition-colors hover:bg-slate-50/60">
       <td className="px-5 py-4">
@@ -253,12 +445,7 @@ function CommissionRow({ commission: c, isSuperAdmin, onApprove, onPay, approvin
       </td>
       <td className="px-5 py-4 text-sm text-slate-500">{formatDate(c.createdAt)}</td>
       <td className="px-5 py-4">
-        <Badge
-          variant="outline"
-          className={`text-xs rounded-lg px-2 py-0.5 font-medium ${STATUS_BADGE[c.status] ?? ""}`}
-        >
-          {STATUS_LABEL[c.status] ?? c.status}
-        </Badge>
+        <CommissionStatusBadges commission={c} />
       </td>
       {isSuperAdmin && (
         <td className="px-5 py-4">
@@ -266,6 +453,8 @@ function CommissionRow({ commission: c, isSuperAdmin, onApprove, onPay, approvin
             status={c.status}
             onApprove={onApprove}
             onPay={onPay}
+            onOverride={onOverride}
+            onDelete={onDelete}
             approving={approving}
             paying={paying}
           />
@@ -275,7 +464,7 @@ function CommissionRow({ commission: c, isSuperAdmin, onApprove, onPay, approvin
   );
 }
 
-function CommissionCard({ commission: c, isSuperAdmin, onApprove, onPay, approving, paying }: CommissionActionProps) {
+function CommissionCard({ commission: c, isSuperAdmin, onApprove, onPay, onOverride, onDelete, approving, paying }: CommissionActionProps) {
   return (
     <div className="px-5 py-4 space-y-2 hover:bg-slate-50/60 transition-colors">
       <div className="flex items-start justify-between gap-2">
@@ -283,12 +472,7 @@ function CommissionCard({ commission: c, isSuperAdmin, onApprove, onPay, approvi
           <p className="font-medium text-sm text-slate-800">{c.employee?.name ?? "—"}</p>
           <p className="text-xs text-slate-400 font-mono mt-0.5">Invoice …{c.invoiceId.slice(-8).toUpperCase()}</p>
         </div>
-        <Badge
-          variant="outline"
-          className={`text-xs rounded-lg px-2 py-0.5 font-medium shrink-0 ${STATUS_BADGE[c.status] ?? ""}`}
-        >
-          {STATUS_LABEL[c.status] ?? c.status}
-        </Badge>
+        <CommissionStatusBadges commission={c} />
       </div>
       <div className="flex items-center justify-between text-sm">
         <span className="text-slate-400">{formatDate(c.createdAt)}</span>
@@ -300,6 +484,8 @@ function CommissionCard({ commission: c, isSuperAdmin, onApprove, onPay, approvi
             status={c.status}
             onApprove={onApprove}
             onPay={onPay}
+            onOverride={onOverride}
+            onDelete={onDelete}
             approving={approving}
             paying={paying}
           />
@@ -309,26 +495,38 @@ function CommissionCard({ commission: c, isSuperAdmin, onApprove, onPay, approvi
   );
 }
 
-function ActionButtons({ status, onApprove, onPay, approving, paying }: {
+function ActionButtons({ status, onApprove, onPay, onOverride, onDelete, approving, paying }: {
   status:    CommissionStatus;
   onApprove: () => void;
   onPay:     () => void;
+  onOverride: () => void;
+  onDelete:  () => void;
   approving: boolean;
   paying:    boolean;
 }) {
-  if (status === "PENDING") {
-    return (
-      <Button size="sm" variant="outline" className="h-7 rounded-lg text-xs" onClick={onApprove} disabled={approving}>
-        {approving ? "…" : "Setujui"}
-      </Button>
-    );
-  }
-  if (status === "APPROVED") {
-    return (
-      <Button size="sm" className="h-7 rounded-lg text-xs" onClick={onPay} disabled={paying}>
-        {paying ? "…" : "Bayar"}
-      </Button>
-    );
-  }
-  return null;
+  const canOverride = status === "PENDING" || status === "APPROVED";
+  return (
+    <div className="flex gap-1.5 flex-wrap">
+      {status === "PENDING" && (
+        <Button size="sm" variant="outline" className="h-7 rounded-lg text-xs" onClick={onApprove} disabled={approving}>
+          {approving ? "…" : "Setujui"}
+        </Button>
+      )}
+      {status === "APPROVED" && (
+        <Button size="sm" className="h-7 rounded-lg text-xs" onClick={onPay} disabled={paying}>
+          {paying ? "…" : "Bayar"}
+        </Button>
+      )}
+      {canOverride && (
+        <Button size="sm" variant="ghost" className="h-7 rounded-lg text-xs px-2 text-slate-500 hover:text-slate-800" onClick={onOverride}>
+          <Edit2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {status === "PENDING" && (
+        <Button size="sm" variant="ghost" className="h-7 rounded-lg text-xs px-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50" onClick={onDelete}>
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
+    </div>
+  );
 }

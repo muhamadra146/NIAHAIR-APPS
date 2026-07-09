@@ -1,6 +1,14 @@
 export type CustomerGender = "MALE" | "FEMALE";
 export type CustomerSyncStatus = "PENDING" | "SYNCED" | "FAILED";
 
+export interface CustomerNote {
+  id:         string;
+  customerId: string;
+  note:       string;
+  createdBy:  string | null;
+  createdAt:  string;
+}
+
 export interface CustomerMembership {
   id:   string;
   name: string;

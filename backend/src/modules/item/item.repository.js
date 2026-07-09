@@ -25,10 +25,10 @@ const INCLUDE = {
   },
 };
 
-const findAll = ({ skip, take, where }) =>
+const findAll = ({ skip, take, where, orderBy }) =>
   prisma.item.findMany({
     skip, take, where,
-    orderBy: { createdAt: "desc" },
+    orderBy: orderBy ?? { createdAt: "desc" },
     include: INCLUDE,
   });
 
@@ -47,4 +47,14 @@ const create = (data) => prisma.item.create({ data });
 
 const update = (id, data) => prisma.item.update({ where: { id }, data, include: INCLUDE });
 
-module.exports = { findAll, count, findById, findByItemCode, findCommissionCategoryById, create, update };
+const findServiceMaterials = (serviceItemId) =>
+  prisma.serviceMaterial.findMany({
+    where: { serviceItemId, isActive: true },
+    include: {
+      materialItem: { select: { id: true, name: true, itemCode: true, itemType: true } },
+      unit:         { select: { id: true, name: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+module.exports = { findAll, count, findById, findByItemCode, findCommissionCategoryById, create, update, findServiceMaterials };

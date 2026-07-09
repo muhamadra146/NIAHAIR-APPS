@@ -4,6 +4,7 @@ const authorize = require("../../middlewares/role.middleware");
 const validate = require("../../middlewares/validate.middleware");
 const { ROLES } = require("../../common/constants/role.constant");
 const { createCustomerSchema, updateCustomerSchema } = require("./customer.validation");
+const { createNoteSchema } = require("./customerNote.validation");
 const {
   getAllController,
   getByIdController,
@@ -12,6 +13,7 @@ const {
 } = require("./customer.controller");
 const { syncFromAccurateController } = require("./customer.sync.controller");
 const { syncToAccurateController, repairCustomerNoController, retryCustomerSyncController } = require("./customer.push.controller");
+const { getNotesController, createNoteController, deleteNoteController } = require("./customerNote.controller");
 
 const router = Router();
 
@@ -21,12 +23,17 @@ router.post("/repair/customer-no",   authenticate, authorize(ROLES.SUPER_ADMIN),
 router.post("/retry/accurate-sync",  authenticate, authorize(ROLES.SUPER_ADMIN), retryCustomerSyncController);
 
 // CRUD
-router.get("/", authenticate, getAllController);
+router.get("/",    authenticate, getAllController);
 router.get("/:id", authenticate, getByIdController);
-router.post("/", authenticate, validate(createCustomerSchema), createController);
+router.post("/",   authenticate, validate(createCustomerSchema), createController);
 router.put("/:id", authenticate, validate(updateCustomerSchema), updateController);
 
-// Manual push sync retry — must be after CRUD to keep route order readable
+// Notes (CRM-008)
+router.get( "/:id/notes",          authenticate, getNotesController);
+router.post("/:id/notes",          authenticate, validate(createNoteSchema), createNoteController);
+router.delete("/:id/notes/:noteId", authenticate, deleteNoteController);
+
+// Manual push sync retry
 router.post("/:id/sync/accurate", authenticate, syncToAccurateController);
 
 module.exports = router;

@@ -1,5 +1,5 @@
 import { Menu, ChevronsUpDown } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { useLayout } from "@/contexts/LayoutContext";
 import { sidebarNav } from "@/layouts/config/sidebarNav";
@@ -73,11 +73,22 @@ export function Header() {
         )}
       </div>
 
-      {/* Right: user */}
-      <div className="flex items-center gap-2">
-        <span className="hidden text-sm text-muted-foreground lg:block">{displayName}</span>
-        <UserAvatar name={displayName} />
-      </div>
+      {/* Right: user — click to open profile */}
+      {user?.employee?.id ? (
+        <Link
+          to={`/employees/${user.employee.id}`}
+          className="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-slate-100"
+          title="Lihat profil saya"
+        >
+          <span className="hidden text-sm text-muted-foreground lg:block">{displayName}</span>
+          <UserAvatar name={displayName} />
+        </Link>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className="hidden text-sm text-muted-foreground lg:block">{displayName}</span>
+          <UserAvatar name={displayName} />
+        </div>
+      )}
     </header>
   );
 }

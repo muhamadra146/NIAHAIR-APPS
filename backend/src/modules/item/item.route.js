@@ -9,6 +9,7 @@ const {
   getByIdController,
   createController,
   updateController,
+  getServiceMaterialsController,
 } = require("./item.controller");
 const { syncFromAccurateController } = require("./item.sync.controller");
 const { syncToAccurateController } = require("./item.push.controller");
@@ -19,7 +20,8 @@ const router = Router();
 router.post("/sync/accurate", authenticate, authorize(ROLES.SUPER_ADMIN), syncFromAccurateController);
 
 // 2. Special parameter routes second
-router.post("/:id/sync/accurate", authenticate, syncToAccurateController);
+router.post("/:id/sync/accurate",       authenticate, syncToAccurateController);
+router.get( "/:id/service-materials",   authenticate, getServiceMaterialsController);
 
 // 3. CRUD routes last
 router.get("/", authenticate, getAllController);

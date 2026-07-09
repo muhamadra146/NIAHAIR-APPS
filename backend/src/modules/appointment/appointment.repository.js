@@ -38,8 +38,8 @@ const INCLUDE = {
 
 // ── List / single ─────────────────────────────────────────────────────
 
-const findAll = ({ skip, take, where }) =>
-  prisma.appointment.findMany({ skip, take, where, orderBy: { createdAt: "desc" }, include: INCLUDE });
+const findAll = ({ skip, take, where, orderBy }) =>
+  prisma.appointment.findMany({ skip, take, where, orderBy: orderBy ?? { createdAt: "desc" }, include: INCLUDE });
 
 const count = (where) => prisma.appointment.count({ where });
 

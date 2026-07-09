@@ -58,6 +58,7 @@ export interface UserRole {
 export interface User {
   id:         string;
   email:      string;
+  username:   string | null;
   employeeId: string;
   isActive:   boolean;
   role:       Pick<UserRole, "id" | "code" | "name">;
@@ -286,8 +287,8 @@ export interface UpdateEmployeeBranchesInput { branchIds: string[] }
 export interface CreateEmployeeRoleInput { code: string; name: string }
 export type UpdateEmployeeRoleInput = Partial<CreateEmployeeRoleInput> & { isActive?: boolean };
 
-export interface CreateUserInput { employeeId: string; email: string; password: string; userRoleId: string }
-export interface UpdateUserInput { email?: string; userRoleId?: string }
+export interface CreateUserInput { username: string; employeeId: string; email: string; password: string; userRoleId: string }
+export interface UpdateUserInput { username?: string; email?: string; userRoleId?: string }
 export interface ResetPasswordInput { password: string }
 
 export interface CreateBranchInput { code: string; name: string; address?: string; city?: string; province?: string; phone?: string; latitude?: number | null; longitude?: number | null; radiusMeters?: number }

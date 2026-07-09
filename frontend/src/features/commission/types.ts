@@ -147,6 +147,12 @@ export interface Commission {
   baseAmount:           number | string;
   commissionAmount:     number | string;
   status:               CommissionStatus;
+  isForfeit:            boolean;
+  forfeitReason:        string | null;
+  isManualOverride:     boolean;
+  overrideBy:           string | null;
+  overrideAt:           string | null;
+  overrideNotes:        string | null;
   approvedAt:           string | null;
   approvedById:         string | null;
   paidAt:               string | null;

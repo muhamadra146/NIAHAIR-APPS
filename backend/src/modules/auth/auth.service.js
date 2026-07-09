@@ -2,11 +2,13 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
-const { findUserByEmail, findUserById, findAllBranches } = require("./auth.repository");
+const { findUserByEmail, findUserByUsername, findUserById, findAllBranches } = require("./auth.repository");
 const { ROLES } = require("../../common/constants/role.constant");
 
-const login = async ({ email, password }) => {
-  const user = await findUserByEmail(email);
+const login = async ({ identifier, password }) => {
+  const user = identifier.includes("@")
+    ? await findUserByEmail(identifier)
+    : await findUserByUsername(identifier);
 
   if (!user || !user.isActive) {
     throw new AppError("Invalid credentials", StatusCodes.UNAUTHORIZED);

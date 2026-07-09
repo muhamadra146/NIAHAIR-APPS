@@ -2,7 +2,17 @@ const { StatusCodes } = require("http-status-codes");
 const { Prisma }      = require("@prisma/client");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const { resolveOrderBy } = require("../../utils/sort");
 const repo            = require("./payroll.repository");
+
+const ORDER_MAP = {
+  periodStart:    { periodStart: "asc" },
+  "-periodStart": { periodStart: "desc" },
+  createdAt:      { createdAt: "asc" },
+  "-createdAt":   { createdAt: "desc" },
+  status:         { status: "asc" },
+  "-status":      { status: "desc" },
+};
 const prisma          = require("../../config/prisma");
 
 // ── Money helper ──────────────────────────────────────────────────────────────
@@ -183,8 +193,9 @@ const buildCommissionBreakdown = (commissions) =>
 
 // ── Service functions ─────────────────────────────────────────────────────────
 
-const getAll = async ({ page = 1, limit = 20, employeeId, branchId, status, yearMonth }) => {
+const getAll = async ({ page = 1, limit = 20, employeeId, branchId, status, yearMonth, sortBy }) => {
   const { skip, take } = paginate(page, limit);
+  const orderBy = resolveOrderBy(sortBy, ORDER_MAP, "-periodStart");
   const where = {};
   if (employeeId) where.employeeId = employeeId;
   if (branchId)   where.branchId   = branchId;
@@ -193,7 +204,7 @@ const getAll = async ({ page = 1, limit = 20, employeeId, branchId, status, year
     const { periodStart, periodEnd } = buildPeriod(yearMonth);
     where.periodStart = { gte: periodStart, lte: periodEnd };
   }
-  const [rows, total] = await Promise.all([repo.findAll({ skip, take, where }), repo.count(where)]);
+  const [rows, total] = await Promise.all([repo.findAll({ skip, take, where, orderBy }), repo.count(where)]);
   return { data: rows, meta: paginationMeta(total, page, limit) };
 };
 
@@ -317,6 +328,8 @@ const markAsPaid = async (id, paidBy) => {
       for (const loan of activeLoans) {
         const repayAmt = Number(loan.monthlyDeduction);
         if (repayAmt <= 0) continue;
+        const alreadyRepaid = await tx.loanRepayment.findFirst({ where: { loanId: loan.id, payrollId: id } });
+        if (alreadyRepaid) continue;
         const newRemaining = Math.max(Number(loan.remainingAmount) - repayAmt, 0);
         const newStatus    = newRemaining <= 0 ? "PAID_OFF" : "ACTIVE";
         await tx.loanRepayment.create({

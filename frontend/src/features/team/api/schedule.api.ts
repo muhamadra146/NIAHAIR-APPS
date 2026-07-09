@@ -47,7 +47,7 @@ export const fetchAvailableStaff = async (params: {
   branchId: string;
 }): Promise<AvailableStaff[]> => {
   const { data } = await api.get<ApiResponse<AvailableStaff[]>>(
-    "/appointments/available-staff",
+    "/staff-schedules/available",
     { params },
   );
   return data.data;

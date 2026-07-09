@@ -5,6 +5,9 @@ import {
   fetchEmployee,
   createEmployee,
   updateEmployee,
+  uploadEmployeeFiles,
+  deactivateEmployee,
+  deleteEmployee,
   updateEmployeeBranches,
   fetchEmployeeRoles,
   fetchNextEmployeeCode,
@@ -17,6 +20,7 @@ import type {
   EmployeeListParams,
   CreateEmployeeInput,
   UpdateEmployeeInput,
+  UploadEmployeeFilesInput,
   UpdateEmployeeBranchesInput,
   CreateSalarySettingInput,
   UpdateSalarySettingInput,
@@ -76,6 +80,40 @@ export function useUpdateEmployee(id: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["employees"] });
       toast.success("Data karyawan diperbarui");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useUploadEmployeeFiles() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, files }: { id: string; files: UploadEmployeeFilesInput }) =>
+      uploadEmployeeFiles(id, files),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["employees"] }),
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useDeactivateEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deactivateEmployee(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      toast.success("Karyawan berhasil dinonaktifkan");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useDeleteEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteEmployee(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      toast.success("Karyawan berhasil dihapus permanen");
     },
     onError: (err: Error) => toast.error(err.message),
   });

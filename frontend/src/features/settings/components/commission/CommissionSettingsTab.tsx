@@ -275,10 +275,10 @@ function CommissionCategorySection() {
 // ── Rule Section ──────────────────────────────────────────────────────────────
 
 const SLOT_OPTIONS = [
-  { value: "",         label: "— Semua role —" },
-  { value: "stylist",  label: "Stylist" },
-  { value: "asisten",  label: "Asisten" },
-  { value: "colorist", label: "Colorist" },
+  { value: "",          label: "— Semua role —" },
+  { value: "pemasang",  label: "Pemasang" },
+  { value: "asisten",   label: "Asisten" },
+  { value: "colorist",  label: "Colorist" },
 ];
 
 interface RuleFormState {
@@ -460,7 +460,7 @@ function CommissionRuleSection() {
                 <Label className="text-xs font-medium text-slate-600">Tipe Komisi</Label>
                 <select value={form.commissionType} onChange={(e) => setForm((f) => ({ ...f, commissionType: e.target.value as CommissionType }))} className={selectCls}>
                   <option value="PERCENTAGE">Persentase (%)</option>
-                  <option value="FIXED_AMOUNT">Nominal (Rp)</option>
+                  <option value="FIXED">Nominal (Rp)</option>
                 </select>
               </div>
               <div className="space-y-1.5">

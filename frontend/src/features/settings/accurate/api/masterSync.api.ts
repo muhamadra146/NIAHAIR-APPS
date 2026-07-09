@@ -7,7 +7,7 @@ const SYNC_ENDPOINTS: Record<MasterSyncEntity, string> = {
   ITEM:          "/items/sync/accurate",
   UNIT:          "/units/sync/accurate",
   WAREHOUSE:     "/warehouses/sync/accurate",
-  INVENTORY:     "/inventories/sync/accurate",
+  INVENTORY:     "/inventory/sync/accurate",
   ITEM_CATEGORY: "/item-categories/sync",
 };
 

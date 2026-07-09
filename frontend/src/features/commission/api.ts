@@ -32,6 +32,23 @@ export async function payCommission(id: string): Promise<Commission> {
   return data.data;
 }
 
+export async function overrideCommission(
+  id: string,
+  body: { commissionAmount: number; notes?: string },
+): Promise<Commission> {
+  const { data } = await api.patch<ApiResponse<Commission>>(`/commissions/${id}/override`, body);
+  return data.data;
+}
+
+export async function regenerateCommission(invoiceId: string): Promise<{ created: number }> {
+  const { data } = await api.post<ApiResponse<{ created: number }>>(`/commissions/invoice/${invoiceId}/regenerate`);
+  return data.data;
+}
+
+export async function deleteCommission(id: string): Promise<void> {
+  await api.delete(`/commissions/${id}`);
+}
+
 // ── Commission Categories ─────────────────────────────────────────────────────
 
 interface CategoryListData { data: CommissionCategory[]; meta: PaginatedResponse<CommissionCategory>["meta"]; }

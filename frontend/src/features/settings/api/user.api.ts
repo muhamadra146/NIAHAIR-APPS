@@ -21,6 +21,6 @@ export const resetUserPassword = async (id: string, input: ResetPasswordInput): 
   await api.patch(`/users/${id}/password`, input);
 };
 
-export const deactivateUser = async (id: string): Promise<void> => {
+export const deleteUser = async (id: string): Promise<void> => {
   await api.delete(`/users/${id}`);
 };

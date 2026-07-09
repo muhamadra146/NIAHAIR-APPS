@@ -5,10 +5,10 @@ const INCLUDE = {
   commissionCategory: { select: { id: true, code: true, name: true } },
 };
 
-const findAll = ({ skip, take, where }) =>
+const findAll = ({ skip, take, where, orderBy }) =>
   prisma.commissionRule.findMany({
     skip, take, where,
-    orderBy: { createdAt: "desc" },
+    orderBy: orderBy ?? { createdAt: "desc" },
     include: INCLUDE,
   });
 

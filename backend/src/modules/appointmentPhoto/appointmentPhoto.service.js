@@ -1,29 +1,30 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
-const prisma          = require("../../config/prisma");
 const cloudinary      = require("../../config/cloudinary");
+const {
+  findAllByAppointment,
+  findById,
+  findAppointmentById,
+  create,
+  remove,
+} = require("./appointmentPhoto.repository");
 
 const listPhotos = (appointmentId) =>
-  prisma.appointmentPhoto.findMany({
-    where:   { appointmentId },
-    orderBy: { createdAt: "asc" },
-  });
+  findAllByAppointment(appointmentId);
 
 const addPhoto = async ({ appointmentId, url, publicId, type = "REFERENCE", notes }) => {
-  const appt = await prisma.appointment.findUnique({ where: { id: appointmentId }, select: { id: true } });
+  const appt = await findAppointmentById(appointmentId);
   if (!appt) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
 
-  return prisma.appointmentPhoto.create({
-    data: { appointmentId, url, publicId, type, notes: notes ?? null },
-  });
+  return create({ appointmentId, url, publicId, type, notes: notes ?? null });
 };
 
 const deletePhoto = async (id) => {
-  const photo = await prisma.appointmentPhoto.findUnique({ where: { id } });
+  const photo = await findById(id);
   if (!photo) throw new AppError("Photo not found", StatusCodes.NOT_FOUND);
 
   await cloudinary.uploader.destroy(photo.publicId);
-  await prisma.appointmentPhoto.delete({ where: { id } });
+  return remove(photo.id);
 };
 
 module.exports = { listPhotos, addPhoto, deletePhoto };

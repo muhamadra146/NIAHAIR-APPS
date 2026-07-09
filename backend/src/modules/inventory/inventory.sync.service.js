@@ -12,9 +12,6 @@ const {
 const ACCURATE_ITEM_LIST   = "/item/list.do";
 const ACCURATE_ITEM_DETAIL = "/item/detail.do";
 
-// Request warehouse stock fields from detail.do.
-// detailWarehouseItem is the most likely field name in Accurate Online;
-// the debug log of the first item will confirm the actual field names.
 const ACCURATE_DETAIL_FIELDS = "id,no,detailWarehouseItem";
 
 // ── Main sync ─────────────────────────────────────────────────────────
@@ -42,7 +39,6 @@ const syncInventoryFromAccurate = async () => {
   let skipped      = 0;
   let page         = 1;
   let pageCount    = 1;
-  let firstItem    = true;   // flag for the debug log — fires once per sync run
 
   do {
     const listRes = await accurateRequest(
@@ -82,17 +78,6 @@ const syncInventoryFromAccurate = async () => {
           skipped++;
           continue;
         }
-
-        // ── Temporary debug: log the first item's full detail response ────────
-        // Remove this block once field names are confirmed.
-        if (firstItem) {
-          firstItem = false;
-          console.log(
-            "[inventory sync] DEBUG first item/detail.do response:\n" +
-            JSON.stringify(detailRes.d, null, 2)
-          );
-        }
-        // ─────────────────────────────────────────────────────────────────────
 
         const warehouseStocks = mapItemDetailToWarehouseStocks(detailRes.d);
 

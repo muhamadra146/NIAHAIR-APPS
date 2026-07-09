@@ -29,10 +29,7 @@ const create = (data, items, tx = prisma) =>
 const update = (id, data) =>
   prisma.stockTransfer.update({ where: { id }, data, include: INCLUDE });
 
-const findMaxSeqToday = async (tx = prisma) => {
-  const today = new Date();
-  const yyyymmdd = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
-  const prefix = `TRF-${yyyymmdd}-`;
+const findMaxSeqToday = async (prefix, tx = prisma) => {
   const last = await tx.stockTransfer.findFirst({
     where:   { transferNo: { startsWith: prefix } },
     orderBy: { transferNo: "desc" },

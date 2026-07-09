@@ -172,7 +172,7 @@ const getAvailableStaff = async ({ date, branchId, startTime, endTime, excludeAp
   }
 
   // For today: mark staff who have already checked out
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = new Date(Date.now() + 7 * 3600 * 1000).toISOString().split("T")[0]; // WIB (UTC+7)
   let checkedOutSet = new Set();
   if (date.split("T")[0] === todayStr && records.length > 0) {
     const checkedOut = await prisma.attendance.findMany({

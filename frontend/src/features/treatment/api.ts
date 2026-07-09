@@ -13,6 +13,9 @@ import type {
   UpdateAssignmentInput,
   ItemSearchResult,
   UnitOption,
+  ServiceMaterial,
+  MaterialUsageItem,
+  BulkSaveMaterialUsageRow,
 } from "./types";
 
 interface TreatmentListData {
@@ -115,4 +118,35 @@ export async function fetchUnits(): Promise<UnitOption[]> {
     params: { isActive: true, limit: 100 },
   });
   return data.data.data ?? [];
+}
+
+// ── Material Usage (Phase 2) ──────────────────────────────────────────────────
+
+export async function fetchServiceMaterials(serviceItemId: string): Promise<ServiceMaterial[]> {
+  const { data } = await api.get<ApiResponse<ServiceMaterial[]>>(
+    `/items/${serviceItemId}/service-materials`,
+  );
+  return data.data ?? [];
+}
+
+export async function fetchMaterialUsages(sessionId: string): Promise<MaterialUsageItem[]> {
+  const { data } = await api.get<ApiResponse<MaterialUsageItem[]>>(
+    `/treatment-sessions/${sessionId}/material-usages`,
+  );
+  return data.data ?? [];
+}
+
+export async function bulkSaveMaterialUsages(
+  sessionId: string,
+  rows: BulkSaveMaterialUsageRow[],
+): Promise<MaterialUsageItem[]> {
+  const { data } = await api.post<ApiResponse<MaterialUsageItem[]>>(
+    `/treatment-sessions/${sessionId}/material-usages/bulk`,
+    { rows },
+  );
+  return data.data ?? [];
+}
+
+export async function deleteMaterialUsageItem(id: string): Promise<void> {
+  await api.delete(`/material-usage-items/${id}`);
 }

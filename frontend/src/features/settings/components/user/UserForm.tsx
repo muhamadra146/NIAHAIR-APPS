@@ -50,11 +50,11 @@ export function UserForm({ open, onOpenChange, onSubmit, isPending, defaultValue
 
   const createForm = useForm<CreateUserFormValues>({
     resolver: zodResolver(createUserSchema),
-    defaultValues: { employeeId: "", email: "", password: "", userRoleId: "" },
+    defaultValues: { employeeId: "", username: "", email: "", password: "", userRoleId: "" },
   });
   const editForm = useForm<UpdateUserFormValues>({
     resolver: zodResolver(updateUserSchema),
-    defaultValues: { email: defaultValues?.email ?? "", userRoleId: defaultValues?.role?.id ?? "" },
+    defaultValues: { username: defaultValues?.username ?? "", email: defaultValues?.email ?? "", userRoleId: defaultValues?.role?.id ?? "" },
   });
 
   const activeForm = isEdit ? editForm : createForm;
@@ -62,9 +62,9 @@ export function UserForm({ open, onOpenChange, onSubmit, isPending, defaultValue
   useEffect(() => {
     if (open) {
       if (isEdit && defaultValues) {
-        editForm.reset({ email: defaultValues.email, userRoleId: defaultValues.role.id });
+        editForm.reset({ username: defaultValues.username ?? "", email: defaultValues.email, userRoleId: defaultValues.role.id });
       } else {
-        createForm.reset({ employeeId: "", email: "", password: "", userRoleId: "" });
+        createForm.reset({ employeeId: "", username: "", email: "", password: "", userRoleId: "" });
         setEmpSearch(""); setEmpSelected(null); setEmpResults([]);
         setShowPassword(false);
       }
@@ -158,6 +158,20 @@ export function UserForm({ open, onOpenChange, onSubmit, isPending, defaultValue
                   )}
                 </div>
               )}
+
+              {/* Username */}
+              <div className="space-y-1.5">
+                <Label>Username <span className="text-destructive">*</span></Label>
+                {isEdit
+                  ? <Input type="text" {...editForm.register("username")} placeholder="contoh: admin_nia" autoComplete="off" />
+                  : <Input type="text" {...createForm.register("username")} placeholder="contoh: admin_nia" autoComplete="off" />
+                }
+                {(isEdit ? editErrors.username : createErrors.username) && (
+                  <p className="text-xs text-destructive">
+                    {(isEdit ? editErrors.username : createErrors.username)?.message}
+                  </p>
+                )}
+              </div>
 
               {/* Email */}
               <div className="space-y-1.5">

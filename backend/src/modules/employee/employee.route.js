@@ -15,7 +15,9 @@ const {
   getByIdController,
   createController,
   updateController,
+  uploadFilesController,
   updateBranchesController,
+  deactivateController,
   deleteController,
 } = require("./employee.controller");
 
@@ -27,7 +29,9 @@ router.post("/",   authenticate, uploadEmployee.fields([{ name: "ktpFile", maxCo
 router.get("/:id", authenticate, getByIdController);
 router.put("/:id", authenticate, uploadEmployee.fields([{ name: "ktpFile", maxCount: 1 }, { name: "contractFile", maxCount: 1 }]), validate(updateEmployeeSchema), updateController);
 
-router.delete("/:id", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), deleteController);
+router.patch("/:id/files",      authenticate, uploadEmployee.fields([{ name: "ktpFile", maxCount: 1 }, { name: "contractFile", maxCount: 1 }]), uploadFilesController);
+router.patch("/:id/deactivate", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), deactivateController);
+router.delete("/:id",           authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), deleteController);
 
 // Must be declared after GET /:id — different method (PATCH), no conflict
 router.patch(

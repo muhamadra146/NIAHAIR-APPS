@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Search, Eye, Building2 } from "lucide-react";
+import { Plus, Search, Eye, EyeOff, Building2, Trash2, AlertTriangle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/stores/authStore";
 import { fetchAllBranches } from "@/features/settings/api/branch.api";
-import { useEmployees, useCreateEmployee } from "../hooks";
+import { useEmployees, useCreateEmployee, useUploadEmployeeFiles, useDeactivateEmployee, useDeleteEmployee } from "../hooks";
 import { updateEmployeeBranches } from "../api";
 import { EmployeeCreateForm } from "../components/EmployeeForm";
 import type { CreateEmployeeFormValues } from "../schemas/employee.schema";
@@ -32,8 +32,10 @@ export function EmployeeListPage() {
   const [search, setSearch]       = useState("");
   const [isActive, setIsActive]   = useState<boolean | undefined>(true);
   const [filterBranch, setFilterBranch] = useState<string>("");
-  const [formOpen, setFormOpen]   = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formOpen, setFormOpen]               = useState(false);
+  const [formError, setFormError]             = useState<string | null>(null);
+  const [confirmDeactivateId, setConfirmDeactivateId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId]         = useState<string | null>(null);
 
   // Load branch list for filter (only for managers+)
   const { data: branches = [] } = useQuery({
@@ -55,7 +57,12 @@ export function EmployeeListPage() {
     isActive,
     branchId: branchFilter,
   });
-  const createMutation = useCreateEmployee();
+  const createMutation      = useCreateEmployee();
+  const uploadFilesMutation = useUploadEmployeeFiles();
+  const deactivateMutation  = useDeactivateEmployee();
+  const deleteMutation      = useDeleteEmployee();
+
+  const canDelete = ["SUPER_ADMIN", "OWNER"].includes(user?.role?.code ?? "");
 
   const employees  = data?.data ?? [];
   const meta       = data?.meta;
@@ -78,11 +85,12 @@ export function EmployeeListPage() {
         resignDate:        values.resignDate        || undefined,
         commissionEnabled: values.commissionEnabled,
         homeBranchId:      values.homeBranchId     || undefined,
-        ktpFile:           files.ktpFile           ?? undefined,
-        contractFile:      files.contractFile      ?? undefined,
       });
       if ((values.branchIds ?? []).length > 0) {
         await updateEmployeeBranches(created.id, { branchIds: values.branchIds });
+      }
+      if (files.ktpFile || files.contractFile) {
+        await uploadFilesMutation.mutateAsync({ id: created.id, files });
       }
       setFormOpen(false);
     } catch (err: unknown) {
@@ -185,25 +193,77 @@ export function EmployeeListPage() {
                 {/* Mobile */}
                 <div className="divide-y divide-border md:hidden">
                   {employees.map((e) => (
-                    <div key={e.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{e.name}</p>
-                        <p className="text-xs text-muted-foreground">{e.employeeCode} · {e.role.name}</p>
-                        {e.homeBranch && (
-                          <p className="text-[11px] text-muted-foreground/70 mt-0.5">{e.homeBranch.name}</p>
-                        )}
+                    <div key={e.id} className="px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{e.name}</p>
+                          <p className="text-xs text-muted-foreground">{e.employeeCode} · {e.role.name}</p>
+                          {e.homeBranch && (
+                            <p className="text-[11px] text-muted-foreground/70 mt-0.5">{e.homeBranch.name}</p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <Badge variant={e.isActive ? "default" : "secondary"} className="text-xs">
+                            {e.isActive ? "Aktif" : "Nonaktif"}
+                          </Badge>
+                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" asChild>
+                            <Link to={`/employees/${e.id}`}>
+                              <Eye className="mr-1 h-3 w-3" />
+                              Detail
+                            </Link>
+                          </Button>
+                          {canDelete && (
+                            <>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-amber-600 hover:bg-amber-50"
+                                title="Nonaktifkan"
+                                onClick={() => { setConfirmDeleteId(null); setConfirmDeactivateId(e.id); }}>
+                                <EyeOff className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                title="Hapus permanen"
+                                onClick={() => { setConfirmDeactivateId(null); setConfirmDeleteId(e.id); }}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <Badge variant={e.isActive ? "default" : "secondary"} className="text-xs">
-                          {e.isActive ? "Aktif" : "Nonaktif"}
-                        </Badge>
-                        <Button variant="outline" size="sm" className="h-7 px-2 text-xs" asChild>
-                          <Link to={`/employees/${e.id}`}>
-                            <Eye className="mr-1 h-3 w-3" />
-                            Detail
-                          </Link>
-                        </Button>
-                      </div>
+                      {confirmDeactivateId === e.id && (
+                        <div className="mt-2 space-y-2">
+                          <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                            Nonaktifkan karyawan ini?
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" className="h-7 text-xs border-amber-400 text-amber-700"
+                              onClick={() => { deactivateMutation.mutate(e.id); setConfirmDeactivateId(null); }}>
+                              Ya, Nonaktifkan
+                            </Button>
+                            <Button variant="outline" size="sm" className="h-7 text-xs"
+                              onClick={() => setConfirmDeactivateId(null)}>
+                              Batal
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      {confirmDeleteId === e.id && (
+                        <div className="mt-2 space-y-2">
+                          <div className="flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                            Hapus permanen? Data tidak bisa dikembalikan.
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="destructive" size="sm" className="h-7 text-xs"
+                              onClick={() => { deleteMutation.mutate(e.id); setConfirmDeleteId(null); }}>
+                              Ya, Hapus
+                            </Button>
+                            <Button variant="outline" size="sm" className="h-7 text-xs"
+                              onClick={() => setConfirmDeleteId(null)}>
+                              Batal
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -259,12 +319,58 @@ export function EmployeeListPage() {
                               {e.isActive ? "Aktif" : "Nonaktif"}
                             </Badge>
                           </td>
-                          <td className="px-4 py-3">
-                            <Button variant="ghost" size="icon" asChild>
-                              <Link to={`/employees/${e.id}`}>
-                                <Eye className="h-4 w-4" />
-                              </Link>
-                            </Button>
+                          <td className="px-4 py-3 text-right">
+                            {confirmDeactivateId === e.id ? (
+                              <div className="flex items-center justify-end gap-2">
+                                <span className="text-xs text-amber-600 flex items-center gap-1">
+                                  <AlertTriangle className="h-3.5 w-3.5" /> Nonaktifkan?
+                                </span>
+                                <Button variant="outline" size="sm" className="h-7 text-xs border-amber-400 text-amber-700 hover:bg-amber-50"
+                                  onClick={() => { deactivateMutation.mutate(e.id); setConfirmDeactivateId(null); }}>
+                                  Ya
+                                </Button>
+                                <Button variant="outline" size="sm" className="h-7 text-xs"
+                                  onClick={() => setConfirmDeactivateId(null)}>
+                                  Batal
+                                </Button>
+                              </div>
+                            ) : confirmDeleteId === e.id ? (
+                              <div className="flex items-center justify-end gap-2">
+                                <span className="text-xs text-red-600 flex items-center gap-1">
+                                  <AlertTriangle className="h-3.5 w-3.5" /> Hapus permanen?
+                                </span>
+                                <Button variant="destructive" size="sm" className="h-7 text-xs"
+                                  onClick={() => { deleteMutation.mutate(e.id); setConfirmDeleteId(null); }}>
+                                  Ya
+                                </Button>
+                                <Button variant="outline" size="sm" className="h-7 text-xs"
+                                  onClick={() => setConfirmDeleteId(null)}>
+                                  Batal
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1">
+                                <Button variant="ghost" size="icon" asChild>
+                                  <Link to={`/employees/${e.id}`}>
+                                    <Eye className="h-4 w-4" />
+                                  </Link>
+                                </Button>
+                                {canDelete && (
+                                  <>
+                                    <Button variant="ghost" size="icon" title="Nonaktifkan"
+                                      className="text-muted-foreground hover:text-amber-600 hover:bg-amber-50"
+                                      onClick={() => { setConfirmDeleteId(null); setConfirmDeactivateId(e.id); }}>
+                                      <EyeOff className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" title="Hapus permanen"
+                                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => { setConfirmDeactivateId(null); setConfirmDeleteId(e.id); }}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            )}
                           </td>
                         </tr>
                       ))}

@@ -1,12 +1,61 @@
 # Project Context
 
-Always read these documents before coding:
+Kamu adalah Software Engineer pada project NIAHAIR ERP.
 
-- docs/Project.md
-- docs/requirement.md
-- docs/ERD.md
-- docs/BUSINESS_FLOW.md
-- docs/BACKEND_RULES.md
+WAJIB membaca seluruh folder /docs sebelum membuat kode.
+
+WAJIB mengikuti seluruh dokumentasi.
+
+Urutan prioritas:
+
+1. Business Rules
+2. ERP Blueprint
+3. Architecture
+4. Project Convention
+5. Module Implementation Guide
+6. Coding Standard
+7. API Standard
+8. Testing Guide
+
+Business Logic hanya di Service.
+
+Repository hanya Database.
+
+Controller harus tipis.
+
+Gunakan DTO.
+
+Gunakan Validation.
+
+Gunakan Prisma.
+
+Gunakan Migration.
+
+Gunakan REST API.
+
+Gunakan TypeScript strict mode.
+
+Jangan membuat file di luar struktur project.
+
+Jangan membuat Business Rule baru.
+
+Jika dokumentasi kurang jelas:
+
+BERHENTI dan tanyakan.
+
+Jangan berasumsi.
+
+Setelah setiap implementasi tampilkan:
+
+- File dibuat
+- File diubah
+- Migration
+- API
+- Test
+- Dokumentasi yang berubah
+
+Sebelum selesai lakukan self-review menggunakan:
+22_MODULE_IMPLEMENTATION_GUIDE.md Chapter 19.
 
 Backend location:
 

@@ -2,9 +2,19 @@ const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const { resolveOrderBy }           = require("../../utils/sort");
 const { handleInvoicePaid }        = require("./invoice.workflow");
+
+const ORDER_MAP = {
+  invoiceDate:    { invoiceDate: "asc" },
+  "-invoiceDate": { invoiceDate: "desc" },
+  createdAt:      { createdAt: "asc" },
+  "-createdAt":   { createdAt: "desc" },
+  grandTotal:     { grandTotal: "asc" },
+  "-grandTotal":  { grandTotal: "desc" },
+};
 const { createSyncJob }            = require("../syncQueue/syncQueue.service");
-const { generateStockMovement }    = require("../inventory/inventory.service");
+const { generateSaleMovement, reverseInvoiceSaleMovements } = require("../inventory/inventory.service");
 const { accurateRequest }          = require("../accurate/accurate.client");
 const prisma                       = require("../../config/prisma");
 const {
@@ -36,8 +46,9 @@ const D = (v) => new Prisma.Decimal(String(v));
 
 // ── List ──────────────────────────────────────────────────────────────
 
-const listInvoices = async ({ page, limit, customerId, branchId, status, appointmentId, startDate, endDate }) => {
+const listInvoices = async ({ page, limit, customerId, branchId, status, appointmentId, startDate, endDate, sortBy }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const orderBy = resolveOrderBy(sortBy, ORDER_MAP, "-invoiceDate");
 
   const where = {};
   if (customerId)   where.customerId   = customerId;
@@ -56,7 +67,7 @@ const listInvoices = async ({ page, limit, customerId, branchId, status, appoint
   }
 
   const [data, total] = await Promise.all([
-    findAll({ skip, take, where }),
+    findAll({ skip, take, where, orderBy }),
     count(where),
   ]);
 
@@ -74,10 +85,10 @@ const getInvoiceById = async (id) => {
 // ── Invoice number generator: INV-YYYYMMDD-XXXX ───────────────────────
 
 const buildInvoiceNo = async () => {
-  const now  = new Date();
-  const yyyy = now.getFullYear();
-  const mm   = String(now.getMonth() + 1).padStart(2, "0");
-  const dd   = String(now.getDate()).padStart(2, "0");
+  const now  = new Date(Date.now() + 7 * 3600 * 1000); // WIB (UTC+7)
+  const yyyy = now.getUTCFullYear();
+  const mm   = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const dd   = String(now.getUTCDate()).padStart(2, "0");
   const prefix = `INV-${yyyy}${mm}${dd}-`;
 
   const maxSeq = await findMaxInvoiceSeqToday(prefix);
@@ -358,7 +369,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   });
 
   // Stock OUT on invoice creation — physical goods are consumed at this point
-  await generateStockMovement(invoice.id);
+  await generateSaleMovement(invoice.id);
 
   // Deposit fully covered the invoice — trigger same workflow as payment path
   if (invoice.status === "PAID") {
@@ -387,14 +398,24 @@ const updateInvoice = async (id, body, userId) => {
     throw new AppError("Cannot edit a paid invoice", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
+  const membershipDiscountOverride = 'membershipDiscountTotal' in body;
   const { items, notes, taxable = false, inclusiveTax = false } = body;
+  const bodyMembershipDiscount = membershipDiscountOverride ? D(body.membershipDiscountTotal ?? 0) : null;
   const branchId = existing.branchId;
+
+  let activeMembership = null;
+  try {
+    activeMembership = await getActiveMembership(existing.customerId);
+  } catch (err) {
+    console.warn(`[invoice update] membership fetch failed for customer ${existing.customerId}: ${err.message}`);
+  }
 
   // Re-resolve prices and build new line items (same logic as createInvoice)
   const itemsData    = [];
   let totalSubtotal = D("0");
   let totalDiscount = D("0");
   let totalTax      = D("0");
+  let membershipDiscountRunning = D("0");
 
   for (const line of items) {
     const item = await findItemById(line.itemId);
@@ -420,9 +441,23 @@ const updateInvoice = async (id, body, userId) => {
     const qty             = D(line.qty);
     const discountType    = line.discountType ?? "AMOUNT";
     const discountPercent = discountType === "PERCENT" ? D(line.discountPercent ?? 0) : null;
-    const discount        = discountType === "PERCENT"
+    let discount          = discountType === "PERCENT"
       ? price.mul(qty).mul(discountPercent).div(D("100")).toDecimalPlaces(2)
       : D(line.discountAmount ?? 0);
+
+    if (
+      !membershipDiscountOverride &&
+      activeMembership?.membership?.discountType === "PERCENTAGE" &&
+      item.itemType === "SERVICE"
+    ) {
+      const membershipItemDiscount = price.mul(qty)
+        .mul(D(activeMembership.membership.discountValue))
+        .div(D("100"))
+        .toDecimalPlaces(0);
+      discount = discount.add(membershipItemDiscount);
+      membershipDiscountRunning = membershipDiscountRunning.add(membershipItemDiscount);
+    }
+
     const grossLine       = price.mul(qty).sub(discount);
     const lineTaxable     = taxable && (line.taxable ?? false);
 
@@ -457,7 +492,29 @@ const updateInvoice = async (id, body, userId) => {
     });
   }
 
-  const grandTotal = totalSubtotal.add(totalTax);
+  let membershipDiscountTotal = D("0");
+  const membershipId = activeMembership?.membership?.id ?? null;
+
+  if (membershipDiscountOverride) {
+    membershipDiscountTotal = bodyMembershipDiscount;
+  } else if (activeMembership) {
+    if (activeMembership.membership.discountType === "PERCENTAGE") {
+      membershipDiscountTotal = membershipDiscountRunning;
+    } else if (activeMembership.membership.discountType === "FIXED_AMOUNT") {
+      const preDiscountTotal = totalSubtotal.add(totalTax);
+      const discountValue    = D(activeMembership.membership.discountValue);
+      membershipDiscountTotal = discountValue.gt(preDiscountTotal) ? preDiscountTotal : discountValue;
+    }
+  }
+
+  const preDiscountGrandTotal = totalSubtotal.add(totalTax);
+  const isFixedAmount         = activeMembership?.membership?.discountType === "FIXED_AMOUNT";
+  const fixedAmountApplied    = isFixedAmount && membershipDiscountTotal.gt(D("0"));
+  const grandTotal = fixedAmountApplied
+    ? (preDiscountGrandTotal.sub(membershipDiscountTotal).gt(D("0"))
+        ? preDiscountGrandTotal.sub(membershipDiscountTotal)
+        : D("0"))
+    : preDiscountGrandTotal;
 
   // Keep existing deposits and payments; recalculate outstanding
   const existingTotalDeposit = D(existing.totalDeposit);
@@ -468,16 +525,21 @@ const updateInvoice = async (id, body, userId) => {
   const newStatus = safeOutstanding.lte(D("0")) ? "PAID" : "UNPAID";
 
   const invoiceData = {
-    subtotal:          totalSubtotal,
+    subtotal:               totalSubtotal,
     totalDiscount,
     totalTax,
     grandTotal,
-    outstandingAmount: safeOutstanding,
-    status:            newStatus,
-    notes:             notes ?? null,
+    membershipDiscountTotal,
+    membershipId,
+    outstandingAmount:      safeOutstanding,
+    status:                 newStatus,
+    notes:                  notes ?? null,
     taxable,
     inclusiveTax,
   };
+
+  // Reverse old SALE movements before items are replaced
+  await reverseInvoiceSaleMovements(existing.invoiceNo);
 
   const updated = await updateWithTransaction({
     invoiceId: id,
@@ -486,6 +548,9 @@ const updateInvoice = async (id, body, userId) => {
     oldStatus: existing.status,
     userId,
   });
+
+  // Generate new SALE movements for the updated items
+  await generateSaleMovement(id);
 
   // Re-sync to Accurate
   await createSyncJob({ entityType: "INVOICE", entityId: id, direction: "APP_TO_ACCURATE" });
@@ -523,6 +588,11 @@ const applyDepositToInvoice = async (invoiceId, { depositId, amount }, userId) =
 
   if (deposit.customerId !== invoice.customerId) {
     throw new AppError("Deposit belongs to a different customer", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
+  const alreadyApplied = deposit.invoiceDeposits.some((d) => d.invoiceId === invoiceId);
+  if (alreadyApplied) {
+    throw new AppError("Deposit ini sudah diterapkan ke invoice ini", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
   const alreadyUsed = deposit.invoiceDeposits.reduce(
@@ -637,13 +707,13 @@ const setupTreatmentSession = async (invoiceId) => {
   });
   // If session exists and already has items, return it as-is
   if (existingSession && existingSession.treatmentItems.length > 0) return existingSession;
-  // If session exists but is empty (e.g. created before fix), delete and recreate
-  if (existingSession) {
-    await prisma.treatmentSession.delete({ where: { id: existingSession.id } });
-  }
-
-  // Create session + items in a transaction
+  // Create session + items in a transaction (delete empty session atomically if needed)
   return prisma.$transaction(async (tx) => {
+    // If session exists but is empty (e.g. created before fix), delete and recreate atomically
+    if (existingSession) {
+      await tx.treatmentSession.delete({ where: { id: existingSession.id } });
+    }
+
     const session = await tx.treatmentSession.create({
       data: {
         customerId:    invoice.customerId,
@@ -708,6 +778,7 @@ const cancelInvoice = async (id, userId) => {
     throw new AppError("Invoice is already cancelled", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
+  await reverseInvoiceSaleMovements(invoice.invoiceNo);
   return cancelWithTransaction({ invoice, userId });
 };
 
@@ -726,6 +797,9 @@ const deleteInvoice = async (id) => {
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
+
+  // Reverse SALE movements before deleting — restores inventory stock
+  await reverseInvoiceSaleMovements(invoice.invoiceNo);
 
   // Delete from Accurate first if it was synced
   if (invoice.accurateInvoiceId) {

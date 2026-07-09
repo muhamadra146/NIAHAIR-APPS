@@ -182,8 +182,6 @@ export function AppointmentCreateForm({ open, onOpenChange, onSubmit, isPending,
   const endTime   = watch("endTime");
   const apptType  = watch("type");
 
-  const EMPTY_SLOTS: StaffBySlot = { stylist: [], asisten: [], colorist: [] };
-
   const [availableStaff, setAvailableStaff] = useState<AvailableStaff[]>([]);
   const [staffLoading, setStaffLoading]     = useState(false);
   const [staffBySlot, setStaffBySlot]       = useState<StaffBySlot>(EMPTY_SLOTS);

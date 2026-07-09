@@ -1,12 +1,10 @@
-const { StatusCodes } = require("http-status-codes");
 const { success } = require("../../common/responses/apiResponse");
-const repo = require("./setting.repository");
+const { getByKey, upsertSetting } = require("./setting.service");
 
 const getByKeyController = async (req, res, next) => {
   try {
-    const { key } = req.params;
-    const setting = await repo.findByKey(key);
-    success(res, setting ?? { key, value: null });
+    const setting = await getByKey(req.params.key);
+    return success(res, setting);
   } catch (err) {
     next(err);
   }
@@ -14,10 +12,8 @@ const getByKeyController = async (req, res, next) => {
 
 const upsertController = async (req, res, next) => {
   try {
-    const { key } = req.params;
-    const { value, description } = req.body;
-    const setting = await repo.upsert(key, String(value), description);
-    success(res, setting, "Setting updated", StatusCodes.OK);
+    const setting = await upsertSetting(req.params.key, req.body);
+    return success(res, setting, "Setting updated");
   } catch (err) {
     next(err);
   }

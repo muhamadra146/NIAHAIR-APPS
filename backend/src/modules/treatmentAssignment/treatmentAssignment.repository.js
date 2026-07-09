@@ -8,8 +8,9 @@ const INCLUDE = {
     select: {
       id:                 true,
       qty:                true,
+      priceSnapshot:      true,
       conversionSnapshot: true,
-      item: { select: { id: true, name: true, itemCode: true } },
+      item: { select: { id: true, name: true, itemCode: true, itemType: true } },
       unit: { select: { id: true, name: true } },
     },
   },
@@ -56,7 +57,22 @@ const sumWorkQtyByItem = async (treatmentItemId, excludeId = null) => {
 const findTreatmentItemById = (id) =>
   prisma.treatmentItem.findUnique({
     where:  { id },
-    select: { id: true, qty: true, conversionSnapshot: true },
+    select: {
+      id:                 true,
+      qty:                true,
+      priceSnapshot:      true,
+      conversionSnapshot: true,
+      item: { select: { itemType: true } },
+    },
+  });
+
+const countByItem = (treatmentItemId) =>
+  prisma.treatmentAssignment.count({ where: { treatmentItemId } });
+
+const updateManyWorkQty = (treatmentItemId, workQty) =>
+  prisma.treatmentAssignment.updateMany({
+    where: { treatmentItemId },
+    data:  { workQty },
   });
 
 const findEmployeeById = (id) =>
@@ -74,4 +90,6 @@ module.exports = {
   sumWorkQtyByItem,
   findTreatmentItemById,
   findEmployeeById,
+  countByItem,
+  updateManyWorkQty,
 };

@@ -14,8 +14,8 @@ const PAYROLL_INCLUDE = {
   ...ITEM_INCLUDE,
 };
 
-const findAll = ({ skip, take, where }) =>
-  prisma.payroll.findMany({ skip, take, where, orderBy: { periodStart: "desc" }, include: PAYROLL_INCLUDE });
+const findAll = ({ skip, take, where, orderBy }) =>
+  prisma.payroll.findMany({ skip, take, where, orderBy: orderBy ?? { periodStart: "desc" }, include: PAYROLL_INCLUDE });
 
 const count = (where) => prisma.payroll.count({ where });
 

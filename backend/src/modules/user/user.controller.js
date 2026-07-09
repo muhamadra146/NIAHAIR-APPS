@@ -1,5 +1,5 @@
 const { success, created } = require("../../common/responses/apiResponse");
-const { getAll, getById, createUser, updateUser, resetPassword, deactivateUser } = require("./user.service");
+const { getAll, getById, createUser, updateUser, resetPassword, changeOwnPassword, deactivateUser, deleteUser } = require("./user.service");
 
 const getAllController = async (req, res, next) => {
   try {
@@ -42,7 +42,19 @@ const deactivateController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const deleteController = async (req, res, next) => {
+  try {
+    return success(res, await deleteUser(req.params.id, req.user.id), "User berhasil dihapus");
+  } catch (err) { next(err); }
+};
+
+const changeOwnPasswordController = async (req, res, next) => {
+  try {
+    return success(res, await changeOwnPassword(req.user.id, req.body), "Password berhasil diubah");
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   getAllController, getByIdController, createController,
-  updateController, resetPasswordController, deactivateController,
+  updateController, resetPasswordController, changeOwnPasswordController, deactivateController, deleteController,
 };

@@ -66,8 +66,8 @@ const findDailyAssignment = ({ start, end, branchId }) => {
 
 // ── List / single ─────────────────────────────────────────────────────
 
-const findAll = ({ skip, take, where }) =>
-  prisma.invoice.findMany({ skip, take, where, orderBy: { createdAt: "desc" }, include: INCLUDE });
+const findAll = ({ skip, take, where, orderBy }) =>
+  prisma.invoice.findMany({ skip, take, where, orderBy: orderBy ?? { createdAt: "desc" }, include: INCLUDE });
 
 const count = (where) => prisma.invoice.count({ where });
 
@@ -146,7 +146,7 @@ const findDepositForApply = (id) =>
       amount:     true,
       status:     true,
       customerId: true,
-      invoiceDeposits: { select: { amountApplied: true } },
+      invoiceDeposits: { select: { invoiceId: true, amountApplied: true } },
     },
   });
 

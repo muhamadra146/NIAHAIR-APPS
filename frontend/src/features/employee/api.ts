@@ -7,6 +7,7 @@ import type {
   EmployeeListParams,
   CreateEmployeeInput,
   UpdateEmployeeInput,
+  UploadEmployeeFilesInput,
   UpdateEmployeeBranchesInput,
   CreateSalarySettingInput,
   UpdateSalarySettingInput,
@@ -40,6 +41,34 @@ export async function updateEmployee(
 ): Promise<Employee> {
   const { data } = await api.put<ApiResponse<Employee>>(`/employees/${id}`, input);
   return data.data;
+}
+
+export async function uploadEmployeeFiles(
+  id: string,
+  input: UploadEmployeeFilesInput,
+): Promise<Employee> {
+  const fd = new FormData();
+  if (input.ktpFile)      fd.append("ktpFile",      input.ktpFile);
+  if (input.contractFile) fd.append("contractFile", input.contractFile);
+  const { data } = await api.patch<ApiResponse<Employee>>(`/employees/${id}/files`, fd, {
+    // Remove default Content-Type so browser sets multipart/form-data + boundary automatically
+    transformRequest: [(reqData, headers) => {
+      if (headers) {
+        delete (headers as Record<string, unknown>)["Content-Type"];
+        delete (headers as Record<string, unknown>)["content-type"];
+      }
+      return reqData;
+    }],
+  });
+  return data.data;
+}
+
+export async function deactivateEmployee(id: string): Promise<void> {
+  await api.patch(`/employees/${id}/deactivate`);
+}
+
+export async function deleteEmployee(id: string): Promise<void> {
+  await api.delete(`/employees/${id}`);
 }
 
 export async function updateEmployeeBranches(

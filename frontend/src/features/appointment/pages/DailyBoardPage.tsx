@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/lib/toast";
 import {
   DndContext,
   PointerSensor,
@@ -110,10 +111,12 @@ const RESCHEDULABLE: AppointmentStatus[] = ["BOOKED", "CONFIRMED", "CHECK_IN", "
 
 // ── Date helpers ──────────────────────────────────────────────────────
 
-const todayStr  = () => new Date().toISOString().split("T")[0];
+const localDateStr = (d: Date = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const todayStr  = () => localDateStr();
 const shiftDate = (d: string, n: number) => {
-  const dt = new Date(d); dt.setDate(dt.getDate() + n);
-  return dt.toISOString().split("T")[0];
+  const dt = new Date(d + "T00:00:00"); dt.setDate(dt.getDate() + n);
+  return localDateStr(dt);
 };
 const pad       = (n: number) => String(n).padStart(2, "0");
 const dtToHHMM  = (iso: string) => { const d = new Date(iso); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
@@ -157,11 +160,13 @@ function EmptyColumnState() {
 function StaffAssignPopover({
   appointment,
   date,
+  open,
   onClose,
   onSaved,
 }: {
   appointment: Appointment;
   date:        string;
+  open:        boolean;
   onClose:     () => void;
   onSaved:     () => void;
 }) {
@@ -170,19 +175,18 @@ function StaffAssignPopover({
   const [staffBySlot, setStaffBySlot] = useState<StaffBySlot>(() =>
     appointment.staffs.reduce<StaffBySlot>(
       (acc, s) => {
-        const key = APPOINTMENT_SLOTS.find((sl) => sl.key === s.slotKey)?.key ?? "stylist";
+        const key = APPOINTMENT_SLOTS.find((sl) => sl.key === s.slotKey)?.key ?? "pemasang";
         return { ...acc, [key]: [...acc[key], s.employee.id] };
       },
       { ...EMPTY_SLOTS }
     )
   );
   const [saving, setSaving] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
 
   const startTime = new Date(appointment.startTime)
-    .toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    .toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
   const endTime = new Date(appointment.endTime)
-    .toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    .toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
 
   const { data: avail = [], isLoading } = useQuery({
     queryKey: ["avail-staff", date, branchId, startTime, endTime],
@@ -194,7 +198,7 @@ function StaffAssignPopover({
         endTime,
         excludeAppointmentId: appointment.id,
       }),
-    enabled: Boolean(branchId),
+    enabled: Boolean(branchId) && open,
     staleTime: 0,
   });
 
@@ -211,14 +215,6 @@ function StaffAssignPopover({
     }));
   const allStaff = [...alreadyAssigned, ...avail];
 
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
-
   function addStaff(slot: SlotKey, id: string) {
     if (staffBySlot[slot].includes(id)) return;
     setStaffBySlot((prev) => ({ ...prev, [slot]: [...prev[slot], id] }));
@@ -234,47 +230,50 @@ function StaffAssignPopover({
       await updateAppointment(appointment.id, { staffsBySlot: slotsToStaffBySlot(staffBySlot) });
       onSaved();
       onClose();
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      toast.error(msg ?? (err instanceof Error ? err.message : "Gagal menyimpan staff"));
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div
-      ref={ref}
-      className="absolute z-50 left-0 right-0 top-full mt-1 rounded-xl border border-border bg-background shadow-2xl overflow-hidden"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/20">
-        <span className="text-xs font-semibold flex items-center gap-1.5">
-          <Users className="h-3.5 w-3.5" /> Staff
-        </span>
-        <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-sm">
+            <Users className="h-4 w-4" /> Atur Staff
+          </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            {appointment.customer?.name ?? "—"} · {startTime}–{endTime}
+          </DialogDescription>
+        </DialogHeader>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center gap-2 py-5 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Memuat…
-        </div>
-      ) : (
-        <div className="p-3">
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Memuat staff tersedia…
+          </div>
+        ) : (
           <StaffSlotSelector
             staff={allStaff}
             staffBySlot={staffBySlot}
             onAdd={addStaff}
             onRemove={removeStaff}
           />
-        </div>
-      )}
+        )}
 
-      <div className="px-3 py-2 border-t border-border bg-muted/20">
-        <Button size="sm" className="w-full h-7 text-xs" onClick={save} disabled={saving}>
-          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Simpan"}
-        </Button>
-      </div>
-    </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Batal</Button>
+          <Button size="sm" onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Simpan"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -507,8 +506,12 @@ function CancelDialog({
       await changeAppointmentStatus(appointment.id, { status: "CANCELLED", cancelReason: reason.trim() });
       onSuccess();
       onClose();
-    } catch {
-      setError("Gagal membatalkan. Coba lagi.");
+    } catch (err: unknown) {
+      const apiMsg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      setError(apiMsg ?? (err instanceof Error ? err.message : "Gagal membatalkan. Coba lagi."));
     } finally {
       setSaving(false);
     }
@@ -612,7 +615,7 @@ function DraggableCard({
 
   const bySlot = a.staffs.reduce<StaffBySlot>(
     (acc, s) => {
-      const key = APPOINTMENT_SLOTS.find((sl) => sl.key === s.slotKey)?.key ?? "stylist";
+      const key = APPOINTMENT_SLOTS.find((sl) => sl.key === s.slotKey)?.key ?? "pemasang";
       return { ...acc, [key]: [...acc[key], s.employee.id] };
     },
     { ...EMPTY_SLOTS }
@@ -644,13 +647,13 @@ function DraggableCard({
       ref={setNodeRef}
       style={style}
       className={[
-        "bg-white rounded-xl shadow-sm select-none overflow-hidden",
+        "bg-white rounded-xl shadow-sm select-none",
         isDragging    ? "opacity-30" : "",
         isDragOverlay ? "shadow-2xl rotate-1 opacity-95 scale-105" : "hover:shadow-md transition-shadow",
       ].join(" ")}
     >
       {/* Colored time header */}
-      <div className={`${timeBg} px-3 py-2 flex items-center justify-between`}>
+      <div className={`${timeBg} px-3 py-2 flex items-center justify-between rounded-t-xl`}>
         <div className="flex items-center gap-2">
           {canDrag && !isDragOverlay && (
             <div
@@ -722,10 +725,11 @@ function DraggableCard({
               ))}
             </div>
           )}
-          {showStaff && !isDragOverlay && (
+          {!isDragOverlay && (
             <StaffAssignPopover
               appointment={a}
               date={date}
+              open={showStaff}
               onClose={() => setShowStaff(false)}
               onSaved={onStaffSaved}
             />
@@ -938,7 +942,6 @@ function AppointmentListRow({
 }) {
   const [showStaff,  setShowStaff]  = useState(false);
   const [showAssign, setShowAssign] = useState(false);
-  const staffRef = useRef<HTMLDivElement>(null);
 
   const next      = NEXT_STATUS[a.status];
   const nextLabel = NEXT_LABEL[a.status];
@@ -952,21 +955,13 @@ function AppointmentListRow({
 
   const bySlot = a.staffs.reduce<StaffBySlot>(
     (acc, s) => {
-      const key = APPOINTMENT_SLOTS.find((sl) => sl.key === s.slotKey)?.key ?? "stylist";
+      const key = APPOINTMENT_SLOTS.find((sl) => sl.key === s.slotKey)?.key ?? "pemasang";
       return { ...acc, [key]: [...acc[key], s.employee.id] };
     },
     { ...EMPTY_SLOTS }
   );
   const employeeMap = new Map(a.staffs.map((s) => [s.employee.id, s.employee.name]));
   const activeSlots = APPOINTMENT_SLOTS.filter(({ key }) => bySlot[key].length > 0);
-
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (staffRef.current && !staffRef.current.contains(e.target as Node)) setShowStaff(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
 
   return (
     <div className={[
@@ -1025,7 +1020,7 @@ function AppointmentListRow({
         )}
 
         {/* Staff */}
-        <div className="mt-1.5 ml-5 relative" ref={staffRef}>
+        <div className="mt-1.5 ml-5">
           {a.staffs.length === 0 ? (
             <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-0.5">
               <AlertTriangle className="h-3 w-3 shrink-0" /> Belum ada staff
@@ -1043,14 +1038,13 @@ function AppointmentListRow({
             </div>
           )}
 
-          {showStaff && (
-            <StaffAssignPopover
-              appointment={a}
-              date={date}
-              onClose={() => setShowStaff(false)}
-              onSaved={onStaffSaved}
-            />
-          )}
+          <StaffAssignPopover
+            appointment={a}
+            date={date}
+            open={showStaff}
+            onClose={() => setShowStaff(false)}
+            onSaved={onStaffSaved}
+          />
         </div>
 
         {/* HS address */}

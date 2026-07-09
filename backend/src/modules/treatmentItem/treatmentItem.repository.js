@@ -1,7 +1,7 @@
 const prisma = require("../../config/prisma");
 
 const INCLUDE = {
-  item: { select: { id: true, name: true, itemCode: true } },
+  item: { select: { id: true, name: true, itemCode: true, itemType: true, defaultUnit: { select: { id: true, name: true } } } },
   unit: { select: { id: true, name: true } },
   _count: { select: { assignments: true } },
 };

@@ -2,6 +2,16 @@ const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const { resolveOrderBy } = require("../../utils/sort");
+
+const ORDER_MAP = {
+  createdAt:    { createdAt: "asc" },
+  "-createdAt": { createdAt: "desc" },
+  amount:       { amount: "asc" },
+  "-amount":    { amount: "desc" },
+  status:       { status: "asc" },
+  "-status":    { status: "desc" },
+};
 const prisma          = require("../../config/prisma");
 const { createSyncJob }                                       = require("../syncQueue/syncQueue.service");
 const { updateDepositInAccurate, deleteDepositFromAccurate }  = require("./deposit.sync.service");
@@ -35,8 +45,9 @@ const withComputed = (deposit) => {
 
 // ── List ──────────────────────────────────────────────────────────────
 
-const listDeposits = async ({ page, limit, customerId, appointmentId, status, branchId, startDate, endDate }) => {
+const listDeposits = async ({ page, limit, customerId, appointmentId, status, branchId, startDate, endDate, sortBy }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const orderBy = resolveOrderBy(sortBy, ORDER_MAP);
 
   const where = {};
   if (customerId)    where.customerId    = customerId;
@@ -51,7 +62,7 @@ const listDeposits = async ({ page, limit, customerId, appointmentId, status, br
   }
 
   const [deposits, total] = await Promise.all([
-    findAll({ skip, take, where }),
+    findAll({ skip, take, where, orderBy }),
     count(where),
   ]);
 
@@ -138,6 +149,13 @@ const cancelDeposit = async (id) => {
     );
   }
 
+  if (deposit.invoiceDeposits?.length > 0) {
+    throw new AppError(
+      "Cannot cancel deposit that has already been applied to an invoice",
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
   const updated = await updateStatus(id, "CANCELLED");
   return withComputed(updated);
 };
@@ -154,6 +172,9 @@ const editDeposit = async (id, { notes, amount }) => {
   if (amount !== undefined) {
     if (deposit.status !== "UNPAID") {
       throw new AppError("Cannot change amount after deposit has been paid", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+    if (D(amount).lte(D("0"))) {
+      throw new AppError("Amount harus lebih dari 0", StatusCodes.UNPROCESSABLE_ENTITY);
     }
     data.amount = D(amount);
   }

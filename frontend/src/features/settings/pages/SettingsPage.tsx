@@ -9,7 +9,7 @@ import { Pagination } from "@/components/common/Pagination";
 
 import {
   useEmployeeRoles, useCreateEmployeeRole, useUpdateEmployeeRole, useDeleteEmployeeRole,
-  useUsers, useCreateUser, useUpdateUser, useResetUserPassword, useDeactivateUser,
+  useUsers, useCreateUser, useUpdateUser, useResetUserPassword, useDeleteUser,
   useBranches, useCreateBranch, useUpdateBranch, useDeleteBranch,
   usePaymentMethods, useCreatePaymentMethod, useUpdatePaymentMethod, useDeletePaymentMethod,
   useCashAccounts, useUpdateCashAccount, useDeleteCashAccount, useSyncCashAccounts,
@@ -184,14 +184,14 @@ function UserTab() {
   const createMut     = useCreateUser();
   const updateMut     = useUpdateUser(editUser?.id ?? "");
   const resetPwMut    = useResetUserPassword(pwUser?.id ?? "");
-  const deactivateMut = useDeactivateUser();
+  const deleteMut = useDeleteUser();
 
   function openCreate() { setEditUser(null); setFormError(null); setFormOpen(true); }
   function openEdit(user: User) { setEditUser(user); setFormError(null); setFormOpen(true); }
   function openResetPw(user: User) { setPwUser(user); setPwError(null); setPwOpen(true); }
 
   async function handleDeleteUser(user: User) {
-    try { await deactivateMut.mutateAsync(user.id); } catch { /* ignored */ }
+    try { await deleteMut.mutateAsync(user.id); } catch { /* ignored */ }
   }
 
   async function handleSubmit(values: CreateUserFormValues | UpdateUserFormValues) {

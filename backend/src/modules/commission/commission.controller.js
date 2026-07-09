@@ -4,6 +4,9 @@ const {
   getCommissionById,
   approveCommission,
   markCommissionPaid,
+  regenerateCommission,
+  overrideCommission,
+  deleteCommission,
 } = require("./commission.service");
 
 const getAllController = async (req, res, next) => {
@@ -42,9 +45,44 @@ const payController = async (req, res, next) => {
   }
 };
 
+const regenerateController = async (req, res, next) => {
+  try {
+    const result = await regenerateCommission(req.params.invoiceId);
+    return success(res, result, "Commissions regenerated");
+  } catch (err) {
+    next(err);
+  }
+};
+
+const overrideController = async (req, res, next) => {
+  try {
+    const { commissionAmount, notes } = req.body;
+    const result = await overrideCommission(req.params.id, {
+      commissionAmount,
+      userId: req.user.id,
+      notes,
+    });
+    return success(res, result, "Commission overridden");
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteController = async (req, res, next) => {
+  try {
+    const result = await deleteCommission(req.params.id);
+    return success(res, result, "Komisi dihapus");
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getAllController,
   getByIdController,
   approveController,
   payController,
+  regenerateController,
+  overrideController,
+  deleteController,
 };

@@ -10,8 +10,8 @@ const INCLUDE = {
   },
 };
 
-const findAll = ({ skip, take, where }) =>
-  prisma.employee.findMany({ skip, take, where, orderBy: { createdAt: "desc" }, include: INCLUDE });
+const findAll = ({ skip, take, where, orderBy }) =>
+  prisma.employee.findMany({ skip, take, where, orderBy: orderBy ?? { createdAt: "desc" }, include: INCLUDE });
 
 const count = (where) => prisma.employee.count({ where });
 
@@ -80,12 +80,74 @@ const updateBranches = (employeeId, branchIds) =>
     return tx.employee.findUnique({ where: { id: employeeId }, include: INCLUDE });
   });
 
+const updateFiles = (id, data) =>
+  prisma.employee.update({ where: { id }, data, include: INCLUDE });
+
 const softDelete = (id) =>
   prisma.employee.update({ where: { id }, data: { isActive: false } });
+
+const hardDelete = (id) =>
+  prisma.$transaction(async (tx) => {
+    // Null-out optional foreign keys that reference this employee
+    await tx.appointment.updateMany({
+      where: { createdByEmployeeId: id },
+      data:  { createdByEmployeeId: null },
+    });
+    await tx.deposit.updateMany({
+      where: { createdByEmployeeId: id },
+      data:  { createdByEmployeeId: null },
+    });
+    await tx.invoice.updateMany({
+      where: { createdByEmployeeId: id },
+      data:  { createdByEmployeeId: null },
+    });
+    await tx.payment.updateMany({
+      where: { createdByEmployeeId: id },
+      data:  { createdByEmployeeId: null },
+    });
+    await tx.clientConsultationNote.updateMany({
+      where: { filledByEmployeeId: id },
+      data:  { filledByEmployeeId: null },
+    });
+    await tx.inventoryMovement.updateMany({
+      where: { createdByEmployeeId: id },
+      data:  { createdByEmployeeId: null },
+    });
+    await tx.inventoryPeriod.updateMany({
+      where: { closedByEmployeeId: id },
+      data:  { closedByEmployeeId: null },
+    });
+
+    // Delete required-FK child records in correct order
+    await tx.commission.deleteMany({ where: { employeeId: id } });
+    await tx.attendanceCorrectionRequest.deleteMany({ where: { employeeId: id } });
+    await tx.attendance.deleteMany({ where: { employeeId: id } });
+    await tx.staffSchedule.deleteMany({ where: { employeeId: id } });
+    await tx.permissionRequest.deleteMany({ where: { employeeId: id } });
+    await tx.sickLeave.deleteMany({ where: { employeeId: id } });
+    await tx.treatmentAssignment.deleteMany({ where: { employeeId: id } });
+    await tx.appointmentStaff.deleteMany({ where: { employeeId: id } });
+    await tx.overtimeChargeEmployee.deleteMany({ where: { employeeId: id } });
+    await tx.branchCommissionRule.deleteMany({ where: { employeeId: id } });
+    await tx.commissionRule.deleteMany({ where: { employeeId: id } });
+    await tx.loanRepayment.deleteMany({ where: { loan: { employeeId: id } } });
+    await tx.loan.deleteMany({ where: { employeeId: id } });
+    await tx.payrollItem.deleteMany({ where: { payroll: { employeeId: id } } });
+    await tx.payroll.deleteMany({ where: { employeeId: id } });
+    await tx.leaveQuota.deleteMany({ where: { employeeId: id } });
+    await tx.leave.deleteMany({ where: { employeeId: id } });
+    await tx.employeeSchedule.deleteMany({ where: { employeeId: id } });
+    await tx.employeeSalarySettings.deleteMany({ where: { employeeId: id } });
+    await tx.employeeBranchHistory.deleteMany({ where: { employeeId: id } });
+    await tx.employeeBranch.deleteMany({ where: { employeeId: id } });
+    await tx.user.deleteMany({ where: { employeeId: id } });
+
+    await tx.employee.delete({ where: { id } });
+  });
 
 module.exports = {
   findAll, count, findById,
   findByEmployeeCode, findLastEmployeeCode, findByEmail,
   findRoleById,
-  create, update, updateBranches, softDelete,
+  create, update, updateFiles, updateBranches, softDelete, hardDelete,
 };

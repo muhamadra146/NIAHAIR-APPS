@@ -1,52 +1,94 @@
-import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { ChevronLeft, Plus, Trash2, UserPlus, CheckCircle2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  ChevronLeft, CheckCircle2, XCircle, Clock, User, Scissors,
+  Upload, Trash2, ZoomIn, AlertTriangle, ExternalLink,
+  CalendarDays, MessageSquare, Camera, Users, Package,
+} from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { formatDate } from "@/lib/utils";
-import { useEmployees } from "@/features/employee/hooks";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  useTreatment,
-  useUpdateTreatment,
-  useTreatmentItems,
-  useCreateTreatmentItem,
-  useDeleteTreatmentItem,
-  useAssignments,
-  useCreateAssignment,
-  useDeleteAssignment,
-  useItemSearch,
-  useUnits,
-} from "../hooks";
-import type { TreatmentItem, ItemSearchResult } from "../types";
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
+import { useAppointment } from "@/features/appointment/hooks/index";
+import {
+  fetchAppointmentPhotos,
+  uploadAppointmentPhoto,
+  deleteAppointmentPhoto,
+  type AppointmentPhotoType,
+} from "@/features/appointment/api/appointment.api";
+import { useTreatment, useTreatmentItems, useCompleteTreatment, useSaveTreatmentNotes, useMaterialUsages } from "../hooks";
+import { TreatmentStatusBadge } from "../components/TreatmentStatusBadge";
+import { ElapsedTime } from "../components/ElapsedTime";
+import { MaterialsTab } from "../components/MaterialsTab";
+import type { TreatmentItem } from "../types";
+import type { AppointmentStatus, Appointment } from "@/features/appointment/types";
+
+// ── Status label map ──────────────────────────────────────────────────────────
+const STATUS_LABEL: Record<AppointmentStatus, string> = {
+  BOOKED:      "Booked",
+  CONFIRMED:   "Confirmed",
+  CHECK_IN:    "Check-in",
+  IN_PROGRESS: "In Progress",
+  COMPLETED:   "Completed",
+  CANCELLED:   "Cancelled",
+  NO_SHOW:     "No Show",
+};
+
+function formatDatetime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("id-ID", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("id-ID", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export function TreatmentDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+
   const { data: session, isLoading, isError } = useTreatment(id!);
-  const updateMutation = useUpdateTreatment(id!);
-  const { data: items = [], isLoading: itemsLoading } = useTreatmentItems(id!);
-  const createItemMutation = useCreateTreatmentItem(id!);
-  const deleteItemMutation = useDeleteTreatmentItem(id!);
+  const { data: appointment } = useAppointment(session?.appointmentId ?? "");
+  const { data: items = [] } = useTreatmentItems(id!);
+  const { data: materialUsages = [] } = useMaterialUsages(id!);
 
-  const [addItemOpen, setAddItemOpen] = useState(false);
-  const [assignOpen, setAssignOpen]   = useState<string | null>(null); // treatmentItemId
+  const completeMutation  = useCompleteTreatment(id!);
+  const saveNotesMutation = useSaveTreatmentNotes(id!);
 
-  async function handleComplete() {
-    await updateMutation.mutateAsync({ completedAt: new Date().toISOString() });
-  }
+  const [activeTab,    setActiveTab]    = useState("overview");
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [notes,        setNotes]        = useState("");
+  const [notesDirty,   setNotesDirty]   = useState(false);
+
+  useEffect(() => {
+    if (session?.notes !== undefined && !notesDirty) {
+      setNotes(session.notes ?? "");
+    }
+  }, [session?.notes, notesDirty]);
 
   if (isLoading) {
     return (
       <PageContainer>
         <div className="space-y-4">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-28 w-full rounded-2xl" />
+          <Skeleton className="h-64 w-full rounded-2xl" />
         </div>
       </PageContainer>
     );
@@ -56,361 +98,839 @@ export function TreatmentDetailPage() {
     return (
       <PageContainer>
         <div className="py-12 text-center text-sm text-muted-foreground">
-          Sesi tidak ditemukan.{" "}
+          Sesi treatment tidak ditemukan.{" "}
           <Link to="/treatments" className="text-primary underline">Kembali</Link>
         </div>
       </PageContainer>
     );
   }
 
-  const isCompleted = !!session.completedAt;
+  const isCompleted        = !!session.completedAt;
+  const hasStaff           = (appointment?.staffs?.length ?? 0) > 0;
+  const hasMaterialSaved   = materialUsages.length > 0;
+
+  async function handleSaveNotes() {
+    try {
+      await saveNotesMutation.mutateAsync(notes);
+      setNotesDirty(false);
+    } catch { /* error handled by hook onError */ }
+  }
+
+  async function handleComplete() {
+    try {
+      await completeMutation.mutateAsync();
+      setCompleteOpen(false);
+    } catch { /* error handled by hook onError */ }
+  }
 
   return (
     <PageContainer>
-      <div className="space-y-4 sm:space-y-6">
-        {/* Header */}
-        <div className="flex items-start gap-2">
-          <Button variant="ghost" size="icon" className="mt-0.5 shrink-0" asChild>
-            <Link to="/treatments"><ChevronLeft className="h-5 w-5" /></Link>
-          </Button>
-          <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="truncate text-xl font-bold tracking-tight sm:text-2xl">
-                {session.customer?.name ?? "—"}
-              </h1>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <span>{session.branch?.name ?? "—"}</span>
-                {isCompleted
-                  ? <Badge className="bg-green-600 text-xs">Selesai</Badge>
-                  : <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">Berlangsung</Badge>
-                }
-              </div>
-            </div>
-            {!isCompleted && (
-              <Button size="sm" onClick={handleComplete} disabled={updateMutation.isPending} className="shrink-0">
-                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                Selesaikan
-              </Button>
-            )}
-          </div>
-        </div>
+      <div className="space-y-4">
 
-        {/* Session info */}
+        {/* Back nav */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2 text-muted-foreground hover:text-foreground"
+          onClick={() => navigate(-1)}
+        >
+          <ChevronLeft className="mr-1 h-4 w-4" />
+          Kembali
+        </Button>
+
+        {/* Header card */}
         <Card>
-          <CardContent className="pt-4 pb-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
-            <InfoRow label="Mulai"   value={session.startedAt ? new Date(session.startedAt).toLocaleString("id-ID") : "—"} />
-            <InfoRow label="Selesai" value={session.completedAt ? new Date(session.completedAt).toLocaleString("id-ID") : "—"} />
-            <InfoRow label="Dibuat"  value={formatDate(session.createdAt)} />
-            {session.appointmentId && <InfoRow label="Booking" value={<Link to={`/appointments/${session.appointmentId}`} className="text-primary underline text-xs">Lihat Booking</Link>} />}
-            {session.notes && <InfoRow label="Catatan" value={session.notes} />}
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+
+              {/* Left: identity */}
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary font-bold text-sm select-none">
+                  {(session.customer?.name ?? "?").slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-lg font-bold">{session.customer?.name ?? "—"}</h1>
+                    <TreatmentStatusBadge
+                      completedAt={session.completedAt}
+                      startedAt={session.startedAt}
+                    />
+                  </div>
+                  {session.customer?.mobilePhone && (
+                    <p className="text-sm text-muted-foreground">{session.customer.mobilePhone}</p>
+                  )}
+                  {session.appointment && (
+                    <p className="text-sm text-muted-foreground">
+                      Booking #{session.appointment.bookingNo} ·{" "}
+                      {formatDate(session.appointment.visitDate)}
+                    </p>
+                  )}
+                  {!isCompleted && session.startedAt && (
+                    <div className="mt-1 flex items-center gap-1.5 text-sm text-blue-700 font-medium">
+                      <Clock className="h-3.5 w-3.5" />
+                      <ElapsedTime startedAt={session.startedAt} />
+                    </div>
+                  )}
+                  {isCompleted && session.completedAt && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Selesai: {formatDatetime(session.completedAt)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Right: actions */}
+              <div className="flex flex-wrap items-center gap-2">
+                {session.appointmentId && (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={`/appointments/${session.appointmentId}`}>
+                      <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                      Lihat Booking
+                    </Link>
+                  </Button>
+                )}
+                {!isCompleted && (
+                  <Button size="sm" onClick={() => setCompleteOpen(true)}>
+                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                    Selesaikan
+                  </Button>
+                )}
+              </div>
+
+            </div>
           </CardContent>
         </Card>
 
-        {/* Items */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Item Treatment ({items.length})</h2>
-            {!isCompleted && (
-              <Button size="sm" variant="outline" onClick={() => setAddItemOpen(true)}>
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Tambah Item
-              </Button>
-            )}
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <div className="overflow-x-auto pb-1 -mx-1 px-1">
+            <TabsList className="inline-flex min-w-max">
+              <TabsTrigger value="overview">
+                <User className="mr-1.5 h-3.5 w-3.5" />
+                Overview
+              </TabsTrigger>
+              <TabsTrigger value="services">
+                <Scissors className="mr-1.5 h-3.5 w-3.5" />
+                Layanan
+              </TabsTrigger>
+              <TabsTrigger value="staff">
+                <Users className="mr-1.5 h-3.5 w-3.5" />
+                Staff
+              </TabsTrigger>
+              <TabsTrigger value="materials">
+                <Package className="mr-1.5 h-3.5 w-3.5" />
+                Material
+              </TabsTrigger>
+              <TabsTrigger value="photos">
+                <Camera className="mr-1.5 h-3.5 w-3.5" />
+                Foto
+              </TabsTrigger>
+              <TabsTrigger value="timeline">
+                <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
+                Timeline
+              </TabsTrigger>
+              <TabsTrigger value="notes">
+                <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
+                Catatan
+              </TabsTrigger>
+            </TabsList>
           </div>
 
-          {itemsLoading ? (
-            <Skeleton className="h-24 w-full" />
-          ) : items.length === 0 ? (
+          {/* OVERVIEW */}
+          <TabsContent value="overview" className="mt-4 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+
+              {/* Customer */}
+              <Card>
+                <CardContent className="p-4 space-y-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Customer
+                  </h3>
+                  <InfoRow label="Nama"         value={session.customer?.name ?? "—"} />
+                  <InfoRow label="No. HP"        value={session.customer?.mobilePhone ?? "—"} />
+                  <InfoRow label="No. Customer"  value={session.customer?.customerNo ?? "—"} />
+                  {session.customer?.id && (
+                    <Button variant="outline" size="sm" className="w-full mt-1" asChild>
+                      <Link to={`/customers/${session.customer.id}`}>
+                        Lihat Profil Customer
+                      </Link>
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Appointment */}
+              <Card>
+                <CardContent className="p-4 space-y-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Booking
+                  </h3>
+                  {appointment ? (
+                    <>
+                      <InfoRow label="No. Booking"       value={`#${appointment.bookingNo}`} />
+                      <InfoRow label="Tanggal Kunjungan" value={formatDate(appointment.visitDate)} />
+                      <InfoRow label="Waktu"             value={`${appointment.startTime} – ${appointment.endTime}`} />
+                      <InfoRow label="Status"            value={STATUS_LABEL[appointment.status] ?? appointment.status} />
+                      <InfoRow label="Tipe"              value={appointment.type} />
+                    </>
+                  ) : session.appointmentId ? (
+                    <p className="text-sm text-muted-foreground">Memuat…</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Tidak terhubung ke booking.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Treatment session */}
+              <Card>
+                <CardContent className="p-4 space-y-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Sesi Treatment
+                  </h3>
+                  <InfoRow
+                    label="Status"
+                    value={isCompleted ? "Selesai" : session.startedAt ? "Berlangsung" : "Belum Mulai"}
+                  />
+                  <InfoRow label="Mulai"        value={formatDatetime(session.startedAt)} />
+                  <InfoRow label="Selesai"      value={formatDatetime(session.completedAt)} />
+                  <InfoRow label="Cabang"       value={session.branch?.name ?? "—"} />
+                  <InfoRow label="Jumlah Item"  value={`${items.length} item treatment`} />
+                </CardContent>
+              </Card>
+
+              {/* Items summary */}
+              {items.length > 0 && (
+                <Card>
+                  <CardContent className="p-4 space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Item Treatment
+                    </h3>
+                    <div className="space-y-2">
+                      {items.map((item) => (
+                        <div key={item.id} className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{item.item?.name ?? "—"}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {item.qty} {item.unit?.name ?? ""}
+                            </p>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "shrink-0 text-xs",
+                              (item.assignments?.length ?? 0) > 0
+                                ? "border-emerald-200 text-emerald-700"
+                                : "border-amber-200 text-amber-600",
+                            )}
+                          >
+                            {(item.assignments?.length ?? 0) > 0
+                              ? `${item.assignments!.length} staff`
+                              : "Belum ditugaskan"}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* SERVICES */}
+          <TabsContent value="services" className="mt-4">
             <Card>
-              <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                Belum ada item. Tambah item treatment.
+              <CardContent className="p-4">
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Layanan Booking
+                </h3>
+                {!appointment ? (
+                  session.appointmentId ? (
+                    <p className="text-sm text-muted-foreground">Memuat data booking…</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Sesi ini tidak terhubung ke booking.</p>
+                  )
+                ) : appointment.services.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    Belum ada layanan pada booking ini.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {appointment.services.map((svc) => (
+                      <div
+                        key={svc.id}
+                        className="flex items-center gap-3 rounded-lg border border-border p-3"
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <Scissors className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">{svc.serviceItem.name}</p>
+                          <p className="text-xs text-muted-foreground font-mono">
+                            {svc.serviceItem.itemCode}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
-          ) : (
-            <div className="space-y-2">
-              {items.map((item) => (
-                <TreatmentItemCard
-                  key={item.id}
-                  item={item}
-                  sessionId={id!}
-                  isCompleted={isCompleted}
-                  onDelete={() => deleteItemMutation.mutate(item.id)}
-                  onAssign={() => setAssignOpen(item.id)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+
+            {items.length > 0 && (
+              <Card className="mt-4">
+                <CardContent className="p-4">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Item Treatment (Produk)
+                  </h3>
+                  <div className="space-y-2">
+                    {items.map((item) => (
+                      <TreatmentItemRow key={item.id} item={item} />
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* STAFF */}
+          <TabsContent value="staff" className="mt-4 space-y-4">
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Staff Booking
+                </h3>
+                {!appointment ? (
+                  <p className="text-sm text-muted-foreground">Memuat…</p>
+                ) : appointment.staffs.length === 0 ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                    <p className="text-sm text-amber-700">
+                      Belum ada staff yang ditugaskan pada booking ini.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {appointment.staffs.map((sf) => (
+                      <div
+                        key={sf.id}
+                        className="flex items-center gap-3 rounded-lg border border-border p-3"
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                          <User className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">{sf.employee.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {sf.employee.role?.name ?? slotLabel(sf.slotKey)}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="text-xs shrink-0">
+                          {slotLabel(sf.slotKey)}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {appointment && appointment.staffs.length > 0 && session.appointmentId && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Untuk mengubah staff, buka{" "}
+                    <Link
+                      to={`/appointments/${session.appointmentId}`}
+                      className="text-primary underline"
+                    >
+                      detail booking
+                    </Link>.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {items.length > 0 && (
+              <Card>
+                <CardContent className="p-4">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Penugasan Item Treatment
+                  </h3>
+                  <div className="space-y-3">
+                    {items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-lg border border-border p-3 space-y-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium">{item.item?.name ?? "—"}</p>
+                          <span className="text-xs text-muted-foreground">
+                            {item.qty} {item.unit?.name ?? ""}
+                          </span>
+                        </div>
+                        {item.assignments && item.assignments.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {item.assignments.map((a) => (
+                              <Badge key={a.id} variant="secondary" className="text-xs">
+                                {a.employee?.name ?? "—"}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-amber-600">Belum ada penugasan</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* MATERIALS */}
+          <TabsContent value="materials" className="mt-4">
+            <MaterialsTab
+              sessionId={id!}
+              treatmentItems={items}
+              isCompleted={isCompleted}
+            />
+          </TabsContent>
+
+          {/* PHOTOS */}
+          <TabsContent value="photos" className="mt-4">
+            {session.appointmentId ? (
+              <PhotosTab appointmentId={session.appointmentId} />
+            ) : (
+              <Card>
+                <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                  Foto tidak tersedia — sesi tidak terhubung ke booking.
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* TIMELINE */}
+          <TabsContent value="timeline" className="mt-4">
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Riwayat Aktivitas Booking
+                </h3>
+                {!appointment ? (
+                  session.appointmentId ? (
+                    <p className="text-sm text-muted-foreground">Memuat…</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Tidak terhubung ke booking.</p>
+                  )
+                ) : (
+                  <AppointmentTimeline appointment={appointment} />
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* NOTES */}
+          <TabsContent value="notes" className="mt-4">
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Catatan Treatment
+                </h3>
+                {isCompleted ? (
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    {session.notes ? (
+                      <p className="text-sm whitespace-pre-wrap">{session.notes}</p>
+                    ) : (
+                      <p className="text-sm italic text-muted-foreground">Tidak ada catatan.</p>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
+                      rows={6}
+                      placeholder="Tambahkan catatan treatment di sini…"
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handleSaveNotes}
+                      disabled={saveNotesMutation.isPending || !notesDirty}
+                    >
+                      {saveNotesMutation.isPending ? "Menyimpan…" : "Simpan Catatan"}
+                    </Button>
+                  </>
+                )}
+                {appointment?.notes && (
+                  <div className="mt-3 rounded-lg border border-border p-3">
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Catatan Booking
+                    </p>
+                    <p className="text-sm whitespace-pre-wrap">{appointment.notes}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+        </Tabs>
       </div>
 
-      {/* Add item dialog */}
-      <AddItemDialog
-        open={addItemOpen}
-        onOpenChange={setAddItemOpen}
-        onSubmit={async (itemId, unitId, qty, notes) => {
-          await createItemMutation.mutateAsync({ itemId, unitId, qty, notes: notes || undefined });
-          setAddItemOpen(false);
-        }}
-        isPending={createItemMutation.isPending}
+      <CompleteTreatmentDialog
+        open={completeOpen}
+        onOpenChange={setCompleteOpen}
+        hasStaff={hasStaff}
+        hasServices={(appointment?.services.length ?? 0) > 0}
+        hasPhotos={(appointment?.photos?.length ?? 0) > 0}
+        hasNotes={!!notes.trim()}
+        hasMaterialSaved={hasMaterialSaved}
+        isPending={completeMutation.isPending}
+        onComplete={handleComplete}
       />
-
-      {/* Assign staff dialog */}
-      {assignOpen && (
-        <AssignStaffDialog
-          open={!!assignOpen}
-          onOpenChange={(v) => { if (!v) setAssignOpen(null); }}
-          sessionId={id!}
-          itemId={assignOpen}
-          isCompleted={isCompleted}
-        />
-      )}
     </PageContainer>
   );
 }
 
-// ── Item card ─────────────────────────────────────────────────────────────────
-
-function TreatmentItemCard({
-  item, sessionId, isCompleted, onDelete, onAssign,
-}: {
-  item: TreatmentItem;
-  sessionId: string;
-  isCompleted: boolean;
-  onDelete: () => void;
-  onAssign: () => void;
-}) {
-  const { data: assignments = [] } = useAssignments(sessionId, item.id);
-  const deleteAssignMutation = useDeleteAssignment(sessionId, item.id);
-
-  return (
-    <Card>
-      <CardHeader className="pb-2 pt-3 flex-row items-start justify-between gap-2">
-        <div>
-          <CardTitle className="text-sm font-medium">
-            {item.item?.name ?? item.itemId}
-          </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            {item.qty} {item.unit?.name ?? ""} · {item.item?.itemCode}
-          </p>
-        </div>
-        {!isCompleted && (
-          <div className="flex gap-1">
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onAssign}>
-              <UserPlus className="mr-1 h-3 w-3" />
-              Staff
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-destructive hover:text-destructive"
-              onClick={onDelete}
-              disabled={(item._count?.assignments ?? assignments.length) > 0}
-              title={(item._count?.assignments ?? assignments.length) > 0 ? "Hapus assignment terlebih dahulu" : "Hapus item"}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
-      </CardHeader>
-      {assignments.length > 0 && (
-        <CardContent className="pt-0 pb-3">
-          <div className="space-y-1">
-            {assignments.map((a) => (
-              <div key={a.id} className="flex items-center justify-between rounded bg-muted/40 px-2 py-1.5 text-xs">
-                <span className="font-medium">{a.employee?.name ?? a.employeeId}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">workQty: {a.workQty}</span>
-                  {!isCompleted && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 text-destructive hover:text-destructive"
-                      onClick={() => deleteAssignMutation.mutate(a.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      )}
-    </Card>
-  );
-}
-
-// ── Add item dialog ───────────────────────────────────────────────────────────
-
-function AddItemDialog({
-  open, onOpenChange, onSubmit, isPending,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  onSubmit: (itemId: string, unitId: string, qty: number, notes: string) => Promise<void>;
-  isPending: boolean;
-}) {
-  const [search, setSearch]             = useState("");
-  const [selected, setSelected]         = useState<ItemSearchResult | null>(null);
-  const [unitId, setUnitId]             = useState("");
-  const [qty, setQty]                   = useState("1");
-  const [notes, setNotes]               = useState("");
-  const [error, setError]               = useState<string | null>(null);
-  const { data: results = [] }          = useItemSearch(search);
-  const { data: units = [] }            = useUnits();
-
-  function reset() { setSearch(""); setSelected(null); setUnitId(""); setQty("1"); setNotes(""); setError(null); }
-  function handleClose(v: boolean) { if (!v) reset(); onOpenChange(v); }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selected)  { setError("Pilih item"); return; }
-    if (!unitId)    { setError("Pilih satuan"); return; }
-    const q = parseFloat(qty);
-    if (isNaN(q) || q <= 0) { setError("Qty harus > 0"); return; }
-    setError(null);
-    try { await onSubmit(selected.id, unitId, q, notes); reset(); }
-    catch (err: unknown) { setError(err instanceof Error ? err.message : "Gagal menambah item"); }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>Tambah Item Treatment</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          {/* Item search */}
-          <div className="flex flex-col gap-1.5">
-            <Label>Item *</Label>
-            <Input
-              value={selected ? `${selected.name} (${selected.itemCode})` : search}
-              onChange={(e) => { setSearch(e.target.value); if (selected) setSelected(null); }}
-              placeholder="Cari nama atau kode item..."
-            />
-            {!selected && results.length > 0 && (
-              <div className="rounded-md border border-input bg-background shadow-sm max-h-48 overflow-y-auto">
-                {results.map((r) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => { setSelected(r); setSearch(""); }}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted/50"
-                  >
-                    <span className="font-medium">{r.name}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">{r.itemCode} · {r.itemType}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          {/* Unit */}
-          <div className="flex flex-col gap-1.5">
-            <Label>Satuan *</Label>
-            <select
-              value={unitId}
-              onChange={(e) => setUnitId(e.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">Pilih satuan</option>
-              {units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
-          </div>
-          {/* Qty */}
-          <div className="flex flex-col gap-1.5">
-            <Label>Qty *</Label>
-            <Input type="number" min="0.01" step="0.01" value={qty} onChange={(e) => setQty(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Catatan</Label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => handleClose(false)}>Batal</Button>
-            <Button type="submit" disabled={isPending}>{isPending ? "Menambahkan…" : "Tambah"}</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ── Assign staff dialog ───────────────────────────────────────────────────────
-
-function AssignStaffDialog({
-  open, onOpenChange, sessionId, itemId, isCompleted,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  sessionId: string;
-  itemId: string;
-  isCompleted: boolean;
-}) {
-  const createAssignMutation = useCreateAssignment(sessionId, itemId);
-  const { data: employees = [] } = useEmployees({ isActive: true, limit: 100 });
-  const [empId, setEmpId]       = useState("");
-  const [workQty, setWorkQty]   = useState("1");
-  const [notes, setNotes]       = useState("");
-  const [error, setError]       = useState<string | null>(null);
-
-  function reset() { setEmpId(""); setWorkQty("1"); setNotes(""); setError(null); }
-  function handleClose(v: boolean) { if (!v) reset(); onOpenChange(v); }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!empId) { setError("Pilih karyawan"); return; }
-    const q = parseFloat(workQty);
-    if (isNaN(q) || q <= 0) { setError("Work qty harus > 0"); return; }
-    setError(null);
-    try {
-      await createAssignMutation.mutateAsync({ employeeId: empId, workQty: q, notes: notes || undefined });
-      reset();
-    } catch (err: unknown) { setError(err instanceof Error ? err.message : "Gagal menugaskan"); }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader><DialogTitle>Tugaskan Staff</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <div className="flex flex-col gap-1.5">
-            <Label>Karyawan *</Label>
-            <select
-              value={empId}
-              onChange={(e) => setEmpId(e.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">Pilih karyawan</option>
-              {(employees.data ?? []).map((e) => (
-                <option key={e.id} value={e.id}>{e.name} ({e.role.name})</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Work Qty *</Label>
-            <Input type="number" min="0.01" step="0.01" value={workQty} onChange={(e) => setWorkQty(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Catatan</Label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => handleClose(false)}>Batal</Button>
-            <Button type="submit" disabled={createAssignMutation.isPending || isCompleted}>
-              {createAssignMutation.isPending ? "Menugaskan…" : "Tugaskan"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div>
-      <span className="text-xs text-muted-foreground">{label}: </span>
-      <span className="text-sm">{value ?? "—"}</span>
+    <div className="flex items-start justify-between gap-2 text-sm">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className="text-right font-medium">{value}</span>
+    </div>
+  );
+}
+
+function slotLabel(slotKey: string | null): string {
+  if (!slotKey) return "Staff";
+  const map: Record<string, string> = {
+    pemasang: "Stylist",
+    asisten:  "Asisten",
+    colorist: "Colorist",
+  };
+  return map[slotKey] ?? slotKey;
+}
+
+function TreatmentItemRow({ item }: { item: TreatmentItem }) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border p-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{item.item?.name ?? "—"}</p>
+        <p className="text-xs text-muted-foreground">
+          {item.qty} {item.unit?.name ?? ""} · {item.item?.itemCode ?? ""}
+        </p>
+      </div>
+      {(item.assignments?.length ?? 0) > 0 && (
+        <div className="flex flex-wrap gap-1 shrink-0">
+          {item.assignments!.map((a) => (
+            <Badge key={a.id} variant="secondary" className="text-xs">
+              {a.employee?.name ?? "—"}
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Photos tab ────────────────────────────────────────────────────────────────
+
+const PHOTO_TYPES: { key: AppointmentPhotoType; label: string }[] = [
+  { key: "REFERENCE",    label: "Foto Referensi" },
+  { key: "HAIR_CURRENT", label: "Kondisi Rambut" },
+];
+
+type PhotoData = {
+  id:        string;
+  url:       string;
+  type:      string;
+  notes:     string | null;
+  createdAt: string;
+};
+
+function PhotosTab({ appointmentId }: { appointmentId: string }) {
+  const qc = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploadType,    setUploadType]    = useState<AppointmentPhotoType>("HAIR_CURRENT");
+  const [lightboxPhoto, setLightboxPhoto] = useState<PhotoData | null>(null);
+
+  const { data: photos = [], isLoading } = useQuery({
+    queryKey: ["appointment-photos", appointmentId],
+    queryFn:  () => fetchAppointmentPhotos(appointmentId),
+    enabled:  !!appointmentId,
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => uploadAppointmentPhoto(appointmentId, file, uploadType),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["appointment-photos", appointmentId] });
+      toast.success("Foto berhasil diunggah");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (photoId: string) => deleteAppointmentPhoto(appointmentId, photoId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["appointment-photos", appointmentId] });
+      toast.success("Foto dihapus");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    uploadMutation.mutate(file);
+    e.target.value = "";
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex gap-2">
+              {PHOTO_TYPES.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setUploadType(key)}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                    uploadType === key
+                      ? "bg-primary text-primary-foreground"
+                      : "border border-border text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={uploadMutation.isPending}
+              onClick={() => inputRef.current?.click()}
+            >
+              <Upload className="mr-1.5 h-3.5 w-3.5" />
+              {uploadMutation.isPending
+                ? "Mengunggah…"
+                : `Unggah ${PHOTO_TYPES.find((t) => t.key === uploadType)?.label ?? ""}`}
+            </Button>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {isLoading ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="aspect-square rounded-xl" />)}
+        </div>
+      ) : photos.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center gap-2 py-12">
+            <Camera className="h-8 w-8 text-muted-foreground/30" />
+            <p className="text-sm text-muted-foreground">Belum ada foto untuk booking ini.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        PHOTO_TYPES.map(({ key, label }) => {
+          const typePhotos = photos.filter((p) => p.type === key);
+          if (typePhotos.length === 0) return null;
+          return (
+            <div key={key}>
+              <h4 className="mb-2 text-sm font-medium text-muted-foreground">{label}</h4>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {typePhotos.map((photo) => (
+                  <div
+                    key={photo.id}
+                    className="group relative aspect-square overflow-hidden rounded-xl border border-border"
+                  >
+                    <img
+                      src={photo.url}
+                      alt={label}
+                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                      <button
+                        onClick={() => setLightboxPhoto(photo)}
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40"
+                      >
+                        <ZoomIn className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => deleteMutation.mutate(photo.id)}
+                        disabled={deleteMutation.isPending}
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-white hover:bg-red-500/80"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {photo.notes && (
+                      <p className="absolute bottom-0 left-0 right-0 truncate bg-black/50 px-2 py-1 text-xs text-white">
+                        {photo.notes}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })
+      )}
+
+      <Dialog open={!!lightboxPhoto} onOpenChange={(v) => !v && setLightboxPhoto(null)}>
+        <DialogContent className="max-w-3xl p-2">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Foto</DialogTitle>
+          </DialogHeader>
+          {lightboxPhoto && (
+            <img
+              src={lightboxPhoto.url}
+              alt="foto"
+              className="max-h-[80vh] w-full rounded-lg object-contain"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ── Timeline ──────────────────────────────────────────────────────────────────
+
+function AppointmentTimeline({ appointment }: { appointment: Appointment }) {
+  const events = [
+    ...appointment.statusHistories.map((h) => ({
+      id:       h.id,
+      date:     h.createdAt,
+      label:    `Status: ${STATUS_LABEL[h.newStatus] ?? h.newStatus}`,
+      sublabel: h.notes ?? undefined,
+      color:
+        h.newStatus === "COMPLETED"  ? "bg-emerald-500" :
+        h.newStatus === "CANCELLED"  ? "bg-red-500" :
+        h.newStatus === "IN_PROGRESS"? "bg-blue-500" : "bg-slate-400",
+    })),
+    ...appointment.rescheduleHistories.map((r) => ({
+      id:       r.id,
+      date:     r.createdAt,
+      label:    `Reschedule: ${formatDate(r.oldVisitDate)} → ${formatDate(r.newVisitDate)}`,
+      sublabel: r.reason,
+      color:    "bg-amber-500",
+    })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  if (events.length === 0) {
+    return (
+      <p className="py-4 text-center text-sm text-muted-foreground">
+        Belum ada riwayat aktivitas.
+      </p>
+    );
+  }
+
+  return (
+    <div className="relative space-y-4 pl-6">
+      <div className="absolute left-2 top-0 h-full w-px bg-border" />
+      {events.map((ev) => (
+        <div key={ev.id} className="relative">
+          <div className={cn("absolute -left-4 top-1.5 h-2.5 w-2.5 rounded-full", ev.color)} />
+          <p className="text-sm font-medium">{ev.label}</p>
+          {ev.sublabel && (
+            <p className="text-xs text-muted-foreground">{ev.sublabel}</p>
+          )}
+          <p className="text-xs text-muted-foreground">{formatDatetime(ev.date)}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Complete dialog ───────────────────────────────────────────────────────────
+
+function CompleteTreatmentDialog({
+  open, onOpenChange, hasStaff, hasServices, hasPhotos, hasNotes, hasMaterialSaved, isPending, onComplete,
+}: {
+  open:             boolean;
+  onOpenChange:     (v: boolean) => void;
+  hasStaff:         boolean;
+  hasServices:      boolean;
+  hasPhotos:        boolean;
+  hasNotes:         boolean;
+  hasMaterialSaved: boolean;
+  isPending:        boolean;
+  onComplete:       () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Selesaikan Treatment</DialogTitle>
+          <DialogDescription>
+            Pastikan semua hal penting sudah terpenuhi sebelum menyelesaikan sesi ini.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-2 py-2">
+          <ChecklistItem ok={hasStaff}         label="Staff sudah ditugaskan"                required />
+          <ChecklistItem ok={hasMaterialSaved} label="Material usage sudah disimpan (opsional)" required={false} />
+          <ChecklistItem ok={hasServices}      label="Layanan ada di booking (opsional)"     required={false} />
+          <ChecklistItem ok={hasPhotos}        label="Foto kondisi rambut (opsional)"        required={false} />
+          <ChecklistItem ok={hasNotes}         label="Catatan treatment (opsional)"          required={false} />
+        </div>
+
+        {!hasStaff && (
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
+            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+            <p className="text-sm text-red-700">
+              Staff belum ditugaskan pada booking ini. Tambahkan staff di tab Staff atau di halaman booking.
+            </p>
+          </div>
+        )}
+        {!hasMaterialSaved && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <p className="text-sm text-amber-700">
+              Material usage belum disimpan. Buka tab Material untuk mengisi dan menyimpannya.
+            </p>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Batal
+          </Button>
+          <Button onClick={onComplete} disabled={!hasStaff || isPending}>
+            <CheckCircle2 className="mr-1.5 h-4 w-4" />
+            {isPending ? "Menyelesaikan…" : "Selesaikan Treatment"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ChecklistItem({
+  ok, label, required,
+}: {
+  ok:       boolean;
+  label:    string;
+  required: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2.5">
+      {ok ? (
+        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+      ) : required ? (
+        <XCircle className="h-4 w-4 shrink-0 text-red-500" />
+      ) : (
+        <div className="h-4 w-4 shrink-0 rounded-full border-2 border-muted-foreground/30" />
+      )}
+      <span className={cn("text-sm", !ok && required && "text-red-600 font-medium")}>
+        {label}
+      </span>
     </div>
   );
 }

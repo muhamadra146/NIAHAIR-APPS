@@ -15,6 +15,10 @@ import {
   deleteAssignment,
   searchItems,
   fetchUnits,
+  fetchServiceMaterials,
+  fetchMaterialUsages,
+  bulkSaveMaterialUsages,
+  deleteMaterialUsageItem,
 } from "./api";
 import type {
   TreatmentListParams,
@@ -24,6 +28,7 @@ import type {
   UpdateTreatmentItemInput,
   CreateAssignmentInput,
   UpdateAssignmentInput,
+  BulkSaveMaterialUsageRow,
 } from "./types";
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
@@ -61,7 +66,34 @@ export function useUpdateTreatment(id: string) {
     mutationFn: (input: UpdateTreatmentInput) => updateTreatment(id, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["treatments", id] });
+      qc.invalidateQueries({ queryKey: ["treatments"] });
       toast.success("Treatment diperbarui");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useCompleteTreatment(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      updateTreatment(id, { completedAt: new Date().toISOString() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["treatments", id] });
+      qc.invalidateQueries({ queryKey: ["treatments"] });
+      toast.success("Treatment diselesaikan");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useSaveTreatmentNotes(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (notes: string) => updateTreatment(id, { notes }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["treatments", id] });
+      toast.success("Catatan disimpan");
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -166,5 +198,48 @@ export function useUnits() {
     queryKey: ["units"],
     queryFn:  fetchUnits,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+// ── Material Usage (Phase 2) ──────────────────────────────────────────────────
+
+export function useServiceMaterials(serviceItemId: string) {
+  return useQuery({
+    queryKey: ["service-materials", serviceItemId],
+    queryFn:  () => fetchServiceMaterials(serviceItemId),
+    enabled:  !!serviceItemId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useMaterialUsages(sessionId: string) {
+  return useQuery({
+    queryKey: ["material-usages", sessionId],
+    queryFn:  () => fetchMaterialUsages(sessionId),
+    enabled:  !!sessionId,
+  });
+}
+
+export function useBulkSaveMaterialUsages(sessionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rows: BulkSaveMaterialUsageRow[]) => bulkSaveMaterialUsages(sessionId, rows),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["material-usages", sessionId] });
+      toast.success("Material usage disimpan");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useDeleteMaterialUsageItem(sessionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteMaterialUsageItem(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["material-usages", sessionId] });
+      toast.success("Item material dihapus");
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 }

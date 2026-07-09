@@ -23,12 +23,12 @@ const INCLUDE = {
 
 // ── Management reads ──────────────────────────────────────────────────
 
-const findAll = ({ skip, take, where }) =>
+const findAll = ({ skip, take, where, orderBy }) =>
   prisma.commission.findMany({
     skip,
     take,
     where,
-    orderBy: { createdAt: "desc" },
+    orderBy: orderBy ?? { createdAt: "desc" },
     include: INCLUDE,
   });
 
@@ -68,27 +68,27 @@ const findInvoiceForGeneration = (invoiceId, tx) => {
   return client.invoice.findUnique({
     where: { id: invoiceId },
     select: {
-      id:     true,
-      status: true,
+      id:          true,
+      status:      true,
+      invoiceDate: true,   // dipakai untuk rule lookup (effectiveDate) dan cek forfeiture
       items: {
         select: {
           id:       true,
           itemId:   true,
           qty:      true,
           price:    true,
-          subtotal: true,
+          subtotal: true,  // after discount, before PPN — ini base komisi
         },
       },
       treatmentSessions: {
         select: {
-          id: true,
+          id:          true,
+          completedAt: true, // dibandingkan dengan invoiceDate (WIB) untuk aturan hangus
           treatmentItems: {
             select: {
-              id:                  true,
-              itemId:              true,
-              qty:                 true,
-              priceSnapshot:       true,
-              conversionSnapshot:  true,
+              id:            true,
+              itemId:        true,
+              priceSnapshot: true,
               item: {
                 select: {
                   id:                   true,
@@ -113,24 +113,50 @@ const findInvoiceForGeneration = (invoiceId, tx) => {
 
 // ── Generator: commission rule lookup ─────────────────────────────────
 
-// Lookup order: specific slotKey match first, then fallback to null (wildcard)
-const findActiveRuleForGeneration = async (employeeId, commissionCategoryId, slotKey, tx) => {
+// Lookup order: specific slotKey match first, then fallback to null (wildcard).
+// coloristPresent: apakah ada slotKey 'colorist' di session ini (Opsi B).
+// invoiceDate: dipakai untuk filter effectiveDate / endDate.
+const findActiveRuleForGeneration = async (
+  employeeId,
+  commissionCategoryId,
+  slotKey,
+  invoiceDate,
+  tx
+) => {
   const client = tx ?? prisma;
-  const select = { id: true, commissionType: true, commissionValue: true, commissionBase: true };
+  const select = {
+    id:              true,
+    commissionType:  true,
+    commissionValue: true,
+    commissionBase:  true,
+  };
 
-  // 1. Try exact slotKey match
+  const baseWhere = {
+    employeeId,
+    commissionCategoryId,
+    isActive:      true,
+    effectiveDate: { lte: invoiceDate },
+    OR: [
+      { endDate: null },
+      { endDate: { gte: invoiceDate } },
+    ],
+  };
+
+  // 1. Coba exact slotKey match
   if (slotKey) {
     const exact = await client.commissionRule.findFirst({
-      where:  { employeeId, commissionCategoryId, slotKey, isActive: true },
+      where:   { ...baseWhere, slotKey },
       select,
+      orderBy: { effectiveDate: "desc" },
     });
     if (exact) return exact;
   }
 
-  // 2. Fallback: wildcard rule (no slotKey)
+  // 2. Fallback: wildcard rule (slotKey null)
   return client.commissionRule.findFirst({
-    where:  { employeeId, commissionCategoryId, slotKey: null, isActive: true },
+    where:   { ...baseWhere, slotKey: null },
     select,
+    orderBy: { effectiveDate: "desc" },
   });
 };
 
@@ -148,6 +174,48 @@ const bulkCreate = (dataArray, tx) => {
   return client.commission.createMany({ data: dataArray });
 };
 
+// ── Regenerator: fetch all commissions for invoice (tx-aware) ─────────
+
+const findAllByInvoice = (invoiceId, tx) =>
+  (tx ?? prisma).commission.findMany({
+    where:   { invoiceId },
+    include: INCLUDE,
+  });
+
+// ── Regenerator: delete PENDING commissions for invoice ───────────────
+
+const deletePendingByInvoice = (invoiceId, tx) => {
+  const client = tx ?? prisma;
+  return client.commission.deleteMany({
+    where: { invoiceId, status: "PENDING" },
+  });
+};
+
+// ── Delete single ─────────────────────────────────────────────────────
+
+const deleteOne = (id) =>
+  prisma.commission.delete({ where: { id } });
+
+// ── Override ──────────────────────────────────────────────────────────
+// Override selalu menang atas forfeit: override manual dari SUPER_ADMIN
+// membatalkan forfeit otomatis sistem.
+
+const overrideOne = (id, { commissionAmount, overrideBy, overrideNotes }) =>
+  prisma.commission.update({
+    where: { id },
+    data: {
+      commissionAmount,
+      isManualOverride: true,
+      overrideBy,
+      overrideAt:    new Date(),
+      overrideNotes: overrideNotes ?? null,
+      // Override menang atas forfeit
+      isForfeit:     false,
+      forfeitReason: null,
+    },
+    include: INCLUDE,
+  });
+
 module.exports = {
   // management
   findAll,
@@ -155,10 +223,15 @@ module.exports = {
   findById,
   approveOne,
   markPaidOne,
-  // generator
+  deleteOne,
+  // generator / regenerator
   withTransaction,
   findInvoiceForGeneration,
   findActiveRuleForGeneration,
   countByInvoice,
   bulkCreate,
+  findAllByInvoice,
+  deletePendingByInvoice,
+  // override
+  overrideOne,
 };

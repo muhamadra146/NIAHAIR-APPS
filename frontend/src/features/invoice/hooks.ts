@@ -64,6 +64,8 @@ export function useCreateInvoice() {
     mutationFn: (input: CreateInvoiceInput) => createInvoice(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["inventories"] });
+      qc.invalidateQueries({ queryKey: ["stock-movements"] });
       toast.success("Invoice berhasil dibuat");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -76,6 +78,8 @@ export function useCancelInvoice(id: string) {
     mutationFn: () => cancelInvoice(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["inventories"] });
+      qc.invalidateQueries({ queryKey: ["stock-movements"] });
       toast.success("Invoice dibatalkan");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -88,6 +92,8 @@ export function useDeleteInvoice(id: string) {
     mutationFn: () => deleteInvoice(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["inventories"] });
+      qc.invalidateQueries({ queryKey: ["stock-movements"] });
       toast.success("Invoice berhasil dihapus");
     },
     onError: (err: Error) => toast.error(err.message),

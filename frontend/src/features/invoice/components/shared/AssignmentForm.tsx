@@ -21,17 +21,19 @@ export function AssignmentForm({
   const [workQty,    setWorkQty]    = useState("");
   const [saving,     setSaving]     = useState(false);
 
-  const maxWork     = Number(treatmentItem.qty) * Number(treatmentItem.conversionSnapshot);
+  const isService    = treatmentItem.item?.itemType === "SERVICE";
+  const maxWork      = Number(treatmentItem.qty) * Number(treatmentItem.conversionSnapshot);
   const staffOptions = appointment?.staffs ?? [];
 
   async function handleAdd() {
-    if (!employeeId || !slotKey || !workQty || Number(workQty) <= 0) return;
+    if (!employeeId || !slotKey) return;
+    if (!isService && (!workQty || Number(workQty) <= 0)) return;
     setSaving(true);
     try {
       await createAssignment(treatmentItem.id, {
         employeeId,
         slotKey,
-        workQty: Number(workQty),
+        ...(isService ? {} : { workQty: Number(workQty) }),
       });
       setEmployeeId(""); setSlotKey(""); setWorkQty("");
       onAdded();
@@ -89,27 +91,41 @@ export function AssignmentForm({
         </select>
       </div>
 
-      {/* Work qty */}
-      <div className="space-y-1">
-        <Label className="text-xs">
-          Qty {maxWork > 0 && <span className="text-muted-foreground">(max {maxWork.toLocaleString("id-ID")})</span>}
-        </Label>
-        <Input
-          type="number"
-          min={0.01}
-          max={maxWork}
-          step={0.01}
-          className="h-8 w-28 text-sm"
-          placeholder={`max ${maxWork}`}
-          value={workQty}
-          onChange={(e) => setWorkQty(e.target.value)}
-        />
-      </div>
+      {/* Work qty — hanya untuk INVENTORY, SERVICE auto-split */}
+      {!isService && (
+        <div className="space-y-1">
+          <Label className="text-xs">
+            Qty {maxWork > 0 && <span className="text-muted-foreground">(max {maxWork.toLocaleString("id-ID")})</span>}
+          </Label>
+          <Input
+            type="number"
+            min={0.01}
+            max={maxWork}
+            step={0.01}
+            className="h-8 w-28 text-sm"
+            placeholder={`max ${maxWork}`}
+            value={workQty}
+            onChange={(e) => setWorkQty(e.target.value)}
+          />
+        </div>
+      )}
+
+      {(employeeId || slotKey || workQty) && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8"
+          disabled={saving}
+          onClick={() => { setEmployeeId(""); setSlotKey(""); setWorkQty(""); }}
+        >
+          Batal
+        </Button>
+      )}
 
       <Button
         size="sm"
         className="h-8"
-        disabled={!employeeId || !slotKey || !workQty || Number(workQty) <= 0 || saving}
+        disabled={!employeeId || !slotKey || (!isService && (!workQty || Number(workQty) <= 0)) || saving}
         onClick={handleAdd}
       >
         {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}

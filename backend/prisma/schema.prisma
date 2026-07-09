@@ -105,7 +105,8 @@ model User {
   userRoleId String
   employeeId String @unique
 
-  email String @unique
+  email    String  @unique
+  username String? @unique
 
   passwordHash String
 
@@ -205,11 +206,12 @@ model Employee {
   appointmentStaffs     AppointmentStaff[]
   treatmentAssignments  TreatmentAssignment[]
   commissionRules       CommissionRule[]
-  commissions           Commission[]
-  attendances           Attendance[]
-  schedules             EmployeeSchedule[]
-  leaves                Leave[]
-  branchCommissionRules BranchCommissionRule[]
+  commissions              Commission[]
+  attendances              Attendance[]
+  schedules                EmployeeSchedule[]
+  leaves                   Leave[]
+  branchCommissionRules    BranchCommissionRule[]
+  overtimeChargeEmployees  OvertimeChargeEmployee[]
   staffSchedules        StaffSchedule[]
   salarySettings        EmployeeSalarySettings[]
   loans                 Loan[]
@@ -218,6 +220,9 @@ model Employee {
   correctionRequests    AttendanceCorrectionRequest[]
   permissionRequests    PermissionRequest[]
   sickLeaves            SickLeave[]
+
+  inventoryMovements    InventoryMovement[] @relation("InventoryMovementCreatedBy")
+  inventoryPeriods      InventoryPeriod[]   @relation("InventoryPeriodClosedBy")
 
   @@index([roleId])
   @@index([homeBranchId])
@@ -327,7 +332,7 @@ model Customer {
 
   name String
 
-  mobilePhone String?
+  mobilePhone String? @unique
 
   email String?
 
@@ -372,7 +377,6 @@ model Customer {
 
   @@index([membershipId])
   @@index([name])
-  @@index([mobilePhone])
   @@map("customers")
 }
 
@@ -531,7 +535,6 @@ model Item {
   itemPrices ItemPrice[]
 
   inventories         Inventory[]
-  stockMovements      StockMovement[]
   stockTransferItems  StockTransferItem[]
   appointmentServices AppointmentService[]
   invoiceItems        InvoiceItem[]
@@ -614,12 +617,49 @@ model ItemPrice {
 // INVENTORY
 // =====================================================
 
-enum StockMovementType {
-  IN
-  OUT
+enum InventoryReferenceType {
+  INVOICE
+  PURCHASE_RECEIPT
+  PURCHASE_RETURN
+  TRANSFER
+  TREATMENT
+  PRODUCTION
+  STOCK_OPNAME
+  OPENING_BALANCE
+  MANUAL
+  SYNC
+}
+
+enum InventoryCreatedSource {
+  USER
+  SYSTEM
+  SYNC
+  WORKER
+}
+
+enum InventorySourceModule {
+  SALE
+  SERVICE
+  PURCHASE
+  PRODUCTION
+  TRANSFER
   ADJUSTMENT
+  OPNAME
+  SYNC
+  OPENING_BALANCE
+}
+
+enum InventoryMovementType {
+  PURCHASE
+  SALE
+  SERVICE_USAGE
+  PRODUCTION
   TRANSFER_IN
   TRANSFER_OUT
+  ADJUSTMENT
+  OPENING_BALANCE
+  RETURN
+  SYNC
 }
 
 enum StockTransferStatus {
@@ -627,6 +667,11 @@ enum StockTransferStatus {
   IN_TRANSIT
   RECEIVED
   CANCELLED
+}
+
+enum InventoryPeriodStatus {
+  OPEN
+  CLOSED
 }
 
 // =====================================================
@@ -653,8 +698,6 @@ model Warehouse {
 
   inventories Inventory[]
 
-  stockMovements StockMovement[]
-
   transferOuts StockTransfer[] @relation("TransferSource")
 
   transferIns StockTransfer[] @relation("TransferDestination")
@@ -674,11 +717,11 @@ model Inventory {
 
   itemId String
 
-  availableQty Decimal @db.Decimal(18, 6)
+  qtyOnHand    Decimal @db.Decimal(18, 6)
 
-  reservedQty Decimal @db.Decimal(18, 6)
+  qtyReserved  Decimal @db.Decimal(18, 6)
 
-  minimumQty Decimal @db.Decimal(18, 6)
+  qtyAvailable Decimal @db.Decimal(18, 6)
 
   lastSyncAt DateTime?
 
@@ -688,6 +731,8 @@ model Inventory {
   warehouse Warehouse @relation(fields: [warehouseId], references: [id])
 
   item Item @relation(fields: [itemId], references: [id])
+
+  movements InventoryMovement[]
 
   @@unique([warehouseId, itemId])
   @@index([warehouseId])
@@ -699,43 +744,88 @@ model Inventory {
 // STOCK MOVEMENTS
 // =====================================================
 
-model StockMovement {
+model InventoryMovement {
   id String @id @default(uuid())
 
-  warehouseId String
+  inventoryId String
 
-  itemId String
+  movementType InventoryMovementType
 
-  invoiceItemId String?
+  qtyBefore Decimal @db.Decimal(18, 6)
 
-  type StockMovementType
+  qtyChange Decimal @db.Decimal(18, 6)
 
-  qty Decimal @db.Decimal(18, 6)
+  qtyAfter Decimal @db.Decimal(18, 6)
 
-  balanceBefore Decimal @db.Decimal(18, 6)
-
-  balanceAfter Decimal @db.Decimal(18, 6)
-
-  referenceType String?
+  referenceType InventoryReferenceType?
 
   referenceId String?
 
+  referenceNo String?
+
   notes String?
+
+  reason String?
+
+  sourceModule InventorySourceModule?
+
+  unitCost Decimal? @db.Decimal(18, 6)
+
+  createdSource InventoryCreatedSource?
+
+  warehouseId String?
+
+  createdBy String?
+
+  createdByEmployeeId String?
+
+  isLocked Boolean @default(false)
 
   createdAt DateTime @default(now())
 
-  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  inventory Inventory @relation(fields: [inventoryId], references: [id])
 
-  item Item @relation(fields: [itemId], references: [id])
+  createdByEmployee Employee? @relation("InventoryMovementCreatedBy", fields: [createdByEmployeeId], references: [id])
 
-  invoiceItem InvoiceItem? @relation(fields: [invoiceItemId], references: [id])
+  materialUsageItems MaterialUsageItem[]
 
-  @@unique([referenceType, referenceId, invoiceItemId])
-  @@index([warehouseId])
-  @@index([itemId])
-  @@index([invoiceItemId])
+  @@index([inventoryId])
   @@index([referenceType, referenceId])
-  @@map("stock_movements")
+  @@index([movementType])
+  @@index([sourceModule])
+  @@index([referenceNo])
+  @@index([warehouseId])
+  @@index([createdSource])
+  @@index([createdAt])
+  @@index([createdByEmployeeId])
+  @@index([isLocked])
+  @@map("inventory_movements")
+}
+
+// =====================================================
+// INVENTORY PERIODS
+// =====================================================
+
+model InventoryPeriod {
+  id   String @id @default(uuid())
+
+  year  Int
+  month Int
+
+  status InventoryPeriodStatus @default(OPEN)
+
+  closedAt DateTime?
+
+  closedByEmployeeId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  closedByEmployee Employee? @relation("InventoryPeriodClosedBy", fields: [closedByEmployeeId], references: [id])
+
+  @@unique([year, month])
+  @@index([status])
+  @@map("inventory_periods")
 }
 
 // =====================================================
@@ -868,20 +958,23 @@ model MaterialUsageItem {
 
   unitId String
 
-  stockMovementId String?
+  inventoryMovementId String?
 
   qty Decimal @db.Decimal(18, 6)
 
   createdAt DateTime @default(now())
 
-  materialUsage MaterialUsage @relation(fields: [materialUsageId], references: [id])
+  materialUsage     MaterialUsage      @relation(fields: [materialUsageId], references: [id])
 
   materialItem Item @relation(fields: [materialItemId], references: [id])
 
   unit Unit @relation(fields: [unitId], references: [id])
 
+  inventoryMovement InventoryMovement? @relation(fields: [inventoryMovementId], references: [id])
+
   @@index([materialUsageId])
   @@index([materialItemId])
+  @@index([inventoryMovementId])
   @@map("material_usage_items")
 }
 
@@ -1278,7 +1371,8 @@ model Invoice {
 
   treatmentSessions TreatmentSession[]
 
-  commissions Commission[]
+  commissions     Commission[]
+  overtimeCharges OvertimeCharge[]
 
   consultationNote ClientConsultationNote?
 
@@ -1331,7 +1425,6 @@ model InvoiceItem {
   unit Unit @relation(fields: [unitId], references: [id])
 
   commissions    Commission[]
-  stockMovements StockMovement[]
 
   @@index([invoiceId])
   @@index([itemId])
@@ -1437,6 +1530,12 @@ enum CommissionStatus {
   PAID
 }
 
+enum ColoristCondition {
+  ANY     // rule selalu berlaku
+  PRESENT // hanya berlaku jika ada colorist di assignment treatment ini
+  ABSENT  // hanya berlaku jika tidak ada colorist di assignment treatment ini
+}
+
 model TreatmentAssignment {
   id String @id @default(uuid())
 
@@ -1493,6 +1592,10 @@ model CommissionRule {
 
   commissionBase CommissionBase @default(AFTER_DISCOUNT)
 
+  // Untuk aturan pengganti colorist (mis. Surya/Ulvi):
+  // PRESENT = hanya berlaku jika ada colorist di assignment, ABSENT = jika tidak ada
+  coloristCondition ColoristCondition @default(ANY)
+
   effectiveDate DateTime
   endDate       DateTime?
 
@@ -1507,7 +1610,8 @@ model CommissionRule {
 
   commissions Commission[]
 
-  @@unique([employeeId, commissionCategoryId, slotKey, effectiveDate])
+  // coloristCondition masuk unique agar Surya/Ulvi bisa punya rule PRESENT dan ABSENT pada tanggal yang sama
+  @@unique([employeeId, commissionCategoryId, slotKey, coloristCondition, effectiveDate])
   @@index([employeeId])
   @@index([commissionCategoryId])
   @@map("commission_rules")
@@ -1554,6 +1658,16 @@ model Commission {
 
   notes String?
 
+  // Komisi hangus jika TreatmentSession.completedAt tidak hari yang sama dengan invoice.invoiceDate (WIB)
+  isForfeit     Boolean   @default(false)
+  forfeitReason String?
+
+  // Override manual oleh CS/Manager ketika ada komplain
+  isManualOverride Boolean   @default(false)
+  overrideBy       String?
+  overrideAt       DateTime?
+  overrideNotes    String?
+
   createdAt DateTime @default(now())
 
   invoice Invoice @relation(fields: [invoiceId], references: [id])
@@ -1574,6 +1688,42 @@ model Commission {
   @@index([status])
   @@index([commissionRuleId])
   @@map("commissions")
+}
+
+model OvertimeCharge {
+  id            String  @id @default(uuid())
+  invoiceId     String
+  totalAmount   Decimal @db.Decimal(18, 2)
+  companyAmount Decimal @db.Decimal(18, 2)
+  teamAmount    Decimal @db.Decimal(18, 2)
+  // EQUAL = dibagi rata antar semua anggota tim
+  splitMethod   String  @default("EQUAL")
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoice   Invoice                  @relation(fields: [invoiceId], references: [id])
+  employees OvertimeChargeEmployee[]
+
+  @@index([invoiceId])
+  @@map("overtime_charges")
+}
+
+model OvertimeChargeEmployee {
+  id               String  @id @default(uuid())
+  overtimeChargeId String
+  employeeId       String
+  amount           Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  overtimeCharge OvertimeCharge @relation(fields: [overtimeChargeId], references: [id])
+  employee       Employee       @relation(fields: [employeeId], references: [id])
+
+  @@index([overtimeChargeId])
+  @@index([employeeId])
+  @@map("overtime_charge_employees")
 }
 
 model BranchCommissionRule {
@@ -1613,6 +1763,7 @@ enum LeaveStatus {
   PENDING
   APPROVED
   REJECTED
+  CANCELLED
 }
 
 enum QuotaType {

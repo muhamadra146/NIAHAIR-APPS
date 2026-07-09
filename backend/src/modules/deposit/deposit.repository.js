@@ -18,8 +18,8 @@ const INCLUDE = {
 
 // ── List / single ─────────────────────────────────────────────────────
 
-const findAll = ({ skip, take, where }) =>
-  prisma.deposit.findMany({ skip, take, where, orderBy: { createdAt: "desc" }, include: INCLUDE });
+const findAll = ({ skip, take, where, orderBy }) =>
+  prisma.deposit.findMany({ skip, take, where, orderBy: orderBy ?? { createdAt: "desc" }, include: INCLUDE });
 
 const count = (where) => prisma.deposit.count({ where });
 

@@ -6,19 +6,21 @@ const EMPLOYEE_BRANCH_INCLUDE = {
   include: { branch: true },
 };
 
-const findUserByEmail = (email) =>
-  prisma.user.findUnique({
-    where: { email },
+const USER_AUTH_INCLUDE = {
+  role: true,
+  employee: {
     include: {
-      role: true,
-      employee: {
-        include: {
-          role:             true,
-          employeeBranches: EMPLOYEE_BRANCH_INCLUDE,
-        },
-      },
+      role:             true,
+      employeeBranches: EMPLOYEE_BRANCH_INCLUDE,
     },
-  });
+  },
+};
+
+const findUserByEmail = (email) =>
+  prisma.user.findUnique({ where: { email }, include: USER_AUTH_INCLUDE });
+
+const findUserByUsername = (username) =>
+  prisma.user.findUnique({ where: { username }, include: USER_AUTH_INCLUDE });
 
 const findUserById = (id) =>
   prisma.user.findUnique({
@@ -44,4 +46,4 @@ const findAllBranches = () =>
     orderBy: { code: "asc" },
   });
 
-module.exports = { findUserByEmail, findUserById, findAllBranches };
+module.exports = { findUserByEmail, findUserByUsername, findUserById, findAllBranches };

@@ -57,6 +57,13 @@ export interface TreatmentItem {
   _count?:              { assignments: number };
 }
 
+export interface TreatmentAppointmentRef {
+  id:        string;
+  bookingNo: string;
+  visitDate: string;
+  status:    string;
+}
+
 export interface TreatmentSession {
   id:            string;
   customerId:    string;
@@ -69,7 +76,9 @@ export interface TreatmentSession {
   updatedAt:     string;
   customer?:     TreatmentCustomer;
   branch?:       TreatmentBranch;
+  appointment?:  TreatmentAppointmentRef;
   items?:        TreatmentItem[];
+  treatmentItems?: TreatmentItem[];
 }
 
 export interface TreatmentListParams {
@@ -127,4 +136,52 @@ export interface ItemSearchResult {
 export interface UnitOption {
   id:   string;
   name: string;
+}
+
+// ── Material Usage (Phase 2) ──────────────────────────────────────────────────
+
+export interface ServiceMaterial {
+  id:            string;
+  serviceItemId: string;
+  materialItemId: string;
+  materialItem:  { id: string; name: string; itemCode: string; itemType: string };
+  unitId:        string;
+  unit:          { id: string; name: string };
+  qty:           number;
+  isActive:      boolean;
+}
+
+export interface MaterialUsageItem {
+  id:                  string;
+  materialUsageId:     string;
+  materialItem:        { id: string; name: string; itemCode: string; itemType: string };
+  unit:                { id: string; name: string };
+  qty:                 number;
+  inventoryMovementId: string | null;
+  materialUsage: {
+    id:              string;
+    treatmentItemId: string;
+  };
+}
+
+/** Local (in-memory) row used by the Materials tab UI */
+export interface MaterialUsageRow {
+  /** MaterialUsageItem.id if already persisted; null for unsaved rows */
+  id:                  string | null;
+  materialUsageId:     string | null;
+  treatmentItemId:     string;
+  materialItem:        { id: string; name: string; itemCode: string };
+  unit:                { id: string; name: string };
+  plannedQty:          number | null;
+  actualQty:           number;
+  isFromBom:           boolean;
+  inventoryMovementId: string | null;
+}
+
+export interface BulkSaveMaterialUsageRow {
+  id:              string | null;
+  treatmentItemId: string;
+  materialItemId:  string;
+  unitId:          string;
+  qty:             number;
 }

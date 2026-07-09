@@ -9,6 +9,8 @@ const {
   sumWorkQtyByItem,
   findTreatmentItemById,
   findEmployeeById,
+  countByItem,
+  updateManyWorkQty,
 } = require("./treatmentAssignment.repository");
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -45,11 +47,36 @@ const createAssignment = async (treatmentItemId, body) => {
     throw new AppError("Employee is not active", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
-  // 3 — validate workQty does not exceed maxWork per individual assignment
+  const isService = treatmentItem.item?.itemType === "SERVICE";
+
+  if (isService) {
+    // Auto-split: priceSnapshot ÷ (jumlah assignment saat ini + 1)
+    const currentCount = await countByItem(treatmentItemId);
+    const newCount     = currentCount + 1;
+    const splitQty     = Number(treatmentItem.priceSnapshot) / newCount;
+
+    if (currentCount > 0) {
+      await updateManyWorkQty(treatmentItemId, splitQty);
+    }
+
+    return create({
+      treatmentItemId,
+      employeeId,
+      slotKey: slotKey ?? null,
+      workQty: splitQty,
+      notes:   notes ?? null,
+    });
+  }
+
+  // INVENTORY: workQty wajib diisi manual
+  if (workQty === undefined || workQty === null) {
+    throw new AppError("workQty wajib diisi untuk item inventory", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
   const maxWork = calcMaxWork(treatmentItem);
   if (workQty > maxWork) {
     throw new AppError(
-      `Work qty exceeds item max. Max per assignment: ${maxWork}, requested: ${workQty}`,
+      `Work qty melebihi batas. Maks per assignment: ${maxWork}, diminta: ${workQty}`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
@@ -59,7 +86,7 @@ const createAssignment = async (treatmentItemId, body) => {
     employeeId,
     slotKey: slotKey ?? null,
     workQty,
-    notes: notes ?? null,
+    notes:   notes ?? null,
   });
 };
 
@@ -91,7 +118,20 @@ const updateAssignment = async (id, body) => {
 const deleteAssignment = async (id) => {
   const assignment = await findById(id);
   if (!assignment) throw new AppError("Assignment not found", StatusCodes.NOT_FOUND);
+
+  const isService       = assignment.treatmentItem?.item?.itemType === "SERVICE";
+  const treatmentItemId = assignment.treatmentItem?.id;
+  const priceSnapshot   = Number(assignment.treatmentItem?.priceSnapshot ?? 0);
+
   await deleteById(id);
+
+  // Setelah hapus, hitung ulang workQty rata untuk jasa
+  if (isService && treatmentItemId && priceSnapshot > 0) {
+    const remainingCount = await countByItem(treatmentItemId);
+    if (remainingCount > 0) {
+      await updateManyWorkQty(treatmentItemId, priceSnapshot / remainingCount);
+    }
+  }
 };
 
 module.exports = {

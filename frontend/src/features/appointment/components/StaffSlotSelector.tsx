@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import type { AvailableStaff } from "../types";
 
 export const APPOINTMENT_SLOTS = [
-  { key: "stylist",  label: "Stylist"  },
+  { key: "pemasang", label: "Pemasang" },
   { key: "asisten",  label: "Asisten"  },
   { key: "colorist", label: "Colorist" },
 ] as const;
@@ -12,7 +12,7 @@ export const APPOINTMENT_SLOTS = [
 export type SlotKey    = (typeof APPOINTMENT_SLOTS)[number]["key"];
 export type StaffBySlot = Record<SlotKey, string[]>;
 
-export const EMPTY_SLOTS: StaffBySlot = { stylist: [], asisten: [], colorist: [] };
+export const EMPTY_SLOTS: StaffBySlot = { pemasang: [], asisten: [], colorist: [] };
 
 export function StaffSlotSelector({
   staff,
@@ -99,7 +99,7 @@ export function StaffSlotSelector({
 
             {/* Dropdown */}
             {isOpen && (
-              <div className="absolute z-30 left-28 right-0 mt-px border border-border rounded-b-md bg-background shadow-lg divide-y divide-border/40 max-h-52 overflow-y-auto">
+              <div className="absolute z-30 left-0 right-0 top-full border border-border rounded-md bg-background shadow-xl divide-y divide-border/40 max-h-48 overflow-y-auto">
                 {staff.length === 0 && (
                   <p className="px-3 py-2 text-xs text-muted-foreground">Tidak ada staff tersedia.</p>
                 )}

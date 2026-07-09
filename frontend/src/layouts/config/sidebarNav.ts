@@ -100,6 +100,11 @@ export const sidebarNav: NavItem[] = [
     icon:  Scissors,
     roles: [...MANAGEMENT_ROLES, "CASHIER", "STYLIST", "STAFF"],
     group: "Operasional",
+    children: [
+      { label: "Dashboard",  href: "/treatments",           roles: [...MANAGEMENT_ROLES, "CASHIER", "STYLIST", "STAFF"] },
+      { label: "Aktif",      href: "/treatments/active",    roles: [...MANAGEMENT_ROLES, "CASHIER", "STYLIST", "STAFF"] },
+      { label: "Selesai",    href: "/treatments/completed", roles: [...MANAGEMENT_ROLES, "CASHIER", "STYLIST", "STAFF"] },
+    ],
   },
   {
     label: "Catatan Klien",

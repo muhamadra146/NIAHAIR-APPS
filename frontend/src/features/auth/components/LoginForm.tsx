@@ -7,8 +7,8 @@ import { Label } from "@/components/ui/label";
 import { useLogin } from "../hooks/useLogin";
 
 const loginSchema = z.object({
-  email:    z.string().email("Email tidak valid"),
-  password: z.string().min(1, "Password wajib diisi"),
+  identifier: z.string().min(1, "Email atau username wajib diisi"),
+  password:   z.string().min(1, "Password wajib diisi"),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -37,16 +37,16 @@ export function LoginForm() {
       className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm"
     >
       <div className="space-y-1">
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="identifier">Email / Username</Label>
         <Input
-          id="email"
-          type="email"
-          placeholder="admin@niahair.com"
-          autoComplete="email"
-          {...register("email")}
+          id="identifier"
+          type="text"
+          placeholder="admin@niahair.com atau username"
+          autoComplete="username"
+          {...register("identifier")}
         />
-        {errors.email && (
-          <p className="text-xs text-destructive">{errors.email.message}</p>
+        {errors.identifier && (
+          <p className="text-xs text-destructive">{errors.identifier.message}</p>
         )}
       </div>
 

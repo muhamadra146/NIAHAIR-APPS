@@ -26,7 +26,7 @@ const getByIdController = async (req, res, next) => {
 
 const createController = async (req, res, next) => {
   try {
-    const result = await svc.create(req.user.employeeId, req.user.branchId, req.body);
+    const result = await svc.create(req.user.employeeId, req.branchId ?? null, req.body);
     return created(res, result, "Izin berhasil diajukan");
   } catch (err) { next(err); }
 };

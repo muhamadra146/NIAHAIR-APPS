@@ -3,7 +3,7 @@ import type { ApiResponse } from "@/types/api";
 import type { TreatmentSession, TreatmentAssignment } from "@/features/appointment/types";
 
 export const SLOT_OPTIONS = [
-  { key: "stylist",  label: "Stylist"  },
+  { key: "pemasang", label: "Pemasang" },
   { key: "asisten",  label: "Asisten"  },
   { key: "colorist", label: "Colorist" },
 ];
@@ -30,6 +30,11 @@ export async function deleteAssignment(id: string): Promise<void> {
 
 export async function generateCommission(invoiceId: string): Promise<{ created: number }> {
   const { data } = await api.post<ApiResponse<{ created: number }>>(`/invoices/${invoiceId}/generate-commission`);
+  return data.data;
+}
+
+export async function regenerateCommission(invoiceId: string): Promise<{ created: number }> {
+  const { data } = await api.post<ApiResponse<{ created: number }>>(`/commissions/invoice/${invoiceId}/regenerate`);
   return data.data;
 }
 

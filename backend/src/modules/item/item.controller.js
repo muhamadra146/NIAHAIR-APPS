@@ -1,5 +1,5 @@
 const { success, created } = require("../../common/responses/apiResponse");
-const { getAll, getById, createItem, updateItem } = require("./item.service");
+const { getAll, getById, createItem, updateItem, getServiceMaterials } = require("./item.service");
 
 const getAllController = async (req, res, next) => {
   try {
@@ -37,4 +37,13 @@ const updateController = async (req, res, next) => {
   }
 };
 
-module.exports = { getAllController, getByIdController, createController, updateController };
+const getServiceMaterialsController = async (req, res, next) => {
+  try {
+    const result = await getServiceMaterials(req.params.id);
+    return success(res, result, "Service materials fetched");
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getAllController, getByIdController, createController, updateController, getServiceMaterialsController };

@@ -60,7 +60,10 @@ function MobileCardList({ users, onEdit, onResetPw, onDelete }: Omit<Props, "isL
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-slate-900">{u.email}</p>
-              <p className="mt-0.5 text-xs text-slate-500">{u.employee?.name ?? "—"}</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {u.username && <span className="font-mono mr-2 text-slate-400">@{u.username}</span>}
+                {u.employee?.name ?? "—"}
+              </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <RoleBadge code={u.role.code} name={u.role.name} />
                 <Badge variant={u.isActive ? "success" : "secondary"} className="text-xs">
@@ -100,7 +103,7 @@ function MobileCardList({ users, onEdit, onResetPw, onDelete }: Omit<Props, "isL
           {confirmId === u.id && (
             <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              User akan dinonaktifkan. Konfirmasi?
+              User akan dihapus permanen. Konfirmasi?
             </div>
           )}
         </div>
@@ -118,6 +121,7 @@ function DesktopTable({ users, onEdit, onResetPw, onDelete }: Omit<Props, "isLoa
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50/70">
             <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Email</th>
+            <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Username</th>
             <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Employee</th>
             <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">User Role</th>
             <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
@@ -128,6 +132,12 @@ function DesktopTable({ users, onEdit, onResetPw, onDelete }: Omit<Props, "isLoa
           {users.map((u) => (
             <tr key={u.id} className="transition-colors hover:bg-slate-50">
               <td className="px-5 py-4 font-medium text-slate-900">{u.email}</td>
+              <td className="px-5 py-4 text-slate-500">
+                {u.username
+                  ? <span className="font-mono text-sm">@{u.username}</span>
+                  : <span className="text-slate-300">—</span>
+                }
+              </td>
               <td className="px-5 py-4 text-slate-500">{u.employee?.name ?? "—"}</td>
               <td className="px-5 py-4">
                 <RoleBadge code={u.role.code} name={u.role.name} />
@@ -141,7 +151,7 @@ function DesktopTable({ users, onEdit, onResetPw, onDelete }: Omit<Props, "isLoa
                 {confirmId === u.id ? (
                   <div className="flex items-center justify-end gap-2">
                     <span className="text-xs text-red-600 flex items-center gap-1">
-                      <AlertTriangle className="h-3.5 w-3.5" /> Nonaktifkan?
+                      <AlertTriangle className="h-3.5 w-3.5" /> Hapus permanen?
                     </span>
                     <Button variant="destructive" size="sm" className="h-7 text-xs"
                       onClick={() => { onDelete(u); setConfirmId(null); }}>

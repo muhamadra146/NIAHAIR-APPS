@@ -183,7 +183,7 @@ export interface TreatmentItem {
   priceSnapshot:      string;
   conversionSnapshot: string;
   notes:              string | null;
-  item:               { id: string; name: string; itemCode: string };
+  item:               { id: string; name: string; itemCode: string; itemType: "INVENTORY" | "SERVICE"; defaultUnit?: { id: string; name: string } };
   unit:               { id: string; name: string };
   assignments:        TreatmentAssignment[];
 }

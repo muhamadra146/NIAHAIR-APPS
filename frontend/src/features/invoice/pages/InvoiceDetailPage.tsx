@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, CreditCard, Wallet, Trash2, Printer, MessageCircle, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, CreditCard, Wallet, Trash2, Printer, MessageCircle, CheckCircle2, Pencil } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import type { InvoiceStatus } from "../types";
 import { useAppointment } from "@/features/appointment/hooks";
 import { fetchCommissions } from "@/features/commission/api";
 import { TreatmentAssignmentSection } from "../components/TreatmentAssignmentSection";
+import { CreateInvoiceDialog } from "../components/CreateInvoiceDialog";
 
 const STATUS_LABEL: Record<InvoiceStatus, string> = {
   UNPAID:    "Belum Bayar",
@@ -54,6 +55,7 @@ export function InvoiceDetailPage() {
   const [payOpen, setPayOpen]                     = useState(false);
   const [depOpen, setDepOpen]                     = useState(false);
   const [newDepOpen, setNewDepOpen]               = useState(false);
+  const [editOpen, setEditOpen]                   = useState(false);
   const [deleteConfirm, setDeleteConfirm]         = useState(false);
   const [deletePaymentTarget, setDeletePaymentTarget] = useState<string | null>(null);
   const [receiptOpen, setReceiptOpen]             = useState(false);
@@ -119,7 +121,13 @@ export function InvoiceDetailPage() {
                 <span className="text-sm text-muted-foreground">{formatDate(invoice.invoiceDate)}</span>
               </div>
             </div>
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 flex-wrap gap-2">
+              {invoice.status === "UNPAID" && (
+                <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                  <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                  Edit
+                </Button>
+              )}
               {canPay && (
                 <>
                   <Button size="sm" variant="outline" onClick={() => setDepOpen(true)}>
@@ -369,6 +377,19 @@ export function InvoiceDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit invoice dialog */}
+      <CreateInvoiceDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        branchId={invoice?.branchId ?? ""}
+        initialExistingInvoiceId={id}
+        startInEditMode
+        onSuccess={() => {
+          qc.invalidateQueries({ queryKey: ["invoices", id] });
+          setEditOpen(false);
+        }}
+      />
 
     </PageContainer>
   );

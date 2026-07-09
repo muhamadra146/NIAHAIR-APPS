@@ -1,9 +1,19 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const { resolveOrderBy } = require("../../utils/sort");
 const prisma          = require("../../config/prisma");
 const repo            = require("./leave.repository");
 const quotaSvc        = require("../leaveQuota/leaveQuota.service");
+
+const ORDER_MAP = {
+  createdAt:    { createdAt: "asc" },
+  "-createdAt": { createdAt: "desc" },
+  startDate:    { startDate: "asc" },
+  "-startDate": { startDate: "desc" },
+  status:       { status: "asc" },
+  "-status":    { status: "desc" },
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -41,8 +51,9 @@ const createLeaveSchedules = async (tx, employeeId, branchId, startDate, endDate
 
 // ── Service functions ─────────────────────────────────────────────────────────
 
-const getAll = async ({ page, limit, employeeId, status, branchId }) => {
+const getAll = async ({ page, limit, employeeId, status, branchId, sortBy }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const orderBy = resolveOrderBy(sortBy, ORDER_MAP);
   const where = {};
   if (employeeId) where.employeeId = employeeId;
   if (status)     where.status     = status;
@@ -51,18 +62,19 @@ const getAll = async ({ page, limit, employeeId, status, branchId }) => {
   }
 
   const [rows, total] = await Promise.all([
-    repo.findAll({ skip, take, where }),
+    repo.findAll({ skip, take, where, orderBy }),
     repo.count(where),
   ]);
   return { data: rows, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
-const getMy = async ({ employeeId, page, limit, status }) => {
+const getMy = async ({ employeeId, page, limit, status, sortBy }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const orderBy = resolveOrderBy(sortBy, ORDER_MAP);
   const where = { employeeId };
   if (status) where.status = status;
   const [rows, total] = await Promise.all([
-    repo.findAll({ skip, take, where }),
+    repo.findAll({ skip, take, where, orderBy }),
     repo.count(where),
   ]);
   return { data: rows, meta: paginationMeta(total, pageNum, limitNum) };
@@ -98,14 +110,18 @@ const createLeave = async (employeeId, { startDate, endDate, reason, leaveTypeId
     if (leaveType.quotaType === "ANNUAL") {
       const year    = start.getUTCFullYear();
       const balance = await quotaSvc.getBalance(employeeId, leaveTypeId, year);
-      if (balance) {
-        const remaining = balance.totalDays - balance.usedDays;
-        if (totalDays > remaining)
-          throw new AppError(
-            `Sisa kuota cuti tidak cukup. Sisa: ${remaining} hari, dibutuhkan: ${totalDays} hari`,
-            StatusCodes.BAD_REQUEST
-          );
+      if (!balance) {
+        throw new AppError(
+          "Kuota cuti belum ditetapkan untuk tahun ini. Hubungi HRD.",
+          StatusCodes.UNPROCESSABLE_ENTITY
+        );
       }
+      const remaining = balance.totalDays - balance.usedDays;
+      if (totalDays > remaining)
+        throw new AppError(
+          `Sisa kuota cuti tidak cukup. Sisa: ${remaining} hari, dibutuhkan: ${totalDays} hari`,
+          StatusCodes.BAD_REQUEST
+        );
     }
   }
 
@@ -154,7 +170,7 @@ const cancel = async (id, employeeId) => {
   if (!leave) throw new AppError("Leave not found", StatusCodes.NOT_FOUND);
   if (leave.employeeId !== employeeId) throw new AppError("Forbidden", StatusCodes.FORBIDDEN);
   if (leave.status !== "PENDING") throw new AppError("Only PENDING leaves can be cancelled", StatusCodes.BAD_REQUEST);
-  return repo.update(id, { status: "REJECTED" });
+  return repo.update(id, { status: "CANCELLED" });
 };
 
 module.exports = { getAll, getMy, getById, createLeave, approve, reject, cancel };

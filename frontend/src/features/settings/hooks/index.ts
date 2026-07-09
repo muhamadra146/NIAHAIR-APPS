@@ -4,7 +4,7 @@ import {
   fetchEmployees, fetchEmployee, createEmployee, updateEmployee, updateEmployeeBranches, deleteEmployee,
 } from "../api/employee.api";
 import { fetchEmployeeRoles, createEmployeeRole, updateEmployeeRole, deleteEmployeeRole } from "../api/employeeRole.api";
-import { fetchUsers, createUser, updateUser, resetUserPassword, deactivateUser } from "../api/user.api";
+import { fetchUsers, createUser, updateUser, resetUserPassword, deleteUser } from "../api/user.api";
 import { fetchUserRoles } from "../api/userRole.api";
 import { fetchBranches, fetchAllBranches, createBranch, updateBranch, deleteBranch } from "../api/branch.api";
 import {
@@ -144,10 +144,10 @@ export const useUpdateUser = (id: string) => {
 export const useResetUserPassword = (id: string) =>
   useMutation({ mutationFn: (input: ResetPasswordInput) => resetUserPassword(id, input) });
 
-export const useDeactivateUser = () => {
+export const useDeleteUser = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deactivateUser(id),
+    mutationFn: (id: string) => deleteUser(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["users"] }); },
   });
 };
