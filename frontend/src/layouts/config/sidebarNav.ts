@@ -22,7 +22,7 @@ import {
   RotateCcw,
   HandHelping,
   Thermometer,
-  ClipboardCheck,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
@@ -123,10 +123,10 @@ export const sidebarNav: NavItem[] = [
     group: "Keuangan",
   },
   {
-    label: "Assignment Harian",
-    href:  "/assignment-harian",
-    icon:  ClipboardCheck,
-    roles: [...MANAGEMENT_ROLES, "STYLIST", "STAFF"],
+    label: "Generate Komisi",
+    href:  "/generate-komisi",
+    icon:  Sparkles,
+    roles: MANAGEMENT_ROLES,
     group: "Keuangan",
   },
   {

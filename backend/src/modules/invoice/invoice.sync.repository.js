@@ -50,6 +50,35 @@ const findInvoiceForSync = async (id) => {
         },
         orderBy: { createdAt: "asc" },
       },
+      treatmentSessions: {
+        select: {
+          treatmentItems: {
+            select: {
+              materialUsages: {
+                select: {
+                  usageItems: {
+                    select: {
+                      qty: true,
+                      materialItem: {
+                        select: {
+                          itemCode:       true,
+                          accurateItemId: true,
+                        },
+                      },
+                      unit: {
+                        select: {
+                          name:           true,
+                          accurateUnitId: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       invoiceDeposits: {
         select: {
           amountApplied: true,

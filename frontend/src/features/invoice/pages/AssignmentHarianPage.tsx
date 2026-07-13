@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Loader2,
@@ -19,7 +19,6 @@ import { formatCurrency } from "@/lib/utils";
 import type { ApiResponse } from "@/types/api";
 import type { TreatmentItem } from "@/features/appointment/types";
 import {
-  setupTreatment,
   generateCommission,
   deleteAssignment,
 } from "@/features/invoice/api/treatmentAssignment.api";
@@ -30,6 +29,7 @@ import { AssignmentForm } from "@/features/invoice/components/shared/AssignmentF
 interface DailyInvoice {
   id:         string;
   invoiceNo:  string;
+  status:     string;
   grandTotal: string;
   customer:   { id: string; name: string; customerNo: string };
   treatmentSessions: Array<{
@@ -39,13 +39,12 @@ interface DailyInvoice {
   _count: { commissions: number };
 }
 
-type InvoiceStatus = "done" | "siap" | "sebagian" | "belum" | "no-session";
+type InvoiceStatus = "done" | "siap" | "sebagian" | "belum";
 
 function getInvoiceStatus(inv: DailyInvoice): InvoiceStatus {
   if (inv._count.commissions > 0) return "done";
   const session = inv.treatmentSessions[0];
-  if (!session) return "no-session";
-  const items = session.treatmentItems ?? [];
+  const items = session?.treatmentItems ?? [];
   if (items.length === 0) return "belum";
   const assignedCount = items.filter((i) => (i.assignments ?? []).length > 0).length;
   if (assignedCount === 0) return "belum";
@@ -54,11 +53,10 @@ function getInvoiceStatus(inv: DailyInvoice): InvoiceStatus {
 }
 
 const STATUS_CONFIG: Record<InvoiceStatus, { label: string; className: string }> = {
-  done:           { label: "Done",          className: "bg-green-100 text-green-700 border-green-200" },
-  siap:           { label: "Siap Generate", className: "bg-blue-100 text-blue-700 border-blue-200"   },
-  sebagian:       { label: "Sebagian",      className: "bg-amber-100 text-amber-700 border-amber-200" },
-  belum:          { label: "Belum Assign",  className: "bg-gray-100 text-gray-600 border-gray-200"   },
-  "no-session":   { label: "Perlu Setup",   className: "bg-orange-100 text-orange-700 border-orange-200" },
+  done:     { label: "Done",          className: "bg-green-100 text-green-700 border-green-200" },
+  siap:     { label: "Siap Generate", className: "bg-blue-100 text-blue-700 border-blue-200"   },
+  sebagian: { label: "Sebagian",      className: "bg-amber-100 text-amber-700 border-amber-200" },
+  belum:    { label: "Belum Assign",  className: "bg-gray-100 text-gray-600 border-gray-200"   },
 };
 
 async function fetchDailyAssignment(date: string) {
@@ -77,7 +75,6 @@ export function AssignmentHarianPage() {
   const [openIds,      setOpenIds]      = useState<Set<string>>(new Set());
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
-  const [settingUpIds,  setSettingUpIds]  = useState<Set<string>>(new Set());
   const [deletingIds,   setDeletingIds]   = useState<Set<string>>(new Set());
 
   const { data: result, isLoading } = useQuery({
@@ -89,10 +86,9 @@ export function AssignmentHarianPage() {
   const invoices  = result?.data     ?? [];
   const truncated = result?.truncated ?? false;
 
-  const statuses   = invoices.map(getInvoiceStatus);
-  const belumCount = statuses.filter((s) => s === "belum" || s === "sebagian").length;
-  const siapCount  = statuses.filter((s) => s === "siap").length;
-  const doneCount  = statuses.filter((s) => s === "done").length;
+  const belumCount = invoices.filter((inv) => { const s = getInvoiceStatus(inv); return s === "belum" || s === "sebagian"; }).length;
+  const siapCount  = invoices.filter((inv) => getInvoiceStatus(inv) === "siap" && inv.status === "PAID").length;
+  const doneCount  = invoices.filter((inv) => getInvoiceStatus(inv) === "done").length;
 
   // ── Handlers ──────────────────────────────────────────────────────────
 
@@ -106,18 +102,6 @@ export function AssignmentHarianPage() {
 
   function refreshDaily() {
     qc.invalidateQueries({ queryKey: ["daily-assignment", date] });
-  }
-
-  async function handleSetup(invoiceId: string) {
-    setSettingUpIds((prev) => new Set([...prev, invoiceId]));
-    try {
-      await setupTreatment(invoiceId);
-      refreshDaily();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Gagal setup treatment");
-    } finally {
-      setSettingUpIds((prev) => { const s = new Set(prev); s.delete(invoiceId); return s; });
-    }
   }
 
   async function handleGenerateOne(invoiceId: string) {
@@ -134,7 +118,7 @@ export function AssignmentHarianPage() {
   }
 
   async function handleGenerateSemua() {
-    const ready = invoices.filter((inv) => getInvoiceStatus(inv) === "siap");
+    const ready = invoices.filter((inv) => getInvoiceStatus(inv) === "siap" && inv.status === "PAID");
     if (ready.length === 0) return;
     setIsGenerating(true);
     let successCount = 0;
@@ -152,7 +136,7 @@ export function AssignmentHarianPage() {
     if (errorNos.length === 0) {
       toast.success(`${successCount} invoice berhasil di-generate`);
     } else {
-      toast.error(`${successCount} berhasil · gagal: ${errorNos.join(", ")}`);
+      toast.error(`${successCount} berhasil, gagal: ${errorNos.join(", ")}`);
     }
   }
 
@@ -197,7 +181,7 @@ export function AssignmentHarianPage() {
             onClick={handleGenerateSemua}
           >
             {isGenerating
-              ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Generating…</>
+              ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Generating...</>
               : `Generate Semua (${siapCount})`
             }
           </Button>
@@ -260,6 +244,7 @@ export function AssignmentHarianPage() {
             const session = inv.treatmentSessions[0];
             const items   = session?.treatmentItems ?? [];
             const isDone  = status === "done";
+            const isPaid  = inv.status === "PAID";
             const cfg     = STATUS_CONFIG[status];
 
             return (
@@ -291,27 +276,6 @@ export function AssignmentHarianPage() {
                 {/* Accordion body */}
                 {isOpen && (
                   <div className="border-t border-border px-4 py-3 space-y-4">
-                    {/* No-session state */}
-                    {status === "no-session" && (
-                      <div className="flex items-center justify-between rounded-md border border-border p-3">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <AlertCircle className="h-4 w-4" />
-                          Assignment pekerjaan belum diatur.
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={settingUpIds.has(inv.id) || isGenerating}
-                          onClick={() => handleSetup(inv.id)}
-                        >
-                          {settingUpIds.has(inv.id)
-                            ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Menyiapkan…</>
-                            : "Setup Assignment"
-                          }
-                        </Button>
-                      </div>
-                    )}
-
                     {/* Treatment items */}
                     {session && items.map((item) => {
                       const assignments   = item.assignments ?? [];
@@ -341,7 +305,7 @@ export function AssignmentHarianPage() {
                               <div key={a.id} className="flex items-center justify-between py-2 text-sm">
                                 <div className="flex items-center gap-2">
                                   <Badge variant="secondary" className="text-xs">
-                                    {a.slotKey ? a.slotKey.charAt(0).toUpperCase() + a.slotKey.slice(1) : "—"}
+                                    {a.slotKey ? a.slotKey.charAt(0).toUpperCase() + a.slotKey.slice(1) : "-"}
                                   </Badge>
                                   <span className="font-medium">{a.employee.name}</span>
                                   <span className="text-muted-foreground text-xs">{a.employee.employeeCode}</span>
@@ -385,22 +349,24 @@ export function AssignmentHarianPage() {
                     {session && items.length > 0 && !isDone && (
                       <div className="flex items-center justify-between pt-1 border-t border-border">
                         <div>
-                          {status === "sebagian" && (
+                          {!isPaid && (
+                            <p className="text-xs text-amber-600">Komisi hanya dapat di-generate setelah invoice lunas (PAID).</p>
+                          )}
+                          {isPaid && status === "sebagian" && (
                             <p className="text-xs text-amber-600">Beberapa item belum fully assigned.</p>
                           )}
-                          {status === "belum" && (
+                          {isPaid && status === "belum" && (
                             <p className="text-xs text-muted-foreground">Belum ada assignment pada invoice ini.</p>
                           )}
                         </div>
                         <Button
                           size="sm"
-                          disabled={status !== "siap" || generatingIds.has(inv.id) || isGenerating}
+                          disabled={status !== "siap" || !isPaid || generatingIds.has(inv.id) || isGenerating}
                           onClick={() => handleGenerateOne(inv.id)}
                         >
                           {generatingIds.has(inv.id)
-                            ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Memproses…</>
-                            : "Generate Komisi"
-                          }
+                            ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Memproses...</>
+                            : "Generate Komisi"}
                         </Button>
                       </div>
                     )}

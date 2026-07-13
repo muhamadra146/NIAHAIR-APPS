@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft, CheckCircle2, XCircle, Clock, User, Scissors,
   Upload, Trash2, ZoomIn, AlertTriangle, ExternalLink,
-  CalendarDays, MessageSquare, Camera, Users, Package,
+  CalendarDays, MessageSquare, Camera, Users, Package, Plus, Loader2,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,6 +28,8 @@ import { useTreatment, useTreatmentItems, useCompleteTreatment, useSaveTreatment
 import { TreatmentStatusBadge } from "../components/TreatmentStatusBadge";
 import { ElapsedTime } from "../components/ElapsedTime";
 import { MaterialsTab } from "../components/MaterialsTab";
+import { createAssignment, deleteAssignment } from "../api";
+import { SLOT_OPTIONS } from "@/features/invoice/api/treatmentAssignment.api";
 import type { TreatmentItem } from "../types";
 import type { AppointmentStatus, Appointment } from "@/features/appointment/types";
 
@@ -62,6 +64,7 @@ function formatDate(iso: string | null | undefined): string {
 export function TreatmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const qc = useQueryClient();
 
   const { data: session, isLoading, isError } = useTreatment(id!);
   const { data: appointment } = useAppointment(session?.appointmentId ?? "");
@@ -394,89 +397,68 @@ export function TreatmentDetailPage() {
 
           {/* STAFF */}
           <TabsContent value="staff" className="mt-4 space-y-4">
-            <Card>
-              <CardContent className="p-4">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Staff Booking
-                </h3>
-                {!appointment ? (
-                  <p className="text-sm text-muted-foreground">Memuat…</p>
-                ) : appointment.staffs.length === 0 ? (
-                  <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-                    <p className="text-sm text-amber-700">
-                      Belum ada staff yang ditugaskan pada booking ini.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {appointment.staffs.map((sf) => (
-                      <div
-                        key={sf.id}
-                        className="flex items-center gap-3 rounded-lg border border-border p-3"
-                      >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                          <User className="h-4 w-4 text-primary" />
+            {/* Staff dari booking */}
+            {session.appointmentId && (
+              <Card>
+                <CardContent className="p-4">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Staff Booking
+                  </h3>
+                  {!appointment ? (
+                    <p className="text-sm text-muted-foreground">Memuat…</p>
+                  ) : appointment.staffs.length === 0 ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                      <p className="text-sm text-amber-700">Belum ada staff pada booking ini.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {appointment.staffs.map((sf) => (
+                        <div key={sf.id} className="flex items-center gap-3 rounded-lg border border-border p-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                            <User className="h-4 w-4 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium">{sf.employee.name}</p>
+                          </div>
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            {slotLabel(sf.slotKey)}
+                          </Badge>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium">{sf.employee.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {sf.employee.role?.name ?? slotLabel(sf.slotKey)}
-                          </p>
-                        </div>
-                        <Badge variant="outline" className="text-xs shrink-0">
-                          {slotLabel(sf.slotKey)}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {appointment && appointment.staffs.length > 0 && session.appointmentId && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Untuk mengubah staff, buka{" "}
-                    <Link
-                      to={`/appointments/${session.appointmentId}`}
-                      className="text-primary underline"
-                    >
-                      detail booking
-                    </Link>.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
+            {/* Penugasan per item treatment */}
             {items.length > 0 && (
               <Card>
                 <CardContent className="p-4">
                   <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Penugasan Item Treatment
                   </h3>
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {items.map((item) => (
-                      <div
+                      <ItemAssignmentCard
                         key={item.id}
-                        className="rounded-lg border border-border p-3 space-y-2"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-medium">{item.item?.name ?? "—"}</p>
-                          <span className="text-xs text-muted-foreground">
-                            {item.qty} {item.unit?.name ?? ""}
-                          </span>
-                        </div>
-                        {item.assignments && item.assignments.length > 0 ? (
-                          <div className="flex flex-wrap gap-1.5">
-                            {item.assignments.map((a) => (
-                              <Badge key={a.id} variant="secondary" className="text-xs">
-                                {a.employee?.name ?? "—"}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-amber-600">Belum ada penugasan</p>
-                        )}
-                      </div>
+                        item={item}
+                        sessionId={id!}
+                        appointment={appointment ?? null}
+                        isCompleted={isCompleted}
+                        onChanged={() => qc.invalidateQueries({ queryKey: ["treatment-items", id!] })}
+                      />
                     ))}
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {items.length === 0 && (
+              <Card>
+                <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                  Belum ada item treatment untuk di-assign.
                 </CardContent>
               </Card>
             )}
@@ -606,6 +588,201 @@ function slotLabel(slotKey: string | null): string {
     colorist: "Colorist",
   };
   return map[slotKey] ?? slotKey;
+}
+
+// ── Item Assignment Card ──────────────────────────────────────────────────────
+
+function ItemAssignmentCard({
+  item, sessionId, appointment, isCompleted, onChanged,
+}: {
+  item:        TreatmentItem;
+  sessionId:   string;
+  appointment: Appointment | null;
+  isCompleted: boolean;
+  onChanged:   () => void;
+}) {
+  const isService    = item.item?.itemType === "SERVICE";
+  const maxWork      = Number(item.qty) * Number(item.conversionSnapshot ?? 1);
+  const staffOptions = appointment?.staffs ?? [];
+  const assignments  = item.assignments ?? [];
+  const usedQty      = assignments.reduce((sum, a) => sum + Number(a.workQty), 0);
+  const remaining    = maxWork - usedQty;
+  const isFull       = !isService && remaining <= 0;
+
+  const [employeeId,  setEmployeeId]  = useState("");
+  const [slotKey,     setSlotKey]     = useState("");
+  const [workQty,     setWorkQty]     = useState("");
+  const [saving,      setSaving]      = useState(false);
+  const [deletingId,  setDeletingId]  = useState<string | null>(null);
+
+  async function handleAdd() {
+    if (!employeeId || !slotKey) return;
+    if (!isService && (!workQty || Number(workQty) <= 0)) return;
+    setSaving(true);
+    try {
+      await createAssignment(sessionId, item.id, {
+        employeeId,
+        slotKey,
+        workQty: isService ? Number(item.qty) : Number(workQty),
+      });
+      setEmployeeId(""); setSlotKey(""); setWorkQty("");
+      onChanged();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal menambah penugasan");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(assignmentId: string) {
+    setDeletingId(assignmentId);
+    try {
+      await deleteAssignment(sessionId, item.id, assignmentId);
+      onChanged();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal menghapus penugasan");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      {/* Item header */}
+      <div className={`flex items-center justify-between px-3 py-2 ${assignments.length > 0 ? "bg-green-50" : "bg-muted/30"}`}>
+        <div>
+          <p className="text-sm font-medium">{item.item?.name ?? "—"}</p>
+          <p className="text-xs text-muted-foreground font-mono">{item.item?.itemCode ?? ""}</p>
+        </div>
+        <div className="text-right flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{item.qty} {item.unit?.name ?? ""}</span>
+          {!isService && assignments.length > 0 && (
+            <span className="text-xs text-muted-foreground">
+              sisa {remaining.toLocaleString("id-ID")} {item.item?.defaultUnit?.name ?? ""}
+            </span>
+          )}
+          {isFull && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+          {!isFull && assignments.length > 0 && !isService && <CheckCircle2 className="h-4 w-4 text-amber-500" />}
+          {isService && assignments.length > 0 && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+        </div>
+      </div>
+
+      {/* Assignment rows */}
+      <div className="divide-y divide-border/50 px-3">
+        {assignments.map((a) => (
+          <div key={a.id} className="flex items-center justify-between py-2 text-sm">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs">
+                {a.slotKey ? slotLabel(a.slotKey) : "—"}
+              </Badge>
+              <span className="font-medium">{a.employee?.name ?? "—"}</span>
+              <span className="text-muted-foreground text-xs">{a.employee?.employeeCode ?? ""}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {!isService && (
+                <span className="text-xs text-muted-foreground">
+                  {Number(a.workQty).toLocaleString("id-ID")} {item.item?.defaultUnit?.name ?? item.unit?.name ?? ""}
+                </span>
+              )}
+              {!isCompleted && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(a.id)}
+                  disabled={deletingId === a.id}
+                  className="text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  {deletingId === a.id
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Trash2 className="h-3.5 w-3.5" />
+                  }
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {/* Add form */}
+        {!isCompleted && !isFull && (
+          <div className="py-3">
+            <div className="flex flex-wrap gap-2 items-end">
+              {/* Staff */}
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Staff</label>
+                {staffOptions.length > 0 ? (
+                  <select
+                    value={employeeId}
+                    onChange={(e) => {
+                      const sf = staffOptions.find((s) => s.employee.id === e.target.value);
+                      setEmployeeId(e.target.value);
+                      if (sf?.slotKey) setSlotKey(sf.slotKey);
+                    }}
+                    className="h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="">Pilih staff…</option>
+                    {staffOptions.map((s) => (
+                      <option key={s.employee.id} value={s.employee.id}>
+                        {s.employee.name} {s.slotKey ? `(${slotLabel(s.slotKey)})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className="h-8 w-44 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder="Employee ID…"
+                    value={employeeId}
+                    onChange={(e) => setEmployeeId(e.target.value)}
+                  />
+                )}
+              </div>
+
+              {/* Slot / Job */}
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Job</label>
+                <select
+                  value={slotKey}
+                  onChange={(e) => setSlotKey(e.target.value)}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">Pilih job…</option>
+                  {SLOT_OPTIONS.map((o) => (
+                    <option key={o.key} value={o.key}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Qty — hanya untuk non-SERVICE */}
+              {!isService && (
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">
+                    Qty ({item.item?.defaultUnit?.name ?? item.unit?.name ?? ""}) {maxWork > 0 && <span className="text-muted-foreground/60">max {maxWork.toLocaleString("id-ID")}</span>}
+                  </label>
+                  <input
+                    type="number"
+                    min={0.01}
+                    max={maxWork}
+                    step={0.01}
+                    className="h-8 w-28 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder={`max ${maxWork}`}
+                    value={workQty}
+                    onChange={(e) => setWorkQty(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <Button
+                size="sm"
+                className="h-8"
+                disabled={!employeeId || !slotKey || (!isService && (!workQty || Number(workQty) <= 0)) || saving}
+                onClick={handleAdd}
+              >
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function TreatmentItemRow({ item }: { item: TreatmentItem }) {

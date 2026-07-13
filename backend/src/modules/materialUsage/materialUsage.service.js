@@ -10,6 +10,7 @@ const {
   findTreatmentItem,
   findSessionById,
 } = require("./materialUsage.repository");
+const { generateServiceMovement, reverseServiceUsageMovement } = require("../inventory/inventory.service");
 
 const getBySession = async (sessionId) => {
   const session = await findSessionById(sessionId);
@@ -58,6 +59,13 @@ const bulkSave = async (sessionId, rows) => {
     }
   }
 
+  // Auto-generate inventory movements for saved usage items
+  try {
+    await generateServiceMovement(sessionId);
+  } catch (err) {
+    console.warn(`[materialUsage bulkSave] generateServiceMovement failed for session ${sessionId}: ${err.message}`);
+  }
+
   return results;
 };
 
@@ -65,14 +73,36 @@ const removeUsageItem = async (id) => {
   const item = await findUsageItemById(id);
   if (!item) throw new AppError("Material usage item not found", StatusCodes.NOT_FOUND);
 
+  // Reverse inventory movement if it exists before deleting
   if (item.inventoryMovementId) {
-    throw new AppError(
-      "Cannot delete: inventory movement already generated for this item.",
-      StatusCodes.CONFLICT,
-    );
+    await reverseServiceUsageMovement(item.inventoryMovementId, id);
   }
 
   await deleteUsageItem(id);
 };
 
-module.exports = { getBySession, bulkSave, removeUsageItem };
+const editUsageItemQty = async (id, qty) => {
+  const item = await findUsageItemById(id);
+  if (!item) throw new AppError("Material usage item not found", StatusCodes.NOT_FOUND);
+
+  // Reverse existing movement first, then update qty, then regenerate
+  if (item.inventoryMovementId) {
+    await reverseServiceUsageMovement(item.inventoryMovementId, id);
+  }
+
+  await updateUsageItemQty(id, qty);
+
+  // Regenerate movement with new qty via session-level generator
+  const sessionId = item.materialUsage?.treatmentItem?.treatmentSessionId;
+  if (sessionId) {
+    try {
+      await generateServiceMovement(sessionId);
+    } catch (err) {
+      console.warn(`[materialUsage editQty] generateServiceMovement failed: ${err.message}`);
+    }
+  }
+
+  return findUsageItemById(id);
+};
+
+module.exports = { getBySession, bulkSave, removeUsageItem, editUsageItemQty };

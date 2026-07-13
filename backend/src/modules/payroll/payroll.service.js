@@ -317,9 +317,21 @@ const markAsPaid = async (id, paidBy) => {
     throw new AppError("Only APPROVED payrolls can be marked as paid", StatusCodes.BAD_REQUEST);
 
   await prisma.$transaction(async (tx) => {
+    const now = new Date();
+
     await tx.payroll.update({
       where: { id },
-      data: { status: "PAID", paidAt: new Date(), paidBy: paidBy ?? null },
+      data: { status: "PAID", paidAt: now, paidBy: paidBy ?? null },
+    });
+
+    // Auto-mark semua komisi APPROVED karyawan dalam periode payroll → PAID
+    await tx.commission.updateMany({
+      where: {
+        employeeId: existing.employeeId,
+        status:     "APPROVED",
+        approvedAt: { gte: existing.periodStart, lte: existing.periodEnd },
+      },
+      data: { status: "PAID", paidAt: now, paidBy: paidBy ?? null },
     });
 
     const kasbonItems = existing.items.filter((i) => i.category === "kasbon" && i.type === "DEDUCTION");
@@ -333,7 +345,7 @@ const markAsPaid = async (id, paidBy) => {
         const newRemaining = Math.max(Number(loan.remainingAmount) - repayAmt, 0);
         const newStatus    = newRemaining <= 0 ? "PAID_OFF" : "ACTIVE";
         await tx.loanRepayment.create({
-          data: { loanId: loan.id, payrollId: id, amount: repayAmt, paidAt: new Date() },
+          data: { loanId: loan.id, payrollId: id, amount: repayAmt, paidAt: now },
         });
         await tx.loan.update({ where: { id: loan.id }, data: { remainingAmount: newRemaining, status: newStatus } });
       }
@@ -474,9 +486,33 @@ const bulkGenerate = async ({ branchId, payDay, yearMonth, notes }, createdBy) =
 const deletePayroll = async (id) => {
   const payroll = await repo.findById(id);
   if (!payroll) throw new AppError("Payroll not found", StatusCodes.NOT_FOUND);
-  if (payroll.status !== "DRAFT")
-    throw new AppError("Hanya payroll dengan status Draft yang dapat dihapus", StatusCodes.UNPROCESSABLE_ENTITY);
-  await repo.remove(id);
+
+  await prisma.$transaction(async (tx) => {
+    // Jika PAID: revert komisi → APPROVED dan balik kasbon
+    if (payroll.status === "PAID") {
+      await tx.commission.updateMany({
+        where: {
+          employeeId: payroll.employeeId,
+          status:     "PAID",
+          approvedAt: { gte: payroll.periodStart, lte: payroll.periodEnd },
+        },
+        data: { status: "APPROVED", paidAt: null, paidBy: null },
+      });
+
+      const repayments = await tx.loanRepayment.findMany({ where: { payrollId: id } });
+      for (const rep of repayments) {
+        await tx.loan.update({
+          where: { id: rep.loanId },
+          data:  { remainingAmount: { increment: Number(rep.amount) }, status: "ACTIVE" },
+        });
+      }
+      await tx.loanRepayment.deleteMany({ where: { payrollId: id } });
+    }
+
+    await tx.payrollItem.deleteMany({ where: { payrollId: id } });
+    await tx.payroll.delete({ where: { id } });
+  });
+
   return { deleted: true };
 };
 

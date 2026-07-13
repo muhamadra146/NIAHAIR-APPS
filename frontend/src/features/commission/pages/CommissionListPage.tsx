@@ -337,13 +337,16 @@ export function CommissionListPage() {
           </DialogHeader>
           {deleteTarget && (
             <div className="py-1 space-y-1 text-sm text-slate-600">
-              <p>Yakin ingin menghapus komisi ini?</p>
+              <p>Semua komisi untuk invoice ini akan dihapus dan status akan kembali ke <strong>belum generate</strong>.</p>
               <div className="mt-3 rounded-lg bg-rose-50 border border-rose-100 px-4 py-3 space-y-1">
-                <p><span className="text-slate-400">Karyawan:</span> <strong>{deleteTarget.employee?.name ?? "—"}</strong></p>
                 <p><span className="text-slate-400">Invoice:</span> <span className="font-mono text-xs">…{deleteTarget.invoiceId.slice(-8).toUpperCase()}</span></p>
-                <p><span className="text-slate-400">Komisi:</span> <strong>{formatCurrency(deleteTarget.commissionAmount)}</strong></p>
+                <p><span className="text-slate-400">Karyawan (dipilih):</span> <strong>{deleteTarget.employee?.name ?? "—"}</strong></p>
+                <p><span className="text-slate-400">Status komisi:</span> <strong>{STATUS_LABEL[deleteTarget.status] ?? deleteTarget.status}</strong></p>
               </div>
-              <p className="text-xs text-rose-500 mt-2">Hanya komisi berstatus PENDING yang bisa dihapus. Aksi ini tidak bisa dibatalkan.</p>
+              <p className="text-xs text-rose-600 mt-2 font-medium">⚠ Seluruh komisi invoice ini akan dihapus, bukan hanya komisi yang dipilih. Aksi ini tidak bisa dibatalkan.</p>
+              {deleteTarget.status === "PAID" && (
+                <p className="text-xs text-rose-500 mt-1">Catatan: pembayaran payroll yang sudah dilakukan tidak ikut terbalik.</p>
+              )}
             </div>
           )}
           <DialogFooter className="gap-2">
@@ -522,11 +525,9 @@ function ActionButtons({ status, onApprove, onPay, onOverride, onDelete, approvi
           <Edit2 className="h-3.5 w-3.5" />
         </Button>
       )}
-      {status === "PENDING" && (
-        <Button size="sm" variant="ghost" className="h-7 rounded-lg text-xs px-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50" onClick={onDelete}>
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      )}
+      <Button size="sm" variant="ghost" className="h-7 rounded-lg text-xs px-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50" onClick={onDelete}>
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
     </div>
   );
 }

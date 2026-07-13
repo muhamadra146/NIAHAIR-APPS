@@ -131,6 +131,7 @@ const findInvoiceForDelete = (id) =>
       outstandingAmount: true,
       grandTotal:        true,
       totalDeposit:      true,
+      _count:            { select: { commissions: true } },
     },
   });
 

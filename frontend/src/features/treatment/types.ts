@@ -33,6 +33,7 @@ export interface TreatmentAssignment {
   id:               string;
   treatmentItemId:  string;
   employeeId:       string;
+  slotKey:          string | null;
   workQty:          number;
   notes:            string | null;
   createdAt:        string;
@@ -117,6 +118,7 @@ export interface UpdateTreatmentItemInput {
 
 export interface CreateAssignmentInput {
   employeeId: string;
+  slotKey?:   string;
   workQty:    number;
   notes?:     string;
 }
@@ -127,10 +129,17 @@ export interface UpdateAssignmentInput {
 }
 
 export interface ItemSearchResult {
-  id:       string;
-  name:     string;
-  itemCode: string;
-  itemType: string;
+  id:          string;
+  name:        string;
+  itemCode:    string;
+  itemType:    string;
+  defaultUnit: { id: string; name: string } | null;
+  itemUnits?: Array<{
+    id:               string;
+    isDefault:        boolean;
+    conversionFactor: number;
+    unit:             { id: string; name: string };
+  }>;
 }
 
 export interface UnitOption {
@@ -144,7 +153,12 @@ export interface ServiceMaterial {
   id:            string;
   serviceItemId: string;
   materialItemId: string;
-  materialItem:  { id: string; name: string; itemCode: string; itemType: string };
+  materialItem:  {
+    id: string; name: string; itemCode: string; itemType: string;
+    category:    { id: string; name: string } | null;
+    defaultUnit: { id: string; name: string } | null;
+    itemUnits:   Array<{ unitId: string; conversionFactor: number }>;
+  };
   unitId:        string;
   unit:          { id: string; name: string };
   qty:           number;
@@ -154,7 +168,12 @@ export interface ServiceMaterial {
 export interface MaterialUsageItem {
   id:                  string;
   materialUsageId:     string;
-  materialItem:        { id: string; name: string; itemCode: string; itemType: string };
+  materialItem:        {
+    id: string; name: string; itemCode: string; itemType: string;
+    category:    { id: string; name: string } | null;
+    defaultUnit: { id: string; name: string } | null;
+    itemUnits:   Array<{ unitId: string; conversionFactor: number }>;
+  };
   unit:                { id: string; name: string };
   qty:                 number;
   inventoryMovementId: string | null;
@@ -170,9 +189,11 @@ export interface MaterialUsageRow {
   id:                  string | null;
   materialUsageId:     string | null;
   treatmentItemId:     string;
-  materialItem:        { id: string; name: string; itemCode: string };
+  materialItem:        { id: string; name: string; itemCode: string; category?: { id: string; name: string } | null };
   unit:                { id: string; name: string };
-  plannedQty:          number | null;
+  /** Factor to convert actualQty (in unit) → default unit. e.g. 1 STANDAR × 60 = 60 helai */
+  conversionFactor:    number;
+  defaultUnit:         { id: string; name: string } | null;
   actualQty:           number;
   isFromBom:           boolean;
   inventoryMovementId: string | null;

@@ -32,14 +32,18 @@ const syncInvoiceToAccurate = async (invoiceId) => {
     }
   }
 
-  // Validate warehouse for INVENTORY items
+  // Validate warehouse for INVENTORY items (invoice lines + material usage items)
   const hasInventoryItem = invoice.items.some((l) => l.item.itemType === "INVENTORY");
+  const hasMaterialUsage = (invoice.treatmentSessions ?? []).some((s) =>
+    s.treatmentItems.some((ti) => ti.materialUsages.some((mu) => mu.usageItems.length > 0))
+  );
   let warehouse = null;
-  if (hasInventoryItem) {
+  if (hasInventoryItem || hasMaterialUsage) {
     warehouse = await findWarehouseByBranchId(invoice.branchId);
-    if (!warehouse?.accurateWarehouseId) {
+    if (hasInventoryItem && !warehouse?.accurateWarehouseId) {
       throw new Error("Branch warehouse not mapped to Accurate yet");
     }
+    // Material usage items: warehouse absence causes per-item skip in mapper (non-fatal)
   }
 
   // Validate applied deposits are synced

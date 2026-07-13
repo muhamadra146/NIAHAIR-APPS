@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
 import { fetchServiceMaterials, searchItems } from "../api";
 import { useMaterialUsages, useBulkSaveMaterialUsages, useDeleteMaterialUsageItem } from "../hooks";
 import type { TreatmentItem, MaterialUsageRow, BulkSaveMaterialUsageRow } from "../types";
@@ -65,13 +64,15 @@ export function MaterialsTab({
             u.materialUsage.treatmentItemId === ti.id &&
             u.materialItem.id === bomRow.materialItemId,
         );
+        const iu = bomRow.materialItem.itemUnits?.find((x) => x.unitId === bomRow.unit.id);
         merged.push({
           id:                  saved?.id ?? null,
           materialUsageId:     saved?.materialUsageId ?? null,
           treatmentItemId:     ti.id,
           materialItem:        bomRow.materialItem,
           unit:                bomRow.unit,
-          plannedQty:          Number(bomRow.qty),
+          conversionFactor:    iu ? Number(iu.conversionFactor) : 1,
+          defaultUnit:         bomRow.materialItem.defaultUnit ?? null,
           actualQty:           saved ? Number(saved.qty) : Number(bomRow.qty),
           isFromBom:           true,
           inventoryMovementId: saved?.inventoryMovementId ?? null,
@@ -87,13 +88,15 @@ export function MaterialsTab({
           r.materialItem.id === u.materialItem.id,
       );
       if (!alreadyInBom) {
+        const iu = u.materialItem.itemUnits?.find((x) => x.unitId === u.unit.id);
         merged.push({
           id:                  u.id,
           materialUsageId:     u.materialUsageId,
           treatmentItemId:     u.materialUsage.treatmentItemId,
           materialItem:        u.materialItem,
           unit:                u.unit,
-          plannedQty:          null,
+          conversionFactor:    iu ? Number(iu.conversionFactor) : 1,
+          defaultUnit:         u.materialItem.defaultUnit ?? null,
           actualQty:           Number(u.qty),
           isFromBom:           false,
           inventoryMovementId: u.inventoryMovementId,
@@ -131,7 +134,7 @@ export function MaterialsTab({
     const payload: BulkSaveMaterialUsageRow[] = rows
       .filter((r) => r.actualQty > 0 || r.isFromBom) // skip zero-qty ad-hoc rows
       .map((r) => ({
-        id:              r.id,
+        ...(r.id ? { id: r.id } : {}),
         treatmentItemId: r.treatmentItemId,
         materialItemId:  r.materialItem.id,
         unitId:          r.unit.id,
@@ -163,8 +166,13 @@ export function MaterialsTab({
   const hasTreatmentItems = treatmentItems.length > 0;
   const hasMovements = rows.some((r) => !!r.inventoryMovementId);
 
-  const totalPlanned = rows.reduce((s, r) => s + (r.plannedQty ?? 0), 0);
-  const totalActual  = rows.reduce((s, r) => s + r.actualQty, 0);
+  const totalGram = rows.reduce((s, r) => s + r.actualQty * r.conversionFactor, 0);
+
+  const gramByCategory = rows.reduce<Record<string, number>>((acc, r) => {
+    const key = r.materialItem.category?.name ?? "Tanpa Kategori";
+    acc[key] = (acc[key] ?? 0) + r.actualQty * r.conversionFactor;
+    return acc;
+  }, {});
 
   if (!hasTreatmentItems) {
     return (
@@ -264,15 +272,13 @@ export function MaterialsTab({
                     <tr className="border-b border-border bg-muted/50">
                       <th className="px-4 py-3 text-left font-medium text-muted-foreground">Material</th>
                       <th className="px-4 py-3 text-left font-medium text-muted-foreground">Satuan</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Qty Rencana</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Qty Aktual</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Selisih</th>
+                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Qty</th>
+                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Satuan Dasar</th>
                       <th className="px-4 py-3" />
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map((row, idx) => {
-                      const diff       = row.plannedQty !== null ? row.actualQty - row.plannedQty : null;
                       const canDelete  = !row.isFromBom && !row.inventoryMovementId && !isCompleted;
                       const qtyLocked  = !!row.inventoryMovementId || isCompleted;
                       return (
@@ -285,11 +291,13 @@ export function MaterialsTab({
                             <p className="text-xs text-muted-foreground font-mono">
                               {row.materialItem.itemCode}
                             </p>
+                            {row.materialItem.category && (
+                              <p className="text-xs text-muted-foreground">
+                                {row.materialItem.category.name}
+                              </p>
+                            )}
                           </td>
                           <td className="px-4 py-2.5 text-muted-foreground">{row.unit.name}</td>
-                          <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
-                            {row.plannedQty !== null ? row.plannedQty : "—"}
-                          </td>
                           <td className="px-4 py-2.5">
                             {qtyLocked ? (
                               <span className="block text-right tabular-nums font-medium">
@@ -306,18 +314,10 @@ export function MaterialsTab({
                               />
                             )}
                           </td>
-                          <td className="px-4 py-2.5 text-right tabular-nums">
-                            {diff !== null ? (
-                              <span
-                                className={cn(
-                                  "text-xs font-medium",
-                                  diff > 0  ? "text-amber-600" :
-                                  diff < 0  ? "text-blue-600"  : "text-muted-foreground",
-                                )}
-                              >
-                                {diff > 0 ? `+${diff}` : diff}
-                              </span>
-                            ) : "—"}
+                          <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
+                            {row.conversionFactor !== 1 && row.defaultUnit
+                              ? `${+(row.actualQty * row.conversionFactor).toFixed(4)} ${row.defaultUnit.name}`
+                              : "—"}
                           </td>
                           <td className="px-4 py-2.5 text-center">
                             {canDelete ? (
@@ -346,7 +346,6 @@ export function MaterialsTab({
           {/* ── Mobile cards ── */}
           <div className="space-y-2 md:hidden">
             {rows.map((row, idx) => {
-              const diff      = row.plannedQty !== null ? row.actualQty - row.plannedQty : null;
               const canDelete = !row.isFromBom && !row.inventoryMovementId && !isCompleted;
               const qtyLocked = !!row.inventoryMovementId || isCompleted;
               return (
@@ -361,6 +360,11 @@ export function MaterialsTab({
                         <p className="text-xs text-muted-foreground font-mono">
                           {row.materialItem.itemCode}
                         </p>
+                        {row.materialItem.category && (
+                          <p className="text-xs text-muted-foreground">
+                            {row.materialItem.category.name}
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         {!row.isFromBom && (
@@ -380,19 +384,13 @@ export function MaterialsTab({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="space-y-0.5">
                         <p className="text-xs text-muted-foreground">Satuan</p>
                         <p className="font-medium">{row.unit.name}</p>
                       </div>
                       <div className="space-y-0.5">
-                        <p className="text-xs text-muted-foreground">Rencana</p>
-                        <p className="font-medium tabular-nums">
-                          {row.plannedQty !== null ? row.plannedQty : "—"}
-                        </p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-xs text-muted-foreground">Aktual</p>
+                        <p className="text-xs text-muted-foreground">Qty</p>
                         {qtyLocked ? (
                           <p className="font-medium tabular-nums">{row.actualQty}</p>
                         ) : (
@@ -407,17 +405,15 @@ export function MaterialsTab({
                         )}
                       </div>
                     </div>
-
-                    {diff !== null && diff !== 0 && (
-                      <p
-                        className={cn(
-                          "text-xs font-medium",
-                          diff > 0 ? "text-amber-600" : "text-blue-600",
-                        )}
-                      >
-                        Selisih: {diff > 0 ? `+${diff}` : diff} {row.unit.name}
+                    {row.conversionFactor !== 1 && row.defaultUnit && (
+                      <p className="text-xs text-muted-foreground">
+                        Satuan dasar:{" "}
+                        <span className="font-medium text-foreground tabular-nums">
+                          {+(row.actualQty * row.conversionFactor).toFixed(4)} {row.defaultUnit.name}
+                        </span>
                       </p>
                     )}
+
                   </CardContent>
                 </Card>
               );
@@ -426,21 +422,30 @@ export function MaterialsTab({
 
           {/* Summary */}
           <Card>
-            <CardContent className="p-4">
-              <div className="grid grid-cols-3 gap-4 text-sm">
+            <CardContent className="p-4 space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="text-center">
                   <p className="text-xs text-muted-foreground mb-1">Total Material</p>
-                  <p className="text-xl font-bold">{rows.length}</p>
+                  <p className="text-xl font-bold tabular-nums">{rows.length}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Total Qty Rencana</p>
-                  <p className="text-xl font-bold tabular-nums">{totalPlanned}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Total Qty Aktual</p>
-                  <p className="text-xl font-bold tabular-nums">{totalActual}</p>
+                  <p className="text-xs text-muted-foreground mb-1">Total Gram</p>
+                  <p className="text-xl font-bold tabular-nums">{+totalGram.toFixed(4)}</p>
                 </div>
               </div>
+              {Object.keys(gramByCategory).length > 0 && (
+                <div className="border-t border-border pt-3 space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Per Kategori</p>
+                  {Object.entries(gramByCategory)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([cat, gram]) => (
+                      <div key={cat} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">{cat}</span>
+                        <span className="font-medium tabular-nums">{+gram.toFixed(4)} gram</span>
+                      </div>
+                    ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </>
@@ -459,10 +464,12 @@ export function MaterialsTab({
 // ── Add Material Dialog ───────────────────────────────────────────────────────
 
 interface ItemOption {
-  id:       string;
-  name:     string;
-  itemCode: string;
-  itemType: string;
+  id:          string;
+  name:        string;
+  itemCode:    string;
+  itemType:    string;
+  defaultUnit: { id: string; name: string } | null;
+  itemUnits?:  Array<{ id: string; isDefault: boolean; conversionFactor: number; unit: { id: string; name: string } }>;
 }
 
 interface UnitOpt {
@@ -517,15 +524,14 @@ function AddMaterialDialog({
     }, 300);
   }
 
-  async function handleSelectItem(item: ItemOption) {
+  function handleSelectItem(item: ItemOption) {
     setSelected(item);
     setResults([]);
     setSearch("");
-    // Try to load units from item data (use search results)
-    // For simplicity, create a default "unit" placeholder
-    // The actual unit resolution happens via the BOM or user input
-    setUnits([]);
-    setSelectedUnit(null);
+    const itemUnits: UnitOpt[] = (item.itemUnits ?? []).map((iu) => ({ id: iu.unit.id, name: iu.unit.name }));
+    setUnits(itemUnits);
+    const defaultUnit = item.itemUnits?.find((iu) => iu.isDefault)?.unit ?? item.itemUnits?.[0]?.unit ?? null;
+    setSelectedUnit(defaultUnit ? { id: defaultUnit.id, name: defaultUnit.name } : null);
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -536,13 +542,17 @@ function AddMaterialDialog({
     if (isNaN(qtyNum) || qtyNum <= 0) { setError("Qty harus lebih dari 0"); return; }
     if (!selectedTiId) { setError("Pilih item treatment"); return; }
 
+    const iuMatch       = selected.itemUnits?.find((iu) => iu.unit.id === selectedUnit.id);
+    const convFactor    = iuMatch ? Number(iuMatch.conversionFactor) : 1;
+    const defaultUnit   = selected.defaultUnit ?? null;
     onAdd({
       id:                  null,
       materialUsageId:     null,
       treatmentItemId:     selectedTiId,
       materialItem:        selected,
       unit:                selectedUnit,
-      plannedQty:          null,
+      conversionFactor:    convFactor,
+      defaultUnit,
       actualQty:           qtyNum,
       isFromBom:           false,
       inventoryMovementId: null,
@@ -604,17 +614,23 @@ function AddMaterialDialog({
           {selected && (
             <div className="flex flex-col gap-1.5">
               <Label>Satuan *</Label>
-              <Input
-                placeholder="Masukkan nama satuan (mis: ml, gram, pcs)"
-                value={selectedUnit?.name ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setSelectedUnit(v ? { id: `unit-temp-${v}`, name: v } : null);
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                Satuan akan disesuaikan saat disimpan.
-              </p>
+              {units.length > 0 ? (
+                <select
+                  value={selectedUnit?.id ?? ""}
+                  onChange={(e) => {
+                    const u = units.find((u) => u.id === e.target.value) ?? null;
+                    setSelectedUnit(u);
+                  }}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="" disabled>Pilih satuan…</option>
+                  {units.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm text-muted-foreground">Tidak ada satuan terdaftar untuk item ini.</p>
+              )}
             </div>
           )}
 

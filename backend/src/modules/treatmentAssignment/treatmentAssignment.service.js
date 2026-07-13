@@ -73,10 +73,13 @@ const createAssignment = async (treatmentItemId, body) => {
     throw new AppError("workQty wajib diisi untuk item inventory", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
-  const maxWork = calcMaxWork(treatmentItem);
-  if (workQty > maxWork) {
+  const maxWork    = calcMaxWork(treatmentItem);
+  const usedQty    = await sumWorkQtyByItem(treatmentItemId);
+  const remaining  = maxWork - Number(usedQty);
+
+  if (workQty > remaining) {
     throw new AppError(
-      `Work qty melebihi batas. Maks per assignment: ${maxWork}, diminta: ${workQty}`,
+      `Work qty melebihi sisa. Sisa: ${remaining}, diminta: ${workQty}`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }

@@ -371,12 +371,12 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
               <Button size="sm" className="rounded-lg" onClick={() => handle(submitMut.mutateAsync, "Dikirim untuk approval")} disabled={isActing}>
                 <Send className="h-3 w-3 mr-1" /> Submit Approval
               </Button>
-              {canDelete && (
-                <Button size="sm" variant="destructive" className="rounded-lg" onClick={() => setDeleteOpen(true)} disabled={isActing}>
-                  <Trash2 className="h-3 w-3 mr-1" /> Hapus
-                </Button>
-              )}
             </>
+          )}
+          {canDelete && (
+            <Button size="sm" variant="destructive" className="rounded-lg" onClick={() => setDeleteOpen(true)} disabled={isActing}>
+              <Trash2 className="h-3 w-3 mr-1" /> Hapus
+            </Button>
           )}
           {payroll.status === "PENDING_APPROVAL" && (
             <Button size="sm" className="rounded-lg" onClick={() => handle(approveMut.mutateAsync, "Payroll disetujui")} disabled={isActing}>
@@ -475,9 +475,13 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
       <Dialog open={deleteOpen} onOpenChange={(v) => { if (!v) setDeleteOpen(false); }}>
         <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-xl sm:rounded-lg">
           <DialogHeader><DialogTitle>Hapus Payroll</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground py-2">
-            Yakin ingin menghapus payroll <span className="font-medium text-foreground">{payroll.employee.name}</span> periode <span className="font-medium text-foreground">{fmtPeriod(payroll.periodStart)}</span>? Tindakan ini tidak dapat dibatalkan.
-          </p>
+          <div className="py-2 space-y-2 text-sm text-muted-foreground">
+            <p>Yakin ingin menghapus payroll <span className="font-medium text-foreground">{payroll.employee.name}</span> periode <span className="font-medium text-foreground">{fmtPeriod(payroll.periodStart)}</span>?</p>
+            {payroll.status === "PAID" && (
+              <p className="text-xs text-rose-600 font-medium">⚠ Payroll ini sudah DIBAYAR. Menghapus akan mengembalikan semua komisi periode ini ke status Disetujui dan membatalkan potongan kasbon.</p>
+            )}
+            <p className="text-xs text-muted-foreground">Tindakan ini tidak dapat dibatalkan.</p>
+          </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setDeleteOpen(false)} className="flex-1 sm:flex-none">Batal</Button>
             <Button
@@ -637,7 +641,7 @@ export function PayrollPage() {
                     </div>
                   </div>
 
-                  {canDelete && p.status === "DRAFT" && (
+                  {canDelete && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }}

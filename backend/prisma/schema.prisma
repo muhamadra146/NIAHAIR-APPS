@@ -1351,6 +1351,8 @@ model Invoice {
 
   lastSyncAt DateTime?
 
+  commissionSkipped Boolean @default(false)
+
   createdByEmployeeId String?
 
   createdAt DateTime @default(now())

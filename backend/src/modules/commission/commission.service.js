@@ -28,6 +28,8 @@ const {
   bulkCreate,
   findAllByInvoice,
   deletePendingByInvoice,
+  findPayrollsContainingCommissions,
+  deleteAllByInvoice,
 } = require("./commission.repository");
 const {
   D,
@@ -225,6 +227,13 @@ const generateCommission = (invoiceId) =>
     const invoice = await findInvoiceForGeneration(invoiceId, tx);
     if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
 
+    if (invoice.status !== "PAID") {
+      throw new AppError(
+        "Komisi hanya dapat di-generate setelah invoice lunas (PAID).",
+        StatusCodes.UNPROCESSABLE_ENTITY
+      );
+    }
+
     const existing = await countByInvoice(invoiceId, tx);
     if (existing > 0) {
       throw new AppError(
@@ -259,9 +268,30 @@ const regenerateCommission = (invoiceId) =>
     const { allowed, blockers } = canRegenerate(allExisting);
 
     if (!allowed) {
-      const ids = blockers.map((b) => `${b.id}(${b.status})`).join(", ");
+      const hasPaid     = blockers.some((b) => b.status === "PAID");
+      const hasApproved = blockers.some((b) => b.status === "APPROVED");
+
+      let reason;
+      if (hasPaid) {
+        reason = "Ada komisi yang sudah berstatus PAID — komisi ini sudah dibayarkan melalui payroll dan tidak dapat diubah.";
+      } else if (hasApproved) {
+        reason = "Ada komisi yang sudah disetujui (APPROVED) dan kemungkinan sudah masuk dalam kalkulasi payroll. Regenerate akan menghapus data tersebut.";
+      } else {
+        reason = `Ada komisi non-PENDING: ${blockers.map((b) => b.status).join(", ")}.`;
+      }
+
       throw new AppError(
-        `Tidak dapat regenerate: ada komisi non-PENDING [${ids}]. Batalkan approval terlebih dahulu.`,
+        `Tidak dapat regenerate komisi. ${reason} Hubungi admin jika perlu koreksi.`,
+        StatusCodes.UNPROCESSABLE_ENTITY
+      );
+    }
+
+    // Cek apakah ada komisi yang sudah masuk payroll APPROVED/PAID
+    const payrollsAffected = await findPayrollsContainingCommissions(allExisting, tx);
+    if (payrollsAffected.length > 0) {
+      const payrollIds = payrollsAffected.map((p) => p.id).join(", ");
+      throw new AppError(
+        `Tidak dapat regenerate: komisi ini sudah termasuk dalam payroll yang disetujui atau dibayar [${payrollIds}]. Batalkan payroll tersebut terlebih dahulu.`,
         StatusCodes.UNPROCESSABLE_ENTITY
       );
     }
@@ -310,15 +340,24 @@ const overrideCommission = async (id, { commissionAmount, userId, notes }) => {
   });
 };
 
-const deleteCommission = async (id) => {
+const deleteCommission = async (id, roleCode) => {
   const commission = await findById(id);
   if (!commission) throw new AppError("Komisi tidak ditemukan", StatusCodes.NOT_FOUND);
-  if (commission.status !== "PENDING") {
+
+  const isSuperAdmin = roleCode === "SUPER_ADMIN";
+  if (!isSuperAdmin && commission.status !== "PENDING") {
     throw new AppError(
       `Komisi tidak bisa dihapus karena statusnya ${commission.status}. Hanya PENDING yang bisa dihapus.`,
       StatusCodes.UNPROCESSABLE_ENTITY,
     );
   }
+
+  // SUPER_ADMIN: hapus SEMUA komisi invoice agar status kembali ke "belum generate"
+  if (isSuperAdmin) {
+    const { count } = await deleteAllByInvoice(commission.invoiceId);
+    return { invoiceId: commission.invoiceId, deleted: count, message: "Semua komisi invoice ini berhasil direset" };
+  }
+
   await deleteOne(id);
   return { id, message: "Komisi berhasil dihapus" };
 };

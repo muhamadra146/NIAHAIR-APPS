@@ -40,7 +40,7 @@ import { BpjsReportPage }           from "@/features/payroll/pages/BpjsReportPag
 import { CorrectionPage }            from "@/features/attendance/pages/CorrectionPage";
 import { PermissionPage }            from "@/features/attendance/pages/PermissionPage";
 import { SickLeavePage }             from "@/features/attendance/pages/SickLeavePage";
-import { AssignmentHarianPage }      from "@/features/invoice/pages/AssignmentHarianPage";
+import { GenerateKomisiPage }         from "@/features/invoice/pages/GenerateKomisiPage";
 
 export const router = createBrowserRouter([
   // ── Public routes ────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ export const router = createBrowserRouter([
           { path: "/invoice-payments",      element: <InvoicePaymentListPage /> },
           // Commissions
           { path: "/commissions",       element: <CommissionListPage /> },
-          { path: "/assignment-harian", element: <AssignmentHarianPage /> },
+          { path: "/generate-komisi",   element: <GenerateKomisiPage /> },
           // Inventory
           { path: "/inventory", element: <InventoryPage /> },
           // Reports

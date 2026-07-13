@@ -1,4 +1,3 @@
-const { generateCommission } = require("../commission/commission.service");
 const {
   findInvoiceWithRelations,
   completeInvoiceRelations,
@@ -33,17 +32,9 @@ const completeInvoiceWorkflow = async (invoiceId, userId) => {
   }
 };
 
-// Order: sessions/appointment → commission
-// Stock movement is generated at invoice creation — not here
+// Komisi tidak di-generate otomatis — harus dilakukan manual melalui halaman Generate Komisi
 const handleInvoicePaid = async (invoiceId, userId) => {
   await completeInvoiceWorkflow(invoiceId, userId);
-  try {
-    await generateCommission(invoiceId);
-  } catch (err) {
-    // Commissions may have been generated manually before payment — skip silently
-    if (err && err.isOperational && err.statusCode === 422) return;
-    throw err;
-  }
 };
 
 module.exports = { handleInvoicePaid };

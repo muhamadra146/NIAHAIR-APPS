@@ -39,6 +39,7 @@ const {
   deleteWithTransaction,
   findMaxInvoiceSeqToday,
   findDailyAssignment,
+  findCommissionGenerateList,
 } = require("./invoice.repository");
 const { getActiveMembership } = require("../membership/membership.service");
 
@@ -371,6 +372,13 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   // Stock OUT on invoice creation — physical goods are consumed at this point
   await generateSaleMovement(invoice.id);
 
+  // Auto-create treatment session so staff can assign immediately in Assignment Harian
+  try {
+    await setupTreatmentSession(invoice.id);
+  } catch (err) {
+    console.warn(`[invoice create] treatment session setup failed for ${invoice.id}: ${err.message}`);
+  }
+
   // Deposit fully covered the invoice — trigger same workflow as payment path
   if (invoice.status === "PAID") {
     await handleInvoicePaid(invoice.id, userId);
@@ -386,6 +394,47 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   return invoice;
 };
 
+// ── Reset treatment session items after invoice edit ─────────────────
+//
+// Deletes all treatment items (and their assignments) for the session,
+// then recreates them from the updated invoice items.
+// Only called when no commissions exist — safe to wipe and rebuild.
+
+const resetTreatmentSessionItems = async (invoiceId) => {
+  const session = await prisma.treatmentSession.findFirst({
+    where:  { invoiceId },
+    select: { id: true },
+  });
+  if (!session) return;
+
+  // Delete all treatment items — cascades to assignments & material usages
+  await prisma.treatmentItem.deleteMany({ where: { treatmentSessionId: session.id } });
+
+  // Recreate from updated invoice items
+  const invoice = await prisma.invoice.findUnique({
+    where:  { id: invoiceId },
+    select: { items: { select: { itemId: true, unitId: true, qty: true, price: true } } },
+  });
+  if (!invoice) return;
+
+  for (const line of invoice.items) {
+    const itemUnit = await prisma.itemUnit.findFirst({
+      where:  { itemId: line.itemId, unitId: line.unitId },
+      select: { conversionFactor: true },
+    });
+    await prisma.treatmentItem.create({
+      data: {
+        treatmentSessionId: session.id,
+        itemId:             line.itemId,
+        unitId:             line.unitId,
+        qty:                line.qty,
+        priceSnapshot:      line.price,
+        conversionSnapshot: itemUnit ? Number(itemUnit.conversionFactor) : 1,
+      },
+    });
+  }
+};
+
 // ── Update ────────────────────────────────────────────────────────────
 
 const updateInvoice = async (id, body, userId) => {
@@ -396,6 +445,15 @@ const updateInvoice = async (id, body, userId) => {
   }
   if (existing.status === "PAID") {
     throw new AppError("Cannot edit a paid invoice", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
+  // Block edit if commissions already generated
+  const commissionCount = await prisma.commission.count({ where: { invoiceId: id } });
+  if (commissionCount > 0) {
+    throw new AppError(
+      "Tidak dapat mengubah invoice yang sudah memiliki komisi. Hapus komisi terlebih dahulu.",
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
   }
 
   const membershipDiscountOverride = 'membershipDiscountTotal' in body;
@@ -551,6 +609,13 @@ const updateInvoice = async (id, body, userId) => {
 
   // Generate new SALE movements for the updated items
   await generateSaleMovement(id);
+
+  // Reset treatment session items to match updated invoice items
+  try {
+    await resetTreatmentSessionItems(id);
+  } catch (err) {
+    console.warn(`[invoice update] treatment session reset failed for ${id}: ${err.message}`);
+  }
 
   // Re-sync to Accurate
   await createSyncJob({ entityType: "INVOICE", entityId: id, direction: "APP_TO_ACCURATE" });
@@ -840,4 +905,69 @@ const getDailyAssignment = async ({ date, branchId }) => {
   return { data: invoices, truncated, date };
 };
 
-module.exports = { listInvoices, getInvoiceById, createInvoice, updateInvoice, applyDepositToInvoice, cancelInvoice, deleteInvoice, setupTreatmentSession, getDailyAssignment };
+// ── Generate Commission List ──────────────────────────────────────────
+// Returns PAID invoices with commission status for the Generate Komisi page.
+
+const getCommissionGenerateList = async ({ page, limit, branchId, startDate, endDate }) => {
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+
+  const where = { status: "PAID" };
+  if (branchId) where.branchId = branchId;
+
+  if (startDate || endDate) {
+    const WIB = 7 * 60 * 60 * 1000;
+    where.invoiceDate = {};
+    if (startDate) {
+      const d = new Date(`${startDate}T00:00:00.000Z`);
+      where.invoiceDate.gte = new Date(d.getTime() - WIB);
+    }
+    if (endDate) {
+      const d = new Date(`${endDate}T00:00:00.000Z`);
+      where.invoiceDate.lte = new Date(d.getTime() - WIB + 24 * 60 * 60 * 1000 - 1);
+    }
+  }
+
+  const [invoices, total] = await Promise.all([
+    findCommissionGenerateList({ skip, take, where }),
+    prisma.invoice.count({ where }),
+  ]);
+
+  return { data: invoices, meta: paginationMeta(total, pageNum, limitNum) };
+};
+
+// ── Skip Commission ───────────────────────────────────────────────────
+
+const resetCommissionSkip = async (invoiceId) => {
+  const invoice = await prisma.invoice.findUnique({
+    where:  { id: invoiceId },
+    select: { id: true, status: true, commissionSkipped: true },
+  });
+
+  if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (!invoice.commissionSkipped) throw new AppError("Invoice tidak dalam status skip komisi", StatusCodes.UNPROCESSABLE_ENTITY);
+
+  return prisma.invoice.update({
+    where: { id: invoiceId },
+    data:  { commissionSkipped: false },
+    select: { id: true, commissionSkipped: true },
+  });
+};
+
+const skipCommission = async (invoiceId) => {
+  const invoice = await prisma.invoice.findUnique({
+    where:  { id: invoiceId },
+    select: { id: true, status: true, commissionSkipped: true, _count: { select: { commissions: true } } },
+  });
+
+  if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (invoice.status !== "PAID") throw new AppError("Invoice harus berstatus PAID", StatusCodes.UNPROCESSABLE_ENTITY);
+  if (invoice._count.commissions > 0) throw new AppError("Invoice sudah memiliki komisi, tidak bisa di-skip", StatusCodes.UNPROCESSABLE_ENTITY);
+
+  return prisma.invoice.update({
+    where: { id: invoiceId },
+    data:  { commissionSkipped: true },
+    select: { id: true, commissionSkipped: true },
+  });
+};
+
+module.exports = { listInvoices, getInvoiceById, createInvoice, updateInvoice, applyDepositToInvoice, cancelInvoice, deleteInvoice, setupTreatmentSession, getDailyAssignment, getCommissionGenerateList, skipCommission, resetCommissionSkip };

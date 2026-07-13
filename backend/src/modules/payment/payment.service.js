@@ -66,6 +66,13 @@ const deletePayment = async (id, userId) => {
   const invoice = await findInvoiceForDelete(payment.invoiceId);
   if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
 
+  if (invoice._count.commissions > 0) {
+    throw new AppError(
+      "Pembayaran tidak dapat dihapus karena komisi invoice ini sudah digenerate. Hapus komisi terlebih dahulu.",
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
   if (payment.accurateReceiptId) {
     await deletePaymentFromAccurate(payment.accurateReceiptId);
   }

@@ -3,6 +3,10 @@ const prisma = require("../../config/prisma");
 const INCLUDE = {
   item: { select: { id: true, name: true, itemCode: true, itemType: true, defaultUnit: { select: { id: true, name: true } } } },
   unit: { select: { id: true, name: true } },
+  assignments: {
+    include: { employee: { select: { id: true, name: true, employeeCode: true } } },
+    orderBy: { createdAt: "asc" },
+  },
   _count: { select: { assignments: true } },
 };
 

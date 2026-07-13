@@ -275,7 +275,7 @@ export function InvoiceDetailPage() {
           <CardContent className="pb-4">
             <TreatmentAssignmentSection
               invoiceId={id!}
-              appointment={appointmentId ? (appointment ?? null) : null}
+              invoiceStatus={invoice.status}
               hasExistingCommission={hasExistingCommission}
             />
           </CardContent>
@@ -344,8 +344,12 @@ export function InvoiceDetailPage() {
               disabled={deletePaymentMutation.isPending}
               onClick={async () => {
                 if (!deletePaymentTarget) return;
-                await deletePaymentMutation.mutateAsync(deletePaymentTarget);
-                setDeletePaymentTarget(null);
+                try {
+                  await deletePaymentMutation.mutateAsync(deletePaymentTarget);
+                  setDeletePaymentTarget(null);
+                } catch {
+                  // error shown via onError toast — dialog stays open intentionally
+                }
               }}
             >
               {deletePaymentMutation.isPending ? "Menghapus…" : "Ya, Hapus"}
@@ -367,9 +371,13 @@ export function InvoiceDetailPage() {
               variant="destructive"
               disabled={deleteMutation.isPending}
               onClick={async () => {
-                await deleteMutation.mutateAsync();
-                setDeleteConfirm(false);
-                navigate("/invoices");
+                try {
+                  await deleteMutation.mutateAsync();
+                  setDeleteConfirm(false);
+                  navigate("/invoices");
+                } catch {
+                  // error shown via onError toast
+                }
               }}
             >
               {deleteMutation.isPending ? "Menghapus…" : "Ya, Hapus"}

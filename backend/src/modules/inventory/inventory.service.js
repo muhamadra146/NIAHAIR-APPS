@@ -357,6 +357,53 @@ const reverseInvoiceSaleMovements = async (invoiceNo) => {
   return { reversed };
 };
 
+// ── Reverse a single SERVICE_USAGE movement ───────────────────────────
+//
+// Called when a MaterialUsageItem is deleted or its qty is changed.
+// Creates a RETURN movement to restore the inventory, then unlinks
+// the inventoryMovementId from the MaterialUsageItem so it can be
+// re-generated with the new qty.
+
+const reverseServiceUsageMovement = async (movementId, materialUsageItemId) => {
+  const movement = await prisma.inventoryMovement.findUnique({
+    where:   { id: movementId },
+    include: { inventory: { select: { id: true, qtyOnHand: true, qtyReserved: true } } },
+  });
+  if (!movement) return;
+
+  const returnQty    = D(movement.qtyChange).abs();
+  const qtyBefore    = D(movement.inventory.qtyOnHand);
+  const qtyAfter     = qtyBefore.add(returnQty);
+  const newAvailable = computeAvailable(qtyAfter, movement.inventory.qtyReserved);
+
+  await prisma.$transaction([
+    prisma.inventoryMovement.create({
+      data: {
+        inventoryId:   movement.inventoryId,
+        movementType:  "RETURN",
+        sourceModule:  "SERVICE",
+        createdSource: "SYSTEM",
+        warehouseId:   movement.warehouseId,
+        qtyBefore,
+        qtyChange:     returnQty,
+        qtyAfter,
+        referenceType: "TREATMENT",
+        referenceId:   movement.referenceId,
+        referenceNo:   movement.referenceNo,
+        notes:         `Reversal service usage: ${movement.notes ?? ""}`,
+      },
+    }),
+    prisma.inventory.update({
+      where: { id: movement.inventoryId },
+      data:  { qtyOnHand: qtyAfter, qtyAvailable: newAvailable },
+    }),
+    prisma.materialUsageItem.update({
+      where: { id: materialUsageItemId },
+      data:  { inventoryMovementId: null },
+    }),
+  ]);
+};
+
 // ── Reservation helpers (future use) ──────────────────────────────────
 //
 // These functions prepare the backend for booking-driven reservations.
@@ -414,6 +461,7 @@ module.exports = {
   generateSaleMovement,
   reverseInvoiceSaleMovements,
   generateServiceMovement,
+  reverseServiceUsageMovement,
   reserveInventory,
   releaseReservation,
 };

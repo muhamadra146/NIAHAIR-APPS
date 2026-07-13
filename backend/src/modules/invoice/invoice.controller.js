@@ -9,6 +9,9 @@ const {
   deleteInvoice,
   setupTreatmentSession,
   getDailyAssignment,
+  getCommissionGenerateList,
+  skipCommission,
+  resetCommissionSkip,
 } = require("./invoice.service");
 const { generateCommission } = require("../commission/commission.service");
 
@@ -102,6 +105,33 @@ const dailyAssignmentController = async (req, res, next) => {
   }
 };
 
+const commissionGenerateListController = async (req, res, next) => {
+  try {
+    const result = await getCommissionGenerateList(req.query);
+    return success(res, result, "Commission generate list fetched");
+  } catch (err) {
+    next(err);
+  }
+};
+
+const skipCommissionController = async (req, res, next) => {
+  try {
+    const result = await skipCommission(req.params.id);
+    return success(res, result, "Invoice ditandai tidak ada komisi");
+  } catch (err) {
+    next(err);
+  }
+};
+
+const resetCommissionSkipController = async (req, res, next) => {
+  try {
+    const result = await resetCommissionSkip(req.params.id);
+    return success(res, result, "Status skip komisi berhasil direset");
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getAllController,
   getByIdController,
@@ -113,4 +143,7 @@ module.exports = {
   setupTreatmentController,
   generateCommissionController,
   dailyAssignmentController,
+  commissionGenerateListController,
+  skipCommissionController,
+  resetCommissionSkipController,
 };

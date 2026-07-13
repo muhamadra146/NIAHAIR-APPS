@@ -9,7 +9,12 @@ const findBySession = (sessionId) =>
     },
     include: {
       materialItem: {
-        select: { id: true, name: true, itemCode: true, itemType: true },
+        select: {
+          id: true, name: true, itemCode: true, itemType: true,
+          category:    { select: { id: true, name: true } },
+          defaultUnit: { select: { id: true, name: true } },
+          itemUnits:   { select: { unitId: true, conversionFactor: true } },
+        },
       },
       unit: { select: { id: true, name: true } },
       materialUsage: {
@@ -36,7 +41,13 @@ const findUsageItemById = (id) =>
   prisma.materialUsageItem.findUnique({
     where: { id },
     include: {
-      materialUsage: { select: { id: true, treatmentItemId: true } },
+      materialUsage: {
+        select: {
+          id:             true,
+          treatmentItemId: true,
+          treatmentItem:  { select: { treatmentSessionId: true } },
+        },
+      },
     },
   });
 

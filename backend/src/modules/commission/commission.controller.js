@@ -70,7 +70,7 @@ const overrideController = async (req, res, next) => {
 
 const deleteController = async (req, res, next) => {
   try {
-    const result = await deleteCommission(req.params.id);
+    const result = await deleteCommission(req.params.id, req.user.roleCode);
     return success(res, result, "Komisi dihapus");
   } catch (err) {
     next(err);

@@ -13,8 +13,10 @@ import type { CommissionListParams } from "./types";
 
 export function useCommissions(params: CommissionListParams = {}) {
   return useQuery({
-    queryKey: ["commissions", params],
-    queryFn:  () => fetchCommissions(params),
+    queryKey:       ["commissions", params],
+    queryFn:        () => fetchCommissions(params),
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 

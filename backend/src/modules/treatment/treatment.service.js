@@ -1,6 +1,7 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const prisma = require("../../config/prisma");
 const {
   findAll,
   count,
@@ -11,6 +12,7 @@ const {
   create,
   update,
 } = require("./treatment.repository");
+const { syncInvoiceToAccurate } = require("../invoice/invoice.sync.service");
 
 const getAll = async ({ page, limit, customerId, branchId, invoiceId, startDate, endDate }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -22,9 +24,16 @@ const getAll = async ({ page, limit, customerId, branchId, invoiceId, startDate,
   if (invoiceId)  where.invoiceId  = invoiceId;
 
   if (startDate || endDate) {
+    const WIB = 7 * 60 * 60 * 1000; // UTC+7
     where.startedAt = {};
-    if (startDate) where.startedAt.gte = new Date(startDate);
-    if (endDate)   where.startedAt.lte = new Date(endDate);
+    if (startDate) {
+      const dayStart = new Date(`${startDate}T00:00:00.000Z`);
+      where.startedAt.gte = new Date(dayStart.getTime() - WIB); // 00:00 WIB
+    }
+    if (endDate) {
+      const dayStart = new Date(`${endDate}T00:00:00.000Z`);
+      where.startedAt.lte = new Date(dayStart.getTime() - WIB + 24 * 60 * 60 * 1000 - 1); // 23:59:59.999 WIB
+    }
   }
 
   const [sessions, total] = await Promise.all([
@@ -75,11 +84,36 @@ const updateSession = async (id, body) => {
 
   const { completedAt, notes } = body;
 
+  // Blokir uncomplete jika invoice sudah di-sync ke Accurate (material sudah masuk Accurate)
+  const isBeingUncompleted = completedAt === null && session.completedAt && session.invoiceId;
+  if (isBeingUncompleted) {
+    const invoice = await prisma.invoice.findUnique({
+      where:  { id: session.invoiceId },
+      select: { accurateInvoiceId: true },
+    });
+    if (invoice?.accurateInvoiceId) {
+      throw new AppError(
+        "Treatment tidak dapat dibatalkan selesai karena invoice sudah tersinkronisasi ke Accurate. Data material sudah terkirim dan tidak dapat di-reverse otomatis.",
+        StatusCodes.UNPROCESSABLE_ENTITY
+      );
+    }
+  }
+
   const data = {};
   if (completedAt !== undefined) data.completedAt = completedAt ? new Date(completedAt) : null;
   if (notes       !== undefined) data.notes       = notes;
 
-  return update(id, data);
+  const updated = await update(id, data);
+
+  // Saat treatment selesai, re-sync invoice ke Accurate agar material usage ikut masuk
+  const isBeingCompleted = completedAt && !session.completedAt && session.invoiceId;
+  if (isBeingCompleted) {
+    syncInvoiceToAccurate(session.invoiceId).catch((err) => {
+      console.warn(`[treatment complete] Accurate re-sync failed for invoice ${session.invoiceId}: ${err.message}`);
+    });
+  }
+
+  return updated;
 };
 
 module.exports = { getAll, getById, createSession, updateSession };

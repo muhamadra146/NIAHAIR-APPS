@@ -51,8 +51,15 @@ const findServiceMaterials = (serviceItemId) =>
   prisma.serviceMaterial.findMany({
     where: { serviceItemId, isActive: true },
     include: {
-      materialItem: { select: { id: true, name: true, itemCode: true, itemType: true } },
-      unit:         { select: { id: true, name: true } },
+      materialItem: {
+        select: {
+          id: true, name: true, itemCode: true, itemType: true,
+          category:    { select: { id: true, name: true } },
+          defaultUnit: { select: { id: true, name: true } },
+          itemUnits:   { select: { unitId: true, conversionFactor: true } },
+        },
+      },
+      unit: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "asc" },
   });

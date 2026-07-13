@@ -56,6 +56,40 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
     }
   }
 
+  // Flatten material usage items across all treatment sessions — synced as Rp 0 lines
+  // so Accurate can reduce inventory without affecting the client-facing price.
+  // Items missing accurateItemId / accurateUnitId are skipped with a console.warn.
+  const materialEntries = [];
+  for (const session of invoice.treatmentSessions ?? []) {
+    for (const ti of session.treatmentItems) {
+      for (const mu of ti.materialUsages) {
+        for (const usageItem of mu.usageItems) {
+          if (!usageItem.materialItem?.accurateItemId) {
+            console.warn(`[invoice sync mapper] skipping material item ${usageItem.materialItem?.itemCode} — not synced to Accurate`);
+            continue;
+          }
+          if (!usageItem.unit?.accurateUnitId) {
+            console.warn(`[invoice sync mapper] skipping material item ${usageItem.materialItem?.itemCode} — unit not synced to Accurate`);
+            continue;
+          }
+          const entry = {
+            itemNo:       usageItem.materialItem.itemCode,
+            itemUnitName: usageItem.unit.name,
+            quantity:     Number(usageItem.qty),
+            unitPrice:    0,
+          };
+          if (warehouse?.accurateWarehouseId) {
+            entry.warehouseId = warehouse.accurateWarehouseId;
+          } else {
+            console.warn(`[invoice sync mapper] skipping material item ${usageItem.materialItem.itemCode} — no warehouse`);
+            continue;
+          }
+          materialEntries.push(entry);
+        }
+      }
+    }
+  }
+
   const addEntries = invoice.items.map((line) => {
     const entry = {
       itemNo:       line.item.itemCode,
@@ -96,7 +130,7 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
     return entry;
   });
 
-  const detailItem = [...deleteEntries, ...addEntries];
+  const detailItem = [...deleteEntries, ...addEntries, ...materialEntries];
 
   const payload = {
     ...(accurateId ? { id: accurateId } : {}),

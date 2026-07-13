@@ -196,6 +196,11 @@ const deletePendingByInvoice = (invoiceId, tx) => {
 const deleteOne = (id) =>
   prisma.commission.delete({ where: { id } });
 
+// ── Delete all commissions for an invoice (full reset) ────────────────
+
+const deleteAllByInvoice = (invoiceId) =>
+  prisma.commission.deleteMany({ where: { invoiceId } });
+
 // ── Override ──────────────────────────────────────────────────────────
 // Override selalu menang atas forfeit: override manual dari SUPER_ADMIN
 // membatalkan forfeit otomatis sistem.
@@ -216,6 +221,30 @@ const overrideOne = (id, { commissionAmount, overrideBy, overrideNotes }) =>
     include: INCLUDE,
   });
 
+// Cek apakah ada payroll APPROVED/PAID yang periode-nya mencakup approvedAt dari komisi-komisi ini.
+// Digunakan sebelum regenerate untuk memastikan tidak ada komisi yang sudah masuk payroll final.
+const findPayrollsContainingCommissions = (commissions, tx) => {
+  const client = tx ?? prisma;
+  const approved = commissions.filter((c) => c.approvedAt);
+  if (approved.length === 0) return [];
+
+  // Ambil semua kombinasi unik employeeId + approvedAt
+  const employeeIds = [...new Set(approved.map((c) => c.employeeId))];
+  const dates       = approved.map((c) => c.approvedAt);
+  const minDate     = new Date(Math.min(...dates.map((d) => new Date(d).getTime())));
+  const maxDate     = new Date(Math.max(...dates.map((d) => new Date(d).getTime())));
+
+  return client.payroll.findMany({
+    where: {
+      employeeId: { in: employeeIds },
+      status:     { in: ["APPROVED", "PAID"] },
+      periodStart: { lte: maxDate },
+      periodEnd:   { gte: minDate },
+    },
+    select: { id: true, employeeId: true, status: true, periodStart: true, periodEnd: true },
+  });
+};
+
 module.exports = {
   // management
   findAll,
@@ -232,6 +261,9 @@ module.exports = {
   bulkCreate,
   findAllByInvoice,
   deletePendingByInvoice,
+  findPayrollsContainingCommissions,
   // override
   overrideOne,
+  // full reset
+  deleteAllByInvoice,
 };

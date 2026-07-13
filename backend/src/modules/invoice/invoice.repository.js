@@ -53,6 +53,24 @@ const DAILY_INCLUDE = {
   _count: { select: { commissions: true } },
 };
 
+const findCommissionGenerateList = ({ skip, take, where }) =>
+  prisma.invoice.findMany({
+    skip,
+    take,
+    where,
+    select: {
+      id:                true,
+      invoiceNo:         true,
+      invoiceDate:       true,
+      grandTotal:        true,
+      commissionSkipped: true,
+      customer: { select: { id: true, name: true, customerNo: true } },
+      branch:   { select: { id: true, name: true } },
+      _count:   { select: { commissions: true } },
+    },
+    orderBy: { invoiceDate: "desc" },
+  });
+
 const findDailyAssignment = ({ start, end, branchId }) => {
   const where = { invoiceDate: { gte: start, lte: end } };
   if (branchId) where.branchId = branchId;
@@ -370,4 +388,5 @@ module.exports = {
   updateWithTransaction,
   cancelWithTransaction,
   findDailyAssignment,
+  findCommissionGenerateList,
 };
