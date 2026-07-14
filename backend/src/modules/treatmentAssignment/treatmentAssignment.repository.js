@@ -52,6 +52,19 @@ const sumWorkQtyByItem = async (treatmentItemId, excludeId = null) => {
   return Number(result._sum.workQty ?? 0);
 };
 
+// Sum of workQty per slotKey — digunakan untuk validasi per-role (stylist/asisten independen).
+const sumWorkQtyBySlot = async (treatmentItemId, slotKey, excludeId = null) => {
+  const where = { treatmentItemId, slotKey };
+  if (excludeId) where.id = { not: excludeId };
+
+  const result = await prisma.treatmentAssignment.aggregate({
+    where,
+    _sum: { workQty: true },
+  });
+
+  return Number(result._sum.workQty ?? 0);
+};
+
 // ── Lookups for validation ────────────────────────────────────────────
 
 const findTreatmentItemById = (id) =>
@@ -88,6 +101,7 @@ module.exports = {
   update,
   deleteById,
   sumWorkQtyByItem,
+  sumWorkQtyBySlot,
   findTreatmentItemById,
   findEmployeeById,
   countByItem,

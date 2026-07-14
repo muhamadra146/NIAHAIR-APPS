@@ -68,27 +68,32 @@ const findInvoiceForGeneration = (invoiceId, tx) => {
   return client.invoice.findUnique({
     where: { id: invoiceId },
     select: {
-      id:          true,
-      status:      true,
-      invoiceDate: true,   // dipakai untuk rule lookup (effectiveDate) dan cek forfeiture
+      id:           true,
+      status:       true,
+      invoiceDate:  true,
+      inclusiveTax: true,
       items: {
         select: {
           id:       true,
           itemId:   true,
           qty:      true,
           price:    true,
-          subtotal: true,  // after discount, before PPN — ini base komisi
+          discount: true,
+          subtotal: true,
+          taxRate:  true,
         },
       },
       treatmentSessions: {
         select: {
           id:          true,
-          completedAt: true, // dibandingkan dengan invoiceDate (WIB) untuk aturan hangus
+          completedAt: true,
           treatmentItems: {
             select: {
-              id:            true,
-              itemId:        true,
-              priceSnapshot: true,
+              id:                 true,
+              itemId:             true,
+              priceSnapshot:      true,
+              qty:                true,
+              conversionSnapshot: true,
               item: {
                 select: {
                   id:                   true,

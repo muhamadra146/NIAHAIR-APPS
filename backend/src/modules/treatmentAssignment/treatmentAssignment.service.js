@@ -7,6 +7,7 @@ const {
   update,
   deleteById,
   sumWorkQtyByItem,
+  sumWorkQtyBySlot,
   findTreatmentItemById,
   findEmployeeById,
   countByItem,
@@ -73,13 +74,15 @@ const createAssignment = async (treatmentItemId, body) => {
     throw new AppError("workQty wajib diisi untuk item inventory", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
-  const maxWork    = calcMaxWork(treatmentItem);
-  const usedQty    = await sumWorkQtyByItem(treatmentItemId);
-  const remaining  = maxWork - Number(usedQty);
+  const maxWork = calcMaxWork(treatmentItem);
+
+  // Validasi per slotKey — setiap role (stylist/asisten) punya kuota mandiri sebesar maxWork
+  const usedBySlot = slotKey ? await sumWorkQtyBySlot(treatmentItemId, slotKey) : 0;
+  const remaining  = maxWork - usedBySlot;
 
   if (workQty > remaining) {
     throw new AppError(
-      `Work qty melebihi sisa. Sisa: ${remaining}, diminta: ${workQty}`,
+      `Work qty melebihi sisa untuk slot ini. Sisa: ${remaining}, diminta: ${workQty}`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
@@ -100,11 +103,17 @@ const updateAssignment = async (id, body) => {
   const { slotKey, workQty, notes } = body;
 
   if (workQty !== undefined) {
-    const treatmentItem = assignment.treatmentItem;
-    const maxWork       = calcMaxWork(treatmentItem);
-    if (workQty > maxWork) {
+    const treatmentItem  = assignment.treatmentItem;
+    const maxWork        = calcMaxWork(treatmentItem);
+    const effectiveSlot  = slotKey ?? assignment.slotKey;
+    const usedBySlot     = effectiveSlot
+      ? await sumWorkQtyBySlot(assignment.treatmentItemId, effectiveSlot, id)
+      : 0;
+    const remaining      = maxWork - usedBySlot;
+
+    if (workQty > remaining) {
       throw new AppError(
-        `Work qty exceeds item max. Max per assignment: ${maxWork}, requested: ${workQty}`,
+        `Work qty melebihi sisa untuk slot ini. Sisa: ${remaining}, diminta: ${workQty}`,
         StatusCodes.UNPROCESSABLE_ENTITY
       );
     }

@@ -131,17 +131,21 @@ export function useUpdateEmployeeBranches(id: string) {
 
 export function useSalarySettings(employeeId: string) {
   return useQuery({
-    queryKey: ["salary-settings", employeeId],
-    queryFn:  () => fetchSalarySettings(employeeId),
-    enabled:  !!employeeId,
+    queryKey:       ["salary-settings", employeeId],
+    queryFn:        () => fetchSalarySettings(employeeId),
+    enabled:        !!employeeId,
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
 export function useActiveSalarySetting(employeeId: string) {
   return useQuery({
-    queryKey: ["salary-settings", employeeId, "active"],
-    queryFn:  () => fetchActiveSalarySetting(employeeId),
-    enabled:  !!employeeId,
+    queryKey:       ["salary-settings", employeeId, "active"],
+    queryFn:        () => fetchActiveSalarySetting(employeeId),
+    enabled:        !!employeeId,
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 

@@ -614,6 +614,7 @@ function ItemAssignmentCard({
   const [workQty,     setWorkQty]     = useState("");
   const [saving,      setSaving]      = useState(false);
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
+  const [showForm,    setShowForm]    = useState(false);
 
   async function handleAdd() {
     if (!employeeId || !slotKey) return;
@@ -626,6 +627,7 @@ function ItemAssignmentCard({
         workQty: isService ? Number(item.qty) : Number(workQty),
       });
       setEmployeeId(""); setSlotKey(""); setWorkQty("");
+      setShowForm(false);
       onChanged();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Gagal menambah penugasan");
@@ -684,27 +686,35 @@ function ItemAssignmentCard({
                   {Number(a.workQty).toLocaleString("id-ID")} {item.item?.defaultUnit?.name ?? item.unit?.name ?? ""}
                 </span>
               )}
-              {!isCompleted && (
-                <button
-                  type="button"
-                  onClick={() => handleDelete(a.id)}
-                  disabled={deletingId === a.id}
-                  className="text-muted-foreground hover:text-destructive transition-colors"
-                >
-                  {deletingId === a.id
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <Trash2 className="h-3.5 w-3.5" />
-                  }
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => handleDelete(a.id)}
+                disabled={deletingId === a.id}
+                className="text-muted-foreground hover:text-destructive transition-colors"
+              >
+                {deletingId === a.id
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Trash2 className="h-3.5 w-3.5" />
+                }
+              </button>
             </div>
           </div>
         ))}
 
-        {/* Add form */}
-        {!isCompleted && !isFull && (
-          <div className="py-3">
-            <div className="flex flex-wrap gap-2 items-end">
+        {/* Add form toggle */}
+        <div className="py-2">
+          {!showForm ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs gap-1"
+              onClick={() => setShowForm(true)}
+            >
+              <Plus className="h-3 w-3" />
+              Tambah Staff
+            </Button>
+          ) : (
+            <div className="flex flex-wrap gap-2 items-end pt-1">
               {/* Staff */}
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Staff</label>
@@ -777,9 +787,17 @@ function ItemAssignmentCard({
               >
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
               </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-xs"
+                onClick={() => { setShowForm(false); setEmployeeId(""); setSlotKey(""); setWorkQty(""); }}
+              >
+                Batal
+              </Button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

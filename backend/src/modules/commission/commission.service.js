@@ -102,6 +102,68 @@ const markCommissionPaid = async (id, userId) => {
   return markPaidOne(id, userId);
 };
 
+// ── Commission base resolver ──────────────────────────────────────────
+//
+// 4 opsi dasar komisi:
+//   BEFORE_DISCOUNT_BEFORE_TAX : harga sebelum diskon & sebelum pajak  = price×qty ÷ (1 + taxRate%)
+//   AFTER_DISCOUNT_BEFORE_TAX  : harga sesudah diskon & sebelum pajak  = subtotal
+//   BEFORE_DISCOUNT_AFTER_TAX  : harga sebelum diskon & sesudah pajak  = price×qty
+//   AFTER_DISCOUNT_AFTER_TAX   : harga sesudah diskon & sesudah pajak  = price×qty - discount
+//
+// Backward compat: nilai lama BEFORE_DISCOUNT → BEFORE_DISCOUNT_AFTER_TAX
+//                               AFTER_DISCOUNT → AFTER_DISCOUNT_BEFORE_TAX
+
+// resolveBaseAmount — hitung dasar komisi berdasarkan opsi dan tipe PPN invoice.
+//
+// inclusiveTax = true  (PPN Pengurangan): price sudah include PPN.
+//   → "sebelum pajak" = price ÷ (1 + taxRate%)   [strip pajak dari harga]
+//   → "sesudah pajak" = price                      [harga apa adanya]
+//   → subtotal field  = DPP (sesudah diskon, sebelum pajak)
+//
+// inclusiveTax = false (PPN Penambahan): price belum include PPN.
+//   → "sebelum pajak" = price                      [harga apa adanya = DPP]
+//   → "sesudah pajak" = price × (1 + taxRate%)     [tambah pajak ke harga]
+//   → subtotal field  = price×qty - discount        [sebelum pajak juga]
+
+function resolveBaseAmount(invoiceItem, commissionBase, inclusiveTax) {
+  const price     = D(invoiceItem.price);
+  const qty       = D(invoiceItem.qty);
+  const discount  = D(invoiceItem.discount ?? 0);
+  const subtotal  = D(invoiceItem.subtotal);
+  const taxRate   = D(invoiceItem.taxRate  ?? 0);
+  const taxFactor = D(1).add(taxRate.div(D(100)));  // mis. 1.11 untuk PPN 11%
+
+  // gross = price × qty (termasuk/tidaknya pajak tergantung inclusiveTax)
+  const gross            = price.mul(qty);
+  const grossAfterDisc   = gross.sub(discount);
+
+  switch (commissionBase) {
+    case "BEFORE_DISCOUNT_BEFORE_TAX":
+      // DPP sebelum diskon
+      if (!inclusiveTax) return gross;                                    // price = DPP
+      return taxRate.gt(D(0)) ? gross.div(taxFactor).toDecimalPlaces(2) : gross;
+
+    case "AFTER_DISCOUNT_BEFORE_TAX":
+      // DPP sesudah diskon — subtotal selalu menyimpan nilai ini di kedua mode
+      return subtotal;
+
+    case "BEFORE_DISCOUNT_AFTER_TAX":
+    case "BEFORE_DISCOUNT":           // backward compat
+      // Harga sesudah pajak, sebelum diskon
+      if (inclusiveTax) return gross;                                     // price sudah include pajak
+      return taxRate.gt(D(0)) ? gross.mul(taxFactor).toDecimalPlaces(2) : gross;
+
+    case "AFTER_DISCOUNT_AFTER_TAX":
+      // Harga sesudah pajak, sesudah diskon
+      if (inclusiveTax) return grossAfterDisc;                           // price sudah include pajak
+      return taxRate.gt(D(0)) ? grossAfterDisc.mul(taxFactor).toDecimalPlaces(2) : grossAfterDisc;
+
+    case "AFTER_DISCOUNT":            // backward compat
+    default:
+      return subtotal;
+  }
+}
+
 // ── Generator (internal) ──────────────────────────────────────────────
 //
 // Rounding strategy:
@@ -137,6 +199,11 @@ async function _buildRows(invoice, tx) {
       const totalWork = sumWorkQty(treatmentItem.assignments);
       if (totalWork.isZero()) continue;
 
+      // maxWork = kapasitas item (qty × conversionSnapshot).
+      // Dipakai sebagai denominator groupShare agar tiap slot (Stylist/Asisten)
+      // mendapat komisi independen, tidak terdilusi oleh slot lain.
+      const maxWork = D(treatmentItem.qty ?? 1).mul(D(treatmentItem.conversionSnapshot ?? 1));
+
       const invoiceItem =
         invoice.items.find((ii) => ii.itemId === treatmentItem.itemId) ?? null;
 
@@ -160,7 +227,7 @@ async function _buildRows(invoice, tx) {
       // yang sama berbagi pool — menjamin sum yang benar setelah rounding.
       const groups = new Map();
       for (const { assignment, rule } of resolved) {
-        const key = `${rule.commissionType}|${String(rule.commissionValue)}|${rule.commissionBase ?? "AFTER_DISCOUNT"}`;
+        const key = `${rule.commissionType}|${String(rule.commissionValue)}|${rule.commissionBase ?? "AFTER_DISCOUNT_BEFORE_TAX"}`;
         if (!groups.has(key)) groups.set(key, { rule, assignments: [] });
         groups.get(key).assignments.push(assignment);
       }
@@ -169,17 +236,16 @@ async function _buildRows(invoice, tx) {
       for (const { rule, assignments: ga } of groups.values()) {
         let baseAmount;
         if (invoiceItem) {
-          baseAmount =
-            rule.commissionBase === "BEFORE_DISCOUNT"
-              ? D(invoiceItem.price).mul(D(invoiceItem.qty))
-              : D(invoiceItem.subtotal);
+          baseAmount = resolveBaseAmount(invoiceItem, rule.commissionBase, invoice.inclusiveTax ?? false);
         } else {
           baseAmount = D(treatmentItem.priceSnapshot);
         }
 
-        // Pool = baseAmount × (groupWork/totalWork) × rate
+        // Pool = baseAmount × (groupWork/maxWork) × rate
+        // Denominator pakai maxWork (kapasitas item) bukan totalWork (semua slot),
+        // agar Stylist dan Asisten mendapat komisi independen satu sama lain.
         const groupWork  = sumWorkQty(ga);
-        const groupShare = groupWork.div(totalWork);
+        const groupShare = maxWork.isZero() ? D(0) : groupWork.div(maxWork);
 
         const pool =
           rule.commissionType === "PERCENTAGE"
@@ -191,8 +257,8 @@ async function _buildRows(invoice, tx) {
         for (let i = 0; i < ga.length; i++) {
           const assignment     = ga[i];
           const commissionAmount = amounts[i];
-          // workRatio = referensi auditing (terhadap totalWork keseluruhan)
-          const workRatio = D(assignment.workQty).div(totalWork);
+          // workRatio = referensi auditing (terhadap maxWork kapasitas item)
+          const workRatio = maxWork.isZero() ? D(0) : D(assignment.workQty).div(maxWork);
 
           rows.push({
             invoiceId:             invoice.id,

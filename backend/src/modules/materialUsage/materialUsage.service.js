@@ -11,6 +11,7 @@ const {
   findSessionById,
 } = require("./materialUsage.repository");
 const { generateServiceMovement, reverseServiceUsageMovement } = require("../inventory/inventory.service");
+const { syncInvoiceToAccurate } = require("../invoice/invoice.sync.service");
 
 const getBySession = async (sessionId) => {
   const session = await findSessionById(sessionId);
@@ -44,7 +45,11 @@ const bulkSave = async (sessionId, rows) => {
     const usage = await findOrCreateUsage(row.treatmentItemId);
 
     if (row.id) {
-      // Update existing item qty
+      // Reverse existing movement first so generateServiceMovement can recreate with new qty
+      const existing = await findUsageItemById(row.id);
+      if (existing?.inventoryMovementId) {
+        await reverseServiceUsageMovement(existing.inventoryMovementId, row.id);
+      }
       const updated = await updateUsageItemQty(row.id, row.qty);
       results.push(updated);
     } else {
@@ -66,6 +71,13 @@ const bulkSave = async (sessionId, rows) => {
     console.warn(`[materialUsage bulkSave] generateServiceMovement failed for session ${sessionId}: ${err.message}`);
   }
 
+  // Re-sync to Accurate if treatment session is already completed
+  if (session.completedAt && session.invoiceId) {
+    syncInvoiceToAccurate(session.invoiceId).catch((err) => {
+      console.warn(`[materialUsage bulkSave] Accurate re-sync failed for invoice ${session.invoiceId}: ${err.message}`);
+    });
+  }
+
   return results;
 };
 
@@ -79,6 +91,17 @@ const removeUsageItem = async (id) => {
   }
 
   await deleteUsageItem(id);
+
+  // Re-sync to Accurate if session is completed
+  const sessionId = item.materialUsage?.treatmentItem?.treatmentSessionId;
+  if (sessionId) {
+    const session = await findSessionById(sessionId);
+    if (session?.completedAt && session?.invoiceId) {
+      syncInvoiceToAccurate(session.invoiceId).catch((err) => {
+        console.warn(`[materialUsage removeUsageItem] Accurate re-sync failed for invoice ${session.invoiceId}: ${err.message}`);
+      });
+    }
+  }
 };
 
 const editUsageItemQty = async (id, qty) => {
@@ -99,6 +122,14 @@ const editUsageItemQty = async (id, qty) => {
       await generateServiceMovement(sessionId);
     } catch (err) {
       console.warn(`[materialUsage editQty] generateServiceMovement failed: ${err.message}`);
+    }
+
+    // Re-sync to Accurate if session is already completed
+    const session = await findSessionById(sessionId);
+    if (session?.completedAt && session?.invoiceId) {
+      syncInvoiceToAccurate(session.invoiceId).catch((err) => {
+        console.warn(`[materialUsage editQty] Accurate re-sync failed for invoice ${session.invoiceId}: ${err.message}`);
+      });
     }
   }
 

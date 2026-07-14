@@ -7,22 +7,28 @@ import type { InventoryListParams, MovementListParams, TransferListParams, Creat
 
 export function useInventories(params: InventoryListParams = {}) {
   return useQuery({
-    queryKey: ["inventories", params],
-    queryFn:  () => fetchInventories(params),
+    queryKey:       ["inventories", params],
+    queryFn:        () => fetchInventories(params),
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
 export function useStockMovements(params: MovementListParams = {}) {
   return useQuery({
-    queryKey: ["stock-movements", params],
-    queryFn:  () => fetchStockMovements(params),
+    queryKey:       ["stock-movements", params],
+    queryFn:        () => fetchStockMovements(params),
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
 export function useStockTransfers(params: TransferListParams = {}) {
   return useQuery({
-    queryKey: ["stock-transfers", params],
-    queryFn:  () => fetchStockTransfers(params),
+    queryKey:       ["stock-transfers", params],
+    queryFn:        () => fetchStockTransfers(params),
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 

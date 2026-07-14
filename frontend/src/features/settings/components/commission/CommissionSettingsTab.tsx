@@ -296,7 +296,7 @@ interface RuleFormState {
 const EMPTY_RULE: RuleFormState = {
   employeeId: "", commissionCategoryId: "", slotKey: "",
   commissionType: "PERCENTAGE", commissionValue: "",
-  commissionBase: "AFTER_DISCOUNT",
+  commissionBase: "AFTER_DISCOUNT_BEFORE_TAX",
   effectiveDate: new Date().toISOString().split("T")[0],
   endDate: "", isActive: true,
 };
@@ -405,8 +405,98 @@ function CommissionRuleSection() {
     parseFloat(form.commissionValue) > 0 &&
     (form.commissionType !== "PERCENTAGE" || parseFloat(form.commissionValue) <= 100);
 
+  // ── shared form fields (reused in add inline & edit dialog) ──────────
+  const formFields = (isEdit: boolean) => (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-slate-600">Karyawan</Label>
+        <select value={form.employeeId} onChange={(e) => setForm((f) => ({ ...f, employeeId: e.target.value }))} disabled={isEdit} className={selectCls}>
+          <option value="">Pilih karyawan…</option>
+          {employees.map((e) => (
+            <option key={e.id} value={e.id}>{e.name}{e.employeeCode ? ` (${e.employeeCode})` : ""}</option>
+          ))}
+        </select>
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-slate-600">Kategori Komisi</Label>
+        <select value={form.commissionCategoryId} onChange={(e) => setForm((f) => ({ ...f, commissionCategoryId: e.target.value }))} disabled={isEdit} className={selectCls}>
+          <option value="">Pilih kategori…</option>
+          {categories.filter((c) => c.isActive).map((c) => (
+            <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+          ))}
+        </select>
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-slate-600">Role <span className="text-slate-400 font-normal">(opsional)</span></Label>
+        <select value={form.slotKey} onChange={(e) => setForm((f) => ({ ...f, slotKey: e.target.value }))} disabled={isEdit} className={selectCls}>
+          {SLOT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-slate-600">Tipe Komisi</Label>
+        <select value={form.commissionType} onChange={(e) => setForm((f) => ({ ...f, commissionType: e.target.value as CommissionType }))} className={selectCls}>
+          <option value="PERCENTAGE">Persentase (%)</option>
+          <option value="FIXED">Nominal (Rp)</option>
+        </select>
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-slate-600">Nilai {form.commissionType === "PERCENTAGE" ? "(%)" : "(Rp)"}</Label>
+        <Input
+          type="number" min={0.01} step={0.01}
+          max={form.commissionType === "PERCENTAGE" ? 100 : undefined}
+          className="h-9 text-sm"
+          placeholder={form.commissionType === "PERCENTAGE" ? "10" : "50000"}
+          value={form.commissionValue}
+          onChange={(e) => setForm((f) => ({ ...f, commissionValue: e.target.value }))}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-slate-600">Dasar Perhitungan</Label>
+        <select value={form.commissionBase} onChange={(e) => setForm((f) => ({ ...f, commissionBase: e.target.value as CommissionBase }))} className={selectCls}>
+          <option value="AFTER_DISCOUNT_BEFORE_TAX">Sesudah Diskon, Sebelum Pajak</option>
+          <option value="BEFORE_DISCOUNT_BEFORE_TAX">Sebelum Diskon, Sebelum Pajak</option>
+          <option value="AFTER_DISCOUNT_AFTER_TAX">Sesudah Diskon, Sesudah Pajak</option>
+          <option value="BEFORE_DISCOUNT_AFTER_TAX">Sebelum Diskon, Sesudah Pajak</option>
+        </select>
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-slate-600">Berlaku Mulai</Label>
+        <Input type="date" className="h-9 text-sm" value={form.effectiveDate} onChange={(e) => setForm((f) => ({ ...f, effectiveDate: e.target.value }))} />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-slate-600">Berlaku Sampai <span className="text-slate-400 font-normal">(opsional)</span></Label>
+        <Input type="date" className="h-9 text-sm" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} />
+      </div>
+      {isEdit && (
+        <div className="flex items-center gap-2 sm:col-span-2">
+          <input type="checkbox" id="rule-active" checked={form.isActive} onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))} className="h-4 w-4 rounded accent-primary" />
+          <Label htmlFor="rule-active" className="text-sm cursor-pointer">Aktif</Label>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
+      {/* ── Edit Dialog ──────────────────────────────────────────────── */}
+      <Dialog open={!!editId} onOpenChange={(open) => { if (!open) cancel(); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Rule Komisi</DialogTitle>
+            <DialogDescription>Ubah pengaturan komisi untuk karyawan ini.</DialogDescription>
+          </DialogHeader>
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          {formFields(true)}
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="ghost" size="sm" onClick={cancel}>Batal</Button>
+            <Button size="sm" disabled={!isFormValid || updateMut.isPending} onClick={() => updateMut.mutate(editId!)}>
+              {updateMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
+              Simpan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-5 py-4">
@@ -417,88 +507,22 @@ function CommissionRuleSection() {
               <p className="text-xs text-slate-400">{rules.length} rule terdaftar</p>
             </div>
           </div>
-          {!adding && !editId && (
-            <Button size="sm" onClick={() => { setAdding(true); setEditId(null); setError(null); }}>
+          {!adding && (
+            <Button size="sm" onClick={() => { setAdding(true); setError(null); }}>
               <Plus className="h-3.5 w-3.5 mr-1.5" /> Tambah Rule
             </Button>
           )}
         </div>
 
-        {/* Add / Edit form */}
-        {(adding || editId) && (
+        {/* Add form — inline */}
+        {adding && (
           <div className="border-b border-slate-100 bg-slate-50/40 px-5 py-4 space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              {editId ? "Edit Rule" : "Tambah Rule Baru"}
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tambah Rule Baru</p>
             {error && <p className="text-xs text-destructive">{error}</p>}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">Karyawan</Label>
-                <select value={form.employeeId} onChange={(e) => setForm((f) => ({ ...f, employeeId: e.target.value }))} disabled={!!editId} className={selectCls}>
-                  <option value="">Pilih karyawan…</option>
-                  {employees.map((e) => (
-                    <option key={e.id} value={e.id}>{e.name}{e.employeeCode ? ` (${e.employeeCode})` : ""}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">Kategori Komisi</Label>
-                <select value={form.commissionCategoryId} onChange={(e) => setForm((f) => ({ ...f, commissionCategoryId: e.target.value }))} disabled={!!editId} className={selectCls}>
-                  <option value="">Pilih kategori…</option>
-                  {categories.filter((c) => c.isActive).map((c) => (
-                    <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">Role <span className="text-slate-400 font-normal">(opsional)</span></Label>
-                <select value={form.slotKey} onChange={(e) => setForm((f) => ({ ...f, slotKey: e.target.value }))} disabled={!!editId} className={selectCls}>
-                  {SLOT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">Tipe Komisi</Label>
-                <select value={form.commissionType} onChange={(e) => setForm((f) => ({ ...f, commissionType: e.target.value as CommissionType }))} className={selectCls}>
-                  <option value="PERCENTAGE">Persentase (%)</option>
-                  <option value="FIXED">Nominal (Rp)</option>
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">Nilai {form.commissionType === "PERCENTAGE" ? "(%)" : "(Rp)"}</Label>
-                <Input
-                  type="number" min={0.01} step={0.01}
-                  max={form.commissionType === "PERCENTAGE" ? 100 : undefined}
-                  className="h-9 text-sm"
-                  placeholder={form.commissionType === "PERCENTAGE" ? "10" : "50000"}
-                  value={form.commissionValue}
-                  onChange={(e) => setForm((f) => ({ ...f, commissionValue: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">Dasar Perhitungan</Label>
-                <select value={form.commissionBase} onChange={(e) => setForm((f) => ({ ...f, commissionBase: e.target.value as CommissionBase }))} className={selectCls}>
-                  <option value="AFTER_DISCOUNT">Setelah Diskon</option>
-                  <option value="BEFORE_DISCOUNT">Sebelum Diskon</option>
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">Berlaku Mulai</Label>
-                <Input type="date" className="h-9 text-sm" value={form.effectiveDate} onChange={(e) => setForm((f) => ({ ...f, effectiveDate: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">Berlaku Sampai <span className="text-slate-400 font-normal">(opsional)</span></Label>
-                <Input type="date" className="h-9 text-sm" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} />
-              </div>
-              {editId && (
-                <div className="flex items-center gap-2 sm:col-span-2">
-                  <input type="checkbox" id="rule-active" checked={form.isActive} onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))} className="h-4 w-4 rounded accent-primary" />
-                  <Label htmlFor="rule-active" className="text-sm cursor-pointer">Aktif</Label>
-                </div>
-              )}
-            </div>
+            {formFields(false)}
             <div className="flex gap-2">
-              <Button size="sm" disabled={!isFormValid || createMut.isPending || updateMut.isPending} onClick={() => editId ? updateMut.mutate(editId) : createMut.mutate()}>
-                {(createMut.isPending || updateMut.isPending) ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
+              <Button size="sm" disabled={!isFormValid || createMut.isPending} onClick={() => createMut.mutate()}>
+                {createMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
                 Simpan
               </Button>
               <Button size="sm" variant="ghost" onClick={cancel}>
@@ -559,7 +583,14 @@ function CommissionRuleSection() {
                           : formatCurrency(rule.commissionValue)}
                       </p>
                       <p className="text-[10px] text-slate-400">
-                        {rule.commissionBase === "AFTER_DISCOUNT" ? "Stlh diskon" : "Sblm diskon"}
+                        {({
+                          AFTER_DISCOUNT_BEFORE_TAX:  "Stlh diskon, sblm pajak",
+                          BEFORE_DISCOUNT_BEFORE_TAX: "Sblm diskon, sblm pajak",
+                          AFTER_DISCOUNT_AFTER_TAX:   "Stlh diskon, stlh pajak",
+                          BEFORE_DISCOUNT_AFTER_TAX:  "Sblm diskon, stlh pajak",
+                          AFTER_DISCOUNT:             "Stlh diskon, sblm pajak",
+                          BEFORE_DISCOUNT:            "Sblm diskon, stlh pajak",
+                        } as Record<string, string>)[rule.commissionBase] ?? rule.commissionBase}
                       </p>
                     </td>
                     <td className="px-4 py-3">

@@ -45,16 +45,20 @@ import type { DepositPaymentListParams, InvoicePaymentListParams } from "./api";
 
 export function useInvoices(params: InvoiceListParams = {}) {
   return useQuery({
-    queryKey: ["invoices", params],
-    queryFn:  () => fetchInvoices(params),
+    queryKey:       ["invoices", params],
+    queryFn:        () => fetchInvoices(params),
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
 export function useInvoice(id: string) {
   return useQuery({
-    queryKey: ["invoices", id],
-    queryFn:  () => fetchInvoice(id),
-    enabled:  !!id,
+    queryKey:       ["invoices", id],
+    queryFn:        () => fetchInvoice(id),
+    enabled:        !!id,
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
@@ -161,24 +165,30 @@ export function useApplyDeposit(invoiceId: string) {
 
 export function useDeposits(params: DepositListParams = {}) {
   return useQuery({
-    queryKey: ["deposits", params],
-    queryFn:  () => fetchDeposits(params),
+    queryKey:       ["deposits", params],
+    queryFn:        () => fetchDeposits(params),
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
 export function useDeposit(id: string) {
   return useQuery({
-    queryKey: ["deposits", id],
-    queryFn:  () => fetchDeposit(id),
-    enabled:  !!id,
+    queryKey:       ["deposits", id],
+    queryFn:        () => fetchDeposit(id),
+    enabled:        !!id,
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
 export function useCustomerAvailableDeposits(customerId: string) {
   return useQuery({
-    queryKey: ["deposits", "available", customerId],
-    queryFn:  () => fetchCustomerAvailableDeposits(customerId),
-    enabled:  !!customerId,
+    queryKey:       ["deposits", "available", customerId],
+    queryFn:        () => fetchCustomerAvailableDeposits(customerId),
+    enabled:        !!customerId,
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
@@ -260,9 +270,11 @@ export function useCancelDeposit(id: string) {
 
 export function useDepositPayments(depositId: string) {
   return useQuery({
-    queryKey: ["deposit-payments", depositId],
-    queryFn:  () => fetchDepositPayments(depositId),
-    enabled:  !!depositId,
+    queryKey:       ["deposit-payments", depositId],
+    queryFn:        () => fetchDepositPayments(depositId),
+    enabled:        !!depositId,
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
@@ -281,15 +293,19 @@ export function useDeleteDepositPayment() {
 
 export function useAllDepositPayments(params: DepositPaymentListParams = {}) {
   return useQuery({
-    queryKey: ["deposit-payments", "all", params],
-    queryFn:  () => fetchAllDepositPayments(params),
+    queryKey:       ["deposit-payments", "all", params],
+    queryFn:        () => fetchAllDepositPayments(params),
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
 export function useDepositSummary(params: { branchId?: string } = {}) {
   return useQuery({
-    queryKey: ["deposits", "summary", params],
-    queryFn:  () => fetchDepositSummary(params),
+    queryKey:       ["deposits", "summary", params],
+    queryFn:        () => fetchDepositSummary(params),
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
@@ -297,8 +313,10 @@ export function useDepositPaymentSummary(
   params: { startDate?: string; endDate?: string; paymentMethodId?: string; branchId?: string } = {},
 ) {
   return useQuery({
-    queryKey: ["deposit-payments", "summary", params],
-    queryFn:  () => fetchDepositPaymentSummary(params),
+    queryKey:       ["deposit-payments", "summary", params],
+    queryFn:        () => fetchDepositPaymentSummary(params),
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 

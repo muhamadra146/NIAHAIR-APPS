@@ -35,16 +35,20 @@ import type {
 
 export function useTreatments(params: TreatmentListParams = {}) {
   return useQuery({
-    queryKey: ["treatments", params],
-    queryFn:  () => fetchTreatments(params),
+    queryKey:       ["treatments", params],
+    queryFn:        () => fetchTreatments(params),
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
 export function useTreatment(id: string) {
   return useQuery({
-    queryKey: ["treatments", id],
-    queryFn:  () => fetchTreatment(id),
-    enabled:  !!id,
+    queryKey:       ["treatments", id],
+    queryFn:        () => fetchTreatment(id),
+    enabled:        !!id,
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
@@ -214,9 +218,11 @@ export function useServiceMaterials(serviceItemId: string) {
 
 export function useMaterialUsages(sessionId: string) {
   return useQuery({
-    queryKey: ["material-usages", sessionId],
-    queryFn:  () => fetchMaterialUsages(sessionId),
-    enabled:  !!sessionId,
+    queryKey:       ["material-usages", sessionId],
+    queryFn:        () => fetchMaterialUsages(sessionId),
+    enabled:        !!sessionId,
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 

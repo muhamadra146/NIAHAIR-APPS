@@ -82,6 +82,7 @@ const createCommissionRule = async (body) => {
     slotKey,
     commissionType:       body.commissionType,
     commissionValue:      body.commissionValue,
+    commissionBase:       body.commissionBase ?? "AFTER_DISCOUNT_BEFORE_TAX",
     effectiveDate:        new Date(body.effectiveDate),
     endDate:              body.endDate ? new Date(body.endDate) : undefined,
     isActive:             body.isActive !== undefined ? body.isActive : true,

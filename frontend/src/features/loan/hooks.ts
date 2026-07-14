@@ -14,24 +14,30 @@ import type { LoanListParams, CreateLoanInput, UpdateLoanInput, AddRepaymentInpu
 
 export function useLoans(params: LoanListParams = {}) {
   return useQuery({
-    queryKey: ["loans", params],
-    queryFn:  () => fetchLoans(params),
+    queryKey:       ["loans", params],
+    queryFn:        () => fetchLoans(params),
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
 export function useLoan(id: string) {
   return useQuery({
-    queryKey: ["loans", id],
-    queryFn:  () => fetchLoan(id),
-    enabled:  !!id,
+    queryKey:       ["loans", id],
+    queryFn:        () => fetchLoan(id),
+    enabled:        !!id,
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
 export function useLoansByEmployee(employeeId: string) {
   return useQuery({
-    queryKey: ["loans", "employee", employeeId],
-    queryFn:  () => fetchLoansByEmployee(employeeId),
-    enabled:  !!employeeId,
+    queryKey:       ["loans", "employee", employeeId],
+    queryFn:        () => fetchLoansByEmployee(employeeId),
+    enabled:        !!employeeId,
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 
@@ -85,8 +91,10 @@ export function useAddRepayment(loanId: string) {
 
 export function useRepayments(loanId: string) {
   return useQuery({
-    queryKey: ["loan-repayments", loanId],
-    queryFn:  () => fetchRepayments(loanId),
-    enabled:  !!loanId,
+    queryKey:       ["loan-repayments", loanId],
+    queryFn:        () => fetchRepayments(loanId),
+    enabled:        !!loanId,
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }

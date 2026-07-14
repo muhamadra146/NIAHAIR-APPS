@@ -220,6 +220,18 @@ const changeAppointmentStatus = async (id, body, userId) => {
     throw new AppError("cancelReason is required when cancelling", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
+  if (newStatus === "COMPLETED") {
+    const paidInvoice = await prisma.invoice.findFirst({
+      where: { appointmentId: id, status: "PAID" },
+    });
+    if (!paidInvoice) {
+      throw new AppError(
+        "Booking tidak dapat diselesaikan. Invoice harus sudah lunas (PAID) terlebih dahulu.",
+        StatusCodes.UNPROCESSABLE_ENTITY
+      );
+    }
+  }
+
   return changeStatusWithTransaction({ appointment, newStatus, notes, cancelReason, userId });
 };
 

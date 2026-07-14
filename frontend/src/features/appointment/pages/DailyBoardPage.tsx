@@ -1178,7 +1178,22 @@ export function DailyBoardPage() {
     onSettled: () => setAdv(null),
   });
 
-  function handleAdvance(id: string, status: AppointmentStatus) {
+  async function handleAdvance(id: string, status: AppointmentStatus) {
+    if (status === "COMPLETED") {
+      setAdv(id);
+      try {
+        const result = await fetchInvoices({ appointmentId: id, limit: 10 });
+        const hasPaid = (result.data ?? []).some((inv: { status: string }) => inv.status === "PAID");
+        if (!hasPaid) {
+          toast.error("Booking tidak dapat diselesaikan. Invoice harus sudah lunas terlebih dahulu.");
+          setAdv(null);
+          return;
+        }
+      } catch {
+        setAdv(null);
+        return;
+      }
+    }
     setAdv(id);
     statusMutation.mutate({ id, status });
   }
@@ -1197,8 +1212,7 @@ export function DailyBoardPage() {
     if (!appt || appt.status === newStatus) return;
     const allowed = VALID_TRANSITIONS[appt.status] ?? [];
     if (!allowed.includes(newStatus)) return;
-    setAdv(appt.id);
-    statusMutation.mutate({ id: appt.id, status: newStatus });
+    handleAdvance(appt.id, newStatus);
   }
 
   function onStaffSaved() {

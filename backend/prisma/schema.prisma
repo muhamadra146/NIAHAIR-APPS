@@ -1517,12 +1517,16 @@ model InvoiceStatusHistory {
 
 enum CommissionType {
   PERCENTAGE
-  FIXED_AMOUNT
+  FIXED
 }
 
 enum CommissionBase {
   BEFORE_DISCOUNT
   AFTER_DISCOUNT
+  BEFORE_DISCOUNT_BEFORE_TAX
+  AFTER_DISCOUNT_BEFORE_TAX
+  BEFORE_DISCOUNT_AFTER_TAX
+  AFTER_DISCOUNT_AFTER_TAX
 }
 
 enum CommissionStatus {

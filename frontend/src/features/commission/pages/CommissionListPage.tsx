@@ -515,11 +515,6 @@ function ActionButtons({ status, onApprove, onPay, onOverride, onDelete, approvi
           {approving ? "…" : "Setujui"}
         </Button>
       )}
-      {status === "APPROVED" && (
-        <Button size="sm" className="h-7 rounded-lg text-xs" onClick={onPay} disabled={paying}>
-          {paying ? "…" : "Bayar"}
-        </Button>
-      )}
       {canOverride && (
         <Button size="sm" variant="ghost" className="h-7 rounded-lg text-xs px-2 text-slate-500 hover:text-slate-800" onClick={onOverride}>
           <Edit2 className="h-3.5 w-3.5" />

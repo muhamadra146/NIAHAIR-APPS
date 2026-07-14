@@ -64,7 +64,7 @@ const findTreatmentItem = (id) =>
   prisma.treatmentItem.findUnique({ where: { id }, select: { id: true } });
 
 const findSessionById = (id) =>
-  prisma.treatmentSession.findUnique({ where: { id }, select: { id: true } });
+  prisma.treatmentSession.findUnique({ where: { id }, select: { id: true, completedAt: true, invoiceId: true } });
 
 module.exports = {
   findBySession,

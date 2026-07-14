@@ -66,9 +66,10 @@ export function GenerateKomisiPage() {
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
 
   const { data: result, isLoading } = useQuery({
-    queryKey:  ["commission-generate-list", startDate, endDate],
-    queryFn:   () => fetchCommissionGenerateList({ startDate, endDate, limit: 100 }),
-    staleTime: 30_000,
+    queryKey:       ["commission-generate-list", startDate, endDate],
+    queryFn:        () => fetchCommissionGenerateList({ startDate, endDate, limit: 100 }),
+    staleTime:      0,
+    refetchOnMount: true,
   });
 
   const invoices = result?.data ?? [];

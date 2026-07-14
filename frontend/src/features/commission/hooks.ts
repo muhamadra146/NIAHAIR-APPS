@@ -22,9 +22,11 @@ export function useCommissions(params: CommissionListParams = {}) {
 
 export function useCommission(id: string) {
   return useQuery({
-    queryKey: ["commissions", id],
-    queryFn:  () => fetchCommission(id),
-    enabled:  !!id,
+    queryKey:       ["commissions", id],
+    queryFn:        () => fetchCommission(id),
+    enabled:        !!id,
+    staleTime:      0,
+    refetchOnMount: true,
   });
 }
 

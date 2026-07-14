@@ -107,7 +107,7 @@ export function MaterialsTab({
     setRows(merged);
     setInitDone(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bomLoading, usagesLoading]);
+  }, [bomLoading, usagesLoading, initDone]);
 
   // Re-sync from server after a successful save (reset dirty + reinit)
   useEffect(() => {
@@ -200,31 +200,27 @@ export function MaterialsTab({
           </p>
         </div>
         <div className="flex gap-2">
-          {!isCompleted && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setAddOpen(true)}
-                disabled={isLoading}
-              >
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Tambah Material
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleSave}
-                disabled={saveMutation.isPending || !isDirty || isLoading}
-              >
-                <Save className="mr-1.5 h-3.5 w-3.5" />
-                {saveMutation.isPending ? "Menyimpan…" : "Simpan Material"}
-              </Button>
-            </>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAddOpen(true)}
+            disabled={isLoading}
+          >
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Tambah Material
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={saveMutation.isPending || !isDirty || isLoading}
+          >
+            <Save className="mr-1.5 h-3.5 w-3.5" />
+            {saveMutation.isPending ? "Menyimpan…" : "Simpan Material"}
+          </Button>
         </div>
       </div>
 
-      {isDirty && !isCompleted && (
+      {isDirty && (
         <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           Ada perubahan yang belum disimpan.
@@ -233,7 +229,7 @@ export function MaterialsTab({
 
       {hasMovements && (
         <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-          Inventory movement sudah digenerate — qty tidak dapat diubah.
+          Inventory movement sudah digenerate. Perubahan qty akan otomatis diperbarui dan disinkronkan.
         </div>
       )}
 
@@ -253,12 +249,10 @@ export function MaterialsTab({
             <p className="text-sm text-muted-foreground">
               Tidak ada BOM pada item treatment ini. Tambahkan material secara manual.
             </p>
-            {!isCompleted && (
-              <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Tambah Material
-              </Button>
-            )}
+            <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Tambah Material
+            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -279,8 +273,8 @@ export function MaterialsTab({
                   </thead>
                   <tbody>
                     {rows.map((row, idx) => {
-                      const canDelete  = !row.isFromBom && !row.inventoryMovementId && !isCompleted;
-                      const qtyLocked  = !!row.inventoryMovementId || isCompleted;
+                      const canDelete  = !row.isFromBom;
+                      const qtyLocked  = false;
                       return (
                         <tr
                           key={`${row.treatmentItemId}-${row.materialItem.id}-${idx}`}

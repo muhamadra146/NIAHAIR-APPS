@@ -115,7 +115,13 @@ export interface UpdateItemCommissionInput {
   commissionCategoryId: string | null;
 }
 export type CommissionType   = "PERCENTAGE" | "FIXED";
-export type CommissionBase   = "BEFORE_DISCOUNT" | "AFTER_DISCOUNT";
+export type CommissionBase   =
+  | "BEFORE_DISCOUNT_BEFORE_TAX"
+  | "AFTER_DISCOUNT_BEFORE_TAX"
+  | "BEFORE_DISCOUNT_AFTER_TAX"
+  | "AFTER_DISCOUNT_AFTER_TAX"
+  | "BEFORE_DISCOUNT"   // legacy
+  | "AFTER_DISCOUNT";   // legacy
 
 export interface CommissionEmployee {
   id:           string;
