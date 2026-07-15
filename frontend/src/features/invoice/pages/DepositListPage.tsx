@@ -2,7 +2,6 @@ import { useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Plus, Search, ArrowRight, Eye, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -113,167 +112,165 @@ export function DepositListPage() {
         {/* ── Summary cards ───────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {(["UNPAID", "PAID", "PARTIAL_USED", "USED"] as const).map((s) => (
-            <Card
+            <div
               key={s}
               onClick={() => { setStatus(status === s ? "" : s); setPage(1); }}
               className={[
-                "cursor-pointer rounded-2xl border bg-white shadow-sm transition-all duration-200",
+                "cursor-pointer rounded-xl border bg-white px-4 py-3.5 shadow-sm transition-all duration-200 select-none",
                 status === s
                   ? "border-primary/40 ring-2 ring-primary/20 shadow-md"
-                  : "border-slate-100/80 hover:border-primary/30 hover:shadow-md",
+                  : "border-slate-100 hover:border-slate-200 hover:shadow-md",
               ].join(" ")}
             >
-              <CardContent className="p-4">
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                  {STATUS_LABEL[s]}
-                </p>
-                <p className="mt-1.5 text-base font-bold sm:text-lg">
-                  {formatCurrency(summary?.[s]?.total ?? "0")}
-                </p>
-                <p className="mt-0.5 text-xs text-slate-400">
-                  {summary?.[s]?.count ?? 0} deposit
-                </p>
-              </CardContent>
-            </Card>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+                  s === "UNPAID"       ? "bg-yellow-400" :
+                  s === "PAID"         ? "bg-emerald-400" :
+                  s === "PARTIAL_USED" ? "bg-blue-400" : "bg-slate-300"
+                }`} />
+                <p className="text-xs font-medium text-slate-500">{STATUS_LABEL[s]}</p>
+              </div>
+              <p className={`text-base font-bold tabular-nums ${
+                s === "UNPAID"       ? "text-yellow-700" :
+                s === "PAID"         ? "text-emerald-700" :
+                s === "PARTIAL_USED" ? "text-blue-700" : "text-slate-600"
+              }`}>
+                {formatCurrency(summary?.[s]?.total ?? "0")}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-400">
+                {summary?.[s]?.count ?? 0} deposit
+              </p>
+            </div>
           ))}
         </div>
 
-        {/* ── Filter + table card ──────────────────────────────── */}
-        <Card className="rounded-2xl border border-slate-100/80 bg-white shadow-sm overflow-hidden">
-
-          {/* Filter bar */}
-          <CardHeader className="border-b border-slate-100 pb-4 pt-4">
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end sm:gap-3">
-
-              {/* Customer search */}
-              <div className="col-span-2 flex flex-col gap-1.5 sm:col-auto">
-                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                  Customer
-                </Label>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                  <Input
-                    value={selectedCust ? selectedCust.name : custSearch}
-                    onChange={handleCustSearch}
-                    onClick={() => { if (selectedCust) clearCust(); }}
-                    placeholder="Cari customer..."
-                    className={`${filterInputCls} pl-8 w-full sm:w-44`}
-                  />
-                  {!selectedCust && custResults.length > 0 && (
-                    <div className="absolute z-10 mt-1 w-full rounded-xl border border-slate-100 bg-white shadow-lg">
-                      {custResults.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => { setSelectedCust(c); setCustSearch(""); setCustResults([]); setPage(1); }}
-                          className="w-full px-3 py-2.5 text-left text-sm hover:bg-slate-50 first:rounded-t-xl last:rounded-b-xl transition-colors"
-                        >
-                          {c.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Status */}
-              <div className="col-span-2 flex flex-col gap-1.5 sm:col-auto">
-                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                  Status
-                </Label>
-                <select
-                  value={status}
-                  onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-                  className={`${filterInputCls} px-3 text-sm w-full sm:w-auto`}
-                >
-                  <option value="">Semua Status</option>
-                  {ALL_STATUSES.map((s) => (
-                    <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+        {/* ── Filters ─────────────────────────────────────────── */}
+        <div className="flex flex-wrap items-end gap-3">
+          {/* Customer search */}
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Customer</p>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              <Input
+                value={selectedCust ? selectedCust.name : custSearch}
+                onChange={handleCustSearch}
+                onClick={() => { if (selectedCust) clearCust(); }}
+                placeholder="Cari customer..."
+                className={`${filterInputCls} pl-8 w-44`}
+              />
+              {!selectedCust && custResults.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full rounded-xl border border-slate-100 bg-white shadow-lg">
+                  {custResults.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => { setSelectedCust(c); setCustSearch(""); setCustResults([]); setPage(1); }}
+                      className="w-full px-3 py-2.5 text-left text-sm hover:bg-slate-50 first:rounded-t-xl last:rounded-b-xl transition-colors"
+                    >
+                      {c.name}
+                    </button>
                   ))}
-                </select>
-              </div>
-
-              {/* Date range */}
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Dari</Label>
-                <Input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => { setStart(e.target.value); setPage(1); }}
-                  className={`${filterInputCls} w-full sm:w-36`}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Sampai</Label>
-                <Input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => { setEnd(e.target.value); setPage(1); }}
-                  className={`${filterInputCls} w-full sm:w-36`}
-                />
-              </div>
-
-              {hasFilter && (
-                <div className="col-span-2 flex items-end sm:col-auto">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={resetFilters}
-                    className="h-9 w-full text-xs text-slate-500 hover:text-slate-800 sm:w-auto"
-                  >
-                    Reset Filter
-                  </Button>
                 </div>
               )}
             </div>
-          </CardHeader>
+          </div>
 
-          {/* Data */}
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="space-y-3 p-5">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} className="h-16 w-full rounded-xl" />
+          {/* Status */}
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Status</p>
+            <select
+              value={status}
+              onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+              className={`${filterInputCls} px-3 text-sm w-40`}
+            >
+              <option value="">Semua Status</option>
+              {ALL_STATUSES.map((s) => (
+                <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Date range — grouped with s/d separator */}
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Periode</p>
+            <div className="flex items-center gap-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => { setStart(e.target.value); setPage(1); }}
+                className="h-9 bg-transparent px-3 text-sm focus:outline-none"
+              />
+              <span className="text-muted-foreground text-xs px-1 select-none border-x border-slate-200 bg-slate-50/60 py-2">s/d</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => { setEnd(e.target.value); setPage(1); }}
+                className="h-9 bg-transparent px-3 text-sm focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {hasFilter && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetFilters}
+              className="h-9 text-xs text-slate-500 hover:text-slate-800"
+            >
+              Reset Filter
+            </Button>
+          )}
+        </div>
+
+        {/* ── Table — flat border, no card ────────────────────── */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          {isLoading ? (
+            <div className="space-y-0 divide-y divide-slate-100">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-5 py-4">
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-4 w-24 ml-auto" />
+                  <Skeleton className="h-5 w-16 rounded-lg" />
+                </div>
+              ))}
+            </div>
+          ) : deposits.length === 0 ? (
+            <p className="py-14 text-center text-sm text-slate-400">
+              Tidak ada deposit ditemukan.
+            </p>
+          ) : (
+            <>
+              {/* Mobile cards */}
+              <div className="sm:hidden divide-y divide-slate-100">
+                {deposits.map((d) => (
+                  <DepositCard key={d.id} deposit={d} canDelete={canDelete} onDelete={() => setDeleteTarget(d)} />
                 ))}
               </div>
-            ) : deposits.length === 0 ? (
-              <p className="py-14 text-center text-sm text-slate-400">
-                Tidak ada deposit ditemukan.
-              </p>
-            ) : (
-              <>
-                {/* Mobile cards */}
-                <div className="sm:hidden divide-y divide-slate-100">
-                  {deposits.map((d) => (
-                    <DepositCard key={d.id} deposit={d} canDelete={canDelete} onDelete={() => setDeleteTarget(d)} />
-                  ))}
-                </div>
 
-                {/* Desktop table */}
-                <div className="hidden sm:block overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-100 bg-slate-50/60">
-                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Customer</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Tanggal</th>
-                        <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Jumlah</th>
-                        <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Terpakai</th>
-                        <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Sisa</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
-                        <th className="px-5 py-3" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {deposits.map((d) => (
-                        <DepositRow key={d.id} deposit={d} canDelete={canDelete} onDelete={() => setDeleteTarget(d)} />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+              {/* Desktop table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50">
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Customer</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Tanggal</th>
+                      <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Jumlah</th>
+                      <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Terpakai</th>
+                      <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Sisa</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                      <th className="px-5 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {deposits.map((d) => (
+                      <DepositRow key={d.id} deposit={d} canDelete={canDelete} onDelete={() => setDeleteTarget(d)} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* ── Pagination ───────────────────────────────────────── */}
         {totalPages > 1 && (

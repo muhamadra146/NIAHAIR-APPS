@@ -32,6 +32,8 @@ import { InventoryPage }         from "@/features/inventory/pages/InventoryPage"
 import { ReportsPage }           from "@/features/report/pages/ReportsPage";
 import { LoanListPage }               from "@/features/loan/pages/LoanListPage";
 import { LoanDetailPage }             from "@/features/loan/pages/LoanDetailPage";
+import { MyLoanPage }                 from "@/features/loan/pages/MyLoanPage";
+import { MyLoanDetailPage }           from "@/features/loan/pages/MyLoanDetailPage";
 import { ConsultationListPage }       from "@/features/consultation/pages/ConsultationListPage";
 import { ConsultationFormPage }       from "@/features/consultation/pages/ConsultationFormPage";
 import { LeavePage }                  from "@/features/leave/pages/LeavePage";
@@ -111,6 +113,9 @@ export const router = createBrowserRouter([
           { path: "/leaves", element: <LeavePage /> },
           // My Payslip (employee self-service)
           { path: "/my-payslip", element: <MyPayslipPage /> },
+          // My Kasbon (employee self-service)
+          { path: "/my-kasbon",      element: <MyLoanPage /> },
+          { path: "/my-kasbon/:id",  element: <MyLoanDetailPage /> },
           // Attendance Correction
           { path: "/attendance-corrections", element: <CorrectionPage /> },
           // Permission (Izin)

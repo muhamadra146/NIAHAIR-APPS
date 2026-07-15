@@ -8,11 +8,21 @@ const {
   getAllController, getByEmployeeController, getByIdController,
   createController, updateController, cancelController,
   addRepaymentController, getRepaymentsController,
+  getMyLoansController, getMyLoanByIdController,
 } = require("./loan.controller");
 
 const router = Router();
 
 const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.ADMIN];
+const ALL_STAFF   = Object.values(ROLES);
+
+// ── Self-service (must be before /:id to avoid route conflict) ────────────────
+router.get("/my",
+  authenticate, getMyLoansController,
+);
+router.get("/my/:id",
+  authenticate, getMyLoanByIdController,
+);
 
 router.get("/",
   authenticate, authorize(...ADMIN_ROLES), getAllController,

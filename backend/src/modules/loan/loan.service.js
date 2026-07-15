@@ -80,4 +80,20 @@ const getRepayments = async (loanId) => {
   return repo.findRepaymentsByLoan(loanId);
 };
 
-module.exports = { getAll, getByEmployee, getById, createLoan, updateLoan, cancelLoan, addRepayment, getRepayments };
+// ── Self-service (staff view own loans) ──────────────────────────────────────
+
+const getMyLoans = async (employeeId) => {
+  if (!employeeId) throw new AppError("User tidak memiliki data karyawan", StatusCodes.FORBIDDEN);
+  return repo.findByEmployee(employeeId);
+};
+
+const getMyLoanById = async (id, employeeId) => {
+  if (!employeeId) throw new AppError("User tidak memiliki data karyawan", StatusCodes.FORBIDDEN);
+  const loan = await repo.findById(id);
+  if (!loan) throw new AppError("Loan not found", StatusCodes.NOT_FOUND);
+  if (loan.employeeId !== employeeId)
+    throw new AppError("Akses ditolak", StatusCodes.FORBIDDEN);
+  return loan;
+};
+
+module.exports = { getAll, getByEmployee, getById, createLoan, updateLoan, cancelLoan, addRepayment, getRepayments, getMyLoans, getMyLoanById };

@@ -14,12 +14,12 @@ import { useLoan, useAddRepayment, useCancelLoan } from "../hooks";
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE:    "Aktif",
-  PAID:      "Lunas",
+  PAID_OFF:  "Lunas",
   CANCELLED: "Dibatalkan",
 };
 const STATUS_COLOR: Record<string, string> = {
   ACTIVE:    "text-blue-600 border-blue-300",
-  PAID:      "text-green-600 border-green-300",
+  PAID_OFF:  "text-green-600 border-green-300",
   CANCELLED: "text-muted-foreground",
 };
 
@@ -148,9 +148,10 @@ export function LoanDetailPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/50">
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tanggal</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Jumlah</th>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Catatan</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-foreground/70 uppercase tracking-wide">Tanggal</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-foreground/70 uppercase tracking-wide">Jumlah</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-foreground/70 uppercase tracking-wide">Sumber</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-foreground/70 uppercase tracking-wide">Catatan</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -158,6 +159,17 @@ export function LoanDetailPage() {
                       <tr key={r.id} className="border-b border-border hover:bg-muted/30">
                         <td className="px-4 py-2.5 text-muted-foreground">{formatDate(r.paidAt)}</td>
                         <td className="px-4 py-2.5 text-right font-medium text-green-700">{formatCurrency(r.amount)}</td>
+                        <td className="px-4 py-2.5">
+                          {r.payrollId ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-blue-600 font-medium bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
+                              Payroll
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+                              Manual
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-2.5 text-muted-foreground text-xs">{r.notes ?? "—"}</td>
                       </tr>
                     ))}

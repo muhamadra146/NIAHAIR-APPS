@@ -1,4 +1,4 @@
-export type LoanStatus = "ACTIVE" | "PAID" | "CANCELLED";
+export type LoanStatus = "ACTIVE" | "PAID_OFF" | "CANCELLED";
 
 export interface LoanEmployee {
   id:           string;

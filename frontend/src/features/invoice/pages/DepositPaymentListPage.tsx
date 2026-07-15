@@ -1,9 +1,8 @@
 import { useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Eye, Plus, Search, Upload, X, ImageIcon, Trash2 } from "lucide-react";
+import { ChevronRight, Plus, Search, Upload, X, ImageIcon, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +20,9 @@ import { fetchDeposits } from "../api";
 import type { Deposit } from "../types";
 
 const CAN_DELETE: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
+
+const filterInputCls =
+  "h-9 rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md focus-visible:shadow-md focus-visible:ring-ring/30";
 
 export function DepositPaymentListPage() {
   const { branchId, user } = useAuthStore();
@@ -78,140 +80,154 @@ export function DepositPaymentListPage() {
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-2 gap-2 sm:gap-3">
-          <Card>
-            <CardContent className="p-3 sm:p-4">
-              <p className="text-xs text-muted-foreground">Hari Ini</p>
-              <p className="text-base font-bold mt-0.5 sm:text-lg">{formatCurrency(summary?.today.total ?? "0")}</p>
-              <p className="text-xs text-muted-foreground">{summary?.today.count ?? 0} transaksi</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4">
-              <p className="text-xs text-muted-foreground">{startDate || endDate ? "Periode Filter" : "Semua Waktu"}</p>
-              <p className="text-base font-bold mt-0.5 sm:text-lg">{formatCurrency(summary?.period.total ?? "0")}</p>
-              <p className="text-xs text-muted-foreground">{summary?.period.count ?? 0} transaksi</p>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-slate-100 bg-white px-4 py-3.5 shadow-sm">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="inline-block w-2 h-2 rounded-full shrink-0 bg-emerald-400" />
+              <p className="text-xs font-medium text-slate-500">Hari Ini</p>
+            </div>
+            <p className="text-base font-bold tabular-nums text-emerald-700">{formatCurrency(summary?.today.total ?? "0")}</p>
+            <p className="mt-0.5 text-xs text-slate-400">{summary?.today.count ?? 0} transaksi</p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-white px-4 py-3.5 shadow-sm">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="inline-block w-2 h-2 rounded-full shrink-0 bg-blue-400" />
+              <p className="text-xs font-medium text-slate-500">{startDate || endDate ? "Periode Filter" : "Semua Waktu"}</p>
+            </div>
+            <p className="text-base font-bold tabular-nums text-blue-700">{formatCurrency(summary?.period.total ?? "0")}</p>
+            <p className="mt-0.5 text-xs text-slate-400">{summary?.period.count ?? 0} transaksi</p>
+          </div>
         </div>
 
-        {/* Filter + list card */}
-        <Card>
-          <CardHeader className="pb-3 pt-4">
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
-              {/* Metode — full width on mobile */}
-              <div className="col-span-2 flex flex-col gap-1 sm:col-auto">
-                <Label className="text-xs text-muted-foreground">Metode Pembayaran</Label>
-                <select
-                  value={paymentMethodId}
-                  onChange={(e) => { setMethod(e.target.value); setPage(1); }}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
-                >
-                  <option value="">Semua Metode</option>
-                  {methodsData.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </select>
-              </div>
+        {/* Filters */}
+        <div className="flex flex-wrap items-end gap-3">
+          {/* Metode Pembayaran */}
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Metode Pembayaran</p>
+            <select
+              value={paymentMethodId}
+              onChange={(e) => { setMethod(e.target.value); setPage(1); }}
+              className={`${filterInputCls} px-3 text-sm w-44`}
+            >
+              <option value="">Semua Metode</option>
+              {methodsData.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </div>
 
-              {/* Date range — half-width each on mobile */}
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs text-muted-foreground">Dari</Label>
-                <Input type="date" value={startDate} onChange={(e) => { setStart(e.target.value); setPage(1); }} className="h-9 w-full sm:w-36" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs text-muted-foreground">Sampai</Label>
-                <Input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className="h-9 w-full sm:w-36" />
-              </div>
-
-              {hasFilter && (
-                <div className="col-span-2 flex items-end sm:col-auto">
-                  <Button
-                    variant="ghost" size="sm"
-                    onClick={() => { setMethod(""); setStart(""); setEnd(""); setPage(1); }}
-                    className="h-9 w-full text-xs sm:w-auto"
-                  >
-                    Reset Filter
-                  </Button>
-                </div>
-              )}
+          {/* Date range — grouped with s/d */}
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Periode</p>
+            <div className="flex items-center gap-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => { setStart(e.target.value); setPage(1); }}
+                className="h-9 bg-transparent px-3 text-sm focus:outline-none"
+              />
+              <span className="text-muted-foreground text-xs px-1 select-none border-x border-slate-200 bg-slate-50/60 py-2">s/d</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => { setEnd(e.target.value); setPage(1); }}
+                className="h-9 bg-transparent px-3 text-sm focus:outline-none"
+              />
             </div>
-          </CardHeader>
+          </div>
 
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="space-y-3 p-4">
-                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+          {hasFilter && (
+            <Button
+              variant="ghost" size="sm"
+              onClick={() => { setMethod(""); setStart(""); setEnd(""); setPage(1); }}
+              className="h-9 text-xs text-slate-500 hover:text-slate-800"
+            >
+              Reset Filter
+            </Button>
+          )}
+        </div>
+
+        {/* Table — flat border, no card */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          {isLoading ? (
+            <div className="divide-y divide-slate-100">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-5 py-4">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-36 ml-2" />
+                  <Skeleton className="h-4 w-24 ml-auto" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              ))}
+            </div>
+          ) : payments.length === 0 ? (
+            <p className="py-14 text-center text-sm text-slate-400">Tidak ada pembayaran.</p>
+          ) : (
+            <>
+              {/* Mobile cards */}
+              <div className="sm:hidden divide-y divide-slate-100">
+                {payments.map((p) => (
+                  <PaymentCard key={p.id} payment={p} canDelete={canDelete} onDelete={() => setDeleteTarget(p)} />
+                ))}
               </div>
-            ) : payments.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted-foreground">Tidak ada pembayaran.</p>
-            ) : (
-              <>
-                {/* Mobile cards */}
-                <div className="sm:hidden divide-y divide-border">
-                  {payments.map((p) => (
-                    <PaymentCard key={p.id} payment={p} canDelete={canDelete} onDelete={() => setDeleteTarget(p)} />
-                  ))}
-                </div>
 
-                {/* Desktop table */}
-                <div className="hidden sm:block overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/50">
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">No. Pembayaran</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Customer</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tanggal</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Metode</th>
-                        <th className="px-4 py-3 text-right font-medium text-muted-foreground">Jumlah</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Ref</th>
-                        <th className="px-4 py-3" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {payments.map((p) => (
-                        <tr key={p.id} className="border-b border-border transition-colors hover:bg-muted/30">
-                          <td className="px-4 py-3">
-                            <Badge variant="outline" className="text-xs font-mono">{p.paymentNo}</Badge>
-                          </td>
-                          <td className="px-4 py-3">
-                            <p className="font-medium">{p.deposit?.customer?.name ?? "—"}</p>
-                            <p className="text-xs text-muted-foreground">{p.deposit?.customer?.mobilePhone ?? ""}</p>
-                          </td>
-                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(p.paidAt)}</td>
-                          <td className="px-4 py-3">{p.paymentMethod?.name ?? "—"}</td>
-                          <td className="px-4 py-3 text-right font-medium whitespace-nowrap">{formatCurrency(p.amount)}</td>
-                          <td className="px-4 py-3 text-muted-foreground text-xs">{p.referenceNo ?? "—"}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1">
-                              <Link
-                                to={`/deposits/${p.depositId}`}
-                                className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                                title="Lihat deposit"
+              {/* Desktop table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50">
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">No. Pembayaran</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Customer</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Tanggal</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Metode</th>
+                      <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Jumlah</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Ref</th>
+                      <th className="px-5 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {payments.map((p) => (
+                      <tr key={p.id} className="group hover:bg-slate-50/60 transition-colors">
+                        <td className="px-5 py-3">
+                          <Badge variant="outline" className="text-xs font-mono rounded-lg px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-600">{p.paymentNo}</Badge>
+                        </td>
+                        <td className="px-5 py-3">
+                          <p className="font-medium text-slate-800">{p.deposit?.customer?.name ?? "—"}</p>
+                          {p.deposit?.customer?.mobilePhone && (
+                            <p className="text-xs text-muted-foreground">{p.deposit.customer.mobilePhone}</p>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-slate-500 whitespace-nowrap">{formatDate(p.paidAt)}</td>
+                        <td className="px-5 py-3 text-slate-600">{p.paymentMethod?.name ?? "—"}</td>
+                        <td className="px-5 py-3 text-right font-semibold tabular-nums text-emerald-700 whitespace-nowrap">{formatCurrency(p.amount)}</td>
+                        <td className="px-5 py-3 text-slate-400 text-xs font-mono">{p.referenceNo ?? "—"}</td>
+                        <td className="px-5 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Link
+                              to={`/deposits/${p.depositId}`}
+                              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-primary transition-colors"
+                            >
+                              Lihat <ChevronRight className="h-3.5 w-3.5" />
+                            </Link>
+                            {canDelete && (
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTarget(p)}
+                                className="ml-2 inline-flex items-center justify-center rounded-md p-1 text-slate-400 hover:bg-destructive/10 hover:text-destructive transition-colors"
                               >
-                                <Eye className="h-4 w-4" />
-                              </Link>
-                              {canDelete && (
-                                <button
-                                  type="button"
-                                  onClick={() => setDeleteTarget(p)}
-                                  className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                                  title="Hapus pembayaran"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Pagination */}
         {totalPages > 1 && (

@@ -46,3 +46,15 @@ export async function fetchRepayments(id: string): Promise<LoanRepayment[]> {
   const { data } = await api.get<ApiResponse<LoanRepayment[]>>(`/loans/${id}/repayments`);
   return data.data;
 }
+
+// ── Self-service ──────────────────────────────────────────────────────────────
+
+export async function fetchMyLoans(): Promise<Loan[]> {
+  const { data } = await api.get<ApiResponse<Loan[]>>("/loans/my");
+  return data.data;
+}
+
+export async function fetchMyLoan(id: string): Promise<Loan> {
+  const { data } = await api.get<ApiResponse<Loan>>(`/loans/my/${id}`);
+  return data.data;
+}

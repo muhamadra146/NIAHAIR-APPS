@@ -58,8 +58,23 @@ const getRepaymentsController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const getMyLoansController = async (req, res, next) => {
+  try {
+    const result = await svc.getMyLoans(req.user.employeeId);
+    return success(res, result, "My loans fetched");
+  } catch (err) { next(err); }
+};
+
+const getMyLoanByIdController = async (req, res, next) => {
+  try {
+    const result = await svc.getMyLoanById(req.params.id, req.user.employeeId);
+    return success(res, result, "My loan fetched");
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   getAllController, getByEmployeeController, getByIdController,
   createController, updateController, cancelController,
   addRepaymentController, getRepaymentsController,
+  getMyLoansController, getMyLoanByIdController,
 };

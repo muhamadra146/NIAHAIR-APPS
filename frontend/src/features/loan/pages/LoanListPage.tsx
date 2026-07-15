@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Search, ChevronRight } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -16,21 +16,21 @@ import { useLoans, useCreateLoan } from "../hooks";
 import type { LoanStatus, Loan } from "../types";
 
 const STATUS_TABS: { key: string; label: string }[] = [
-  { key: "",           label: "Semua" },
-  { key: "ACTIVE",     label: "Aktif" },
-  { key: "PAID",       label: "Lunas" },
-  { key: "CANCELLED",  label: "Dibatalkan" },
+  { key: "",         label: "Semua" },
+  { key: "ACTIVE",   label: "Aktif" },
+  { key: "PAID_OFF", label: "Lunas" },
+  { key: "CANCELLED", label: "Dibatalkan" },
 ];
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE:    "Aktif",
-  PAID:      "Lunas",
+  PAID_OFF:  "Lunas",
   CANCELLED: "Dibatalkan",
 };
 
 const STATUS_COLOR: Record<string, string> = {
   ACTIVE:    "text-blue-600 border-blue-300",
-  PAID:      "text-green-600 border-green-300",
+  PAID_OFF:  "text-green-600 border-green-300",
   CANCELLED: "text-muted-foreground",
 };
 
@@ -223,6 +223,17 @@ function CreateLoanDialog({
   const [error, setError]             = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  // Auto-hitung endDate: startDate + Math.ceil(total / monthly) bulan
+  useEffect(() => {
+    const totalAmt   = parseFloat(total);
+    const monthlyAmt = parseFloat(monthly);
+    if (!startDate || isNaN(totalAmt) || totalAmt <= 0 || isNaN(monthlyAmt) || monthlyAmt <= 0) return;
+    const months = Math.ceil(totalAmt / monthlyAmt);
+    const d = new Date(startDate);
+    d.setMonth(d.getMonth() + months - 1);
+    setEndDate(d.toISOString().slice(0, 10));
+  }, [total, monthly, startDate]);
+
   function reset() {
     setEmpSearch(""); setEmpResults([]); setSelectedEmp(null);
     setTotal(""); setMonthly(""); setStartDate(todayStr); setEndDate(""); setNotes(""); setError(null);
@@ -310,7 +321,14 @@ function CreateLoanDialog({
               <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Tanggal Selesai</Label>
+              <Label className="flex items-center gap-1.5">
+                Tanggal Selesai
+                {parseFloat(total) > 0 && parseFloat(monthly) > 0 && (
+                  <span className="text-[10px] font-normal text-primary bg-primary/10 rounded px-1 py-0.5">
+                    auto · {Math.ceil(parseFloat(total) / parseFloat(monthly))}×
+                  </span>
+                )}
+              </Label>
               <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
@@ -321,13 +339,6 @@ function CreateLoanDialog({
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
           </div>
-
-          {/* Estimated installments */}
-          {parseFloat(total) > 0 && parseFloat(monthly) > 0 && (
-            <p className="text-xs text-muted-foreground bg-muted/50 rounded px-3 py-2">
-              Estimasi: {Math.ceil(parseFloat(total) / parseFloat(monthly))} kali cicilan
-            </p>
-          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>

@@ -23,52 +23,35 @@ import {
 } from "../constants";
 import type { CreateConsultationNoteInput } from "../types";
 
-// ── Question container ─────────────────────────────────────────────────────────
+// ── Question ───────────────────────────────────────────────────────────────────
 
-function Q({
-  num, label, hint, required, children,
-}: {
-  num:      number;
-  label:    string;
-  hint?:    string;
-  required?: boolean;
-  children: React.ReactNode;
+function Q({ num, label, hint, required, children }: {
+  num: number; label: string; hint?: string; required?: boolean; children: React.ReactNode;
 }) {
   return (
-    <div className="flex gap-3">
-      <div className="flex flex-col items-center pt-0.5">
-        <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground shrink-0">
-          {num}
-        </span>
-        <div className="w-px flex-1 bg-border/50 mt-2 mb-0" />
+    <div className="space-y-2 pb-4">
+      <div>
+        <p className="text-sm font-medium text-foreground">
+          <span className="text-muted-foreground mr-1.5">{num}.</span>
+          {label}
+          {required && <span className="text-rose-500 ml-1">*</span>}
+        </p>
+        {hint && <p className="text-xs text-muted-foreground mt-0.5 ml-5">{hint}</p>}
       </div>
-      <div className="flex-1 pb-5 space-y-2.5 min-w-0">
-        <div>
-          <p className="text-sm font-semibold text-foreground leading-snug">
-            {label}
-            {required && <span className="text-rose-500 ml-1">*</span>}
-          </p>
-          {hint && <p className="text-xs text-muted-foreground mt-0.5">{hint}</p>}
-        </div>
-        {children}
-      </div>
+      <div className="ml-5">{children}</div>
     </div>
   );
 }
 
-// ── Pill group ─────────────────────────────────────────────────────────────────
+// ── Pills ──────────────────────────────────────────────────────────────────────
 
-function Pills({
-  options, value, onChange, multi = false,
-}: {
-  options:  { value: string; label: string }[];
-  value:    string | string[];
+function Pills({ options, value, onChange, multi = false }: {
+  options: { value: string; label: string }[];
+  value: string | string[];
   onChange: (v: any) => void;
-  multi?:   boolean;
+  multi?: boolean;
 }) {
-  const isActive = (v: string) =>
-    multi ? (value as string[]).includes(v) : value === v;
-
+  const isActive = (v: string) => multi ? (value as string[]).includes(v) : value === v;
   const toggle = (v: string) => {
     if (multi) {
       const arr = value as string[];
@@ -79,7 +62,7 @@ function Pills({
   };
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-1.5">
       {options.map((o) => {
         const active = isActive(o.value);
         return (
@@ -87,13 +70,12 @@ function Pills({
             key={o.value}
             type="button"
             onClick={() => toggle(o.value)}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium border-2 transition-all duration-150 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
               active
-                ? "bg-primary border-primary text-white shadow-md shadow-primary/20"
-                : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground hover:bg-primary/5"
+                ? "bg-primary border-primary text-white"
+                : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
             }`}
           >
-            {multi && active && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
             {o.label}
           </button>
         );
@@ -102,47 +84,33 @@ function Pills({
   );
 }
 
-function TextExtra({
-  placeholder, value, onChange,
-}: { placeholder: string; value: string; onChange: (v: string) => void }) {
+function TextExtra({ placeholder, value, onChange }: {
+  placeholder: string; value: string; onChange: (v: string) => void;
+}) {
   return (
     <Input
       placeholder={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="text-sm bg-muted/40 border-dashed"
+      className="text-sm mt-1.5"
     />
   );
 }
 
-// ── Section wrapper ────────────────────────────────────────────────────────────
+// ── Section divider ────────────────────────────────────────────────────────────
 
-function Section({
-  icon, letter, title, gradient, children,
-}: {
-  icon:     React.ReactNode;
-  letter:   string;
-  title:    string;
-  gradient: string;
-  children: React.ReactNode;
+function Section({ icon, letter, title, gradient, children }: {
+  icon: React.ReactNode; letter: string; title: string; gradient: string; children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border overflow-hidden shadow-sm bg-card">
-      {/* Header */}
-      <div className={`px-5 py-4 flex items-center gap-3 ${gradient}`}>
-        <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-          <span className="text-white">{icon}</span>
+    <div className="rounded-2xl overflow-hidden border shadow-sm">
+      <div className={`${gradient} px-4 py-3 flex items-center gap-2`}>
+        <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center text-white shrink-0">
+          {icon}
         </div>
-        <div>
-          <p className="text-white/70 text-xs font-medium uppercase tracking-widest leading-none mb-0.5">
-            Bagian {letter}
-          </p>
-          <h3 className="text-white font-bold text-sm leading-tight">{title}</h3>
-        </div>
+        <span className="text-sm font-semibold text-white">{letter}. {title}</span>
       </div>
-
-      {/* Body */}
-      <div className="px-5 pt-5 pb-2">
+      <div className="p-4 space-y-1">
         {children}
       </div>
     </div>
@@ -160,33 +128,60 @@ interface InvoiceOption {
   status:      string;
 }
 
+function InvoiceCard({ inv, onSelect }: { inv: InvoiceOption; onSelect: (inv: InvoiceOption) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(inv)}
+      className="w-full text-left rounded-xl border-2 border-border/60 p-4 hover:border-primary hover:bg-primary/5 transition-all group"
+    >
+      <div className="flex items-center justify-between mb-1">
+        <span className="font-bold text-sm font-mono group-hover:text-primary transition-colors">
+          {inv.invoiceNo}
+        </span>
+        <Badge variant="outline" className="text-xs">{formatDate(inv.invoiceDate)}</Badge>
+      </div>
+      <p className="text-sm font-semibold">{inv.customer?.name}</p>
+      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+        {inv.items?.map((i) => i.item.name).join(", ")}
+      </p>
+    </button>
+  );
+}
+
 function InvoicePicker({ onSelect }: { onSelect: (inv: InvoiceOption) => void }) {
   const { branchId } = useAuthStore();
   const [search,         setSearch]         = useState("");
-  const [results,        setResults]        = useState<InvoiceOption[]>([]);
-  const [loading,        setLoading]        = useState(false);
+  const [todayList,      setTodayList]      = useState<InvoiceOption[]>([]);
+  const [searchResults,  setSearchResults]  = useState<InvoiceOption[]>([]);
+  const [loadingToday,   setLoadingToday]   = useState(true);
+  const [loadingSearch,  setLoadingSearch]  = useState(false);
   const [usedInvoiceIds, setUsedInvoiceIds] = useState<Set<string>>(new Set());
 
-  // Load invoiceIds that already have a consultation note
+  // Load used invoice IDs + today's invoices on mount
   useEffect(() => {
-    api.get("/consultation-notes", { params: { limit: 1000 } }).then(({ data }: any) => {
-      const ids = new Set<string>(
-        (data.data?.data ?? []).map((n: any) => n.invoiceId as string)
-      );
+    const today = new Date().toISOString().split("T")[0];
+    Promise.all([
+      api.get("/consultation-notes", { params: { limit: 1000 } }),
+      api.get("/invoices", { params: { limit: 100, branchId: branchId || undefined, startDate: today, endDate: today } }),
+    ]).then(([notesRes, invRes]: any) => {
+      const ids = new Set<string>((notesRes.data?.data?.data ?? []).map((n: any) => n.invoiceId as string));
       setUsedInvoiceIds(ids);
-    }).catch(() => {});
-  }, []);
+      const all: InvoiceOption[] = invRes.data?.data?.data ?? [];
+      setTodayList(all.filter((inv) => !ids.has(inv.id)));
+    }).catch(() => {}).finally(() => setLoadingToday(false));
+  }, [branchId]);
 
   const handleSearch = async (q: string) => {
     setSearch(q);
-    if (q.length < 2) { setResults([]); return; }
-    setLoading(true);
+    if (q.length < 2) { setSearchResults([]); return; }
+    setLoadingSearch(true);
     try {
       const { data } = await api.get("/invoices", {
         params: { limit: 50, branchId: branchId || undefined },
       }) as any;
       const all: InvoiceOption[] = data.data?.data ?? [];
-      setResults(
+      setSearchResults(
         all.filter(
           (inv) =>
             !usedInvoiceIds.has(inv.id) && (
@@ -196,9 +191,11 @@ function InvoicePicker({ onSelect }: { onSelect: (inv: InvoiceOption) => void })
         )
       );
     } finally {
-      setLoading(false);
+      setLoadingSearch(false);
     }
   };
+
+  const isSearching = search.length >= 2;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
@@ -208,50 +205,56 @@ function InvoicePicker({ onSelect }: { onSelect: (inv: InvoiceOption) => void })
             <MessageSquareQuote className="w-7 h-7 text-primary" />
           </div>
           <h1 className="text-2xl font-bold">Catatan Klien</h1>
-          <p className="text-sm text-muted-foreground">Cari invoice untuk diisi catatannya</p>
+          <p className="text-sm text-muted-foreground">Pilih invoice atau cari nama klien</p>
         </div>
 
-        <Card className="shadow-md border-0 ring-1 ring-border/50">
-          <CardContent className="pt-5 space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Nomor invoice atau nama klien..."
-                value={search}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="pl-9 h-11"
-                autoFocus
-              />
-            </div>
-            {loading && (
-              <div className="space-y-2">
-                {[1,2,3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
-              </div>
-            )}
-            {results.map((inv) => (
-              <button
-                key={inv.id}
-                type="button"
-                onClick={() => onSelect(inv)}
-                className="w-full text-left rounded-xl border-2 border-border/60 p-4 hover:border-primary hover:bg-primary/5 transition-all group"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-sm font-mono group-hover:text-primary transition-colors">
-                    {inv.invoiceNo}
-                  </span>
-                  <Badge variant="outline" className="text-xs">{formatDate(inv.invoiceDate)}</Badge>
-                </div>
-                <p className="text-sm font-semibold">{inv.customer?.name}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                  {inv.items?.map((i) => i.item.name).join(", ")}
-                </p>
-              </button>
+        {/* Search bar */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Cari nomor invoice atau nama klien..."
+            value={search}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="pl-9 h-11 bg-white shadow-sm"
+          />
+        </div>
+
+        {/* Search results */}
+        {isSearching && (
+          <div className="space-y-2">
+            {loadingSearch && [1,2,3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
+            {!loadingSearch && searchResults.map((inv) => (
+              <InvoiceCard key={inv.id} inv={inv} onSelect={onSelect} />
             ))}
-            {search.length >= 2 && !loading && results.length === 0 && (
+            {!loadingSearch && searchResults.length === 0 && (
               <p className="text-sm text-center text-muted-foreground py-6">Invoice tidak ditemukan</p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        )}
+
+        {/* Today's invoices */}
+        {!isSearching && (
+          <Card className="shadow-md border-0 ring-1 ring-border/50">
+            <CardContent className="pt-4 pb-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-primary" />
+                <span className="text-sm font-semibold">Invoice Hari Ini</span>
+                {!loadingToday && (
+                  <span className="ml-auto text-xs text-muted-foreground">{todayList.length} invoice</span>
+                )}
+              </div>
+              {loadingToday && [1,2,3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
+              {!loadingToday && todayList.length === 0 && (
+                <p className="text-sm text-center text-muted-foreground py-4">
+                  Tidak ada invoice hari ini yang belum diisi
+                </p>
+              )}
+              {!loadingToday && todayList.map((inv) => (
+                <InvoiceCard key={inv.id} inv={inv} onSelect={onSelect} />
+              ))}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
@@ -284,12 +287,30 @@ export function ConsultationFormPage() {
   const navigate          = useNavigate();
   const isEdit            = !!id;
 
-  const [invoiceId,   setInvoiceId]   = useState(searchParams.get("invoiceId") ?? "");
-  const [invoiceInfo, setInvoiceInfo] = useState<InvoiceOption | null>(null);
-  const [form, setForm]               = useState<FormState>(EMPTY);
-  const [editNote, setEditNote]       = useState<any>(null);
+  const [invoiceId,      setInvoiceId]      = useState(searchParams.get("invoiceId") ?? "");
+  const [invoiceInfo,    setInvoiceInfo]    = useState<InvoiceOption | null>(null);
+  const [form, setForm]                    = useState<FormState>(EMPTY);
+  const [editNote, setEditNote]            = useState<any>(null);
+  const [noteError, setNoteError]          = useState(false);
 
   const { data: existingNote } = useConsultationNoteByInvoice(isEdit ? "" : invoiceId);
+
+  // Fetch invoice info when invoiceId comes from URL params (no picker was used)
+  useEffect(() => {
+    if (isEdit || !invoiceId || invoiceInfo) return;
+    api.get(`/invoices/${invoiceId}`).then(({ data }: any) => {
+      const inv = data.data;
+      if (!inv) return;
+      setInvoiceInfo({
+        id:          inv.id,
+        invoiceNo:   inv.invoiceNo,
+        invoiceDate: inv.invoiceDate,
+        customer:    inv.customer,
+        items:       inv.items ?? [],
+        status:      inv.status ?? "",
+      });
+    }).catch(() => {});
+  }, [invoiceId, isEdit, invoiceInfo]);
 
   useEffect(() => {
     if (!isEdit || !id) return;
@@ -362,9 +383,11 @@ export function ConsultationFormPage() {
 
   const handleSubmit = async () => {
     if (!form.interestingNote?.trim()) {
-      alert("Field 'Satu hal menarik yang klien bilang' wajib diisi");
+      setNoteError(true);
+      document.getElementById("interesting-note")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
+    setNoteError(false);
     const payload = Object.fromEntries(
       Object.entries(form).map(([k, v]) => [k, v === "" ? undefined : v])
     ) as FormState;
@@ -479,12 +502,7 @@ export function ConsultationFormPage() {
         </div>
 
         {/* ── Section A: Profil Klien ── */}
-        <Section
-          icon={<User className="w-4 h-4" />}
-          letter="A"
-          title="Profil Klien"
-          gradient="bg-gradient-to-r from-blue-600 to-blue-500"
-        >
+        <Section icon={<User className="w-4 h-4" />} letter="A" title="Profil Klien" gradient="bg-gradient-to-r from-blue-600 to-blue-500">
           <Q num={1} label="Apa profesi atau aktivitas utama klien?">
             <Pills
               options={PROFESSION_OPTIONS}
@@ -526,12 +544,7 @@ export function ConsultationFormPage() {
         </Section>
 
         {/* ── Section B: Motivasi ── */}
-        <Section
-          icon={<Heart className="w-4 h-4" />}
-          letter="B"
-          title="Motivasi & Perjalanan Klien"
-          gradient="bg-gradient-to-r from-rose-500 to-pink-500"
-        >
+        <Section icon={<Heart className="w-4 h-4" />} letter="B" title="Motivasi & Perjalanan Klien" gradient="bg-gradient-to-r from-rose-500 to-pink-500">
           <Q num={4} label="Tau Nia Hair dari mana?">
             <Pills
               options={DISCOVERY_OPTIONS}
@@ -608,15 +621,22 @@ export function ConsultationFormPage() {
         </Section>
 
         {/* ── Section C: Catatan Sesi ── */}
-        <Section
-          icon={<Sparkles className="w-4 h-4" />}
-          letter="C"
-          title="Catatan Sesi Ini"
-          gradient="bg-gradient-to-r from-violet-600 to-purple-500"
-        >
-          <Q num={8} label="Ada kendala selama pemakaian extensions?" hint="Kalau tidak ada, tulis 'tidak ada'">
+        <Section icon={<Sparkles className="w-4 h-4" />} letter="C" title="Catatan Sesi Ini" gradient="bg-gradient-to-r from-violet-600 to-purple-500">
+          <Q num={8} label="Ada kendala selama pemakaian extensions?">
+            <div className="flex flex-wrap gap-2 mb-2">
+              {["Tidak ada", "Sering nyangkut", "Ada yang lepas", "Gatal"].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => set("issuesDuringUse", s === "Tidak ada" ? "Tidak ada" : (form.issuesDuringUse ? `${form.issuesDuringUse}, ${s}` : s))}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-border/70 bg-muted/40 hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all"
+                >
+                  {s === "Tidak ada" ? "✓ Tidak ada" : `+ ${s}`}
+                </button>
+              ))}
+            </div>
             <Textarea
-              placeholder="Contoh: sering nyangkut, ada yang lepas, dll."
+              placeholder="Atau tulis langsung di sini..."
               value={form.issuesDuringUse ?? ""}
               onChange={(e) => set("issuesDuringUse", e.target.value)}
               rows={2}
@@ -625,8 +645,24 @@ export function ConsultationFormPage() {
           </Q>
 
           <Q num={9} label="Ada perubahan kebiasaan atau perasaan setelah pakai extensions?">
+            <div className="flex flex-wrap gap-2 mb-2">
+              {["Baru pasang", "Tidak ada", "Lebih percaya diri", "Lebih mudah styling"].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => set("changesAfterUse", s)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                    form.changesAfterUse === s
+                      ? "bg-primary/10 border-primary/60 text-primary"
+                      : "border-border/70 bg-muted/40 hover:bg-primary/10 hover:border-primary/50 hover:text-primary"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
             <Textarea
-              placeholder="Kalau baru pasang hari ini, jawab 'baru pasang'"
+              placeholder="Atau tulis langsung di sini..."
               value={form.changesAfterUse ?? ""}
               onChange={(e) => set("changesAfterUse", e.target.value)}
               rows={2}
@@ -641,16 +677,20 @@ export function ConsultationFormPage() {
             required
           >
             <Textarea
+              id="interesting-note"
               placeholder="Tulis di sini — ini yang paling penting, jangan dikosongkan ya!"
               value={form.interestingNote ?? ""}
-              onChange={(e) => set("interestingNote", e.target.value)}
+              onChange={(e) => { set("interestingNote", e.target.value); if (noteError) setNoteError(false); }}
               rows={4}
               className={`text-sm resize-none transition-colors ${
-                !form.interestingNote?.trim()
-                  ? "border-rose-300 focus-visible:ring-rose-300 bg-rose-50/50"
+                noteError
+                  ? "border-rose-400 focus-visible:ring-rose-400 bg-rose-50/50"
                   : "border-primary/40"
               }`}
             />
+            {noteError && (
+              <p className="text-xs text-rose-500 mt-1">Field ini wajib diisi sebelum menyimpan.</p>
+            )}
           </Q>
 
           <Q num={11} label="Catatan tambahan lainnya" hint="Opsional">

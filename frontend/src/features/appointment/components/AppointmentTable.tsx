@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Eye, Home, Trash2 } from "lucide-react";
+import { ChevronRight, Home, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -26,9 +26,17 @@ interface Props {
 
 function LoadingState() {
   return (
-    <div className="space-y-3 p-5">
+    <div className="divide-y divide-slate-100">
       {Array.from({ length: 5 }).map((_, i) => (
-        <Skeleton key={i} className="h-14 w-full rounded-xl" />
+        <div key={i} className="flex items-center gap-4 px-5 py-4">
+          <Skeleton className="h-4 w-28" />
+          <div className="flex-1 space-y-1.5">
+            <Skeleton className="h-3.5 w-36" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-5 w-16 rounded-lg" />
+        </div>
       ))}
     </div>
   );
@@ -142,67 +150,62 @@ function DesktopTable({ appointments, canDelete }: { appointments: Appointment[]
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/60">
-              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Booking No</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Customer</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Tipe</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Branch</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Visit Date</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Time</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Action</th>
+            <tr className="border-b border-slate-200 bg-slate-50">
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Booking No</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Customer</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Tipe</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Cabang</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Tanggal</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Jam</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+              <th className="px-5 py-3" />
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100">
             {appointments.map((a) => (
-              <tr key={a.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50/60">
-                <td className="px-5 py-4 font-mono text-xs text-slate-400">{a.bookingNo}</td>
-                <td className="px-5 py-4">
+              <tr key={a.id} className="group hover:bg-slate-50/60 transition-colors">
+                <td className="px-5 py-3.5 font-mono text-xs text-slate-400">{a.bookingNo}</td>
+                <td className="px-5 py-3.5">
                   <p className="font-medium text-slate-800">{a.customer.name}</p>
                   {a.customer.mobilePhone && (
                     <p className="text-xs text-slate-400 mt-0.5">{a.customer.mobilePhone}</p>
                   )}
                 </td>
-                <td className="px-5 py-4">
+                <td className="px-5 py-3.5">
                   {a.type === "HOME_SERVICE" ? (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-orange-600">
-                      <Home className="h-3 w-3" /> HS
+                      <Home className="h-3 w-3" /> Home
                     </span>
                   ) : (
                     <span className="text-xs text-slate-400">Salon</span>
                   )}
                 </td>
-                <td className="px-5 py-4 text-slate-500 text-sm">{a.branch.name}</td>
-                <td className="px-5 py-4 text-slate-500 text-sm">{formatDate(a.visitDate)}</td>
-                <td className="px-5 py-4 text-xs text-slate-400">
+                <td className="px-5 py-3.5 text-slate-500 text-sm">{a.branch.name}</td>
+                <td className="px-5 py-3.5 text-slate-500 text-sm whitespace-nowrap">{formatDate(a.visitDate)}</td>
+                <td className="px-5 py-3.5 text-xs text-slate-400 whitespace-nowrap tabular-nums">
                   {new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                   {" – "}
                   {new Date(a.endTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                 </td>
-                <td className="px-5 py-4">
+                <td className="px-5 py-3.5">
                   <AppointmentStatusBadge status={a.status} />
                 </td>
-                <td className="px-5 py-4">
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-                      asChild
+                <td className="px-5 py-3.5 text-right">
+                  <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Link
+                      to={`/appointments/${a.id}`}
+                      className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-primary transition-colors"
                     >
-                      <Link to={`/appointments/${a.id}`}>
-                        <Eye className="h-4 w-4" />
-                      </Link>
-                    </Button>
+                      Lihat <ChevronRight className="h-3.5 w-3.5" />
+                    </Link>
                     {canDelete && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500"
+                      <button
+                        type="button"
                         onClick={() => setToDelete(a)}
+                        className="inline-flex items-center justify-center rounded-md p-1 text-slate-400 hover:bg-destructive/10 hover:text-destructive transition-colors"
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     )}
                   </div>
                 </td>

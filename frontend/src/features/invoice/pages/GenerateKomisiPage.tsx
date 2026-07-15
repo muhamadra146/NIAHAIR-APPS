@@ -8,10 +8,9 @@ import {
   Ban,
   Clock,
   ExternalLink,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/lib/toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -154,24 +153,26 @@ export function GenerateKomisiPage() {
       </div>
 
       {/* Controls */}
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="space-y-1">
-          <Label className="text-xs">Dari Tanggal</Label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Sampai Tanggal</Label>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-0 rounded-lg border border-input bg-background shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2">
+            <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="text-sm bg-transparent focus:outline-none"
+            />
+          </div>
+          <span className="text-muted-foreground text-xs px-1 select-none border-x border-input bg-muted/30 py-2">s/d</span>
+          <div className="flex items-center gap-2 px-3 py-2">
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="text-sm bg-transparent focus:outline-none"
+            />
+          </div>
         </div>
 
         {belumCount > 0 && (
@@ -188,24 +189,27 @@ export function GenerateKomisiPage() {
         )}
       </div>
 
-      {/* Summary badges */}
+      {/* Summary bar */}
       {!isLoading && invoices.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted-foreground">{invoices.length} invoice PAID</span>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+          <span>Menampilkan <strong className="text-foreground">{invoices.length}</strong> invoice PAID</span>
+          {belumCount > 0 && <span className="text-border">·</span>}
           {belumCount > 0 && (
-            <Badge variant="outline" className="text-amber-600 border-amber-300">
-              {belumCount} belum diproses
-            </Badge>
+            <span className="flex items-center gap-1 text-amber-600 font-medium">
+              <Clock className="w-3.5 h-3.5" />{belumCount} belum diproses
+            </span>
           )}
+          {doneCount > 0 && <span className="text-border">·</span>}
           {doneCount > 0 && (
-            <Badge variant="outline" className="text-green-600 border-green-300">
-              {doneCount} sudah generate
-            </Badge>
+            <span className="flex items-center gap-1 text-green-600 font-medium">
+              <CheckCircle2 className="w-3.5 h-3.5" />{doneCount} sudah generate
+            </span>
           )}
+          {skipCount > 0 && <span className="text-border">·</span>}
           {skipCount > 0 && (
-            <Badge variant="outline" className="text-gray-500 border-gray-300">
-              {skipCount} tidak ada komisi
-            </Badge>
+            <span className="flex items-center gap-1 text-muted-foreground font-medium">
+              <Ban className="w-3.5 h-3.5" />{skipCount} tidak ada komisi
+            </span>
           )}
         </div>
       )}
@@ -233,12 +237,12 @@ export function GenerateKomisiPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
-                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Invoice</th>
-                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Pelanggan</th>
-                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Tanggal</th>
-                <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Total</th>
-                <th className="px-4 py-2.5 text-center font-medium text-muted-foreground">Status Komisi</th>
-                <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Aksi</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-foreground/70 uppercase tracking-wide">Invoice</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-foreground/70 uppercase tracking-wide">Pelanggan</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-foreground/70 uppercase tracking-wide">Tanggal</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-foreground/70 uppercase tracking-wide">Total</th>
+                <th className="px-4 py-2.5 text-center text-xs font-semibold text-foreground/70 uppercase tracking-wide">Status Komisi</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-foreground/70 uppercase tracking-wide">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">

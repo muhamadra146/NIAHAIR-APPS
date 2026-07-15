@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCustomers } from "../hooks/useCustomers";
@@ -55,52 +54,49 @@ export function CustomerListPage() {
 
   return (
     <PageContainer>
-      <div className="space-y-4 sm:space-y-6">
+      <div className="space-y-5">
         {/* Page header */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Customers</h1>
             <p className="text-sm text-muted-foreground">
-              {meta ? `${meta.total} customers total` : "Manage customer records"}
+              {meta ? `${meta.total.toLocaleString("id-ID")} pelanggan terdaftar` : "Memuat data..."}
             </p>
           </div>
-          <Button onClick={() => { setFormError(null); setFormOpen(true); }} size="sm" className="sm:size-auto">
+          <Button onClick={() => { setFormError(null); setFormOpen(true); }} size="sm">
             <Plus className="mr-2 h-4 w-4" />
-            Add Customer
+            Tambah Customer
           </Button>
         </div>
 
-        <Card>
-          <CardHeader className="pb-3 pt-4">
-            {/* Search — full width on mobile */}
-            <div className="relative w-full sm:max-w-sm">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search name, phone, email..."
-                value={search}
-                onChange={handleSearchChange}
-                className="pl-9"
-              />
-            </div>
-          </CardHeader>
+        {/* Search */}
+        <div className="relative w-full sm:max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Cari nama, telepon, email..."
+            value={search}
+            onChange={handleSearchChange}
+            className="pl-9 h-9 rounded-xl border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md focus-visible:shadow-md"
+          />
+        </div>
 
-          <CardContent className="p-0">
-            <CustomerTable customers={customers} isLoading={isLoading} />
-          </CardContent>
-        </Card>
+        {/* Table — flat border, no card wrapper */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <CustomerTable customers={customers} isLoading={isLoading} />
+        </div>
 
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
-              Page {meta?.page} of {totalPages}
+              Halaman {meta?.page} dari {totalPages}
             </span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Previous
+                Sebelumnya
               </Button>
               <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                Next
+                Selanjutnya
               </Button>
             </div>
           </div>

@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Search, Eye, EyeOff, Building2, Trash2, AlertTriangle } from "lucide-react";
+import { Plus, Search, ChevronRight, EyeOff, Building2, Trash2, AlertTriangle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -121,266 +120,256 @@ export function EmployeeListPage() {
         </div>
 
         {/* Filters */}
-        <Card>
-          <CardHeader className="pb-3 pt-4">
-            <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Search */}
+          <div className="relative flex-1 min-w-48">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+            <Input
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Cari nama, kode, email..."
+              className="pl-8 h-9 rounded-xl border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md focus-visible:shadow-md"
+            />
+          </div>
 
-              {/* Search */}
-              <div className="relative flex-1 min-w-48">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                  placeholder="Cari nama, kode, email..."
-                  className="pl-8 h-9"
-                />
-              </div>
-
-              {/* Branch filter — only SUPER_ADMIN sees all branches */}
-              {isSuperAdmin && branches.length > 0 && (
-                <div className="relative">
-                  <Building2 className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-                  <select
-                    value={filterBranch}
-                    onChange={(e) => { setFilterBranch(e.target.value); setPage(1); }}
-                    className="h-9 rounded-md border border-input bg-background pl-8 pr-8 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring appearance-none cursor-pointer"
-                  >
-                    <option value="">Semua Cabang</option>
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Active status toggle */}
-              <div className="flex items-center gap-1 rounded-md border border-input bg-background p-1">
-                {[
-                  { label: "Aktif",    value: true  as boolean | undefined },
-                  { label: "Semua",    value: undefined },
-                  { label: "Nonaktif", value: false as boolean | undefined },
-                ].map((opt) => (
-                  <button
-                    key={String(opt.value)}
-                    type="button"
-                    onClick={() => { setIsActive(opt.value); setPage(1); }}
-                    className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
-                      isActive === opt.value
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
+          {/* Branch filter */}
+          {isSuperAdmin && branches.length > 0 && (
+            <div className="relative">
+              <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              <select
+                value={filterBranch}
+                onChange={(e) => { setFilterBranch(e.target.value); setPage(1); }}
+                className="h-9 rounded-xl border border-slate-200 bg-white shadow-sm pl-8 pr-3 text-sm focus:outline-none hover:shadow-md transition-shadow appearance-none cursor-pointer"
+              >
+                <option value="">Semua Cabang</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
-              </div>
+              </select>
             </div>
-          </CardHeader>
+          )}
 
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="space-y-3 p-4">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} className="h-14 w-full" />
-                ))}
-              </div>
-            ) : employees.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted-foreground">
-                Tidak ada karyawan ditemukan.
-              </p>
-            ) : (
-              <>
-                {/* Mobile */}
-                <div className="divide-y divide-border md:hidden">
-                  {employees.map((e) => (
-                    <div key={e.id} className="px-4 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{e.name}</p>
-                          <p className="text-xs text-muted-foreground">{e.employeeCode} · {e.role.name}</p>
-                          {e.homeBranch && (
-                            <p className="text-[11px] text-muted-foreground/70 mt-0.5">{e.homeBranch.name}</p>
-                          )}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <Badge variant={e.isActive ? "default" : "secondary"} className="text-xs">
+          {/* Active status toggle */}
+          <div className="flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white shadow-sm p-1">
+            {[
+              { label: "Aktif",    value: true  as boolean | undefined },
+              { label: "Semua",    value: undefined },
+              { label: "Nonaktif", value: false as boolean | undefined },
+            ].map((opt) => (
+              <button
+                key={String(opt.value)}
+                type="button"
+                onClick={() => { setIsActive(opt.value); setPage(1); }}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  isActive === opt.value
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Table — flat border, no card */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          {isLoading ? (
+            <div className="divide-y divide-slate-100">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-5 py-4">
+                  <Skeleton className="h-3.5 w-16 font-mono" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-3.5 w-40" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="h-5 w-14 rounded-lg" />
+                  <Skeleton className="h-5 w-14 rounded-lg" />
+                </div>
+              ))}
+            </div>
+          ) : employees.length === 0 ? (
+            <p className="py-14 text-center text-sm text-slate-400">
+              Tidak ada karyawan ditemukan.
+            </p>
+          ) : (
+            <>
+              {/* Mobile */}
+              <div className="divide-y divide-slate-100 md:hidden">
+                {employees.map((e) => (
+                  <div key={e.id} className="px-4 py-3.5 hover:bg-slate-50/60 transition-colors">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-medium text-slate-800">{e.name}</p>
+                          <Badge variant="outline" className={`text-xs shrink-0 rounded-lg px-2 py-0.5 ${e.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
                             {e.isActive ? "Aktif" : "Nonaktif"}
                           </Badge>
-                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" asChild>
-                            <Link to={`/employees/${e.id}`}>
-                              <Eye className="mr-1 h-3 w-3" />
-                              Detail
-                            </Link>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">{e.employeeCode} · {e.role.name}</p>
+                        {e.homeBranch && (
+                          <p className="text-xs text-slate-400 mt-0.5">{e.homeBranch.name}</p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Link to={`/employees/${e.id}`} className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-primary transition-colors">
+                          <ChevronRight className="h-4 w-4" />
+                        </Link>
+                        {canDelete && (
+                          <>
+                            <button type="button" className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                              onClick={() => { setConfirmDeleteId(null); setConfirmDeactivateId(e.id); }}>
+                              <EyeOff className="h-3.5 w-3.5" />
+                            </button>
+                            <button type="button" className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                              onClick={() => { setConfirmDeactivateId(null); setConfirmDeleteId(e.id); }}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {confirmDeactivateId === e.id && (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                          Nonaktifkan karyawan ini?
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" className="h-7 text-xs border-amber-400 text-amber-700"
+                            onClick={() => { deactivateMutation.mutate(e.id); setConfirmDeactivateId(null); }}>
+                            Ya, Nonaktifkan
                           </Button>
-                          {canDelete && (
-                            <>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-amber-600 hover:bg-amber-50"
-                                title="Nonaktifkan"
-                                onClick={() => { setConfirmDeleteId(null); setConfirmDeactivateId(e.id); }}>
-                                <EyeOff className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                title="Hapus permanen"
-                                onClick={() => { setConfirmDeactivateId(null); setConfirmDeleteId(e.id); }}>
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </>
-                          )}
+                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setConfirmDeactivateId(null)}>Batal</Button>
                         </div>
                       </div>
-                      {confirmDeactivateId === e.id && (
-                        <div className="mt-2 space-y-2">
-                          <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
-                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                            Nonaktifkan karyawan ini?
-                          </div>
-                          <div className="flex gap-2">
-                            <Button variant="outline" size="sm" className="h-7 text-xs border-amber-400 text-amber-700"
-                              onClick={() => { deactivateMutation.mutate(e.id); setConfirmDeactivateId(null); }}>
-                              Ya, Nonaktifkan
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-7 text-xs"
-                              onClick={() => setConfirmDeactivateId(null)}>
-                              Batal
-                            </Button>
-                          </div>
+                    )}
+                    {confirmDeleteId === e.id && (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                          Hapus permanen? Data tidak bisa dikembalikan.
                         </div>
-                      )}
-                      {confirmDeleteId === e.id && (
-                        <div className="mt-2 space-y-2">
-                          <div className="flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">
-                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                            Hapus permanen? Data tidak bisa dikembalikan.
-                          </div>
-                          <div className="flex gap-2">
-                            <Button variant="destructive" size="sm" className="h-7 text-xs"
-                              onClick={() => { deleteMutation.mutate(e.id); setConfirmDeleteId(null); }}>
-                              Ya, Hapus
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-7 text-xs"
-                              onClick={() => setConfirmDeleteId(null)}>
-                              Batal
-                            </Button>
-                          </div>
+                        <div className="flex gap-2">
+                          <Button variant="destructive" size="sm" className="h-7 text-xs"
+                            onClick={() => { deleteMutation.mutate(e.id); setConfirmDeleteId(null); }}>
+                            Ya, Hapus
+                          </Button>
+                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setConfirmDeleteId(null)}>Batal</Button>
                         </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
 
-                {/* Desktop */}
-                <div className="hidden overflow-x-auto md:block">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/50">
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Kode</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Nama</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Role</th>
+              {/* Desktop */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50">
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Kode</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Nama</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Role</th>
+                      {isSuperAdmin && (
+                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Cabang</th>
+                      )}
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Kontak</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Komisi</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                      <th className="px-5 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {employees.map((e) => (
+                      <tr key={e.id} className="group hover:bg-slate-50/60 transition-colors">
+                        <td className="px-5 py-3.5 font-mono text-xs text-slate-400">{e.employeeCode ?? "—"}</td>
+                        <td className="px-5 py-3.5 font-medium text-slate-800">{e.name}</td>
+                        <td className="px-5 py-3.5 text-slate-500">{e.role.name}</td>
                         {isSuperAdmin && (
-                          <th className="px-4 py-3 text-left font-medium text-muted-foreground">Cabang</th>
+                          <td className="px-5 py-3.5">
+                            {e.homeBranch ? (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 border border-slate-200 px-2 py-0.5 text-xs text-slate-600">
+                                <Building2 className="h-3 w-3 shrink-0" />
+                                {e.homeBranch.name}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
                         )}
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Kontak</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Komisi</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-                        <th className="px-4 py-3" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {employees.map((e) => (
-                        <tr key={e.id} className="border-b border-border transition-colors hover:bg-muted/30">
-                          <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{e.employeeCode ?? "—"}</td>
-                          <td className="px-4 py-3 font-medium">{e.name}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{e.role.name}</td>
-                          {isSuperAdmin && (
-                            <td className="px-4 py-3">
-                              {e.homeBranch ? (
-                                <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground border border-border">
-                                  <Building2 className="h-3 w-3 shrink-0" />
-                                  {e.homeBranch.name}
-                                </span>
-                              ) : (
-                                <span className="text-xs text-muted-foreground/50">—</span>
-                              )}
-                            </td>
+                        <td className="px-5 py-3.5 text-xs text-slate-500">
+                          <div className="tabular-nums">{e.phone ?? "—"}</div>
+                          <div className="text-slate-400">{e.email ?? "—"}</div>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          {e.commissionEnabled ? (
+                            <Badge variant="outline" className="text-xs rounded-lg px-2 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-200">Aktif</Badge>
+                          ) : (
+                            <span className="text-slate-300">—</span>
                           )}
-                          <td className="px-4 py-3 text-xs text-muted-foreground">
-                            <div>{e.phone ?? "—"}</div>
-                            <div>{e.email ?? "—"}</div>
-                          </td>
-                          <td className="px-4 py-3">
-                            {e.commissionEnabled ? (
-                              <Badge variant="outline" className="text-xs text-green-600 border-green-300">Aktif</Badge>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <Badge variant={e.isActive ? "default" : "secondary"}>
-                              {e.isActive ? "Aktif" : "Nonaktif"}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {confirmDeactivateId === e.id ? (
-                              <div className="flex items-center justify-end gap-2">
-                                <span className="text-xs text-amber-600 flex items-center gap-1">
-                                  <AlertTriangle className="h-3.5 w-3.5" /> Nonaktifkan?
-                                </span>
-                                <Button variant="outline" size="sm" className="h-7 text-xs border-amber-400 text-amber-700 hover:bg-amber-50"
-                                  onClick={() => { deactivateMutation.mutate(e.id); setConfirmDeactivateId(null); }}>
-                                  Ya
-                                </Button>
-                                <Button variant="outline" size="sm" className="h-7 text-xs"
-                                  onClick={() => setConfirmDeactivateId(null)}>
-                                  Batal
-                                </Button>
-                              </div>
-                            ) : confirmDeleteId === e.id ? (
-                              <div className="flex items-center justify-end gap-2">
-                                <span className="text-xs text-red-600 flex items-center gap-1">
-                                  <AlertTriangle className="h-3.5 w-3.5" /> Hapus permanen?
-                                </span>
-                                <Button variant="destructive" size="sm" className="h-7 text-xs"
-                                  onClick={() => { deleteMutation.mutate(e.id); setConfirmDeleteId(null); }}>
-                                  Ya
-                                </Button>
-                                <Button variant="outline" size="sm" className="h-7 text-xs"
-                                  onClick={() => setConfirmDeleteId(null)}>
-                                  Batal
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-end gap-1">
-                                <Button variant="ghost" size="icon" asChild>
-                                  <Link to={`/employees/${e.id}`}>
-                                    <Eye className="h-4 w-4" />
-                                  </Link>
-                                </Button>
-                                {canDelete && (
-                                  <>
-                                    <Button variant="ghost" size="icon" title="Nonaktifkan"
-                                      className="text-muted-foreground hover:text-amber-600 hover:bg-amber-50"
-                                      onClick={() => { setConfirmDeleteId(null); setConfirmDeactivateId(e.id); }}>
-                                      <EyeOff className="h-4 w-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" title="Hapus permanen"
-                                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                      onClick={() => { setConfirmDeactivateId(null); setConfirmDeleteId(e.id); }}>
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <Badge variant="outline" className={`text-xs rounded-lg px-2 py-0.5 ${e.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
+                            {e.isActive ? "Aktif" : "Nonaktif"}
+                          </Badge>
+                        </td>
+                        <td className="px-5 py-3.5 text-right">
+                          {confirmDeactivateId === e.id ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="text-xs text-amber-600 flex items-center gap-1">
+                                <AlertTriangle className="h-3.5 w-3.5" /> Nonaktifkan?
+                              </span>
+                              <Button variant="outline" size="sm" className="h-7 text-xs border-amber-400 text-amber-700 hover:bg-amber-50"
+                                onClick={() => { deactivateMutation.mutate(e.id); setConfirmDeactivateId(null); }}>
+                                Ya
+                              </Button>
+                              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setConfirmDeactivateId(null)}>Batal</Button>
+                            </div>
+                          ) : confirmDeleteId === e.id ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="text-xs text-red-600 flex items-center gap-1">
+                                <AlertTriangle className="h-3.5 w-3.5" /> Hapus permanen?
+                              </span>
+                              <Button variant="destructive" size="sm" className="h-7 text-xs"
+                                onClick={() => { deleteMutation.mutate(e.id); setConfirmDeleteId(null); }}>
+                                Ya
+                              </Button>
+                              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setConfirmDeleteId(null)}>Batal</Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Link
+                                to={`/employees/${e.id}`}
+                                className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-primary transition-colors"
+                              >
+                                Lihat <ChevronRight className="h-3.5 w-3.5" />
+                              </Link>
+                              {canDelete && (
+                                <>
+                                  <button type="button" title="Nonaktifkan"
+                                    className="inline-flex items-center justify-center rounded-md p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                    onClick={() => { setConfirmDeleteId(null); setConfirmDeactivateId(e.id); }}>
+                                    <EyeOff className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button type="button" title="Hapus permanen"
+                                    className="inline-flex items-center justify-center rounded-md p-1 text-slate-400 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                    onClick={() => { setConfirmDeactivateId(null); setConfirmDeleteId(e.id); }}>
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Pagination */}
         {totalPages > 1 && (

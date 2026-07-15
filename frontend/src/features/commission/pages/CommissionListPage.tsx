@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle, DollarSign, Clock, Filter, RefreshCw, Edit2, Trash2 } from "lucide-react";
+import { RefreshCw, Edit2, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -143,12 +143,12 @@ export function CommissionListPage() {
         {activeTab === "items" && <MasterItemTab />}
         {activeTab === "commissions" && (<>
 
-        {/* Summary cards */}
+        {/* Summary bar */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <SummaryCard icon={<Filter className="h-4 w-4" />}      label="Ditampilkan" value={String(commissions.length)} iconColor="text-slate-500"   bgColor="bg-slate-50"   />
-          <SummaryCard icon={<Clock className="h-4 w-4" />}       label="Pending"     value={String(counts["PENDING"] ?? 0)} iconColor="text-yellow-600" bgColor="bg-yellow-50" />
-          <SummaryCard icon={<CheckCircle className="h-4 w-4" />} label="Disetujui"   value={String(counts["APPROVED"] ?? 0)} iconColor="text-blue-600"   bgColor="bg-blue-50"   />
-          <SummaryCard icon={<DollarSign className="h-4 w-4" />}  label="Total Komisi" value={formatCurrency(totalAmount)} iconColor="text-emerald-600" bgColor="bg-emerald-50" />
+          <SummaryCard label="Ditampilkan" value={String(commissions.length)}         accent="text-foreground" />
+          <SummaryCard label="Pending"     value={String(counts["PENDING"] ?? 0)}     accent="text-yellow-600" />
+          <SummaryCard label="Disetujui"   value={String(counts["APPROVED"] ?? 0)}    accent="text-blue-600"   />
+          <SummaryCard label="Total Komisi" value={formatCurrency(totalAmount)}        accent="text-emerald-600" highlight />
         </div>
 
         {/* Filter + table */}
@@ -156,15 +156,15 @@ export function CommissionListPage() {
           <CardHeader className="border-b border-slate-100 pb-4 pt-4">
 
             {/* Status tabs */}
-            <div className="flex gap-1 flex-wrap mb-4">
+            <div className="flex gap-1.5 flex-wrap mb-4">
               {STATUS_TABS.map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => { setStatus(tab.key); setPage(1); }}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all border ${
                     status === tab.key
-                      ? "bg-primary text-primary-foreground"
-                      : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 bg-background"
                   }`}
                 >
                   {tab.label}
@@ -173,24 +173,24 @@ export function CommissionListPage() {
             </div>
 
             {/* Filters row */}
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Dari</Label>
-                <Input type="date" value={startDate} onChange={(e) => { setStart(e.target.value); setPage(1); }} className={`${filterInputCls} w-36`} />
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Date range — grouped */}
+              <div className="flex items-center gap-0 rounded-lg border border-input bg-background shadow-sm overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <span className="text-xs text-muted-foreground shrink-0">Dari</span>
+                  <input type="date" value={startDate} onChange={(e) => { setStart(e.target.value); setPage(1); }} className="text-sm bg-transparent focus:outline-none" />
+                </div>
+                <span className="text-muted-foreground text-xs px-1 select-none border-x border-input bg-muted/30 py-2">s/d</span>
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className="text-sm bg-transparent focus:outline-none" />
+                </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Sampai</Label>
-                <Input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className={`${filterInputCls} w-36`} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Invoice ID</Label>
-                <Input
-                  value={invoiceId}
-                  onChange={(e) => { setInvoiceId(e.target.value.trim()); setPage(1); }}
-                  placeholder="Filter invoice…"
-                  className={`${filterInputCls} w-44`}
-                />
-              </div>
+              <Input
+                value={invoiceId}
+                onChange={(e) => { setInvoiceId(e.target.value.trim()); setPage(1); }}
+                placeholder="Filter invoice…"
+                className={`${filterInputCls} w-44 h-[38px]`}
+              />
               {isSuperAdmin && invoiceId && (
                 <Button
                   size="sm"
@@ -227,7 +227,7 @@ export function CommissionListPage() {
                       <tr className="border-b border-slate-100 bg-slate-50/60">
                         <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Karyawan</th>
                         <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Invoice</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Tipe</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Rate</th>
                         <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Komisi</th>
                         <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Tanggal</th>
                         <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
@@ -371,24 +371,18 @@ export function CommissionListPage() {
 }
 
 function SummaryCard({
-  icon, label, value, iconColor, bgColor,
+  label, value, accent, highlight,
 }: {
-  icon: React.ReactNode;
   label: string;
   value: string;
-  iconColor: string;
-  bgColor: string;
+  accent?: string;
+  highlight?: boolean;
 }) {
   return (
-    <Card className="rounded-2xl border border-slate-100/80 bg-white shadow-sm">
-      <CardContent className="p-4">
-        <div className={`inline-flex items-center justify-center h-8 w-8 rounded-lg ${bgColor} ${iconColor} mb-2`}>
-          {icon}
-        </div>
-        <p className="text-xs font-medium uppercase tracking-wider text-slate-400">{label}</p>
-        <p className="mt-1 text-lg font-bold text-slate-800">{value}</p>
-      </CardContent>
-    </Card>
+    <div className={`rounded-xl border px-4 py-3 ${highlight ? "bg-muted/30 border-border" : "bg-background border-border"}`}>
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
+      <p className={`text-lg font-bold ${accent ?? "text-foreground"}`}>{value}</p>
+    </div>
   );
 }
 

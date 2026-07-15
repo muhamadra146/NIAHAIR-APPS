@@ -2,13 +2,11 @@ import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Plus, Eye, Search, CreditCard, Receipt,
-  TrendingUp, Clock, CheckCircle2, ChevronDown, ChevronUp, Trash2,
+  TrendingUp, Clock, CheckCircle2, ChevronDown, ChevronUp, Trash2, ChevronRight,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -375,136 +373,143 @@ function ManagementView() {
           </p>
         )}
 
-        {/* Filter + table card */}
-        <Card className="rounded-2xl border border-slate-100/80 bg-white shadow-sm overflow-hidden">
-          <CardHeader className="border-b border-slate-100 pb-4 pt-4">
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Status</Label>
-                <select
-                  value={status}
-                  onChange={(e) => { setStatus(e.target.value as InvoiceStatus | ""); setPage(1); }}
-                  className={`${filterInputCls} px-3 text-sm`}
-                >
-                  <option value="">Semua status</option>
-                  {(Object.keys(STATUS_LABEL) as InvoiceStatus[]).map((s) => (
-                    <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Dari</Label>
-                <Input type="date" value={startDate} onChange={(e) => { setStart(e.target.value); setPage(1); }} className={`${filterInputCls} w-36`} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Sampai</Label>
-                <Input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className={`${filterInputCls} w-36`} />
-              </div>
-              {(status || startDate || endDate) && (
-                <Button variant="ghost" size="sm" onClick={() => { setStatus(""); setStart(""); setEnd(""); setPage(1); }} className="h-9 text-xs text-slate-500 hover:text-slate-800">
-                  Reset
-                </Button>
-              )}
+        {/* Filters */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Status</p>
+            <select
+              value={status}
+              onChange={(e) => { setStatus(e.target.value as InvoiceStatus | ""); setPage(1); }}
+              className={`${filterInputCls} px-3 text-sm w-40`}
+            >
+              <option value="">Semua Status</option>
+              {(Object.keys(STATUS_LABEL) as InvoiceStatus[]).map((s) => (
+                <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Periode</p>
+            <div className="flex items-center gap-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => { setStart(e.target.value); setPage(1); }}
+                className="h-9 bg-transparent px-3 text-sm focus:outline-none"
+              />
+              <span className="text-muted-foreground text-xs px-1 select-none border-x border-slate-200 bg-slate-50/60 py-2">s/d</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => { setEnd(e.target.value); setPage(1); }}
+                className="h-9 bg-transparent px-3 text-sm focus:outline-none"
+              />
             </div>
-          </CardHeader>
+          </div>
+          {(status || startDate || endDate) && (
+            <Button variant="ghost" size="sm" onClick={() => { setStatus(""); setStart(""); setEnd(""); setPage(1); }} className="h-9 text-xs text-slate-500 hover:text-slate-800">
+              Reset Filter
+            </Button>
+          )}
+        </div>
 
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="space-y-3 p-5">
-                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
-              </div>
-            ) : invoices.length === 0 ? (
-              <p className="py-14 text-center text-sm text-slate-400">Tidak ada invoice.</p>
-            ) : (
-              <>
-                {/* Mobile */}
-                <div className="divide-y divide-slate-100 md:hidden">
-                  {invoices.map((inv) => (
-                    <div key={inv.id} className="flex items-start justify-between gap-3 px-5 py-4 hover:bg-slate-50/60 transition-colors">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-mono text-slate-400">{inv.invoiceNo}</p>
-                        <p className="truncate text-sm font-medium text-slate-800">{inv.customer?.name ?? "—"}</p>
-                        <p className="text-xs text-slate-400">{formatDate(inv.invoiceDate)}</p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1.5">
-                        <InvoiceStatusBadge status={inv.status} />
-                        <p className="text-xs font-semibold text-slate-800">{formatCurrency(inv.grandTotal)}</p>
-                        <div className="flex items-center gap-1">
-                          <Button variant="outline" size="sm" className="h-7 rounded-lg px-2 text-xs" asChild>
-                            <Link to={`/invoices/${inv.id}`}><Eye className="mr-1 h-3 w-3" />Detail</Link>
-                          </Button>
-                          {canDelete && inv.status !== "PAID" && (
-                            <Button
-                              variant="ghost" size="sm"
-                              className="h-7 rounded-lg px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => setDeleteTarget(inv)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
+        {/* Table — flat border, no card */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          {isLoading ? (
+            <div className="divide-y divide-slate-100">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-5 py-4">
+                  <Skeleton className="h-3.5 w-28 font-mono" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-3.5 w-36" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="h-4 w-24 ml-auto" />
+                  <Skeleton className="h-5 w-16 rounded-lg" />
+                </div>
+              ))}
+            </div>
+          ) : invoices.length === 0 ? (
+            <p className="py-14 text-center text-sm text-slate-400">Tidak ada invoice.</p>
+          ) : (
+            <>
+              {/* Mobile */}
+              <div className="divide-y divide-slate-100 md:hidden">
+                {invoices.map((inv) => (
+                  <Link key={inv.id} to={`/invoices/${inv.id}`} className="flex items-start justify-between gap-3 px-5 py-4 hover:bg-slate-50/60 transition-colors">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-mono text-slate-400">{inv.invoiceNo}</p>
+                      <p className="truncate text-sm font-medium text-slate-800">{inv.customer?.name ?? "—"}</p>
+                      <p className="text-xs text-slate-400">{formatDate(inv.invoiceDate)}</p>
                     </div>
-                  ))}
-                </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <InvoiceStatusBadge status={inv.status} />
+                      <p className="text-sm font-semibold tabular-nums text-slate-800">{formatCurrency(inv.grandTotal)}</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-slate-300 shrink-0 self-center" />
+                  </Link>
+                ))}
+              </div>
 
-                {/* Desktop */}
-                <div className="hidden overflow-x-auto md:block">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-100 bg-slate-50/60">
-                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">No. Invoice</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Customer</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Tanggal</th>
-                        <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Total</th>
-                        <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Sisa Bayar</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
-                        <th className="px-5 py-3" />
-                        <th className="px-5 py-3" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {invoices.map((inv) => (
-                        <tr key={inv.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50/60">
-                          <td className="px-5 py-4 font-mono text-xs text-slate-400">{inv.invoiceNo}</td>
-                          <td className="px-5 py-4">
-                            <p className="font-medium text-slate-800">{inv.customer?.name ?? "—"}</p>
-                            <p className="text-xs text-slate-400 mt-0.5">{inv.customer?.mobilePhone ?? ""}</p>
-                          </td>
-                          <td className="px-5 py-4 text-slate-500 text-sm">{formatDate(inv.invoiceDate)}</td>
-                          <td className="px-5 py-4 text-right font-semibold text-slate-800 whitespace-nowrap">{formatCurrency(inv.grandTotal)}</td>
-                          <td className="px-5 py-4 text-right whitespace-nowrap">
-                            {Number(inv.outstandingAmount) > 0
-                              ? <span className="text-red-600 font-semibold">{formatCurrency(inv.outstandingAmount)}</span>
-                              : <span className="text-slate-400">—</span>}
-                          </td>
-                          <td className="px-5 py-4"><InvoiceStatusBadge status={inv.status} /></td>
-                          <td className="px-5 py-4">
-                            <Button variant="ghost" size="icon" className="rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100" asChild>
-                              <Link to={`/invoices/${inv.id}`}><Eye className="h-4 w-4" /></Link>
-                            </Button>
-                          </td>
-                          <td className="px-5 py-4">
+              {/* Desktop */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50">
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">No. Invoice</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Customer</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Tanggal</th>
+                      <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Total</th>
+                      <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Sisa Bayar</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                      <th className="px-5 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {invoices.map((inv) => (
+                      <tr key={inv.id} className="group hover:bg-slate-50/60 transition-colors">
+                        <td className="px-5 py-3.5 font-mono text-xs text-slate-400">{inv.invoiceNo}</td>
+                        <td className="px-5 py-3.5">
+                          <p className="font-medium text-slate-800">{inv.customer?.name ?? "—"}</p>
+                          {inv.customer?.mobilePhone && (
+                            <p className="text-xs text-slate-400 mt-0.5">{inv.customer.mobilePhone}</p>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{formatDate(inv.invoiceDate)}</td>
+                        <td className="px-5 py-3.5 text-right font-semibold tabular-nums text-slate-800 whitespace-nowrap">{formatCurrency(inv.grandTotal)}</td>
+                        <td className="px-5 py-3.5 text-right tabular-nums whitespace-nowrap">
+                          {Number(inv.outstandingAmount) > 0
+                            ? <span className="font-semibold text-red-600">{formatCurrency(inv.outstandingAmount)}</span>
+                            : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="px-5 py-3.5"><InvoiceStatusBadge status={inv.status} /></td>
+                        <td className="px-5 py-3.5 text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Link
+                              to={`/invoices/${inv.id}`}
+                              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-primary transition-colors"
+                            >
+                              Lihat <ChevronRight className="h-3.5 w-3.5" />
+                            </Link>
                             {canDelete && inv.status !== "PAID" && (
-                              <Button
-                                variant="ghost" size="icon"
-                                className="rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/10"
+                              <button
+                                type="button"
                                 onClick={() => setDeleteTarget(inv)}
-                                title="Hapus invoice"
+                                className="inline-flex items-center justify-center rounded-md p-1 text-slate-400 hover:bg-destructive/10 hover:text-destructive transition-colors"
                               >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
                             )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Pagination */}
         {totalPages > 1 && (

@@ -226,6 +226,13 @@ export const sidebarNav: NavItem[] = [
     roles: [...MANAGEMENT_ROLES, "STYLIST", "STAFF", "CASHIER"],
     group: "Keuangan Saya",
   },
+  {
+    label: "Kasbon Saya",
+    href:  "/my-kasbon",
+    icon:  Banknote,
+    roles: [...MANAGEMENT_ROLES, "STYLIST", "STAFF", "CASHIER"],
+    group: "Keuangan Saya",
+  },
 
   // ── Lainnya ───────────────────────────────────────────────────────────
   {

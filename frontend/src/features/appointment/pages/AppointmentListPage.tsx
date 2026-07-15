@@ -2,10 +2,7 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useAppointments, useCreateAppointment } from "../hooks";
 import { AppointmentTable } from "../components/AppointmentTable";
 import { AppointmentCreateForm, type PendingPhoto } from "../components/AppointmentForm";
@@ -97,63 +94,59 @@ export function AppointmentListPage() {
           </Button>
         </div>
 
-        {/* Filter + table card */}
-        <Card className="rounded-2xl border border-slate-100/80 bg-white shadow-sm overflow-hidden">
-          <CardHeader className="border-b border-slate-100 pb-4 pt-4">
-            <div className="flex flex-wrap items-end gap-3">
+        {/* Filters */}
+        <div className="flex flex-wrap items-end gap-3">
+          {/* Status */}
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Status</p>
+            <select
+              value={status}
+              onChange={(e) => { setStatus(e.target.value as AppointmentStatus | ""); setPage(1); }}
+              className={`${filterInputCls} px-3 text-sm w-44`}
+            >
+              <option value="">Semua Status</option>
+              {ALL_STATUSES.map((s) => (
+                <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+              ))}
+            </select>
+          </div>
 
-              {/* Status */}
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Status</Label>
-                <select
-                  value={status}
-                  onChange={(e) => { setStatus(e.target.value as AppointmentStatus | ""); setPage(1); }}
-                  className={`${filterInputCls} px-3 text-sm`}
-                >
-                  <option value="">All statuses</option>
-                  {ALL_STATUSES.map((s) => (
-                    <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Date range */}
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">From</Label>
-                <Input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => { setStart(e.target.value); setPage(1); }}
-                  className={`${filterInputCls} w-36`}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">To</Label>
-                <Input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => { setEnd(e.target.value); setPage(1); }}
-                  className={`${filterInputCls} w-36`}
-                />
-              </div>
-
-              {(status || startDate || endDate) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => { setStatus(""); setStart(""); setEnd(""); setPage(1); }}
-                  className="h-9 text-xs text-slate-500 hover:text-slate-800"
-                >
-                  Clear
-                </Button>
-              )}
+          {/* Date range — grouped with s/d separator */}
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Periode</p>
+            <div className="flex items-center gap-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => { setStart(e.target.value); setPage(1); }}
+                className="h-9 bg-transparent px-3 text-sm focus:outline-none"
+              />
+              <span className="text-muted-foreground text-xs px-1 select-none border-x border-slate-200 bg-slate-50/60 py-2">s/d</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => { setEnd(e.target.value); setPage(1); }}
+                className="h-9 bg-transparent px-3 text-sm focus:outline-none"
+              />
             </div>
-          </CardHeader>
+          </div>
 
-          <CardContent className="p-0">
-            <AppointmentTable appointments={appointments} isLoading={isLoading} />
-          </CardContent>
-        </Card>
+          {(status || startDate || endDate) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setStatus(""); setStart(""); setEnd(""); setPage(1); }}
+              className="h-9 text-xs text-slate-500 hover:text-slate-800"
+            >
+              Reset Filter
+            </Button>
+          )}
+        </div>
+
+        {/* Table — flat border, no card */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <AppointmentTable appointments={appointments} isLoading={isLoading} />
+        </div>
 
         {/* Pagination */}
         {totalPages > 1 && (
