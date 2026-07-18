@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { StaffDashboardPage } from "./StaffDashboardPage";
 import {
   TrendingUp, Receipt, Wallet, CalendarDays,
   Users, BadgeDollarSign, ArrowUpRight,
@@ -37,8 +38,14 @@ const KPI_CONFIG = [
   { icon: Users,           label: "Kasbon Aktif",  href: "/loans"        },
 ] as const;
 
+const STAFF_ROLES = ["STAFF", "STYLIST"] as const;
+
 export function DashboardPage() {
   const { user, branchId } = useAuthStore();
+
+  if (user?.roleCode && STAFF_ROLES.includes(user.roleCode as typeof STAFF_ROLES[number])) {
+    return <StaffDashboardPage />;
+  }
 
   const { data: summary, isLoading } = useSummaryReport({
     branchId:  branchId ?? undefined,

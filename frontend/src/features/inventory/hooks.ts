@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   fetchInventories, fetchStockMovements,
   fetchStockTransfers, createStockTransfer, updateTransferStatus,
+  fetchItemCategories,
 } from "./api";
 import type { InventoryListParams, MovementListParams, TransferListParams, CreateTransferInput } from "./types";
 
@@ -11,6 +12,14 @@ export function useInventories(params: InventoryListParams = {}) {
     queryFn:        () => fetchInventories(params),
     staleTime:      0,
     refetchOnMount: true,
+  });
+}
+
+export function useItemCategories() {
+  return useQuery({
+    queryKey: ["item-categories"],
+    queryFn:  fetchItemCategories,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

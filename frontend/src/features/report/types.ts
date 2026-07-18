@@ -37,6 +37,21 @@ export interface CommissionByEmployee {
   paid:        number | string;
 }
 
+export interface SalesByItem {
+  itemId:             string;
+  itemCode:           string;
+  name:               string;
+  itemType:           "INVENTORY" | "SERVICE";
+  categoryId:         string | null;
+  categoryName:       string | null;
+  parentCategoryId:   string | null;
+  parentCategoryName: string | null;
+  totalQty:           number;
+  totalRevenue:       number | string;
+  invoiceCount:       number;
+  cumPct:             number;
+}
+
 export interface ReportParams {
   branchId?:  string;
   startDate?: string;

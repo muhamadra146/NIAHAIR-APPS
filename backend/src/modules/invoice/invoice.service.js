@@ -14,7 +14,7 @@ const ORDER_MAP = {
   "-grandTotal":  { grandTotal: "desc" },
 };
 const { createSyncJob }            = require("../syncQueue/syncQueue.service");
-const { generateSaleMovement, reverseInvoiceSaleMovements } = require("../inventory/inventory.service");
+const { generateSaleMovement, reverseInvoiceSaleMovements, reverseInvoiceServiceMovements } = require("../inventory/inventory.service");
 const { accurateRequest }          = require("../accurate/accurate.client");
 const prisma                       = require("../../config/prisma");
 const {
@@ -863,8 +863,11 @@ const deleteInvoice = async (id) => {
     );
   }
 
-  // Reverse SALE movements before deleting — restores inventory stock
+  // Reverse SALE movements (invoice items) — restores inventory stock
   await reverseInvoiceSaleMovements(invoice.invoiceNo);
+
+  // Reverse SERVICE_USAGE movements (treatment materials) — restores material stock
+  await reverseInvoiceServiceMovements(id);
 
   // Delete from Accurate first if it was synced
   if (invoice.accurateInvoiceId) {

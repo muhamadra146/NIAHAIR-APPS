@@ -13,18 +13,24 @@ const SALT_ROUNDS = 10;
 
 // ── List ──────────────────────────────────────────────────────────────
 
-const getAll = async ({ page, limit, search, isActive }) => {
+const getAll = async ({ page, limit, search, isActive, branchId }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
   if (search) {
     where.OR = [
-      { name:  { contains: search, mode: "insensitive" } },
-      { email: { contains: search, mode: "insensitive" } },
+      { email:    { contains: search, mode: "insensitive" } },
+      { username: { contains: search, mode: "insensitive" } },
+      { employee: { name: { contains: search, mode: "insensitive" } } },
     ];
   }
   if (isActive !== undefined && isActive !== "") {
     where.isActive = isActive === "true" || isActive === true;
+  }
+  if (branchId) {
+    where.employee = {
+      employeeBranches: { some: { branchId, isActive: true } },
+    };
   }
 
   const [users, total] = await Promise.all([findAll({ skip, take, where }), count(where)]);

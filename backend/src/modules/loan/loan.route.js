@@ -9,6 +9,7 @@ const {
   createController, updateController, cancelController,
   addRepaymentController, getRepaymentsController,
   getMyLoansController, getMyLoanByIdController,
+  deleteController,
 } = require("./loan.controller");
 
 const router = Router();
@@ -54,6 +55,10 @@ router.post("/:id/repayments",
 
 router.get("/:id/repayments",
   authenticate, authorize(...ADMIN_ROLES), getRepaymentsController,
+);
+
+router.delete("/:id",
+  authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), deleteController,
 );
 
 module.exports = router;

@@ -8,6 +8,7 @@ export interface InventoryItemRef {
   name:     string;
   itemCode: string | null;
   itemType: string;
+  category: { id: string; name: string } | null;
 }
 
 export interface InventoryWarehouseRef {
@@ -47,12 +48,21 @@ export interface StockMovement {
 }
 
 export interface InventoryListParams {
-  page?:        number;
-  limit?:       number;
-  warehouseId?: string;
-  branchId?:    string;
-  itemId?:      string;
-  search?:      string;
+  page?:             number;
+  limit?:            number;
+  warehouseId?:      string;
+  branchId?:         string;
+  itemId?:           string;
+  search?:           string;
+  categoryId?:       string;
+  parentCategoryId?: string;
+}
+
+export interface ItemCategory {
+  id:       string;
+  name:     string;
+  parentId: string | null;
+  parent:   { id: string; name: string } | null;
 }
 
 export interface MovementListParams {

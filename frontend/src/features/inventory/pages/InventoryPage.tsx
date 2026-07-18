@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/lib/toast";
-import { useInventories, useStockMovements, useStockTransfers, useCreateStockTransfer, useUpdateTransferStatus } from "../hooks";
+import { useInventories, useItemCategories, useStockMovements, useStockTransfers, useCreateStockTransfer, useUpdateTransferStatus } from "../hooks";
 import { fetchWarehouses } from "@/features/settings/api/warehouse.api";
 import { fetchInvoiceItems } from "@/features/invoice/api";
 import type { StockTransfer, CreateTransferInput } from "../types";
@@ -65,9 +65,11 @@ export function InventoryPage() {
 // ── Stock balance tab ─────────────────────────────────────────────────────────
 
 function StockTab({ branchId }: { branchId?: string | null }) {
-  const [page, setPage]   = useState(1);
-  const [search, setSearch] = useState("");
+  const [page, setPage]                   = useState(1);
+  const [search, setSearch]               = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedParent, setSelectedParent] = useState("");
+  const [selectedSub, setSelectedSub]     = useState("");
 
   function handleSearch(e: React.ChangeEvent<HTMLInputElement>) {
     setSearch(e.target.value);
@@ -78,21 +80,91 @@ function StockTab({ branchId }: { branchId?: string | null }) {
     }, 300);
   }
 
+  const { data: catData } = useItemCategories();
+  const categories = catData ?? [];
+
+  const parentCats = categories.filter((c) => !c.parentId);
+  const childMap   = categories.reduce<Record<string, typeof categories>>((acc, c) => {
+    if (c.parentId) {
+      if (!acc[c.parentId]) acc[c.parentId] = [];
+      acc[c.parentId].push(c);
+    }
+    return acc;
+  }, {});
+  const currentSubs = selectedParent ? (childMap[selectedParent] ?? []) : [];
+
+  function handleParentClick(id: string) {
+    const next = selectedParent === id ? "" : id;
+    setSelectedParent(next);
+    setSelectedSub("");
+    setPage(1);
+  }
+
+  function handleSubClick(id: string) {
+    setSelectedSub((prev) => (prev === id ? "" : id));
+    setPage(1);
+  }
+
+  function handleReset() {
+    setSearch(""); setDebouncedSearch("");
+    setSelectedParent(""); setSelectedSub("");
+    setPage(1);
+  }
+
   const { data, isLoading } = useInventories({
     page, limit: 30,
-    branchId: branchId ?? undefined,
-    search:   debouncedSearch || undefined,
+    branchId:        branchId ?? undefined,
+    search:          debouncedSearch || undefined,
+    parentCategoryId: selectedParent && !selectedSub ? selectedParent : undefined,
+    categoryId:      selectedSub || undefined,
   });
   const inventories = data?.data ?? [];
   const meta        = data?.meta;
   const totalPages  = meta ? Math.ceil(meta.total / 30) : 1;
 
+  const hasFilter = !!(debouncedSearch || selectedParent || selectedSub);
+
   return (
     <Card>
-      <CardHeader className="pb-3 pt-4">
-        <div className="relative max-w-xs">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input value={search} onChange={handleSearch} placeholder="Cari barang..." className="pl-8 h-9" />
+      <CardHeader className="pb-3 pt-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[160px] max-w-xs">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input value={search} onChange={handleSearch} placeholder="Cari barang..." className="pl-8 h-9" />
+          </div>
+
+          {/* Kategori dropdown */}
+          <select
+            value={selectedParent}
+            onChange={(e) => { setSelectedParent(e.target.value); setSelectedSub(""); setPage(1); }}
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="">Semua Kategori</option>
+            {parentCats.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+
+          {/* Sub kategori dropdown — hanya muncul jika parent dipilih & punya anak */}
+          {selectedParent && currentSubs.length > 0 && (
+            <select
+              value={selectedSub}
+              onChange={(e) => { setSelectedSub(e.target.value); setPage(1); }}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">Semua Sub Kategori</option>
+              {currentSubs.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          )}
+
+          {hasFilter && (
+            <button onClick={handleReset} className="text-xs text-muted-foreground hover:text-foreground underline shrink-0">
+              Reset
+            </button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="p-0">
@@ -108,6 +180,7 @@ function StockTab({ branchId }: { branchId?: string | null }) {
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Barang</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Kategori</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Gudang</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Di Tangan</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Tersedia</th>
@@ -124,6 +197,7 @@ function StockTab({ branchId }: { branchId?: string | null }) {
                           <p className="font-medium">{inv.item.name}</p>
                           {inv.item.itemCode && <p className="text-xs text-muted-foreground">{inv.item.itemCode}</p>}
                         </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{inv.item.category?.name ?? "—"}</td>
                         <td className="px-4 py-3 text-muted-foreground">{inv.warehouse.name}</td>
                         <td className="px-4 py-3 text-right font-semibold">{onHand.toLocaleString("id-ID")}</td>
                         <td className="px-4 py-3 text-right">
@@ -152,6 +226,9 @@ function StockTab({ branchId }: { branchId?: string | null }) {
                         <p className="text-sm font-medium">{inv.item.name}</p>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">{inv.warehouse.name}</p>
+                      {inv.item.category && (
+                        <p className="text-xs text-muted-foreground/70">{inv.item.category.name}</p>
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs text-muted-foreground">Di tangan: {onHand.toLocaleString("id-ID")}</p>

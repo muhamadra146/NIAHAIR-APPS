@@ -72,9 +72,17 @@ const getMyLoanByIdController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const deleteController = async (req, res, next) => {
+  try {
+    await svc.deleteLoan(req.params.id);
+    return success(res, null, "Loan deleted");
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   getAllController, getByEmployeeController, getByIdController,
   createController, updateController, cancelController,
   addRepaymentController, getRepaymentsController,
   getMyLoansController, getMyLoanByIdController,
+  deleteController,
 };

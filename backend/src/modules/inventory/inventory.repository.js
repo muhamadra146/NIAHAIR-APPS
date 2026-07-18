@@ -12,7 +12,12 @@ const MOVEMENT_INCLUDE = {
 };
 
 const INVENTORY_INCLUDE = {
-  item:      { select: { id: true, name: true, itemCode: true, itemType: true } },
+  item: {
+    select: {
+      id: true, name: true, itemCode: true, itemType: true,
+      category: { select: { id: true, name: true } },
+    },
+  },
   warehouse: { select: { id: true, name: true } },
 };
 

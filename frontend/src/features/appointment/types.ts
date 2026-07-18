@@ -109,13 +109,14 @@ export interface Appointment {
 }
 
 export interface AppointmentListParams {
-  page?:       number;
-  limit?:      number;
-  branchId?:   string;
-  status?:     AppointmentStatus | "";
-  customerId?: string;
-  startDate?:  string;
-  endDate?:    string;
+  page?:        number;
+  limit?:       number;
+  branchId?:    string;
+  status?:      AppointmentStatus | "";
+  customerId?:  string;
+  employeeId?:  string;
+  startDate?:   string;
+  endDate?:     string;
 }
 
 export interface ServiceInput {

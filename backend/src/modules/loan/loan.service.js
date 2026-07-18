@@ -96,4 +96,10 @@ const getMyLoanById = async (id, employeeId) => {
   return loan;
 };
 
-module.exports = { getAll, getByEmployee, getById, createLoan, updateLoan, cancelLoan, addRepayment, getRepayments, getMyLoans, getMyLoanById };
+const deleteLoan = async (id) => {
+  const loan = await repo.findById(id);
+  if (!loan) throw new AppError("Loan not found", StatusCodes.NOT_FOUND);
+  await repo.remove(id);
+};
+
+module.exports = { getAll, getByEmployee, getById, createLoan, updateLoan, cancelLoan, addRepayment, getRepayments, getMyLoans, getMyLoanById, deleteLoan };

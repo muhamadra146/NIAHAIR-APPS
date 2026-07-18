@@ -175,4 +175,86 @@ const getCommissionByEmployee = async ({ startDate, endDate }) => {
     }));
 };
 
-module.exports = { getSummary, getDailyRevenue, getCommissionByEmployee };
+// ── Sales by item (Pareto) ────────────────────────────────────────────────────
+
+const getSalesByItem = async ({ branchId, startDate, endDate }) => {
+  const invoiceWhere = { status: "PAID" };
+  if (branchId) invoiceWhere.branchId = branchId;
+  if (startDate || endDate) {
+    invoiceWhere.invoiceDate = {};
+    if (startDate) invoiceWhere.invoiceDate.gte = new Date(startDate);
+    if (endDate)   invoiceWhere.invoiceDate.lte = new Date(endDate + "T23:59:59.999Z");
+  }
+
+  const rows = await prisma.invoiceItem.findMany({
+    where: { invoice: invoiceWhere },
+    select: {
+      itemId:    true,
+      qty:       true,
+      subtotal:  true,
+      invoiceId: true,
+      item: {
+        select: {
+          itemCode: true,
+          name:     true,
+          itemType: true,
+          category: {
+            select: {
+              id: true, name: true,
+              parent: { select: { id: true, name: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // Group by itemId in JavaScript
+  const map = {};
+  for (const r of rows) {
+    if (!map[r.itemId]) {
+      map[r.itemId] = {
+        itemId:             r.itemId,
+        itemCode:           r.item.itemCode,
+        name:               r.item.name,
+        itemType:           r.item.itemType,
+        categoryId:         r.item.category?.id            ?? null,
+        categoryName:       r.item.category?.name          ?? null,
+        parentCategoryId:   r.item.category?.parent?.id    ?? null,
+        parentCategoryName: r.item.category?.parent?.name  ?? null,
+        totalQty:           0,
+        totalRevenue:       0,
+        invoiceIds:         new Set(),
+      };
+    }
+    map[r.itemId].totalQty     += Number(r.qty);
+    map[r.itemId].totalRevenue += Number(r.subtotal);
+    map[r.itemId].invoiceIds.add(r.invoiceId);
+  }
+
+  const sorted = Object.values(map)
+    .sort((a, b) => b.totalQty - a.totalQty);
+
+  const totalQty = sorted.reduce((s, r) => s + r.totalQty, 0);
+  let cumQty = 0;
+
+  return sorted.map((r) => {
+    cumQty += r.totalQty;
+    return {
+      itemId:             r.itemId,
+      itemCode:           r.itemCode,
+      name:               r.name,
+      itemType:           r.itemType,
+      categoryId:         r.categoryId,
+      categoryName:       r.categoryName,
+      parentCategoryId:   r.parentCategoryId,
+      parentCategoryName: r.parentCategoryName,
+      totalQty:           r.totalQty,
+      totalRevenue:       r.totalRevenue,
+      invoiceCount:       r.invoiceIds.size,
+      cumPct:             totalQty > 0 ? Math.round((cumQty / totalQty) * 1000) / 10 : 0,
+    };
+  });
+};
+
+module.exports = { getSummary, getDailyRevenue, getCommissionByEmployee, getSalesByItem };

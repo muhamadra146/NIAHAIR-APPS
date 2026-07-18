@@ -57,4 +57,7 @@ const generateLoanNo = async () => {
   return `KB${String(count + 1).padStart(5, "0")}`;
 };
 
-module.exports = { findAll, count, findByEmployee, findById, create, update, addRepayment, findRepaymentsByLoan, generateLoanNo };
+const remove = (id) =>
+  prisma.loan.delete({ where: { id } });
+
+module.exports = { findAll, count, findByEmployee, findById, create, update, addRepayment, findRepaymentsByLoan, generateLoanNo, remove };

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Check, X, Loader2, Tag, Users, Trash2, AlertTriangle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,10 +54,24 @@ const selectCls =
 
 export function CommissionSettingsTab() {
   return (
-    <div className="space-y-6">
-      <CommissionCategorySection />
-      <CommissionRuleSection />
-    </div>
+    <Tabs defaultValue="category" className="space-y-6">
+      <TabsList className="h-9">
+        <TabsTrigger value="category" className="text-xs gap-1.5">
+          <Tag className="h-3.5 w-3.5" />
+          Kategori Komisi
+        </TabsTrigger>
+        <TabsTrigger value="rules" className="text-xs gap-1.5">
+          <Users className="h-3.5 w-3.5" />
+          Rule per Karyawan
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="category" className="mt-0">
+        <CommissionCategorySection />
+      </TabsContent>
+      <TabsContent value="rules" className="mt-0">
+        <CommissionRuleSection />
+      </TabsContent>
+    </Tabs>
   );
 }
 

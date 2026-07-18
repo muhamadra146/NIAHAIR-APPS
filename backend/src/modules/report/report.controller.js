@@ -1,5 +1,5 @@
 const { success } = require("../../common/responses/apiResponse");
-const { getSummaryReport, getRevenueReport, getCommissionReport } = require("./report.service");
+const { getSummaryReport, getRevenueReport, getCommissionReport, getSalesByItemReport } = require("./report.service");
 
 const summaryController = async (req, res, next) => {
   try {
@@ -31,4 +31,14 @@ const commissionController = async (req, res, next) => {
   }
 };
 
-module.exports = { summaryController, revenueController, commissionController };
+const salesByItemController = async (req, res, next) => {
+  try {
+    const { branchId, startDate, endDate } = req.query;
+    const result = await getSalesByItemReport({ branchId, startDate, endDate });
+    return success(res, result, "Sales by item report fetched");
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { summaryController, revenueController, commissionController, salesByItemController };

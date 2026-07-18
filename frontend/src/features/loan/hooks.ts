@@ -9,6 +9,7 @@ import {
   cancelLoan,
   addRepayment,
   fetchRepayments,
+  deleteLoan,
 } from "./api";
 import type { LoanListParams, CreateLoanInput, UpdateLoanInput, AddRepaymentInput } from "./types";
 
@@ -84,6 +85,18 @@ export function useAddRepayment(loanId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["loans"] });
       toast.success("Angsuran dicatat");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useDeleteLoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteLoan(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["loans"] });
+      toast.success("Kasbon berhasil dihapus");
     },
     onError: (err: Error) => toast.error(err.message),
   });

@@ -5,7 +5,7 @@ const prisma                             = require("../../config/prisma");
 const repo                               = require("./attendance.repository");
 const settingRepo                        = require("../setting/setting.repository");
 
-const GEOFENCE_EXEMPT_KEY = "attendance_geofence_exempt_roles";
+const GEOFENCE_EXEMPT_KEY = "attendance_geofence_exempt_employees";
 
 const haversineMeters = (lat1, lon1, lat2, lon2) => {
   const R = 6371000;
@@ -18,14 +18,17 @@ const haversineMeters = (lat1, lon1, lat2, lon2) => {
 
 const checkGeofence = async (branchId, employeeId, latitude, longitude) => {
   if (!latitude || !longitude) return; // no GPS, allow
-  const [branch, employee, exemptSetting] = await Promise.all([
+  const [branch, exemptSetting] = await Promise.all([
     prisma.branch.findUnique({ where: { id: branchId }, select: { latitude: true, longitude: true, radiusMeters: true } }),
-    prisma.employee.findUnique({ where: { id: employeeId }, select: { role: { select: { code: true } } } }),
     settingRepo.findByKey(GEOFENCE_EXEMPT_KEY),
   ]);
   if (!branch?.latitude || !branch?.longitude) return; // branch has no coordinates, allow
-  const exemptCodes = exemptSetting?.value ? JSON.parse(exemptSetting.value) : [];
-  if (exemptCodes.includes(employee?.role?.code)) return; // role is exempt
+  // Format: [{employeeId, branchId}] — branchId null means exempt at all branches
+  const exemptList = exemptSetting?.value ? JSON.parse(exemptSetting.value) : [];
+  const isExempt = exemptList.some(
+    (e) => e.employeeId === employeeId && (e.branchId === null || e.branchId === branchId)
+  );
+  if (isExempt) return;
   const dist = haversineMeters(
     Number(branch.latitude), Number(branch.longitude),
     Number(latitude), Number(longitude)

@@ -28,6 +28,7 @@ import { DepositPaymentPage }     from "@/features/invoice/pages/DepositPaymentP
 import { DepositPaymentListPage }  from "@/features/invoice/pages/DepositPaymentListPage";
 import { InvoicePaymentListPage }  from "@/features/invoice/pages/InvoicePaymentListPage";
 import { CommissionListPage }    from "@/features/commission/pages/CommissionListPage";
+import { MyCommissionPage }      from "@/features/commission/pages/MyCommissionPage";
 import { InventoryPage }         from "@/features/inventory/pages/InventoryPage";
 import { ReportsPage }           from "@/features/report/pages/ReportsPage";
 import { LoanListPage }               from "@/features/loan/pages/LoanListPage";
@@ -112,7 +113,8 @@ export const router = createBrowserRouter([
           // Leave Management
           { path: "/leaves", element: <LeavePage /> },
           // My Payslip (employee self-service)
-          { path: "/my-payslip", element: <MyPayslipPage /> },
+          { path: "/my-payslip",     element: <MyPayslipPage /> },
+          { path: "/my-commission",  element: <MyCommissionPage /> },
           // My Kasbon (employee self-service)
           { path: "/my-kasbon",      element: <MyLoanPage /> },
           { path: "/my-kasbon/:id",  element: <MyLoanDetailPage /> },

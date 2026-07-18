@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { TrendingUp, Receipt, Wallet, CalendarDays, Users, BadgeDollarSign, ClipboardList } from "lucide-react";
+import { TrendingUp, Receipt, Wallet, CalendarDays, Users, BadgeDollarSign, ClipboardList, ShoppingCart } from "lucide-react";
+import {
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ReferenceLine, ResponsiveContainer, Legend,
+} from "recharts";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,16 +12,17 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
-import { useSummaryReport, useRevenueReport, useCommissionReport } from "../hooks";
+import { useSummaryReport, useRevenueReport, useCommissionReport, useSalesByItem } from "../hooks";
 import { useAttendanceReport } from "@/features/team/hooks";
 import { useBpjsReport } from "@/features/payroll/hooks";
 
 const TABS = [
-  { key: "summary",     label: "Ringkasan" },
-  { key: "revenue",     label: "Pendapatan" },
-  { key: "commissions", label: "Komisi" },
-  { key: "attendance",  label: "Kehadiran" },
-  { key: "bpjs",        label: "BPJS" },
+  { key: "summary",       label: "Ringkasan" },
+  { key: "revenue",       label: "Pendapatan" },
+  { key: "commissions",   label: "Komisi" },
+  { key: "sales-by-item", label: "Penjualan" },
+  { key: "attendance",    label: "Kehadiran" },
+  { key: "bpjs",          label: "BPJS" },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
 
@@ -84,11 +89,12 @@ export function ReportsPage() {
           ))}
         </div>
 
-        {activeTab === "summary"     && <SummaryTab params={params} />}
-        {activeTab === "revenue"     && <RevenueTab params={params} />}
-        {activeTab === "commissions" && <CommissionsTab params={applied} />}
-        {activeTab === "attendance"  && <AttendanceTab branchId={branchId ?? undefined} startDate={applied.startDate} endDate={applied.endDate} />}
-        {activeTab === "bpjs"        && <BpjsTab branchId={branchId ?? undefined} />}
+        {activeTab === "summary"       && <SummaryTab params={params} />}
+        {activeTab === "revenue"       && <RevenueTab params={params} />}
+        {activeTab === "commissions"   && <CommissionsTab params={applied} />}
+        {activeTab === "sales-by-item" && <SalesByItemTab params={params} />}
+        {activeTab === "attendance"    && <AttendanceTab branchId={branchId ?? undefined} startDate={applied.startDate} endDate={applied.endDate} />}
+        {activeTab === "bpjs"          && <BpjsTab branchId={branchId ?? undefined} />}
       </div>
     </PageContainer>
   );
@@ -490,6 +496,313 @@ function CommissionsTab({ params }: { params: Parameters<typeof useCommissionRep
                   <td className="px-4 py-2.5 text-right text-blue-600">{formatCurrency(data.reduce((s, r) => s + Number(r.approved), 0))}</td>
                   <td className="px-4 py-2.5 text-right text-green-600">{formatCurrency(data.reduce((s, r) => s + Number(r.paid), 0))}</td>
                   <td className="px-4 py-2.5 text-right">{formatCurrency(grand)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ── Sales by item tab ─────────────────────────────────────────────────────────
+
+function SalesByItemTab({ params }: { params: Parameters<typeof useSalesByItem>[0] }) {
+  const { data = [], isLoading, isError, error } = useSalesByItem(params);
+  const [selectedParent,   setSelectedParent]   = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
+
+  // Build unique parent categories from data
+  const parentCats = Array.from(
+    new Map(
+      data
+        .filter((r) => r.parentCategoryId)
+        .map((r) => [r.parentCategoryId!, r.parentCategoryName!]),
+    ).entries(),
+  ).sort((a, b) => a[1].localeCompare(b[1]));
+
+  // Top-level categories with no parent (e.g. JASA items tagged directly)
+  const rootCats = Array.from(
+    new Map(
+      data
+        .filter((r) => !r.parentCategoryId && r.categoryId)
+        .map((r) => [r.categoryId!, r.categoryName!]),
+    ).entries(),
+  ).sort((a, b) => a[1].localeCompare(b[1]));
+
+  // Subcategories of selected parent
+  const subCats = selectedParent
+    ? Array.from(
+        new Map(
+          data
+            .filter((r) => r.parentCategoryId === selectedParent)
+            .map((r) => [r.categoryId!, r.categoryName!]),
+        ).entries(),
+      ).sort((a, b) => a[1].localeCompare(b[1]))
+    : [];
+
+  function handleParentClick(id: string) {
+    const next = selectedParent === id ? "" : id;
+    setSelectedParent(next);
+    setSelectedCategory("");
+  }
+
+  function handleSubClick(id: string) {
+    setSelectedCategory((prev) => (prev === id ? "" : id));
+  }
+
+  function handleRootClick(id: string) {
+    // Root category (no parent) acts as both parent and sub
+    setSelectedParent("");
+    setSelectedCategory((prev) => (prev === id ? "" : id));
+  }
+
+  // Filter by parent → sub, then recalculate cumPct
+  const filtered = (() => {
+    let base = data;
+    if (selectedParent)   base = base.filter((r) => r.parentCategoryId === selectedParent);
+    if (selectedCategory) base = base.filter((r) => r.categoryId === selectedCategory);
+    const total = base.reduce((s, r) => s + r.totalQty, 0);
+    let cum = 0;
+    return base.map((r) => {
+      cum += r.totalQty;
+      return { ...r, cumPct: total > 0 ? Math.round((cum / total) * 1000) / 10 : 0 };
+    });
+  })();
+
+  const totalQty     = filtered.reduce((s, r) => s + r.totalQty, 0);
+  const totalRevenue = filtered.reduce((s, r) => s + Number(r.totalRevenue), 0);
+
+  // Pareto chart — top 20 items max for readability
+  const chartData = filtered.slice(0, 20).map((r) => ({
+    name:   r.name.length > 18 ? r.name.slice(0, 16) + "…" : r.name,
+    qty:    r.totalQty,
+    cumPct: r.cumPct,
+  }));
+
+  if (isLoading) {
+    return <div className="space-y-2">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
+  }
+
+  if (isError) {
+    return (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-6 text-center">
+        <p className="text-sm font-medium text-destructive">Gagal memuat laporan penjualan</p>
+        <p className="mt-1 text-xs text-muted-foreground">{String((error as Error)?.message ?? "Terjadi kesalahan pada server")}</p>
+      </div>
+    );
+  }
+
+  if (data.length === 0) {
+    return <p className="py-12 text-center text-sm text-muted-foreground">Tidak ada data penjualan untuk periode ini.</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Category filter — two-level chips */}
+      <div className="space-y-2">
+        {/* Parent category chips + root-level chips */}
+        {(parentCats.length > 0 || rootCats.length > 0) && (
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <span className="text-xs text-muted-foreground shrink-0 mr-1">Kategori:</span>
+            {parentCats.map(([id, name]) => (
+              <button
+                key={id}
+                onClick={() => handleParentClick(id)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
+                  selectedParent === id
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+            {rootCats.map(([id, name]) => (
+              <button
+                key={id}
+                onClick={() => handleRootClick(id)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
+                  selectedCategory === id && !selectedParent
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+            {(selectedParent || selectedCategory) && (
+              <button
+                onClick={() => { setSelectedParent(""); setSelectedCategory(""); }}
+                className="text-xs text-muted-foreground hover:text-foreground underline ml-1"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Subcategory chips — shown when parent selected and has children */}
+        {subCats.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pl-3 border-l-2 border-primary/40">
+            {subCats.map(([id, name]) => (
+              <button
+                key={id}
+                onClick={() => handleSubClick(id)}
+                className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors border ${
+                  selectedCategory === id
+                    ? "bg-primary/90 text-primary-foreground border-primary/90"
+                    : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Summary */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-1.5 mb-2 text-indigo-600">
+              <ShoppingCart className="h-4 w-4" />
+              <span className="text-xs font-medium">Total Item Terjual</span>
+            </div>
+            <p className="text-xl font-bold">{totalQty.toLocaleString("id-ID")}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{filtered.length} jenis produk</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-1.5 mb-2 text-green-600">
+              <TrendingUp className="h-4 w-4" />
+              <span className="text-xs font-medium">Total Revenue</span>
+            </div>
+            <p className="text-xl font-bold">{formatCurrency(totalRevenue)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">dari invoice lunas</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-1.5 mb-2 text-amber-600">
+              <Receipt className="h-4 w-4" />
+              <span className="text-xs font-medium">Top Item</span>
+            </div>
+            <p className="text-sm font-bold leading-tight">{filtered[0]?.name ?? "—"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {filtered[0] ? `${filtered[0].totalQty.toLocaleString("id-ID")} terjual` : ""}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Pareto chart */}
+      <Card>
+        <CardHeader className="pb-2 pt-4">
+          <CardTitle className="text-sm font-semibold text-muted-foreground">
+            Pareto Penjualan {filtered.length > 20 ? `(Top 20 dari ${filtered.length} item)` : `(${filtered.length} item)`}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pb-4">
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={chartData} margin={{ top: 4, right: 40, left: 0, bottom: 60 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                angle={-40}
+                textAnchor="end"
+                interval={0}
+              />
+              <YAxis
+                yAxisId="left"
+                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                label={{ value: "Qty", angle: -90, position: "insideLeft", style: { fontSize: 10 } }}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                domain={[0, 100]}
+                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                tickFormatter={(v) => `${v}%`}
+              />
+              <Tooltip
+                formatter={(value: number, name: string) =>
+                  name === "cumPct" ? [`${value}%`, "Kumulatif"] : [value.toLocaleString("id-ID"), "Qty"]
+                }
+                contentStyle={{ fontSize: 12 }}
+              />
+              <Legend
+                wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                formatter={(v) => (v === "cumPct" ? "% Kumulatif" : "Qty Terjual")}
+              />
+              <Bar yAxisId="left" dataKey="qty" fill="hsl(var(--primary))" opacity={0.85} radius={[3, 3, 0, 0]} />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="cumPct"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                dot={{ r: 3, fill: "#f59e0b" }}
+              />
+              <ReferenceLine yAxisId="right" y={80} stroke="#ef4444" strokeDasharray="4 2" label={{ value: "80%", fill: "#ef4444", fontSize: 10 }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Ranking table */}
+      <Card>
+        <CardHeader className="pb-2 pt-4">
+          <CardTitle className="text-sm font-semibold text-muted-foreground">
+            Ranking Penjualan {selectedCategory ? `— ${data.find((r) => r.categoryId === selectedCategory)?.categoryName ?? ""}` : "(Semua Kategori)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="px-4 py-2.5 text-center text-xs font-semibold text-muted-foreground w-10">#</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Produk</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Kategori</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-indigo-700">Qty</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-green-700">Revenue</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-amber-600">Kumulatif</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filtered.map((r, i) => (
+                  <tr key={r.itemId} className={`hover:bg-muted/30 transition-colors ${r.cumPct <= 80 ? "" : "opacity-60"}`}>
+                    <td className="px-4 py-2.5 text-center text-xs font-medium text-muted-foreground">{i + 1}</td>
+                    <td className="px-4 py-2.5">
+                      <p className="font-medium text-sm">{r.name}</p>
+                      <p className="text-xs text-muted-foreground">{r.itemCode}</p>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className="text-xs text-muted-foreground">{r.categoryName ?? "—"}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-indigo-700">
+                      {r.totalQty.toLocaleString("id-ID")}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-green-700">
+                      {formatCurrency(r.totalRevenue)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">
+                      <span className={`text-xs font-medium ${r.cumPct <= 80 ? "text-amber-600" : "text-muted-foreground"}`}>
+                        {r.cumPct}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                <tr className="bg-muted/50 font-semibold border-t-2 border-border">
+                  <td colSpan={3} className="px-4 py-2.5 text-xs">Total ({filtered.length} item)</td>
+                  <td className="px-4 py-2.5 text-right text-xs text-indigo-700 tabular-nums">{totalQty.toLocaleString("id-ID")}</td>
+                  <td className="px-4 py-2.5 text-right text-xs text-green-700 tabular-nums">{formatCurrency(totalRevenue)}</td>
+                  <td />
                 </tr>
               </tbody>
             </table>

@@ -227,6 +227,13 @@ export const sidebarNav: NavItem[] = [
     group: "Keuangan Saya",
   },
   {
+    label: "Komisi Saya",
+    href:  "/my-commission",
+    icon:  BadgeDollarSign,
+    roles: ["STYLIST", "STAFF"],
+    group: "Keuangan Saya",
+  },
+  {
     label: "Kasbon Saya",
     href:  "/my-kasbon",
     icon:  Banknote,

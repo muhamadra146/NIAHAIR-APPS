@@ -58,3 +58,7 @@ export async function fetchMyLoan(id: string): Promise<Loan> {
   const { data } = await api.get<ApiResponse<Loan>>(`/loans/my/${id}`);
   return data.data;
 }
+
+export async function deleteLoan(id: string): Promise<void> {
+  await api.delete(`/loans/${id}`);
+}

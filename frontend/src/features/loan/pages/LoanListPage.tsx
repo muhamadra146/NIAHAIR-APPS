@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, ChevronRight } from "lucide-react";
+import { Plus, Search, ChevronRight, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useAuthStore } from "@/stores/authStore";
 import { fetchEmployees } from "@/features/settings/api/employee.api";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { useLoans, useCreateLoan } from "../hooks";
+import { useLoans, useCreateLoan, useDeleteLoan } from "../hooks";
 import type { LoanStatus, Loan } from "../types";
 
 const STATUS_TABS: { key: string; label: string }[] = [
@@ -35,12 +35,15 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export function LoanListPage() {
-  const { branchId } = useAuthStore();
-  const navigate      = useNavigate();
+  const { branchId, user } = useAuthStore();
+  const navigate            = useNavigate();
 
-  const [page, setPage]         = useState(1);
-  const [status, setStatus]     = useState("");
-  const [formOpen, setFormOpen] = useState(false);
+  const [page, setPage]               = useState(1);
+  const [status, setStatus]           = useState("");
+  const [formOpen, setFormOpen]       = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Loan | null>(null);
+
+  const isSuperUser = user?.roleCode === "SUPER_ADMIN" || user?.roleCode === "OWNER";
 
   const { data, isLoading } = useLoans({
     page, limit: 20,
@@ -48,6 +51,7 @@ export function LoanListPage() {
     status:   status   || undefined,
   });
   const createMutation = useCreateLoan();
+  const deleteMutation  = useDeleteLoan();
 
   const loans      = data?.data ?? [];
   const meta       = data?.meta;
@@ -129,8 +133,19 @@ export function LoanListPage() {
                               {STATUS_LABEL[loan.status] ?? loan.status}
                             </Badge>
                           </td>
-                          <td className="px-4 py-3">
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1">
+                              {isSuperUser && (
+                                <button
+                                  onClick={() => setDeleteTarget(loan)}
+                                  className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                  title="Hapus kasbon"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -141,7 +156,12 @@ export function LoanListPage() {
                 {/* Mobile */}
                 <div className="md:hidden divide-y divide-border">
                   {loans.map((loan) => (
-                    <LoanCard key={loan.id} loan={loan} onClick={() => navigate(`/loans/${loan.id}`)} />
+                    <LoanCard
+                      key={loan.id}
+                      loan={loan}
+                      onClick={() => navigate(`/loans/${loan.id}`)}
+                      onDelete={isSuperUser ? () => setDeleteTarget(loan) : undefined}
+                    />
                   ))}
                 </div>
               </>
@@ -160,6 +180,38 @@ export function LoanListPage() {
         )}
       </div>
 
+      {/* Delete confirm dialog */}
+      {deleteTarget && (
+        <Dialog open onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Hapus Kasbon</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground py-2">
+              Hapus kasbon <span className="font-semibold text-foreground">{deleteTarget.loanNo}</span> atas nama{" "}
+              <span className="font-semibold text-foreground">{deleteTarget.employee?.name ?? "—"}</span>?
+              Tindakan ini tidak dapat dibatalkan.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteMutation.isPending}>
+                Batal
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={deleteMutation.isPending}
+                onClick={() => {
+                  deleteMutation.mutate(deleteTarget.id, {
+                    onSuccess: () => setDeleteTarget(null),
+                  });
+                }}
+              >
+                {deleteMutation.isPending ? "Menghapus…" : "Hapus"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       <CreateLoanDialog
         open={formOpen}
         onOpenChange={setFormOpen}
@@ -174,7 +226,7 @@ export function LoanListPage() {
   );
 }
 
-function LoanCard({ loan, onClick }: { loan: Loan; onClick: () => void }) {
+function LoanCard({ loan, onClick, onDelete }: { loan: Loan; onClick: () => void; onDelete?: () => void }) {
   const pct = Number(loan.totalAmount) > 0
     ? Math.round(((Number(loan.totalAmount) - Number(loan.remainingAmount)) / Number(loan.totalAmount)) * 100)
     : 0;
@@ -186,9 +238,19 @@ function LoanCard({ loan, onClick }: { loan: Loan; onClick: () => void }) {
           <p className="text-sm font-medium">{loan.employee?.name ?? "—"}</p>
           <p className="text-xs text-muted-foreground font-mono">{loan.loanNo}</p>
         </div>
-        <Badge variant="outline" className={`text-xs shrink-0 ${STATUS_COLOR[loan.status] ?? ""}`}>
-          {STATUS_LABEL[loan.status] ?? loan.status}
-        </Badge>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Badge variant="outline" className={`text-xs ${STATUS_COLOR[loan.status] ?? ""}`}>
+            {STATUS_LABEL[loan.status] ?? loan.status}
+          </Badge>
+          {onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex items-center justify-between text-sm mb-2">
         <span className="text-muted-foreground">Sisa: <span className="font-medium text-orange-600">{formatCurrency(loan.remainingAmount)}</span></span>

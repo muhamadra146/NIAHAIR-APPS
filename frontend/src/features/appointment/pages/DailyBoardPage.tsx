@@ -762,12 +762,6 @@ function DraggableCard({
               onClick={(e) => { e.stopPropagation(); setShowStaff((v) => !v); }}>
               <Users className="h-3.5 w-3.5" />
             </Button>
-            {(a.status === "IN_PROGRESS" || a.status === "COMPLETED") && !isDragOverlay && (
-              <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-amber-500 hover:text-amber-700 hover:bg-amber-50" title="Assign Pekerjaan"
-                onClick={() => setShowAssign(true)}>
-                <ClipboardList className="h-3.5 w-3.5" />
-              </Button>
-            )}
             {a.status === "IN_PROGRESS" && onInvoice && (
               <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-blue-500 hover:text-blue-700 hover:bg-blue-50" title="Invoice"
                 onClick={() => onInvoice(a)} disabled={checkingInvoice}>
@@ -1079,12 +1073,6 @@ function AppointmentListRow({
             onClick={(e) => { e.stopPropagation(); setShowStaff((v) => !v); }}>
             <Users className="h-3 w-3" />
           </Button>
-          {(a.status === "IN_PROGRESS" || a.status === "COMPLETED") && (
-            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-amber-500 hover:text-amber-700 hover:bg-amber-50" title="Assign Pekerjaan"
-              onClick={() => setShowAssign(true)}>
-              <ClipboardList className="h-3 w-3" />
-            </Button>
-          )}
           {a.status === "IN_PROGRESS" && onInvoice && (
             <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-blue-500 hover:text-blue-700 hover:bg-blue-50" title="Invoice"
               onClick={() => onInvoice(a)} disabled={checkingInvoice}>

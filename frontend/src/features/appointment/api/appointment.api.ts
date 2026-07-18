@@ -41,6 +41,7 @@ export const fetchAppointments = async (params: AppointmentListParams) => {
       branchId:   params.branchId   || undefined,
       status:     params.status     || undefined,
       customerId: params.customerId || undefined,
+      employeeId: params.employeeId || undefined,
       startDate:  params.startDate  || undefined,
       endDate:    params.endDate    || undefined,
     },

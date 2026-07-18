@@ -73,19 +73,23 @@ const listMovements = async ({
 
 // ── List inventory balances ───────────────────────────────────────────
 
-const listInventories = async ({ page, limit, warehouseId, branchId, itemId, search }) => {
+const listInventories = async ({ page, limit, warehouseId, branchId, itemId, search, categoryId, parentCategoryId }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
   if (warehouseId) where.warehouseId = warehouseId;
   if (branchId)    where.warehouse   = { branchId };
   if (itemId)      where.itemId      = itemId;
-  if (search)      where.item        = {
-    OR: [
+
+  if (search || categoryId || parentCategoryId) {
+    where.item = {};
+    if (search)           where.item.OR         = [
       { name:     { contains: search, mode: "insensitive" } },
       { itemCode: { contains: search, mode: "insensitive" } },
-    ],
-  };
+    ];
+    if (categoryId)       where.item.categoryId = categoryId;
+    if (parentCategoryId) where.item.category   = { parentId: parentCategoryId };
+  }
 
   const [data, total] = await Promise.all([
     findInventories({ skip, take, where }),
@@ -357,6 +361,80 @@ const reverseInvoiceSaleMovements = async (invoiceNo) => {
   return { reversed };
 };
 
+// ── Reverse all SERVICE_USAGE movements for an invoice ───────────────
+//
+// Called before deleteWithTransaction so materialUsageItem FKs are still intact.
+// Finds all SERVICE_USAGE movements linked to treatment sessions of the invoice,
+// creates RETURN movements to restore inventory, and updates balances.
+// Idempotent: skips any movement already reversed.
+
+const reverseInvoiceServiceMovements = async (invoiceId) => {
+  const sessions = await prisma.treatmentSession.findMany({
+    where:  { invoiceId },
+    select: { id: true },
+  });
+  if (sessions.length === 0) return { reversed: 0 };
+
+  const sessionIds = sessions.map((s) => s.id);
+
+  const movements = await prisma.inventoryMovement.findMany({
+    where: {
+      movementType:  "SERVICE_USAGE",
+      referenceType: "TREATMENT",
+      referenceId:   { in: sessionIds },
+    },
+    include: {
+      inventory: { select: { id: true, qtyOnHand: true, qtyReserved: true } },
+    },
+  });
+
+  if (movements.length === 0) return { reversed: 0 };
+
+  let reversed = 0;
+
+  for (const movement of movements) {
+    const alreadyReversed = await prisma.inventoryMovement.count({
+      where: {
+        movementType:  "RETURN",
+        referenceType: "TREATMENT",
+        referenceId:   movement.id,
+      },
+    });
+    if (alreadyReversed > 0) continue;
+
+    const returnQty    = D(movement.qtyChange).abs();
+    const qtyBefore    = D(movement.inventory.qtyOnHand);
+    const qtyAfter     = qtyBefore.add(returnQty);
+    const newAvailable = computeAvailable(qtyAfter, movement.inventory.qtyReserved);
+
+    await prisma.inventoryMovement.create({
+      data: {
+        inventoryId:   movement.inventoryId,
+        movementType:  "RETURN",
+        sourceModule:  "SERVICE",
+        createdSource: "SYSTEM",
+        warehouseId:   movement.warehouseId,
+        qtyBefore,
+        qtyChange:     returnQty,
+        qtyAfter,
+        referenceType: "TREATMENT",
+        referenceId:   movement.id,
+        referenceNo:   movement.referenceNo,
+        notes:         `Void invoice service usage: ${movement.referenceNo ?? ""}`,
+      },
+    });
+
+    await prisma.inventory.update({
+      where: { id: movement.inventoryId },
+      data:  { qtyOnHand: qtyAfter, qtyAvailable: newAvailable },
+    });
+
+    reversed++;
+  }
+
+  return { reversed };
+};
+
 // ── Reverse a single SERVICE_USAGE movement ───────────────────────────
 //
 // Called when a MaterialUsageItem is deleted or its qty is changed.
@@ -460,6 +538,7 @@ module.exports = {
   listInventories,
   generateSaleMovement,
   reverseInvoiceSaleMovements,
+  reverseInvoiceServiceMovements,
   generateServiceMovement,
   reverseServiceUsageMovement,
   reserveInventory,

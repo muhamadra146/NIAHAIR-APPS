@@ -1,7 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchMyAttendanceToday } from "../api/attendance.api";
 import {
   fetchCorrections, fetchMyCorrections, createCorrection, reviewCorrection,
 } from "../api/correction.api";
+
+export const useMyAttendanceToday = () =>
+  useQuery({
+    queryKey:       ["attendance", "my", "today"],
+    queryFn:        fetchMyAttendanceToday,
+    staleTime:      60_000,
+    refetchOnMount: true,
+  });
 import {
   fetchPermissions, fetchMyPermissions, createPermission,
   approvePermission, rejectPermission, cancelPermission,

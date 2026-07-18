@@ -454,6 +454,10 @@ model ItemCategory {
 
   name String
 
+  parentId String?
+  parent   ItemCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children ItemCategory[] @relation("CategoryHierarchy")
+
   isActive Boolean @default(true)
 
   createdAt DateTime @default(now())
@@ -462,6 +466,7 @@ model ItemCategory {
   items Item[]
 
   @@index([name])
+  @@index([parentId])
   @@map("item_categories")
 }
 

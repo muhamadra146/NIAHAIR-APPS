@@ -1,5 +1,5 @@
 ﻿import { useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Users } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -32,12 +32,9 @@ import { WarehouseForm }      from "../components/warehouse/WarehouseForm";
 import type { WarehouseFormValues } from "../components/warehouse/WarehouseForm";
 import { ShiftTable }         from "../components/shift/ShiftTable";
 import { ShiftForm }          from "../components/shift/ShiftForm";
-import { SalaryTab }          from "../components/salary/SalaryTab";
-import { LoanTab }            from "../components/loan/LoanTab";
 import { AccuratePanel }      from "../accurate/AccuratePanel";
 import { CommissionSettingsTab } from "../components/commission/CommissionSettingsTab";
-import { LeaveTypeTab }          from "../components/leaveType/LeaveTypeTab";
-import { LeaveQuotaTab }         from "../components/leaveQuota/LeaveQuotaTab";
+import { LeaveSettingsTab }      from "../components/leave/LeaveSettingsTab";
 import { MembershipTab }         from "../components/membership/MembershipTab";
 import { AttendanceSettingsTab } from "../components/attendance/AttendanceSettingsTab";
 import { HolidayTab }            from "../components/holiday/HolidayTab";
@@ -106,22 +103,6 @@ function EmployeeTab() {
 
   return (
     <div className="space-y-6">
-      {/* Redirect card */}
-      <Card>
-        <CardContent className="flex flex-wrap items-center justify-between gap-4 py-5">
-          <div>
-            <p className="font-semibold text-sm">Data Karyawan</p>
-            <p className="text-sm text-muted-foreground">Tambah, edit, dan kelola karyawan di halaman Karyawan.</p>
-          </div>
-          <Button size="sm" asChild>
-            <a href="/employees">Buka Halaman Karyawan →</a>
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Divider */}
-      <div className="border-t border-border" />
-
       {/* Employee Role section */}
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -157,18 +138,24 @@ function EmployeeTab() {
 // Tab 2 â€" User Account
 // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function UserTab() {
-  const [formOpen, setFormOpen]         = useState(false);
-  const [editUser, setEditUser]         = useState<User | null>(null);
-  const [formError, setFormError]       = useState<string | null>(null);
-  const [pwOpen, setPwOpen]             = useState(false);
-  const [pwUser, setPwUser]             = useState<User | null>(null);
-  const [pwError, setPwError]           = useState<string | null>(null);
-  const [userSearch, setUserSearch]     = useState("");
+  const [formOpen, setFormOpen]           = useState(false);
+  const [editUser, setEditUser]           = useState<User | null>(null);
+  const [formError, setFormError]         = useState<string | null>(null);
+  const [pwOpen, setPwOpen]               = useState(false);
+  const [pwUser, setPwUser]               = useState<User | null>(null);
+  const [pwError, setPwError]             = useState<string | null>(null);
+  const [userSearch, setUserSearch]       = useState("");
   const [debouncedUser, setDebouncedUser] = useState("");
-  const [userPage, setUserPage]         = useState(1);
+  const [branchFilter, setBranchFilter]   = useState("");
+  const [userPage, setUserPage]           = useState(1);
+
+  const { data: branchData } = useBranches({ limit: 100 });
+  const allBranches = branchData?.data ?? [];
 
   const { data, isLoading } = useUsers({
-    page: userPage, limit: 20, search: debouncedUser || undefined,
+    page: userPage, limit: 20,
+    search:   debouncedUser || undefined,
+    branchId: branchFilter  || undefined,
   });
   const users    = data?.data ?? [];
   const userMeta = data?.meta;
@@ -181,10 +168,15 @@ function UserTab() {
       setTimeout(() => setDebouncedUser(e.target.value), 400);
   }
 
-  const createMut     = useCreateUser();
-  const updateMut     = useUpdateUser(editUser?.id ?? "");
-  const resetPwMut    = useResetUserPassword(pwUser?.id ?? "");
-  const deleteMut = useDeleteUser();
+  function handleBranchFilter(e: React.ChangeEvent<HTMLSelectElement>) {
+    setBranchFilter(e.target.value);
+    setUserPage(1);
+  }
+
+  const createMut  = useCreateUser();
+  const updateMut  = useUpdateUser(editUser?.id ?? "");
+  const resetPwMut = useResetUserPassword(pwUser?.id ?? "");
+  const deleteMut  = useDeleteUser();
 
   function openCreate() { setEditUser(null); setFormError(null); setFormOpen(true); }
   function openEdit(user: User) { setEditUser(user); setFormError(null); setFormOpen(true); }
@@ -221,35 +213,50 @@ function UserTab() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold">User Accounts</h2>
-          <p className="text-sm text-muted-foreground">
-            {userMeta ? `${userMeta.total} total` : "System login accounts and permissions"}
-          </p>
-        </div>
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />New User
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-3 pt-4">
-          <div className="relative w-full sm:max-w-xs">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search email, employeeâ€¦"
-              value={userSearch}
-              onChange={handleUserSearch}
-              className="pl-9"
-            />
+    <div className="space-y-6">
+      <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        {/* Header bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-slate-500" />
+            <span className="text-sm font-semibold text-slate-800">User Accounts</span>
+            {userMeta && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+                {userMeta.total} user
+              </span>
+            )}
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <UserTable users={users} isLoading={isLoading} onEdit={openEdit} onResetPw={openResetPw} onDelete={handleDeleteUser} />
-        </CardContent>
-      </Card>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <Input
+                placeholder="Cari email, karyawan…"
+                value={userSearch}
+                onChange={handleUserSearch}
+                className="h-8 pl-8 text-xs w-44 border-slate-200 bg-white"
+              />
+            </div>
+            {/* Branch filter */}
+            <select
+              value={branchFilter}
+              onChange={handleBranchFilter}
+              className="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            >
+              <option value="">Semua Cabang</option>
+              {allBranches.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+            <Button size="sm" className="h-8 text-xs gap-1.5" onClick={openCreate}>
+              <Plus className="h-3.5 w-3.5" />New User
+            </Button>
+          </div>
+        </div>
+
+        {/* Table */}
+        <UserTable users={users} isLoading={isLoading} onEdit={openEdit} onResetPw={openResetPw} onDelete={handleDeleteUser} />
+      </div>
 
       {userMeta && (
         <Pagination
@@ -698,11 +705,8 @@ const TABS = [
   { value: "cash-accounts",   label: "Kas" },
   { value: "warehouses",      label: "Gudang" },
   { value: "shifts",          label: "Shift" },
-  { value: "salary",          label: "Gaji" },
-  { value: "loans",           label: "Kasbon" },
   { value: "komisi",          label: "Komisi" },
-  { value: "leave-types",     label: "Tipe Cuti" },
-  { value: "leave-quotas",    label: "Kuota Cuti" },
+  { value: "leave",           label: "Cuti" },
   { value: "memberships",     label: "Membership" },
   { value: "holidays",        label: "Hari Libur" },
   { value: "attendance",      label: "Absensi" },
@@ -755,11 +759,8 @@ export function SettingsPage() {
             <TabsContent value="cash-accounts"   className="mt-0 p-6"><CashAccountTab /></TabsContent>
             <TabsContent value="warehouses"      className="mt-0 p-6"><WarehouseTab /></TabsContent>
             <TabsContent value="shifts"          className="mt-0 p-6"><ShiftTab /></TabsContent>
-            <TabsContent value="salary"          className="mt-0 p-6"><SalaryTab /></TabsContent>
-            <TabsContent value="loans"           className="mt-0 p-6"><LoanTab /></TabsContent>
             <TabsContent value="komisi"          className="mt-0 p-6"><CommissionSettingsTab /></TabsContent>
-            <TabsContent value="leave-types"     className="mt-0 p-6"><LeaveTypeTab /></TabsContent>
-            <TabsContent value="leave-quotas"    className="mt-0 p-6"><LeaveQuotaTab /></TabsContent>
+            <TabsContent value="leave"           className="mt-0 p-6"><LeaveSettingsTab /></TabsContent>
             <TabsContent value="memberships"     className="mt-0 p-6"><MembershipTab /></TabsContent>
             <TabsContent value="holidays"        className="mt-0 p-6"><HolidayTab /></TabsContent>
             <TabsContent value="attendance"      className="mt-0 p-6"><AttendanceSettingsTab /></TabsContent>

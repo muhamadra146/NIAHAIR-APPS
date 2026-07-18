@@ -59,14 +59,15 @@ const buildBookingNo = async () => {
 
 // ── List ──────────────────────────────────────────────────────────────
 
-const listAppointments = async ({ page, limit, customerId, branchId, status, startDate, endDate, sortBy }) => {
+const listAppointments = async ({ page, limit, customerId, branchId, status, startDate, endDate, sortBy, employeeId }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
   const orderBy = resolveOrderBy(sortBy, ORDER_MAP, "-visitDate");
 
   const where = {};
-  if (customerId) where.customerId = customerId;
-  if (branchId)   where.branchId   = branchId;
-  if (status)     where.status     = status;
+  if (customerId)  where.customerId  = customerId;
+  if (branchId)    where.branchId    = branchId;
+  if (status)      where.status      = status;
+  if (employeeId)  where.staffs      = { some: { employeeId } };
 
   if (startDate || endDate) {
     where.visitDate = {};

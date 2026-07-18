@@ -2,7 +2,7 @@ import { api } from "@/lib/axios";
 import type { ApiResponse, PaginatedResponse } from "@/types/api";
 import type {
   InventoryBalance, StockMovement, InventoryListParams, MovementListParams,
-  StockTransfer, CreateTransferInput, TransferListParams,
+  StockTransfer, CreateTransferInput, TransferListParams, ItemCategory,
 } from "./types";
 
 interface InventoryListData {
@@ -51,4 +51,11 @@ export async function updateTransferStatus(id: string, status: string, branchId?
     ...(branchId ? { branchId } : {}),
   });
   return data.data;
+}
+
+export async function fetchItemCategories(): Promise<ItemCategory[]> {
+  const { data } = await api.get<ApiResponse<{ data: ItemCategory[] }>>("/item-categories", {
+    params: { limit: 200 },
+  });
+  return data.data.data;
 }
