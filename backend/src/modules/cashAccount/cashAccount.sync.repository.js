@@ -21,4 +21,16 @@ const upsertCashAccount = ({ accurateAccountId, accurateAccountNo, code, name })
     },
   });
 
-module.exports = { findByAccurateAccountId, upsertCashAccount };
+const findAllActiveAccurateIds = () =>
+  prisma.cashAccount.findMany({
+    where:  { isActive: true, accurateAccountId: { not: null } },
+    select: { id: true, accurateAccountId: true },
+  });
+
+const deactivateManyByIds = (ids) =>
+  prisma.cashAccount.updateMany({
+    where: { id: { in: ids } },
+    data:  { isActive: false },
+  });
+
+module.exports = { findByAccurateAccountId, upsertCashAccount, findAllActiveAccurateIds, deactivateManyByIds };

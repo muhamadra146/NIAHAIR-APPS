@@ -1,0 +1,2 @@
+-- AddValue
+ALTER TYPE "SyncEntityType" ADD VALUE 'PURCHASE_INVOICE';

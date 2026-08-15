@@ -1,5 +1,6 @@
 ﻿import { useState } from "react";
-import { Plus, Search, Users } from "lucide-react";
+import { toast } from "sonner";
+import { Plus, Search, Users, RefreshCw, Loader2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,9 +13,10 @@ import {
   useUsers, useCreateUser, useUpdateUser, useResetUserPassword, useDeleteUser,
   useBranches, useCreateBranch, useUpdateBranch, useDeleteBranch,
   usePaymentMethods, useCreatePaymentMethod, useUpdatePaymentMethod, useDeletePaymentMethod,
-  useCashAccounts, useUpdateCashAccount, useDeleteCashAccount, useSyncCashAccounts,
+  useCashAccounts, useCreateCashAccount, useUpdateCashAccount, useDeleteCashAccount,
   useWarehouses, useSyncWarehouses, useUpdateWarehouseBranch, useUpdateWarehouseAccurate,
   useShiftMasters, useCreateShift, useUpdateShift, useDeleteShift,
+  useAllGlAccounts, useSyncAllGlAccounts, useUpdateGlAccountUsage,
 } from "../hooks";
 
 import { EmployeeRoleTable } from "../components/employeeRole/EmployeeRoleTable";
@@ -369,7 +371,7 @@ function BranchTab() {
 // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 // Tab 4 â€" Payment Method
 // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-function PaymentMethodTab() {
+function PaymentMethodSubTab() {
   const [formOpen, setFormOpen]   = useState(false);
   const [editMethod, setEdit]     = useState<PaymentMethod | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -385,23 +387,14 @@ function PaymentMethodTab() {
   function openEdit(m: PaymentMethod) { setEdit(m); setFormError(null); setFormOpen(true); }
   async function handleDelete(m: PaymentMethod) {
     if (!confirm(`Delete "${m.name}"?`)) return;
-    try { await deleteMut.mutateAsync(m.id); }
-    catch { /* handled by query invalidation */ }
+    try { await deleteMut.mutateAsync(m.id); } catch { /* handled */ }
   }
 
   async function handleSubmit(values: PaymentMethodFormValues) {
     setFormError(null);
     try {
-      const payload = {
-        code:          values.code,
-        name:          values.name,
-        cashAccountId: values.cashAccountId || undefined,
-      };
-      if (editMethod) {
-        await updateMut.mutateAsync(payload);
-      } else {
-        await createMut.mutateAsync(payload);
-      }
+      const payload = { code: values.code, name: values.name, cashAccountId: values.cashAccountId || undefined };
+      if (editMethod) { await updateMut.mutateAsync(payload); } else { await createMut.mutateAsync(payload); }
       setFormOpen(false);
     } catch (err: unknown) {
       setFormError(apiErr(err, "Gagal menyimpan metode bayar"));
@@ -412,33 +405,156 @@ function PaymentMethodTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold">Payment Methods</h2>
-          <p className="text-sm text-muted-foreground">Configure accepted payment types</p>
+          <h2 className="text-sm font-semibold">Metode Pembayaran</h2>
+          <p className="text-xs text-muted-foreground">Konfigurasi metode pembayaran yang diterima</p>
         </div>
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />New Method
-        </Button>
+        <Button size="sm" onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Tambah</Button>
+      </div>
+      <Card><CardContent className="p-0">
+        <PaymentMethodTable methods={methods} isLoading={isLoading} onEdit={openEdit} onDelete={handleDelete} />
+      </CardContent></Card>
+      <PaymentMethodForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleSubmit}
+        isPending={createMut.isPending || updateMut.isPending} defaultValues={editMethod} error={formError} />
+    </div>
+  );
+}
+
+function CashAccountSubTab() {
+  const [formOpen, setFormOpen]       = useState(false);
+  const [editAccount, setEdit]        = useState<CashAccount | null>(null);
+  const [formError, setFormError]     = useState<string | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
+  const [confirmAccount, setConfirm]  = useState<CashAccount | null>(null);
+
+  const { data, isLoading, refetch, isFetching } = useCashAccounts({ limit: 100 });
+  const allAccounts = data?.data ?? [];
+  const accounts    = showInactive ? allAccounts : allAccounts.filter((a) => a.isActive);
+
+  const createMut = useCreateCashAccount();
+  const updateMut = useUpdateCashAccount(editAccount?.id ?? "");
+  const deleteMut = useDeleteCashAccount();
+
+  function openCreate() { setEdit(null); setFormError(null); setFormOpen(true); }
+  function openEdit(a: CashAccount) { setEdit(a); setFormError(null); setFormOpen(true); }
+
+  function handleDelete(a: CashAccount) { setConfirm(a); }
+  async function confirmDelete() {
+    if (!confirmAccount) return;
+    try {
+      await deleteMut.mutateAsync(confirmAccount.id);
+      setConfirm(null);
+    } catch (err: unknown) {
+      toast.error(apiErr(err, "Gagal menonaktifkan akun"));
+      setConfirm(null);
+    }
+  }
+
+  async function handleSubmit(values: CashAccountFormValues) {
+    setFormError(null);
+    try {
+      if (editAccount) {
+        await updateMut.mutateAsync({
+          name:              values.name,
+          accurateAccountId: values.accurateAccountId ? Number(values.accurateAccountId) : undefined,
+          accurateAccountNo: values.accurateAccountNo || undefined,
+        });
+      } else {
+        await createMut.mutateAsync({
+          code:              values.code.toUpperCase(),
+          name:              values.name,
+          accurateAccountId: values.accurateAccountId ? Number(values.accurateAccountId) : undefined,
+          accurateAccountNo: values.accurateAccountNo || undefined,
+        });
+      }
+      setFormOpen(false);
+    } catch (err: unknown) {
+      setFormError(apiErr(err, "Gagal menyimpan akun kas"));
+    }
+  }
+
+  const inactiveCount = allAccounts.filter((a) => !a.isActive).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold">Cash Account</h2>
+          <p className="text-xs text-muted-foreground">Akun yang ditag "Cash Account" di Settings → GL Akun</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={openCreate}>
+            <Plus className="h-3 w-3 mr-1.5" />
+            Tambah
+          </Button>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            title="Reload daftar cash account dari database"
+          >
+            {isFetching ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+            Reload
+          </button>
+        </div>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <PaymentMethodTable
-            methods={methods}
-            isLoading={isLoading}
-            onEdit={openEdit}
-            onDelete={handleDelete}
-          />
-        </CardContent>
-      </Card>
+      {inactiveCount > 0 && (
+        <button
+          onClick={() => setShowInactive((v) => !v)}
+          className="text-xs text-muted-foreground hover:text-foreground underline"
+        >
+          {showInactive ? "Sembunyikan inactive" : `Tampilkan ${inactiveCount} akun inactive`}
+        </button>
+      )}
 
-      <PaymentMethodForm
+      <Card><CardContent className="p-0">
+        <CashAccountTable accounts={accounts} isLoading={isLoading} onEdit={openEdit} onDelete={handleDelete} />
+      </CardContent></Card>
+
+      {/* Confirm delete dialog */}
+      {confirmAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="rounded-lg bg-background border border-border p-6 shadow-lg max-w-sm w-full mx-4">
+            <h3 className="text-sm font-semibold mb-2">Hapus akun?</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Akun <span className="font-medium text-foreground">"{confirmAccount.name}"</span> akan dihapus permanen dan tidak bisa dikembalikan.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button size="sm" variant="outline" onClick={() => setConfirm(null)} disabled={deleteMut.isPending}>Batal</Button>
+              <Button size="sm" variant="destructive" onClick={confirmDelete} disabled={deleteMut.isPending}>
+                {deleteMut.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                Hapus
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <CashAccountForm
         open={formOpen}
         onOpenChange={setFormOpen}
         onSubmit={handleSubmit}
         isPending={createMut.isPending || updateMut.isPending}
-        defaultValues={editMethod}
+        defaultValues={editAccount}
         error={formError}
       />
+    </div>
+  );
+}
+
+function PaymentMethodTab() {
+  const [subTab, setSubTab] = useState<"methods" | "cash">("methods");
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-0 border-b border-border">
+        {([["methods", "Metode Bayar"], ["cash", "Cash Account"]] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setSubTab(key)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              subTab === key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}>{label}</button>
+        ))}
+      </div>
+      {subTab === "methods" ? <PaymentMethodSubTab /> : <CashAccountSubTab />}
     </div>
   );
 }
@@ -446,80 +562,181 @@ function PaymentMethodTab() {
 // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 // Tab 5 â€" Cash Account
 // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-function CashAccountTab() {
-  const [formOpen, setFormOpen]   = useState(false);
-  const [editAccount, setEdit]    = useState<CashAccount | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
+const GL_ACCOUNT_LIMIT = 10;
 
-  const { data, isLoading } = useCashAccounts({ limit: 100 });
-  const accounts = data?.data ?? [];
+const GL_USAGE_OPTIONS = [
+  { value: "",                  label: "— Tidak ada —" },
+  { value: "STOCK_ADJUSTMENT",  label: "Penyesuaian Stok" },
+  { value: "CASH_ACCOUNT",      label: "Cash Account" },
+];
 
-  const syncMut   = useSyncCashAccounts();
-  const updateMut = useUpdateCashAccount(editAccount?.id ?? "");
-  const deleteMut = useDeleteCashAccount();
+function GlUsageBadge({ usage }: { usage: string | null }) {
+  if (!usage) return <span className="text-xs text-muted-foreground italic">Belum diset</span>;
+  if (usage === "STOCK_ADJUSTMENT") return <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Penyesuaian Stok</span>;
+  if (usage === "CASH_ACCOUNT")     return <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Cash Account</span>;
+  return <span className="text-xs text-muted-foreground">{usage}</span>;
+}
 
-  function openEdit(a: CashAccount) { setEdit(a); setFormError(null); setFormOpen(true); }
+function GlAccountsTab() {
+  const { data: glAccounts = [], isLoading } = useAllGlAccounts();
+  const syncMut   = useSyncAllGlAccounts();
+  const usageMut  = useUpdateGlAccountUsage();
+  const [glPage, setGlPage]         = useState(1);
+  const [glSearch, setGlSearch]     = useState("");
+  const [glCategory, setGlCategory] = useState("");
+  const [editingId, setEditingId]   = useState<string | null>(null);
+  const [editValue, setEditValue]   = useState("");
 
-  async function handleSync() {
-    try {
-      const result = await syncMut.mutateAsync();
-      alert(`Sync complete: ${result.synced} synced, ${result.skipped} skipped.`);
-    } catch {
-      alert("Sync failed. Please try again.");
-    }
+  const categoryOptions = Array.from(
+    new Set(glAccounts.map((a) => a.category).filter(Boolean))
+  ).sort() as string[];
+
+  const filtered = glAccounts.filter((a) => {
+    const q = glSearch.toLowerCase();
+    const matchSearch =
+      (a.number ?? "").toLowerCase().includes(q) ||
+      a.name.toLowerCase().includes(q) ||
+      (a.category ?? "").toLowerCase().includes(q);
+    const matchCategory = glCategory === "" || a.category === glCategory;
+    return matchSearch && matchCategory;
+  });
+
+  const total      = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / GL_ACCOUNT_LIMIT));
+  const paged      = filtered.slice((glPage - 1) * GL_ACCOUNT_LIMIT, glPage * GL_ACCOUNT_LIMIT);
+
+  const resetFilters = () => { setGlSearch(""); setGlCategory(""); setGlPage(1); };
+
+  function startEdit(id: string, current: string | null) {
+    setEditingId(id);
+    setEditValue(current ?? "");
   }
 
-  async function handleDelete(a: CashAccount) {
-    if (!confirm(`Deactivate "${a.name}"?`)) return;
-    try { await deleteMut.mutateAsync(a.id); }
-    catch { /* handled by query invalidation */ }
-  }
+  function cancelEdit() { setEditingId(null); setEditValue(""); }
 
-  async function handleSubmit(values: CashAccountFormValues) {
-    setFormError(null);
-    try {
-      await updateMut.mutateAsync({
-        name:              values.name,
-        accurateAccountId: values.accurateAccountId ? Number(values.accurateAccountId) : undefined,
-        accurateAccountNo: values.accurateAccountNo || undefined,
-      });
-      setFormOpen(false);
-    } catch (err: unknown) {
-      setFormError(apiErr(err, "Gagal menyimpan akun kas"));
-    }
+  async function saveEdit(id: string) {
+    await usageMut.mutateAsync({ id, usage: editValue || null });
+    setEditingId(null);
+    setEditValue("");
   }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold">Cash Accounts</h2>
-          <p className="text-sm text-muted-foreground">Synced from Accurate Online (GL accounts, type: Cash/Bank)</p>
+          <h2 className="text-base font-semibold">GL Akun</h2>
+          <p className="text-sm text-muted-foreground">Semua akun dari Accurate Online — sync untuk memperbarui</p>
         </div>
-        <Button size="sm" variant="outline" onClick={handleSync} disabled={syncMut.isPending}>
-          {syncMut.isPending ? "Syncingâ€¦" : "Sync from Accurate"}
+        <Button size="sm" variant="outline" onClick={() => { syncMut.mutate(); resetFilters(); }} disabled={syncMut.isPending}>
+          {syncMut.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1.5" /> : <RefreshCw className="h-3 w-3 mr-1.5" />}
+          Sync GL Akun dari Accurate
         </Button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-64">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Cari no. akun atau nama..."
+            value={glSearch}
+            onChange={(e) => { setGlSearch(e.target.value); setGlPage(1); }}
+            className="pl-8 h-8 text-sm"
+          />
+        </div>
+        <select
+          value={glCategory}
+          onChange={(e) => { setGlCategory(e.target.value); setGlPage(1); }}
+          className="h-8 rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        >
+          <option value="">Semua Kategori</option>
+          {categoryOptions.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        {(glSearch || glCategory) && (
+          <button onClick={resetFilters} className="text-xs text-muted-foreground hover:text-foreground underline">
+            Reset filter
+          </button>
+        )}
       </div>
 
       <Card>
         <CardContent className="p-0">
-          <CashAccountTable
-            accounts={accounts}
-            isLoading={isLoading}
-            onEdit={openEdit}
-            onDelete={handleDelete}
-          />
+          {isLoading ? (
+            <div className="space-y-3 p-4">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-10 rounded bg-muted animate-pulse" />)}</div>
+          ) : glAccounts.length === 0 ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">Belum ada akun — klik Sync GL Akun dari Accurate</div>
+          ) : filtered.length === 0 ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">Tidak ada akun yang cocok dengan pencarian</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground w-28">No. Akun</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Nama</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground w-36">Kategori</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground w-56">Penggunaan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paged.map((a) => (
+                    <tr key={a.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{a.number ?? "—"}</td>
+                      <td className="px-4 py-2.5">{a.name}</td>
+                      <td className="px-4 py-2.5 text-xs text-muted-foreground">{a.category ?? "—"}</td>
+                      <td className="px-4 py-2">
+                        {editingId === a.id ? (
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              autoFocus
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              className="h-7 rounded border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                            >
+                              {GL_USAGE_OPTIONS.map((o) => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => saveEdit(a.id)}
+                              disabled={usageMut.isPending}
+                              className="flex h-7 w-7 items-center justify-center rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                            >
+                              {usageMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <span className="text-xs">✓</span>}
+                            </button>
+                            <button onClick={cancelEdit} className="flex h-7 w-7 items-center justify-center rounded border border-input hover:bg-muted text-xs">✕</button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 group">
+                            <GlUsageBadge usage={a.usage} />
+                            <button
+                              onClick={() => startEdit(a.id, a.usage)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                            >
+                              <Plus className="h-3.5 w-3.5 rotate-0" style={{ transform: a.usage ? undefined : undefined }} />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <CashAccountForm
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        onSubmit={handleSubmit}
-        isPending={updateMut.isPending}
-        defaultValues={editAccount}
-        error={formError}
-      />
+      {totalPages > 1 && (
+        <Pagination
+          page={glPage}
+          limit={GL_ACCOUNT_LIMIT}
+          total={total}
+          totalPages={totalPages}
+          onPageChange={setGlPage}
+        />
+      )}
     </div>
   );
 }
@@ -702,7 +919,7 @@ const TABS = [
   { value: "users",           label: "User" },
   { value: "branches",        label: "Cabang" },
   { value: "payment-methods", label: "Pembayaran" },
-  { value: "cash-accounts",   label: "Kas" },
+  { value: "gl-accounts",     label: "GL Akun" },
   { value: "warehouses",      label: "Gudang" },
   { value: "shifts",          label: "Shift" },
   { value: "komisi",          label: "Komisi" },
@@ -756,7 +973,7 @@ export function SettingsPage() {
             <TabsContent value="users"           className="mt-0 p-6"><UserTab /></TabsContent>
             <TabsContent value="branches"        className="mt-0 p-6"><BranchTab /></TabsContent>
             <TabsContent value="payment-methods" className="mt-0 p-6"><PaymentMethodTab /></TabsContent>
-            <TabsContent value="cash-accounts"   className="mt-0 p-6"><CashAccountTab /></TabsContent>
+            <TabsContent value="gl-accounts"     className="mt-0 p-6"><GlAccountsTab /></TabsContent>
             <TabsContent value="warehouses"      className="mt-0 p-6"><WarehouseTab /></TabsContent>
             <TabsContent value="shifts"          className="mt-0 p-6"><ShiftTab /></TabsContent>
             <TabsContent value="komisi"          className="mt-0 p-6"><CommissionSettingsTab /></TabsContent>

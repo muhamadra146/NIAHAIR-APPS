@@ -10,6 +10,7 @@ const {
   createController,
   updateController,
   getServiceMaterialsController,
+  debugAccurateItemController,
 } = require("./item.controller");
 const { syncFromAccurateController } = require("./item.sync.controller");
 const { syncToAccurateController } = require("./item.push.controller");
@@ -17,7 +18,8 @@ const { syncToAccurateController } = require("./item.push.controller");
 const router = Router();
 
 // 1. Static routes first — prevents "sync" from being captured as :id
-router.post("/sync/accurate", authenticate, authorize(ROLES.SUPER_ADMIN), syncFromAccurateController);
+router.post("/sync/accurate",          authenticate, authorize(ROLES.SUPER_ADMIN), syncFromAccurateController);
+router.get( "/debug/accurate-detail",  authenticate, authorize(ROLES.SUPER_ADMIN), debugAccurateItemController);
 
 // 2. Special parameter routes second
 router.post("/:id/sync/accurate",       authenticate, syncToAccurateController);

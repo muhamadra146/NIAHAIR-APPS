@@ -21,6 +21,8 @@ interface Props {
 }
 
 export function CashAccountForm({ open, onOpenChange, onSubmit, isPending, defaultValues, error }: Props) {
+  const isEdit = Boolean(defaultValues);
+
   const { register, handleSubmit, reset, formState: { errors } } = useForm<CashAccountFormValues>({
     resolver: zodResolver(cashAccountSchema),
   });
@@ -28,6 +30,7 @@ export function CashAccountForm({ open, onOpenChange, onSubmit, isPending, defau
   useEffect(() => {
     if (open) {
       reset({
+        code:              defaultValues?.code ?? "",
         name:              defaultValues?.name ?? "",
         accurateAccountId: defaultValues?.accurateAccountId ?? "",
         accurateAccountNo: defaultValues?.accurateAccountNo ?? "",
@@ -45,7 +48,7 @@ export function CashAccountForm({ open, onOpenChange, onSubmit, isPending, defau
         )}
       >
         <DialogHeader className="shrink-0 border-b border-border px-4 py-4 sm:px-6">
-          <DialogTitle>Edit Cash Account</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit Cash Account" : "Tambah Cash Account"}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-1 flex-col overflow-hidden">
@@ -54,15 +57,23 @@ export function CashAccountForm({ open, onOpenChange, onSubmit, isPending, defau
               <div className="mb-4 rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
             )}
             <div className="space-y-4">
-              {/* Code — read-only, set by Accurate */}
               <div className="space-y-1.5">
-                <Label>Code</Label>
-                <Input value={defaultValues?.code ?? ""} readOnly disabled className="bg-muted text-muted-foreground" />
-                <p className="text-xs text-muted-foreground">Set by Accurate sync. Not editable.</p>
+                <Label>Kode <span className="text-destructive">*</span></Label>
+                {isEdit ? (
+                  <>
+                    <Input value={defaultValues?.code ?? ""} readOnly disabled className="bg-muted text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground">Kode tidak dapat diubah.</p>
+                  </>
+                ) : (
+                  <>
+                    <Input {...register("code")} placeholder="KAS-001" />
+                    {errors.code && <p className="text-xs text-destructive">{errors.code.message}</p>}
+                  </>
+                )}
               </div>
 
               <div className="space-y-1.5">
-                <Label>Name <span className="text-destructive">*</span></Label>
+                <Label>Nama <span className="text-destructive">*</span></Label>
                 <Input {...register("name")} placeholder="Kas Cipete" />
                 {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
               </div>
@@ -83,10 +94,10 @@ export function CashAccountForm({ open, onOpenChange, onSubmit, isPending, defau
           <DialogFooter className="shrink-0 border-t border-border px-4 py-4 sm:px-6">
             <Button type="button" variant="outline" className="flex-1 sm:flex-none"
               onClick={() => onOpenChange(false)} disabled={isPending}>
-              Cancel
+              Batal
             </Button>
             <Button type="submit" className="flex-1 sm:flex-none" disabled={isPending}>
-              {isPending ? "Saving…" : "Save"}
+              {isPending ? "Menyimpan…" : "Simpan"}
             </Button>
           </DialogFooter>
         </form>

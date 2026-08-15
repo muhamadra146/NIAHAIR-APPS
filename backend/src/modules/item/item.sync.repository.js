@@ -52,6 +52,12 @@ const deactivatePriceById = (id) =>
 
 const createItemPrice = (data) => prisma.itemPrice.create({ data });
 
+const updateItemPriceCostPrice = (id, costPrice) =>
+  prisma.itemPrice.update({ where: { id }, data: { costPrice } });
+
+const updateItemPurchaseUnit = (itemId, purchaseUnitId) =>
+  prisma.item.update({ where: { id: itemId }, data: { purchaseUnitId } });
+
 const findCategoryByAccurateId = (accurateCategoryId) =>
   prisma.itemCategory.findUnique({
     where:  { accurateCategoryId },
@@ -68,5 +74,7 @@ module.exports = {
   findActiveGlobalPrice,
   deactivatePriceById,
   createItemPrice,
+  updateItemPriceCostPrice,
+  updateItemPurchaseUnit,
   findCategoryByAccurateId,
 };

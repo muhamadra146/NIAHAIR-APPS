@@ -11,6 +11,8 @@ const {
   findActiveGlobalPrice,
   deactivatePriceById,
   createItemPrice,
+  updateItemPriceCostPrice,
+  updateItemPurchaseUnit,
   findCategoryByAccurateId,
 } = require("./item.sync.repository");
 
@@ -23,7 +25,8 @@ const ACCURATE_FIELDS =
   "unit1,unit2,unit3,unit4,unit5," +
   "ratio2,ratio3,ratio4,ratio5," +
   "itemCategory";
-const ACCURATE_DETAIL_FIELDS = "detailSellingPrice";
+// vendorPrice = harga beli per vendorUnit; vendorUnit/vendorUnitId = satuan beli
+const ACCURATE_DETAIL_FIELDS = "detailSellingPrice,vendorPrice,vendorUnit,vendorUnitId";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -70,13 +73,30 @@ const syncItemUnitsAndPrices = async (itemId, accurateItem) => {
     { unit: accurateItem.unit5, factor: accurateItem.ratio5, isDefault: false },
   ].filter(e => e.unit?.id);
 
-  // Build price lookup keyed by Accurate unit ID
-  const priceMap = {};
+  // Build selling price lookup keyed by Accurate unit ID
+  const sellingPriceMap = {};
   for (const p of accurateItem.detailSellingPrice ?? []) {
     if (p.unit?.id && p.price != null) {
-      priceMap[parseInt(p.unit.id, 10)] = Number(p.price);
+      sellingPriceMap[parseInt(p.unit.id, 10)] = Number(p.price);
     }
   }
+
+  // vendorPrice = harga beli (single flat field per satuan beli, not an array)
+  // vendorUnit / vendorUnitId = satuan beli dari Accurate
+  const vendorUnitAccurateId = accurateItem.vendorUnit?.id
+    ? parseInt(accurateItem.vendorUnit.id, 10)
+    : accurateItem.vendorUnitId
+      ? parseInt(accurateItem.vendorUnitId, 10)
+      : null;
+  const vendorPrice = accurateItem.vendorPrice != null ? Number(accurateItem.vendorPrice) : null;
+
+  // Build purchase price map: hanya satu entry (vendor unit → vendor price)
+  const purchasePriceMap = {};
+  if (vendorUnitAccurateId && vendorPrice != null) {
+    purchasePriceMap[vendorUnitAccurateId] = vendorPrice;
+  }
+
+  const purchaseUnitAccurateId = vendorUnitAccurateId;
 
   for (const { unit, factor, isDefault } of unitEntries) {
     try {
@@ -91,13 +111,47 @@ const syncItemUnitsAndPrices = async (itemId, accurateItem) => {
 
       await upsertItemUnit(itemId, localUnit.id, Number(factor ?? 1), isDefault);
 
-      // Only write a price row when Accurate explicitly provides one
-      const price = priceMap[accurateUnitId];
-      if (price != null) {
-        await syncItemPrice(itemId, localUnit.id, price);
+      // Sync selling price
+      const sellingPrice = sellingPriceMap[accurateUnitId];
+      if (sellingPrice != null) {
+        await syncItemPrice(itemId, localUnit.id, sellingPrice);
+      }
+
+      // Sync cost price (harga beli) onto the active price record
+      const costPrice = purchasePriceMap[accurateUnitId];
+      if (costPrice != null) {
+        const existing = await findActiveGlobalPrice(itemId, localUnit.id);
+        if (existing) {
+          if (Number(existing.costPrice) !== costPrice) {
+            await updateItemPriceCostPrice(existing.id, costPrice);
+          }
+        } else {
+          // No selling price record exists — create one with sellingPrice=0
+          await createItemPrice({
+            itemId,
+            unitId:       localUnit.id,
+            branchId:     null,
+            sellingPrice: 0,
+            costPrice,
+            effectiveDate: new Date(),
+            isActive:     true,
+          });
+        }
       }
     } catch (_err) {
       console.error("ITEM UNIT/PRICE SYNC ERROR:", unit?.id, _err.message);
+    }
+  }
+
+  // Set purchaseUnitId on Item (satuan beli default dari Accurate)
+  if (purchaseUnitAccurateId) {
+    try {
+      const purchaseLocalUnit = await findUnitByAccurateId(purchaseUnitAccurateId);
+      if (purchaseLocalUnit) {
+        await updateItemPurchaseUnit(itemId, purchaseLocalUnit.id);
+      }
+    } catch (_err) {
+      console.error("ITEM PURCHASE UNIT UPDATE ERROR:", itemId, _err.message);
     }
   }
 };
@@ -167,8 +221,11 @@ const syncItemsFromAccurate = async () => {
           const detailRes = await accurateRequest(
             `${ACCURATE_ITEM_DETAIL}?id=${item.id}&fields=${ACCURATE_DETAIL_FIELDS}`
           );
-          if (detailRes.s && detailRes.d?.detailSellingPrice) {
+          if (detailRes.s && detailRes.d) {
             item.detailSellingPrice = detailRes.d.detailSellingPrice;
+            item.vendorPrice        = detailRes.d.vendorPrice;
+            item.vendorUnit         = detailRes.d.vendorUnit;
+            item.vendorUnitId       = detailRes.d.vendorUnitId;
           }
         } catch (_detailErr) {
           console.error("ITEM DETAIL FETCH ERROR:", item.id, _detailErr.message);

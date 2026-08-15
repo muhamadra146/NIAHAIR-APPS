@@ -223,6 +223,7 @@ model Employee {
 
   inventoryMovements    InventoryMovement[] @relation("InventoryMovementCreatedBy")
   inventoryPeriods      InventoryPeriod[]   @relation("InventoryPeriodClosedBy")
+  purchaseInvoices      PurchaseInvoice[]   @relation("PurchaseInvoiceCreatedBy")
 
   @@index([roleId])
   @@index([homeBranchId])
@@ -492,12 +493,14 @@ model Unit {
 
   itemPrices ItemPrice[]
 
-  defaultItems Item[]
+  defaultItems  Item[] @relation("ItemDefaultUnit")
+  purchaseItems Item[] @relation("ItemPurchaseUnit")
 
-  serviceMaterials   ServiceMaterial[]
-  materialUsageItems MaterialUsageItem[]
-  invoiceItems       InvoiceItem[]
-  treatmentItems     TreatmentItem[]
+  serviceMaterials     ServiceMaterial[]
+  materialUsageItems   MaterialUsageItem[]
+  invoiceItems         InvoiceItem[]
+  treatmentItems       TreatmentItem[]
+  purchaseInvoiceItems PurchaseInvoiceItem[]
 
   @@index([name])
   @@map("units")
@@ -512,6 +515,7 @@ model Item {
 
   categoryId           String?
   defaultUnitId        String?
+  purchaseUnitId       String?
   commissionCategoryId String?
 
   accurateItemId Int? @unique
@@ -531,7 +535,8 @@ model Item {
 
   category ItemCategory? @relation(fields: [categoryId], references: [id])
 
-  defaultUnit Unit? @relation(fields: [defaultUnitId], references: [id])
+  defaultUnit  Unit? @relation("ItemDefaultUnit",  fields: [defaultUnitId],  references: [id])
+  purchaseUnit Unit? @relation("ItemPurchaseUnit", fields: [purchaseUnitId], references: [id])
 
   commissionCategory CommissionCategory? @relation(fields: [commissionCategoryId], references: [id])
 
@@ -539,8 +544,9 @@ model Item {
 
   itemPrices ItemPrice[]
 
-  inventories         Inventory[]
-  stockTransferItems  StockTransferItem[]
+  inventories          Inventory[]
+  stockTransferItems   StockTransferItem[]
+  purchaseInvoiceItems PurchaseInvoiceItem[]
   appointmentServices AppointmentService[]
   invoiceItems        InvoiceItem[]
   commissions         Commission[]
@@ -552,6 +558,7 @@ model Item {
   @@index([itemType])
   @@index([categoryId])
   @@index([defaultUnitId])
+  @@index([purchaseUnitId])
   @@index([commissionCategoryId])
   @@index([name])
   @@map("items")
@@ -707,6 +714,8 @@ model Warehouse {
 
   transferIns StockTransfer[] @relation("TransferDestination")
 
+  purchaseInvoices PurchaseInvoice[]
+
   @@index([branchId])
   @@map("warehouses")
 }
@@ -786,11 +795,19 @@ model InventoryMovement {
 
   isLocked Boolean @default(false)
 
+  accurateAdjustmentId Int?
+  glAccountId          String?
+  purchaseInvoiceItemId String?
+
   createdAt DateTime @default(now())
 
   inventory Inventory @relation(fields: [inventoryId], references: [id])
 
   createdByEmployee Employee? @relation("InventoryMovementCreatedBy", fields: [createdByEmployeeId], references: [id])
+
+  glAccount GlAccount? @relation(fields: [glAccountId], references: [id])
+
+  purchaseInvoiceItem PurchaseInvoiceItem? @relation("PurchaseMovement", fields: [purchaseInvoiceItemId], references: [id])
 
   materialUsageItems MaterialUsageItem[]
 
@@ -804,6 +821,8 @@ model InventoryMovement {
   @@index([createdAt])
   @@index([createdByEmployeeId])
   @@index([isLocked])
+  @@index([glAccountId])
+  @@index([purchaseInvoiceItemId])
   @@map("inventory_movements")
 }
 
@@ -858,6 +877,10 @@ model StockTransfer {
   accurateTransferNumber String?
   lastSyncAt             DateTime?
 
+  accurateReceiveId     Int?      @unique
+  accurateReceiveNumber String?
+  lastReceiveSyncAt     DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -883,7 +906,8 @@ model StockTransferItem {
 
   itemId String
 
-  qty Decimal @db.Decimal(18, 6)
+  qty         Decimal  @db.Decimal(18, 6)
+  receivedQty Decimal? @db.Decimal(18, 6)
 
   accurateDetailId Int?
 
@@ -2130,6 +2154,8 @@ enum SyncEntityType {
   PAYMENT
   DEPOSIT_PAYMENT
   STOCK_TRANSFER
+  STOCK_TRANSFER_RECEIVE
+  PURCHASE_INVOICE
 }
 
 enum SyncQueueStatus {
@@ -2701,4 +2727,161 @@ model ClientConsultationNote {
   @@index([branchId])
   @@index([filledByEmployeeId])
   @@map("client_consultation_notes")
+}
+
+// =====================================================
+// PURCHASE MODULE
+// =====================================================
+
+enum PurchaseInvoiceStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+// =====================================================
+// GL ACCOUNTS (synced from Accurate)
+// =====================================================
+
+model GlAccount {
+  id String @id @default(uuid())
+
+  accurateGlAccountId Int? @unique
+
+  number    String?
+  name      String
+  category  String?
+  usage     String?
+  isActive  Boolean   @default(true)
+  lastSyncAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  inventoryMovements InventoryMovement[]
+
+  @@index([number])
+  @@index([name])
+  @@index([category])
+  @@index([usage])
+  @@map("gl_accounts")
+}
+
+// =====================================================
+// SUPPLIERS (synced from Accurate /vendor/list.do)
+// =====================================================
+
+model Supplier {
+  id String @id @default(uuid())
+
+  accurateVendorId Int? @unique
+
+  name         String
+  code         String?
+  email        String?
+  phone        String?
+  address      String?
+  paymentTerms String?
+
+  isActive   Boolean   @default(true)
+  lastSyncAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchaseInvoices PurchaseInvoice[]
+
+  @@index([name])
+  @@map("suppliers")
+}
+
+// =====================================================
+// PURCHASE INVOICES (Faktur Pembelian)
+// =====================================================
+
+model PurchaseInvoice {
+  id String @id @default(uuid())
+
+  supplierId  String
+  warehouseId String?
+
+  invoiceNo         String  @unique
+  supplierInvoiceNo String?
+
+  invoiceDate  DateTime
+  dueDate      DateTime?
+  deliveryDate DateTime?
+
+  subtotal      Decimal @db.Decimal(18, 2)
+  totalDiscount Decimal @default(0) @db.Decimal(18, 2)
+  totalTax      Decimal @default(0) @db.Decimal(18, 2)
+  grandTotal    Decimal @db.Decimal(18, 2)
+
+  taxable      Boolean @default(false)
+  inclusiveTax Boolean @default(false)
+
+  taxInvoiceDate     DateTime?
+  taxTransactionType String?
+  taxInvoiceNo       String?
+
+  paymentTerms String?
+  notes        String?
+
+  status PurchaseInvoiceStatus @default(DRAFT)
+
+  createdByEmployeeId String?
+
+  accuratePurchaseInvoiceId     Int?      @unique
+  accuratePurchaseInvoiceNumber String?
+  lastSyncAt                    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  supplier          Supplier   @relation(fields: [supplierId], references: [id])
+  warehouse         Warehouse? @relation(fields: [warehouseId], references: [id])
+  createdByEmployee Employee?  @relation("PurchaseInvoiceCreatedBy", fields: [createdByEmployeeId], references: [id])
+
+  items PurchaseInvoiceItem[]
+
+  @@index([supplierId])
+  @@index([warehouseId])
+  @@index([status])
+  @@index([invoiceDate])
+  @@index([createdByEmployeeId])
+  @@map("purchase_invoices")
+}
+
+// =====================================================
+// PURCHASE INVOICE ITEMS
+// =====================================================
+
+model PurchaseInvoiceItem {
+  id String @id @default(uuid())
+
+  purchaseInvoiceId String
+  itemId            String
+  unitId            String
+
+  accurateDetailId Int?
+
+  qty      Decimal @db.Decimal(18, 6)
+  price    Decimal @db.Decimal(18, 2)
+  discount Decimal @default(0) @db.Decimal(18, 2)
+  subtotal Decimal @db.Decimal(18, 2)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+  item            Item            @relation(fields: [itemId], references: [id])
+  unit            Unit            @relation(fields: [unitId], references: [id])
+
+  inventoryMovements InventoryMovement[] @relation("PurchaseMovement")
+
+  @@index([purchaseInvoiceId])
+  @@index([itemId])
+  @@index([unitId])
+  @@map("purchase_invoice_items")
 }

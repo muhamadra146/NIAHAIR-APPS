@@ -1,62 +1,53 @@
-const { StatusCodes }     = require("http-status-codes");
-const AppError            = require("../../common/errors/AppError");
-const { accurateRequest } = require("../accurate/accurate.client");
-const { mapAccurateCashAccount } = require("./cashAccount.sync.mapper");
-const { upsertCashAccount }      = require("./cashAccount.sync.repository");
+const { findByUsage } = require("../glAccount/glAccount.sync.repository");
+const { upsertCashAccount, findAllActiveAccurateIds, deactivateManyByIds } = require("./cashAccount.sync.repository");
 
-const ACCURATE_GLACCOUNT_LIST = "/glaccount/list.do";
-const ACCURATE_FIELDS         = "id,no,name,accountType";
-const TARGET_TYPE             = "CASH_BANK";
+const CASH_ACCOUNT_USAGE = "CASH_ACCOUNT";
 
 const syncCashAccountsFromAccurate = async () => {
-  console.log("[cashAccount sync] start");
+  console.log("[cashAccount sync] reading from gl_accounts where usage=CASH_ACCOUNT");
 
-  let synced   = 0;
-  let skipped  = 0;
-  let page     = 1;
-  let pageCount = 1;
+  const glAccounts = await findByUsage(CASH_ACCOUNT_USAGE);
 
-  do {
-    const res = await accurateRequest(
-      `${ACCURATE_GLACCOUNT_LIST}?fields=${ACCURATE_FIELDS}&sp.page=${page}`
-    );
+  if (glAccounts.length === 0) {
+    console.log("[cashAccount sync] no CASH_ACCOUNT accounts found");
+    return { synced: 0, skipped: 0, deactivated: 0, message: "Tidak ada akun dengan penggunaan 'Cash Account'. Tag akun di Settings → GL Akun terlebih dahulu." };
+  }
 
-    if (!res.s) {
-      throw new AppError(
-        `Accurate API error on glaccount list page ${page}`,
-        StatusCodes.BAD_GATEWAY
-      );
-    }
+  let synced  = 0;
+  let skipped = 0;
 
-    pageCount     = res.sp?.pageCount ?? 1;
-    const rows    = res.d ?? [];
+  const syncedAccurateIds = new Set();
 
-    console.log(`[cashAccount sync] page=${page}/${pageCount} count=${rows.length}`);
+  for (const gl of glAccounts) {
+    if (!gl.accurateGlAccountId || !gl.number) { skipped++; continue; }
 
-    for (const row of rows) {
-      if (row.accountType !== TARGET_TYPE) {
-        skipped++;
-        continue;
-      }
+    await upsertCashAccount({
+      accurateAccountId: gl.accurateGlAccountId,
+      accurateAccountNo: String(gl.number),
+      code:              String(gl.number),
+      name:              gl.name,
+    });
 
-      if (!row.id || !row.no) {
-        skipped++;
-        continue;
-      }
+    syncedAccurateIds.add(gl.accurateGlAccountId);
+    synced++;
+    console.log(`[cashAccount sync] upserted no=${gl.number} name=${gl.name}`);
+  }
 
-      const data = mapAccurateCashAccount(row);
-      await upsertCashAccount(data);
-      synced++;
+  // Auto-deactivate accounts that are no longer tagged
+  const existing = await findAllActiveAccurateIds();
+  const toDeactivate = existing
+    .filter((a) => !syncedAccurateIds.has(a.accurateAccountId))
+    .map((a) => a.id);
 
-      console.log(`[cashAccount sync] upserted id=${row.id} no=${row.no} name=${row.name}`);
-    }
+  let deactivated = 0;
+  if (toDeactivate.length > 0) {
+    await deactivateManyByIds(toDeactivate);
+    deactivated = toDeactivate.length;
+    console.log(`[cashAccount sync] deactivated=${deactivated} untagged accounts`);
+  }
 
-    page++;
-  } while (page <= pageCount);
-
-  console.log(`[cashAccount sync] done — synced=${synced} skipped=${skipped}`);
-
-  return { synced, skipped };
+  console.log(`[cashAccount sync] done — synced=${synced} skipped=${skipped} deactivated=${deactivated}`);
+  return { synced, skipped, deactivated };
 };
 
 module.exports = { syncCashAccountsFromAccurate };

@@ -15,10 +15,23 @@ const INVENTORY_INCLUDE = {
   item: {
     select: {
       id: true, name: true, itemCode: true, itemType: true,
-      category: { select: { id: true, name: true } },
+      category:    { select: { id: true, name: true } },
+      defaultUnit: { select: { id: true, name: true } },
+      itemUnits: {
+        select: {
+          conversionFactor: true,
+          isDefault:        true,
+          unit:             { select: { id: true, name: true } },
+        },
+        orderBy: { conversionFactor: "asc" },
+      },
     },
   },
   warehouse: { select: { id: true, name: true } },
+};
+
+const MOVEMENT_GL_INCLUDE = {
+  glAccount: { select: { id: true, number: true, name: true } },
 };
 
 // ── Inventory movements ────────────────────────────────────────────────
@@ -115,4 +128,5 @@ module.exports = {
   findInvoiceForSaleMovement,
   findTreatmentSessionForServiceMovement,
   findWarehouseByBranchId,
+  MOVEMENT_GL_INCLUDE,
 };

@@ -269,6 +269,7 @@ export interface ItemPriceOption {
   unitId:       string;
   branchId:     string | null;
   sellingPrice: string;
+  costPrice:    string | null;
 }
 
 export interface ItemUnitOption {
@@ -279,12 +280,13 @@ export interface ItemUnitOption {
 }
 
 export interface ItemSearchResult {
-  id:         string;
-  name:       string;
-  itemCode:   string;
-  itemType:   string;
-  itemPrices: ItemPriceOption[];
-  itemUnits:  ItemUnitOption[];
+  id:             string;
+  name:           string;
+  itemCode:       string;
+  itemType:       string;
+  purchaseUnitId: string | null;
+  itemPrices:     ItemPriceOption[];
+  itemUnits:      ItemUnitOption[];
 }
 
 export async function fetchInvoiceItems(search: string): Promise<ItemSearchResult[]> {

@@ -44,6 +44,8 @@ import { CorrectionPage }            from "@/features/attendance/pages/Correctio
 import { PermissionPage }            from "@/features/attendance/pages/PermissionPage";
 import { SickLeavePage }             from "@/features/attendance/pages/SickLeavePage";
 import { GenerateKomisiPage }         from "@/features/invoice/pages/GenerateKomisiPage";
+import { PurchasePage }              from "@/features/purchase/pages/PurchasePage";
+import { PurchaseDetailPage }        from "@/features/purchase/pages/PurchaseDetailPage";
 
 export const router = createBrowserRouter([
   // ── Public routes ────────────────────────────────────────────────────
@@ -101,6 +103,9 @@ export const router = createBrowserRouter([
           { path: "/generate-komisi",   element: <GenerateKomisiPage /> },
           // Inventory
           { path: "/inventory", element: <InventoryPage /> },
+          // Pembelian
+          { path: "/purchases",     element: <PurchasePage /> },
+          { path: "/purchases/:id", element: <PurchaseDetailPage /> },
           // Reports
           { path: "/reports", element: <ReportsPage /> },
           // Loans (Kasbon)

@@ -23,6 +23,7 @@ import {
   HandHelping,
   Thermometer,
   Sparkles,
+  ShoppingCart,
   type LucideIcon,
 } from "lucide-react";
 
@@ -170,6 +171,13 @@ export const sidebarNav: NavItem[] = [
     label: "Inventory",
     href:  "/inventory",
     icon:  Package,
+    roles: MANAGEMENT_ROLES,
+    group: "Data",
+  },
+  {
+    label: "Pembelian",
+    href:  "/purchases",
+    icon:  ShoppingCart,
     roles: MANAGEMENT_ROLES,
     group: "Data",
   },

@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-// code is set by Accurate sync — not editable
 export const cashAccountSchema = z.object({
-  name:              z.string().min(1, "Name is required"),
+  code:              z.string().min(1, "Kode wajib diisi"),
+  name:              z.string().min(1, "Nama wajib diisi"),
   accurateAccountId: z.coerce.number().optional().or(z.literal("")),
   accurateAccountNo: z.string().optional().or(z.literal("")),
 });

@@ -3,7 +3,9 @@ const { mapTransferToAccurate } = require("./stockTransfer.sync.mapper");
 const {
   findTransferForSync,
   markTransferSynced,
+  markTransferReceiveSynced,
   markTransferItemSynced,
+  findReceiveAccurateId,
 } = require("./stockTransfer.sync.repository");
 
 const ACCURATE_ITEM_TRANSFER_SAVE = "/item-transfer/save.do";
@@ -62,6 +64,8 @@ const syncTransferToAccurate = async (transferId) => {
     body:   payload,
   });
 
+  console.log("[transfer sync response]", JSON.stringify(response));
+
   if (!response.s || !response.r?.id) {
     throw new Error(`Accurate API error: ${JSON.stringify(response)}`);
   }
@@ -72,7 +76,7 @@ const syncTransferToAccurate = async (transferId) => {
   await markTransferSynced({ id: transferId, accurateTransferId, accurateTransferNumber });
 
   // Save per-line Accurate detail IDs
-  const details = response.r.detailItemTransfer ?? [];
+  const details = response.r.detailItem ?? [];
   for (let i = 0; i < inventoryItems.length; i++) {
     if (details[i]?.id) {
       await markTransferItemSynced(inventoryItems[i].id, details[i].id);
@@ -87,4 +91,82 @@ const syncTransferToAccurate = async (transferId) => {
   return { synced: true, accurateTransferId, accurateTransferNumber };
 };
 
-module.exports = { syncTransferToAccurate };
+// ── TRANSFER_IN sync (Terima Barang) ──────────────────────────────────
+const syncTransferReceiveToAccurate = async (transferId) => {
+  console.log(`[transfer receive sync] start transferId=${transferId}`);
+
+  const transfer = await findTransferForSync(transferId);
+  if (!transfer) throw new Error(`Stock transfer not found: ${transferId}`);
+
+  // Must be RECEIVED status
+  if (transfer.status !== "RECEIVED") {
+    throw new Error(`Transfer status must be RECEIVED to sync receive, got: ${transfer.status}`);
+  }
+
+  // TRANSFER_OUT must be synced first
+  if (!transfer.accurateTransferId) {
+    throw new Error(`TRANSFER_OUT not yet synced to Accurate for transfer: ${transfer.transferNo}`);
+  }
+
+  // Idempotency — skip if TRANSFER_IN already synced
+  const existingReceiveId = await findReceiveAccurateId(transferId);
+  if (existingReceiveId) {
+    return { skipped: true, reason: "TRANSFER_IN already synced" };
+  }
+
+  if (!transfer.destinationWarehouse.accurateWarehouseId) {
+    throw new Error(`Destination warehouse not mapped to Accurate: ${transfer.destinationWarehouse.name}`);
+  }
+
+  const inventoryItems = transfer.items.filter((it) => it.item.itemType === "INVENTORY");
+  if (inventoryItems.length === 0) {
+    throw new Error("Transfer has no INVENTORY items to sync");
+  }
+
+  // Build TRANSFER_IN payload — references each TRANSFER_OUT detail line by fromItemTransferDetailId
+  // receivedQty may differ from qty if user did a partial receive
+  const payload = {
+    itemTransferType:   "TRANSFER_IN",
+    fromItemTransferId: transfer.accurateTransferId,
+    warehouseId:        transfer.destinationWarehouse.accurateWarehouseId,
+    detailItem: inventoryItems.map((it) => {
+      const sentQty     = Number(it.qty);
+      const receivedQty = it.receivedQty != null ? Number(it.receivedQty) : sentQty;
+      const rejectedQty = Math.max(0, sentQty - receivedQty);
+      return {
+        itemId:                  it.item.accurateItemId,
+        quantity:                receivedQty,
+        unitId:                  it.item.defaultUnit?.accurateUnitId,
+        fromItemTransferDetailId: it.accurateDetailId ?? undefined,
+        ...(rejectedQty > 0 ? { rejectedQuantity: rejectedQty } : {}),
+      };
+    }),
+  };
+
+  console.log("[transfer receive sync payload]", JSON.stringify(payload));
+
+  const response = await accurateRequest(ACCURATE_ITEM_TRANSFER_SAVE, {
+    method: "POST",
+    body:   payload,
+  });
+
+  console.log("[transfer receive sync response]", JSON.stringify(response));
+
+  if (!response.s || !response.r?.id) {
+    throw new Error(`Accurate API error: ${JSON.stringify(response)}`);
+  }
+
+  const accurateReceiveId     = response.r.id;
+  const accurateReceiveNumber = response.r.number ?? response.r.no ?? null;
+
+  await markTransferReceiveSynced({ id: transferId, accurateReceiveId, accurateReceiveNumber });
+
+  console.log(
+    `[transfer receive sync] success transferId=${transferId}` +
+    ` accurateId=${accurateReceiveId} number=${accurateReceiveNumber}`
+  );
+
+  return { synced: true, accurateReceiveId, accurateReceiveNumber };
+};
+
+module.exports = { syncTransferToAccurate, syncTransferReceiveToAccurate };

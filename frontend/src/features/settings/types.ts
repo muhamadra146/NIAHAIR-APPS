@@ -73,6 +73,7 @@ export interface CashAccount {
   accurateAccountId: number | null;
   accurateAccountNo: string | null;
   isActive:          boolean;
+  paymentMethods?:   { id: string; code: string; name: string }[];
 }
 
 // ── Payment Method ────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
-const { findAll, count, findById, findByCode, create, update } = require("./cashAccount.repository");
+const { findAll, count, findById, findByCode, create, update, remove } = require("./cashAccount.repository");
 
 const listCashAccounts = async ({ page, limit, isActive }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -56,11 +56,20 @@ const updateCashAccount = async (id, body) => {
   return update(id, data);
 };
 
-// Soft delete
+// Hard delete — blocked if used by active payment methods
 const deleteCashAccount = async (id) => {
   const account = await findById(id);
   if (!account) throw new AppError("Cash account not found", StatusCodes.NOT_FOUND);
-  return update(id, { isActive: false });
+
+  if (account.paymentMethods && account.paymentMethods.length > 0) {
+    const names = account.paymentMethods.map((m) => m.name).join(", ");
+    throw new AppError(
+      `Tidak dapat dihapus — akun ini digunakan oleh metode pembayaran: ${names}`,
+      StatusCodes.CONFLICT
+    );
+  }
+
+  return remove(id);
 };
 
 module.exports = { listCashAccounts, getCashAccountById, createCashAccount, updateCashAccount, deleteCashAccount };

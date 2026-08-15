@@ -3,12 +3,20 @@ export type InventoryMovementType =
   | "TRANSFER_IN" | "TRANSFER_OUT" | "ADJUSTMENT"
   | "OPENING_BALANCE" | "RETURN" | "SYNC";
 
+export interface InventoryItemUnit {
+  conversionFactor: string | number;
+  isDefault:        boolean;
+  unit:             { id: string; name: string };
+}
+
 export interface InventoryItemRef {
-  id:       string;
-  name:     string;
-  itemCode: string | null;
-  itemType: string;
-  category: { id: string; name: string } | null;
+  id:          string;
+  name:        string;
+  itemCode:    string | null;
+  itemType:    string;
+  category:    { id: string; name: string } | null;
+  defaultUnit: { id: string; name: string } | null;
+  itemUnits:   InventoryItemUnit[];
 }
 
 export interface InventoryWarehouseRef {
@@ -79,7 +87,7 @@ export interface MovementListParams {
 }
 
 // ── Stock Transfer ────────────────────────────────────────────────────
-export type StockTransferStatus = "PENDING" | "IN_TRANSIT" | "RECEIVED";
+export type StockTransferStatus = "PENDING" | "IN_TRANSIT" | "RECEIVED" | "CANCELLED";
 
 export interface StockTransferWarehouse {
   id:       string;
@@ -89,10 +97,11 @@ export interface StockTransferWarehouse {
 }
 
 export interface StockTransferItem {
-  id:       string;
-  itemId:   string;
-  qty:      string;
-  item:     { id: string; name: string; itemCode: string; itemType: string };
+  id:          string;
+  itemId:      string;
+  qty:         string;
+  receivedQty: string | null;
+  item:        { id: string; name: string; itemCode: string; itemType: string };
 }
 
 export interface StockTransfer {
@@ -124,6 +133,51 @@ export interface TransferListParams {
   limit?:                 number;
   sourceWarehouseId?:     string;
   destinationWarehouseId?: string;
-  status?:                StockTransferStatus | "";
+  status?:                StockTransferStatus | "" | undefined;
   branchId?:              string;
+}
+
+// ── GL Accounts ───────────────────────────────────────────────────────
+export interface GlAccount {
+  id:       string;
+  number:   string | null;
+  name:     string;
+  category: string | null;
+  usage:    string | null;
+}
+
+// ── Stock Adjustment ──────────────────────────────────────────────────
+export interface BatchAdjustmentItem {
+  inventoryId: string;
+  qtyActual:   number;
+}
+
+export interface CreateBatchStockAdjustmentInput {
+  glAccountId: string;
+  reason:      string;
+  notes?:      string;
+  items:       BatchAdjustmentItem[];
+}
+
+export interface BatchStockAdjustmentResult {
+  adjustedCount:  number;
+  accurateSynced: number;
+  accurateErrors: string[] | null;
+  movements: { movementId: string; qtyBefore: string; qtyChange: string; qtyAfter: string }[];
+}
+
+export interface CreateStockAdjustmentInput {
+  qtyActual:   number;
+  reason:      string;
+  glAccountId: string;
+  notes?:      string;
+}
+
+export interface StockAdjustmentResult {
+  movementId:     string;
+  qtyBefore:      string;
+  qtyChange:      string;
+  qtyAfter:       string;
+  accurateSynced: boolean;
+  accurateError:  string | null;
 }

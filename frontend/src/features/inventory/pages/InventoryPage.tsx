@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Package, Search, Check, Loader2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Package, Search, Check, Loader2, SlidersHorizontal, RefreshCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -11,17 +11,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/lib/toast";
-import { useInventories, useItemCategories, useStockMovements, useStockTransfers, useCreateStockTransfer, useUpdateTransferStatus } from "../hooks";
+import { useInventories, useItemCategories, useStockMovements, useStockTransfers, useCreateStockTransfer, useUpdateTransferStatus, useCreateStockAdjustment, useGlAccounts, useCreateBatchStockAdjustment, useDeleteStockTransfer, useUndoTransferReceive } from "../hooks";
 import { fetchWarehouses } from "@/features/settings/api/warehouse.api";
 import { fetchInvoiceItems } from "@/features/invoice/api";
-import type { StockTransfer, CreateTransferInput } from "../types";
-import { ArrowLeftRight, Plus, Trash2, TruckIcon } from "lucide-react";
+import type { StockTransfer, CreateTransferInput, InventoryBalance } from "../types";
+import { ArrowLeftRight, Plus, Trash2, TruckIcon, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { SimpleSelect } from "@/components/ui/simple-select";
+import type { SelectOption } from "@/components/ui/simple-select";
 
 const TABS = [
-  { key: "stock",     label: "Stok" },
-  { key: "movements", label: "Mutasi" },
-  { key: "transfers", label: "Transfer" },
+  { key: "stock",       label: "Stok" },
+  { key: "movements",   label: "Mutasi" },
+  { key: "transfers",   label: "Transfer" },
+  { key: "adjustment",  label: "Penyesuaian" },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
 
@@ -54,9 +57,10 @@ export function InventoryPage() {
           ))}
         </div>
 
-        {activeTab === "stock"     && <StockTab branchId={branchId} />}
-        {activeTab === "movements" && <MovementsTab branchId={branchId} />}
-        {activeTab === "transfers" && <TransferTab branchId={branchId} />}
+        {activeTab === "stock"      && <StockTab branchId={branchId} />}
+        {activeTab === "movements"  && <MovementsTab branchId={branchId} />}
+        {activeTab === "transfers"  && <TransferTab branchId={branchId} />}
+        {activeTab === "adjustment" && <BatchAdjustmentTab branchId={branchId} />}
       </div>
     </PageContainer>
   );
@@ -65,11 +69,15 @@ export function InventoryPage() {
 // ── Stock balance tab ─────────────────────────────────────────────────────────
 
 function StockTab({ branchId }: { branchId?: string | null }) {
+  const { user } = useAuthStore();
+  const isSuperUser = user?.roleCode === "SUPER_ADMIN" || user?.roleCode === "OWNER";
+
   const [page, setPage]                   = useState(1);
   const [search, setSearch]               = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedParent, setSelectedParent] = useState("");
   const [selectedSub, setSelectedSub]     = useState("");
+  const [adjustTarget, setAdjustTarget]   = useState<InventoryBalance | null>(null);
 
   function handleSearch(e: React.ChangeEvent<HTMLInputElement>) {
     setSearch(e.target.value);
@@ -125,6 +133,7 @@ function StockTab({ branchId }: { branchId?: string | null }) {
   const hasFilter = !!(debouncedSearch || selectedParent || selectedSub);
 
   return (
+    <>
     <Card>
       <CardHeader className="pb-3 pt-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -185,6 +194,7 @@ function StockTab({ branchId }: { branchId?: string | null }) {
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Di Tangan</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Tersedia</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Update Terakhir</th>
+                    {isSuperUser && <th className="px-4 py-3 w-10" />}
                   </tr>
                 </thead>
                 <tbody>
@@ -206,6 +216,17 @@ function StockTab({ branchId }: { branchId?: string | null }) {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-muted-foreground">{formatDate(inv.updatedAt)}</td>
+                        {isSuperUser && (
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              onClick={() => setAdjustTarget(inv)}
+                              title="Penyesuaian stok"
+                              className="text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <SlidersHorizontal className="h-4 w-4" />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -230,11 +251,22 @@ function StockTab({ branchId }: { branchId?: string | null }) {
                         <p className="text-xs text-muted-foreground/70">{inv.item.category.name}</p>
                       )}
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-xs text-muted-foreground">Di tangan: {onHand.toLocaleString("id-ID")}</p>
-                      <p className={`text-sm font-semibold ${available < 0 ? "text-red-600" : ""}`}>
-                        Tersedia: {available.toLocaleString("id-ID")}
-                      </p>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Di tangan: {onHand.toLocaleString("id-ID")}</p>
+                        <p className={`text-sm font-semibold ${available < 0 ? "text-red-600" : ""}`}>
+                          Tersedia: {available.toLocaleString("id-ID")}
+                        </p>
+                      </div>
+                      {isSuperUser && (
+                        <button
+                          onClick={() => setAdjustTarget(inv)}
+                          title="Penyesuaian stok"
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <SlidersHorizontal className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -254,6 +286,14 @@ function StockTab({ branchId }: { branchId?: string | null }) {
         </div>
       )}
     </Card>
+
+    {adjustTarget && (
+      <AdjustStockDialog
+        target={adjustTarget}
+        onClose={() => setAdjustTarget(null)}
+      />
+    )}
+    </>
   );
 }
 
@@ -274,7 +314,7 @@ const MOVEMENT_LABEL: Record<string, string> = {
   TRANSFER_OUT:    "Transfer Keluar",
   ADJUSTMENT:      "Penyesuaian",
   OPENING_BALANCE: "Saldo Awal",
-  RETURN:          "Return",
+  RETURN:          "Retur Pembelian",
   SYNC:            "Sinkronisasi",
 };
 
@@ -436,9 +476,10 @@ function MovementsTab({ branchId }: { branchId?: string | null }) {
 // ── Stock Transfer tab ────────────────────────────────────────────────────────
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
-  PENDING:    { label: "Pending",   className: "text-yellow-700 border-yellow-300 bg-yellow-50" },
-  IN_TRANSIT: { label: "Dikirim",   className: "text-blue-700 border-blue-300 bg-blue-50" },
-  RECEIVED:   { label: "Diterima",  className: "text-green-700 border-green-300 bg-green-50" },
+  PENDING:    { label: "Pending",    className: "text-yellow-700 border-yellow-300 bg-yellow-50" },
+  IN_TRANSIT: { label: "Dikirim",    className: "text-blue-700 border-blue-300 bg-blue-50" },
+  RECEIVED:   { label: "Diterima",   className: "text-green-700 border-green-300 bg-green-50" },
+  CANCELLED:  { label: "Dibatalkan", className: "text-red-700 border-red-300 bg-red-50" },
 };
 
 interface TransferItemLine { itemId: string; qty: number; itemName: string; }
@@ -451,13 +492,15 @@ function TransferTab({ branchId }: { branchId?: string | null }) {
 
   const { data, isLoading } = useStockTransfers({
     page, limit: 20, branchId: branchId ?? undefined,
-    status: filterStatus as "PENDING" | "IN_TRANSIT" | "RECEIVED" | "" || undefined,
+    status: filterStatus as "PENDING" | "IN_TRANSIT" | "RECEIVED" | "CANCELLED" | "" || undefined,
   });
   const transfers  = data?.data ?? [];
   const meta       = data?.meta;
   const totalPages = meta ? Math.ceil(meta.total / 20) : 1;
 
-  const updateStatusMut = useUpdateTransferStatus();
+  const updateStatusMut  = useUpdateTransferStatus();
+  const deleteMut        = useDeleteStockTransfer();
+  const undoReceiveMut   = useUndoTransferReceive();
 
   const isSuperUser = user?.roleCode === "SUPER_ADMIN" || user?.roleCode === "OWNER";
 
@@ -469,11 +512,25 @@ function TransferTab({ branchId }: { branchId?: string | null }) {
 
   function canTerima(t: typeof transfers[number]) {
     if (t.status !== "IN_TRANSIT") return false;
+    return !t.destinationWarehouse.branchId || t.destinationWarehouse.branchId === branchId;
+  }
+
+  function canDelete(t: typeof transfers[number]) {
+    if (t.status !== "PENDING" && t.status !== "IN_TRANSIT") return false;
+    if (isSuperUser) return true;
+    return !t.sourceWarehouse.branchId || t.sourceWarehouse.branchId === branchId;
+  }
+
+  function canUndoReceive(t: typeof transfers[number]) {
+    if (t.status !== "RECEIVED") return false;
     if (isSuperUser) return true;
     return !t.destinationWarehouse.branchId || t.destinationWarehouse.branchId === branchId;
   }
 
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId]       = useState<string | null>(null);
+  const [receiveTarget, setReceiveTarget]  = useState<StockTransfer | null>(null);
+  const [deleteTarget, setDeleteTarget]    = useState<StockTransfer | null>(null);
+  const [undoTarget, setUndoTarget]        = useState<StockTransfer | null>(null);
 
   function toggleExpand(id: string) {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -484,6 +541,10 @@ function TransferTab({ branchId }: { branchId?: string | null }) {
       onSuccess: () => toast.success("Status transfer berhasil diperbarui"),
       onError:   (e: Error) => toast.error(e.message),
     });
+  }
+
+  function handleTerima(t: typeof transfers[number]) {
+    setReceiveTarget(t);
   }
 
   return (
@@ -497,6 +558,7 @@ function TransferTab({ branchId }: { branchId?: string | null }) {
                 { key: "PENDING",    label: "Pending" },
                 { key: "IN_TRANSIT", label: "Dikirim" },
                 { key: "RECEIVED",   label: "Diterima" },
+                { key: "CANCELLED",  label: "Dibatalkan" },
               ].map((s) => (
                 <button key={s.key} onClick={() => { setStatus(s.key); setPage(1); }}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
@@ -565,20 +627,36 @@ function TransferTab({ branchId }: { branchId?: string | null }) {
                               <Badge variant="outline" className={`text-xs ${s?.className ?? ""}`}>{s?.label ?? t.status}</Badge>
                             </td>
                             <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                              {canKirim(t) && (
-                                <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-                                  disabled={updateStatusMut.isPending}
-                                  onClick={() => handleAction(t.id, "IN_TRANSIT")}>
-                                  <TruckIcon className="h-3 w-3" /> Kirim
-                                </Button>
-                              )}
-                              {canTerima(t) && (
-                                <Button size="sm" className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700"
-                                  disabled={updateStatusMut.isPending}
-                                  onClick={() => handleAction(t.id, "RECEIVED")}>
-                                  <Check className="h-3 w-3" /> Terima
-                                </Button>
-                              )}
+                              <div className="flex gap-1 justify-end">
+                                {canKirim(t) && (
+                                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                                    disabled={updateStatusMut.isPending}
+                                    onClick={() => handleAction(t.id, "IN_TRANSIT")}>
+                                    <TruckIcon className="h-3 w-3" /> Kirim
+                                  </Button>
+                                )}
+                                {canTerima(t) && (
+                                  <Button size="sm" className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700"
+                                    disabled={updateStatusMut.isPending}
+                                    onClick={() => handleTerima(t)}>
+                                    <Check className="h-3 w-3" /> Terima
+                                  </Button>
+                                )}
+                                {canUndoReceive(t) && (
+                                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-orange-600 border-orange-300 hover:bg-orange-50"
+                                    disabled={undoReceiveMut.isPending}
+                                    onClick={() => setUndoTarget(t)}>
+                                    <RotateCcw className="h-3 w-3" /> Batal Terima
+                                  </Button>
+                                )}
+                                {canDelete(t) && (
+                                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-red-600 border-red-300 hover:bg-red-50"
+                                    disabled={deleteMut.isPending}
+                                    onClick={() => setDeleteTarget(t)}>
+                                    <Trash2 className="h-3 w-3" /> Hapus
+                                  </Button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                           {expanded && (
@@ -633,7 +711,7 @@ function TransferTab({ branchId }: { branchId?: string | null }) {
                       )}
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">{formatDate(t.transferDate)} · {t.items.length} item</span>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-wrap">
                           {canKirim(t) && (
                             <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
                               disabled={updateStatusMut.isPending}
@@ -644,8 +722,22 @@ function TransferTab({ branchId }: { branchId?: string | null }) {
                           {canTerima(t) && (
                             <Button size="sm" className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700"
                               disabled={updateStatusMut.isPending}
-                              onClick={() => handleAction(t.id, "RECEIVED")}>
+                              onClick={() => handleTerima(t)}>
                               <Check className="h-3 w-3" /> Terima
+                            </Button>
+                          )}
+                          {canUndoReceive(t) && (
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-orange-600 border-orange-300 hover:bg-orange-50"
+                              disabled={undoReceiveMut.isPending}
+                              onClick={() => setUndoTarget(t)}>
+                              <RotateCcw className="h-3 w-3" /> Batal Terima
+                            </Button>
+                          )}
+                          {canDelete(t) && (
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-red-600 border-red-300 hover:bg-red-50"
+                              disabled={deleteMut.isPending}
+                              onClick={() => setDeleteTarget(t)}>
+                              <Trash2 className="h-3 w-3" /> Hapus
                             </Button>
                           )}
                         </div>
@@ -670,7 +762,190 @@ function TransferTab({ branchId }: { branchId?: string | null }) {
       </Card>
 
       {showCreate && <CreateTransferDialog onClose={() => setShowCreate(false)} />}
+      {receiveTarget && (
+        <ReceiveDialog
+          transfer={receiveTarget}
+          branchId={branchId}
+          onClose={() => setReceiveTarget(null)}
+        />
+      )}
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Hapus Transfer"
+          description={
+            deleteTarget.status === "PENDING"
+              ? `Transfer ${deleteTarget.transferNo} akan dihapus permanen. Lanjutkan?`
+              : `Transfer ${deleteTarget.transferNo} sudah dikirim. Penghapusan akan membatalkan transfer dan mengembalikan stok ke gudang asal. Mutasi barang tetap tercatat. Lanjutkan?`
+          }
+          confirmLabel="Hapus"
+          confirmVariant="destructive"
+          isPending={deleteMut.isPending}
+          onConfirm={() => {
+            deleteMut.mutate(deleteTarget.id, {
+              onSuccess: () => {
+                toast.success("Transfer berhasil dihapus");
+                setDeleteTarget(null);
+              },
+              onError: (e: Error) => toast.error(e.message),
+            });
+          }}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+      {undoTarget && (
+        <ConfirmDialog
+          title="Batalkan Penerimaan"
+          description={`Penerimaan transfer ${undoTarget.transferNo} akan dibatalkan. Stok akan dikurangi dari gudang tujuan dan status kembali ke Dikirim. Mutasi barang tetap tercatat. Lanjutkan?`}
+          confirmLabel="Batalkan Penerimaan"
+          confirmVariant="outline"
+          isPending={undoReceiveMut.isPending}
+          onConfirm={() => {
+            undoReceiveMut.mutate(undoTarget.id, {
+              onSuccess: () => {
+                toast.success("Penerimaan transfer berhasil dibatalkan");
+                setUndoTarget(null);
+              },
+              onError: (e: Error) => toast.error(e.message),
+            });
+          }}
+          onCancel={() => setUndoTarget(null)}
+        />
+      )}
     </>
+  );
+}
+
+// ── Confirm Dialog ────────────────────────────────────────────────────────────
+
+function ConfirmDialog({
+  title, description, confirmLabel, confirmVariant = "default", isPending, onConfirm, onCancel,
+}: {
+  title:           string;
+  description:     string;
+  confirmLabel:    string;
+  confirmVariant?: "default" | "destructive" | "outline";
+  isPending:       boolean;
+  onConfirm:       () => void;
+  onCancel:        () => void;
+}) {
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">{description}</p>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onCancel} disabled={isPending}>Batal</Button>
+          <Button variant={confirmVariant} onClick={onConfirm} disabled={isPending}>
+            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : confirmLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Receive Dialog (partial receive) ─────────────────────────────────────────
+
+function ReceiveDialog({
+  transfer,
+  branchId,
+  onClose,
+}: {
+  transfer: import("../types").StockTransfer;
+  branchId?: string | null;
+  onClose:   () => void;
+}) {
+  const inventoryItems = transfer.items.filter((it) => it.item.itemType === "INVENTORY");
+
+  const [qtys, setQtys] = useState<Record<string, string>>(() =>
+    Object.fromEntries(inventoryItems.map((it) => [it.itemId, String(Number(it.qty))]))
+  );
+
+  const updateStatusMut = useUpdateTransferStatus();
+
+  function handleQtyChange(itemId: string, val: string) {
+    setQtys((prev) => ({ ...prev, [itemId]: val }));
+  }
+
+  function handleSubmit() {
+    for (const it of inventoryItems) {
+      const val = Number(qtys[it.itemId]);
+      if (isNaN(val) || val < 0) return toast.error(`Qty tidak valid untuk ${it.item.name}`);
+      if (val > Number(it.qty))  return toast.error(`Qty terima tidak boleh melebihi qty kirim (${it.item.name})`);
+    }
+
+    const receivedItems = inventoryItems.map((it) => ({
+      itemId:      it.itemId,
+      receivedQty: Number(qtys[it.itemId]),
+    }));
+
+    updateStatusMut.mutate(
+      { id: transfer.id, status: "RECEIVED", branchId, receivedItems },
+      {
+        onSuccess: () => { toast.success("Barang berhasil diterima"); onClose(); },
+        onError:   (e: Error) => toast.error(e.message),
+      },
+    );
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Terima Barang — {transfer.transferNo}</DialogTitle>
+        </DialogHeader>
+
+        <div className="text-xs text-muted-foreground mb-3">
+          Dari: <span className="font-medium">{transfer.sourceWarehouse.name}</span>
+          {" → "}
+          Ke: <span className="font-medium">{transfer.destinationWarehouse.name}</span>
+        </div>
+
+        <div className="space-y-3">
+          {inventoryItems.map((it) => {
+            const sentQty = Number(it.qty);
+            const val     = qtys[it.itemId] ?? String(sentQty);
+            const num     = Number(val);
+            const isShort = !isNaN(num) && num < sentQty;
+            return (
+              <div key={it.itemId} className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">{it.item.name}</Label>
+                  <span className="text-xs text-muted-foreground">Dikirim: {sentQty}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={sentQty}
+                    step="any"
+                    value={val}
+                    onChange={(e) => handleQtyChange(it.itemId, e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                  {isShort && (
+                    <span className="text-xs text-amber-600 whitespace-nowrap">
+                      -{sentQty - num} kurang
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <DialogFooter className="mt-4">
+          <Button variant="outline" onClick={onClose} disabled={updateStatusMut.isPending}>Batal</Button>
+          <Button onClick={handleSubmit} disabled={updateStatusMut.isPending}
+            className="bg-green-600 hover:bg-green-700">
+            {updateStatusMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            Konfirmasi Terima
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -750,9 +1025,7 @@ function CreateTransferDialog({ onClose }: { onClose: () => void }) {
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Buat Transfer Stok</DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle>Buat Transfer Stok</DialogTitle></DialogHeader>
 
         <div className="space-y-4 py-1">
           {/* Warehouses */}
@@ -851,6 +1124,535 @@ function CreateTransferDialog({ onClose }: { onClose: () => void }) {
           <Button onClick={handleSubmit} disabled={createTransfer.isPending}>
             {createTransfer.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
             Buat Transfer
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Batch Adjustment Tab ──────────────────────────────────────────────────────
+
+interface AdjustLine {
+  inventoryId: string;
+  itemName:    string;
+  itemCode:    string | null;
+  warehouseName: string;
+  qtyOnHand:   number;
+  defaultUnit: string | null;
+  qtyActual:   string;
+}
+
+function BatchAdjustmentTab({ branchId }: { branchId?: string | null }) {
+  const { user } = useAuthStore();
+  const isSuperUser = user?.roleCode === "SUPER_ADMIN" || user?.roleCode === "OWNER";
+
+  const [glAccountId, setGlAccount] = useState("");
+  const [reason, setReason]         = useState(ADJUSTMENT_REASONS[0]);
+  const [notes, setNotes]           = useState("");
+  const [lines, setLines]           = useState<AdjustLine[]>([]);
+
+  // Item search
+  const [search, setSearch]       = useState("");
+  const [dSearch, setDSearch]     = useState("");
+  const [showDrop, setShowDrop]   = useState(false);
+
+  const { data: glAccounts = [], refetch: refetchGl, isFetching: isRefetchingGl } = useGlAccounts({ usage: "STOCK_ADJUSTMENT" });
+  const batchMutation = useCreateBatchStockAdjustment();
+
+  const { data: searchData } = useInventories({
+    search:  dSearch || undefined,
+    branchId: branchId ?? undefined,
+    limit:   20,
+  });
+  const searchResults = (searchData?.data ?? []).filter(
+    (inv) => inv.item.itemType === "INVENTORY" && !lines.find((l) => l.inventoryId === inv.id)
+  );
+
+  function handleSearchChange(val: string) {
+    setSearch(val);
+    clearTimeout((handleSearchChange as unknown as { t?: ReturnType<typeof setTimeout> }).t);
+    (handleSearchChange as unknown as { t?: ReturnType<typeof setTimeout> }).t = setTimeout(() => {
+      setDSearch(val);
+    }, 300);
+    setShowDrop(val.length >= 1);
+  }
+
+  function selectInventory(inv: InventoryBalance) {
+    setLines((prev) => [
+      ...prev,
+      {
+        inventoryId:  inv.id,
+        itemName:     inv.item.name,
+        itemCode:     inv.item.itemCode,
+        warehouseName: inv.warehouse.name,
+        qtyOnHand:    Number(inv.qtyOnHand),
+        defaultUnit:  inv.item.defaultUnit?.name ?? null,
+        qtyActual:    String(Number(inv.qtyOnHand)),
+      },
+    ]);
+    setSearch(""); setDSearch(""); setShowDrop(false);
+  }
+
+  function updateQty(inventoryId: string, val: string) {
+    setLines((prev) => prev.map((l) => l.inventoryId === inventoryId ? { ...l, qtyActual: val } : l));
+  }
+
+  function removeLine(inventoryId: string) {
+    setLines((prev) => prev.filter((l) => l.inventoryId !== inventoryId));
+  }
+
+  function handleSubmit() {
+    if (!glAccountId)    return toast.error("Pilih akun penyesuaian");
+    if (!reason)         return toast.error("Pilih alasan penyesuaian");
+    if (lines.length === 0) return toast.error("Tambahkan minimal 1 item");
+
+    const invalidLine = lines.find((l) => l.qtyActual === "" || isNaN(parseFloat(l.qtyActual)) || parseFloat(l.qtyActual) < 0);
+    if (invalidLine) return toast.error(`Qty aktual tidak valid untuk: ${invalidLine.itemName}`);
+
+    batchMutation.mutate(
+      {
+        glAccountId,
+        reason,
+        notes: notes || undefined,
+        items: lines.map((l) => ({ inventoryId: l.inventoryId, qtyActual: parseFloat(l.qtyActual) })),
+      },
+      {
+        onSuccess: () => {
+          setLines([]);
+          setNotes("");
+        },
+      },
+    );
+  }
+
+  if (!isSuperUser) {
+    return (
+      <Card>
+        <CardContent className="py-16 text-center text-sm text-muted-foreground">
+          Hanya SUPER_ADMIN dan OWNER yang dapat melakukan penyesuaian stok.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header form */}
+      <Card>
+        <CardHeader className="pb-3 pt-4">
+          <div>
+            <h2 className="text-sm font-semibold">Penyesuaian Persediaan</h2>
+            <p className="text-xs text-muted-foreground">Sesuaikan stok banyak barang sekaligus — hasil akan disinkronkan ke Accurate</p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* GL Account */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">Akun Penyesuaian <span className="text-destructive">*</span></Label>
+                <button
+                  type="button"
+                  onClick={() => refetchGl()}
+                  disabled={isRefetchingGl}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  title="Reload daftar akun dari database"
+                >
+                  {isRefetchingGl ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                  Reload
+                </button>
+              </div>
+              <SimpleSelect
+                value={glAccountId}
+                onChange={setGlAccount}
+                placeholder="— Pilih akun —"
+                searchable
+                searchPlaceholder="Cari nama atau nomor akun..."
+                options={glAccounts.map((a): SelectOption => ({
+                  value: a.id,
+                  label: a.number ? `[${a.number}] ${a.name}` : a.name,
+                }))}
+              />
+            </div>
+
+            {/* Reason */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">Alasan <span className="text-destructive">*</span></Label>
+              <SimpleSelect
+                value={reason}
+                onChange={setReason}
+                options={ADJUSTMENT_REASONS.map((r): SelectOption => ({ value: r, label: r }))}
+              />
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">Catatan <span className="text-muted-foreground text-xs">(opsional)</span></Label>
+              <Input
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Keterangan tambahan..."
+                className="h-9"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Item search + table */}
+      <Card>
+        <CardHeader className="pb-3 pt-4">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              value={search}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={() => { if (search.length >= 1) setShowDrop(true); }}
+              onBlur={() => setTimeout(() => setShowDrop(false), 150)}
+              placeholder="Cari & tambah barang..."
+              className="pl-8 h-9"
+            />
+            {showDrop && searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 z-10 mt-1 border border-border rounded-md bg-popover shadow-md overflow-hidden">
+                {searchResults.slice(0, 8).map((inv) => (
+                  <button
+                    key={inv.id}
+                    type="button"
+                    onMouseDown={() => selectInventory(inv)}
+                    className="w-full text-left px-3 py-2.5 text-sm hover:bg-accent transition-colors border-b border-border/40 last:border-0 flex items-center justify-between gap-3"
+                  >
+                    <div>
+                      <span className="font-medium">{inv.item.name}</span>
+                      {inv.item.itemCode && <span className="ml-2 text-xs text-muted-foreground font-mono">{inv.item.itemCode}</span>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="text-xs text-muted-foreground">{inv.warehouse.name}</span>
+                      <span className="ml-2 text-xs font-semibold">{Number(inv.qtyOnHand).toLocaleString("id-ID")}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-0">
+          {lines.length === 0 ? (
+            <div className="py-16 text-center space-y-2">
+              <Package className="h-8 w-8 mx-auto text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">Belum ada item — cari dan tambahkan barang di atas</p>
+            </div>
+          ) : (
+            <>
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/50">
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Barang</th>
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Gudang</th>
+                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Stok Saat Ini</th>
+                      <th className="px-4 py-3 text-right font-medium text-muted-foreground w-40">Qty Aktual</th>
+                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Selisih</th>
+                      <th className="px-4 py-3 w-10" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((line) => {
+                      const parsed = parseFloat(line.qtyActual);
+                      const diff   = isNaN(parsed) ? null : parsed - line.qtyOnHand;
+                      return (
+                        <tr key={line.inventoryId} className="border-b border-border hover:bg-muted/20">
+                          <td className="px-4 py-3">
+                            <p className="font-medium">{line.itemName}</p>
+                            {line.itemCode && <p className="text-xs text-muted-foreground font-mono">{line.itemCode}</p>}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground text-sm">{line.warehouseName}</td>
+                          <td className="px-4 py-3 text-right font-mono">
+                            {line.qtyOnHand.toLocaleString("id-ID")}
+                            {line.defaultUnit && <span className="ml-1 text-xs text-muted-foreground">{line.defaultUnit}</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Input
+                              type="number"
+                              min={0}
+                              step={0.001}
+                              value={line.qtyActual}
+                              onChange={(e) => updateQty(line.inventoryId, e.target.value)}
+                              className="h-8 text-right font-mono w-36 ml-auto"
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-semibold">
+                            <span className={diff === null ? "text-muted-foreground" : diff > 0 ? "text-green-600" : diff < 0 ? "text-red-600" : "text-muted-foreground"}>
+                              {diff === null ? "—" : diff > 0 ? `+${diff.toLocaleString("id-ID")}` : diff.toLocaleString("id-ID")}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <button onClick={() => removeLine(line.inventoryId)} className="text-muted-foreground hover:text-destructive transition-colors">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="md:hidden divide-y divide-border">
+                {lines.map((line) => {
+                  const parsed = parseFloat(line.qtyActual);
+                  const diff   = isNaN(parsed) ? null : parsed - line.qtyOnHand;
+                  return (
+                    <div key={line.inventoryId} className="px-4 py-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium">{line.itemName}</p>
+                          <p className="text-xs text-muted-foreground">{line.warehouseName}</p>
+                        </div>
+                        <button onClick={() => removeLine(line.inventoryId)} className="text-muted-foreground hover:text-destructive mt-0.5">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-xs text-muted-foreground">
+                          Stok: <span className="font-semibold text-foreground">{line.qtyOnHand.toLocaleString("id-ID")}</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-1">
+                          <Label className="text-xs shrink-0">Aktual:</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step={0.001}
+                            value={line.qtyActual}
+                            onChange={(e) => updateQty(line.inventoryId, e.target.value)}
+                            className="h-7 text-right font-mono text-sm flex-1"
+                          />
+                        </div>
+                        {diff !== null && (
+                          <span className={`text-xs font-semibold ${diff > 0 ? "text-green-600" : diff < 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                            {diff > 0 ? `+${diff.toLocaleString("id-ID")}` : diff.toLocaleString("id-ID")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </CardContent>
+
+        {lines.length > 0 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/30">
+            <p className="text-sm text-muted-foreground">{lines.length} item dipilih</p>
+            <Button onClick={handleSubmit} disabled={batchMutation.isPending} className="gap-1.5">
+              {batchMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Simpan Penyesuaian
+            </Button>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ── Adjust Stock Dialog ────────────────────────────────────────────────────────
+
+const ADJUSTMENT_REASONS = [
+  "Selisih Stok",
+  "Barang Rusak",
+  "Barang Hilang",
+  "Koreksi",
+];
+
+function AdjustStockDialog({ target, onClose }: { target: InventoryBalance; onClose: () => void }) {
+  const currentQty                  = Number(target.qtyOnHand);
+  const [qtyActual, setQty]         = useState<string>(String(currentQty));
+  const [reason, setReason]         = useState(ADJUSTMENT_REASONS[0]);
+  const [notes, setNotes]           = useState("");
+  const [glAccountId, setGlAccount] = useState("");
+
+  const { data: glAccounts = [], refetch: refetchGl2, isFetching: isRefetchingGl2 } = useGlAccounts({ usage: "STOCK_ADJUSTMENT" });
+  const adjustMutation = useCreateStockAdjustment();
+
+  const parsed = parseFloat(qtyActual);
+  const diff   = isNaN(parsed) ? null : parsed - currentQty;
+
+  // Build multi-unit display: for each itemUnit, qty = qtyOnHand / conversionFactor
+  const sortedUnits = target.item.itemUnits
+    .filter((u) => Number(u.conversionFactor) > 0)
+    .slice()
+    .sort((a, b) => Number(a.conversionFactor) - Number(b.conversionFactor));
+
+  const baseUnit = sortedUnits[0]; // smallest factor = base unit
+
+  const unitDisplays = sortedUnits.map((u) => ({
+    name: u.unit.name,
+    qty:  currentQty / Number(u.conversionFactor),
+  })).filter((u) => !isNaN(u.qty));
+
+  // Conversion notice: "1 tube = 80 gram", relative to the base unit
+  const conversionLines = sortedUnits.slice(1).map((u) => {
+    const ratio = Number(u.conversionFactor) / Number(baseUnit?.conversionFactor ?? 1);
+    return `1 ${u.unit.name} = ${ratio % 1 === 0 ? ratio.toLocaleString("id-ID") : ratio.toLocaleString("id-ID", { maximumFractionDigits: 4 })} ${baseUnit?.unit.name ?? ""}`;
+  });
+
+  function handleSubmit() {
+    if (qtyActual === "" || isNaN(parsed) || parsed < 0) {
+      toast.error("Qty aktual tidak valid");
+      return;
+    }
+    if (!reason) {
+      toast.error("Alasan wajib dipilih");
+      return;
+    }
+    if (!glAccountId) {
+      toast.error("Akun penyesuaian wajib dipilih");
+      return;
+    }
+    adjustMutation.mutate(
+      { inventoryId: target.id, qtyActual: parsed, reason, glAccountId, notes: notes || undefined },
+      { onSuccess: () => onClose() },
+    );
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Penyesuaian Stok</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          {/* Item info */}
+          <div className="rounded-md bg-muted/50 px-4 py-3 space-y-0.5">
+            <p className="font-medium text-sm">{target.item.name}</p>
+            {target.item.itemCode && (
+              <p className="text-xs text-muted-foreground font-mono">{target.item.itemCode}</p>
+            )}
+            <p className="text-xs text-muted-foreground">{target.warehouse.name}</p>
+          </div>
+
+          {/* Current qty display */}
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-md border border-border px-3 py-2.5">
+              <p className="text-xs text-muted-foreground mb-1">Stok Saat Ini</p>
+              {unitDisplays.length > 0 ? (
+                <div className="space-y-0.5">
+                  {unitDisplays.map((u) => (
+                    <p key={u.name} className="font-semibold font-mono leading-tight">
+                      {u.qty % 1 === 0
+                        ? u.qty.toLocaleString("id-ID")
+                        : u.qty.toLocaleString("id-ID", { maximumFractionDigits: 3 })}
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">{u.name}</span>
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="font-semibold font-mono">
+                  {currentQty.toLocaleString("id-ID")}
+                  {target.item.defaultUnit && (
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      {target.item.defaultUnit.name}
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
+            <div className="rounded-md border border-border px-3 py-2.5">
+              <p className="text-xs text-muted-foreground mb-0.5">Selisih</p>
+              <p className={`font-semibold font-mono ${diff === null ? "text-muted-foreground" : diff > 0 ? "text-green-600" : diff < 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                {diff === null ? "—" : diff > 0 ? `+${diff.toLocaleString("id-ID")}` : diff.toLocaleString("id-ID")}
+                {diff !== null && diff !== 0 && target.item.defaultUnit && (
+                  <span className="ml-1 text-xs font-normal opacity-70">
+                    {target.item.defaultUnit.name}
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {/* Conversion notice */}
+          {conversionLines.length > 0 && (
+            <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2.5 space-y-0.5">
+              {conversionLines.map((line) => (
+                <p key={line} className="text-xs text-blue-700 dark:text-blue-300 font-mono">{line}</p>
+              ))}
+            </div>
+          )}
+
+          {/* Qty aktual input */}
+          <div className="space-y-1.5">
+            <Label className="text-sm">Qty Aktual (hasil hitung fisik) <span className="text-destructive">*</span></Label>
+            <Input
+              type="number"
+              min={0}
+              step={0.001}
+              value={qtyActual}
+              onChange={(e) => setQty(e.target.value)}
+              className="h-9 font-mono"
+              placeholder="0"
+            />
+          </div>
+
+          {/* Reason */}
+          <div className="space-y-1.5">
+            <Label className="text-sm">Alasan <span className="text-destructive">*</span></Label>
+            <SimpleSelect
+              value={reason}
+              onChange={setReason}
+              options={ADJUSTMENT_REASONS.map((r): SelectOption => ({ value: r, label: r }))}
+            />
+          </div>
+
+          {/* GL Account (Akun Penyesuaian) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Akun Penyesuaian <span className="text-destructive">*</span></Label>
+              <button
+                type="button"
+                onClick={() => refetchGl2()}
+                disabled={isRefetchingGl2}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                title="Reload daftar akun dari database"
+              >
+                {isRefetchingGl2 ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                Reload
+              </button>
+            </div>
+            <SimpleSelect
+              value={glAccountId}
+              onChange={setGlAccount}
+              placeholder="— Pilih akun penyesuaian —"
+              searchable
+              searchPlaceholder="Cari nama atau nomor akun..."
+              options={glAccounts.map((a): SelectOption => ({
+                value: a.id,
+                label: a.number ? `[${a.number}] ${a.name}` : a.name,
+              }))}
+            />
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-1.5">
+            <Label className="text-sm">Catatan <span className="text-muted-foreground text-xs">(opsional)</span></Label>
+            <Input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Keterangan tambahan..."
+              className="h-9"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={adjustMutation.isPending}>Batal</Button>
+          <Button onClick={handleSubmit} disabled={adjustMutation.isPending}>
+            {adjustMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+            Simpan Penyesuaian
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -3,12 +3,14 @@ const authenticate = require("../../middlewares/auth.middleware");
 const authorize    = require("../../middlewares/role.middleware");
 const validate     = require("../../middlewares/validate.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
-const { closePeriodSchema, reopenPeriodSchema } = require("./inventory.validation");
+const { closePeriodSchema, reopenPeriodSchema, stockAdjustmentSchema, batchStockAdjustmentSchema } = require("./inventory.validation");
 const {
   getMovementsController,
   getInventoriesController,
   syncController,
   generateServiceMovementController,
+  createAdjustmentController,
+  createBatchAdjustmentController,
   closePeriodController,
   reopenPeriodController,
 } = require("./inventory.controller");
@@ -29,6 +31,24 @@ router.post(
   "/service-movement/:treatmentSessionId",
   authenticate,
   generateServiceMovementController,
+);
+
+// Batch stock adjustment — SUPER_ADMIN and OWNER only (INV-013)
+router.post(
+  "/adjust-batch",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER),
+  validate(batchStockAdjustmentSchema),
+  createBatchAdjustmentController,
+);
+
+// Single stock adjustment — SUPER_ADMIN and OWNER only (INV-013)
+router.post(
+  "/:id/adjust",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER),
+  validate(stockAdjustmentSchema),
+  createAdjustmentController,
 );
 
 module.exports = router;

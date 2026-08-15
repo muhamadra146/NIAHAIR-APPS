@@ -87,7 +87,7 @@ const create = async (body, userId) => {
 const BYPASS_ROLES = ["SUPER_ADMIN", "OWNER"];
 
 // ── Update status ─────────────────────────────────────────────────────
-const updateStatus = async (id, newStatus, userRole, actingBranchId) => {
+const updateStatus = async (id, newStatus, userRole, actingBranchId, receivedItems = null) => {
   const transfer = await repo.findById(id);
   if (!transfer) throw new AppError("Transfer tidak ditemukan", StatusCodes.NOT_FOUND);
 
@@ -137,7 +137,13 @@ const updateStatus = async (id, newStatus, userRole, actingBranchId) => {
       direction:  "APP_TO_ACCURATE",
     });
   } else if (newStatus === "RECEIVED") {
-    await generateTransferInMovements(transfer);
+    await generateTransferInMovements(transfer, receivedItems);
+    // Sync TRANSFER_IN to Accurate when goods are received at destination
+    await createSyncJob({
+      entityType: "STOCK_TRANSFER_RECEIVE",
+      entityId:   id,
+      direction:  "APP_TO_ACCURATE",
+    });
   }
 
   return repo.findById(id);
@@ -201,9 +207,15 @@ const generateTransferOutMovements = async (transfer) => {
 };
 
 // ── Generate TRANSFER_IN movements (add to destination warehouse) ─────
+// receivedItems: [{ itemId, receivedQty }] — if provided, use receivedQty instead of qty
 // Status update is inside the transaction — if any movement fails the status stays IN_TRANSIT
-const generateTransferInMovements = async (transfer) => {
+const generateTransferInMovements = async (transfer, receivedItems = null) => {
   await validatePeriodOpen(new Date());
+
+  // Build lookup map: itemId → receivedQty (if user specified)
+  const receivedMap = new Map(
+    (receivedItems ?? []).map((r) => [r.itemId, D(r.receivedQty)])
+  );
 
   await prisma.$transaction(async (tx) => {
     await tx.stockTransfer.update({ where: { id: transfer.id }, data: { status: "RECEIVED" } });
@@ -211,7 +223,17 @@ const generateTransferInMovements = async (transfer) => {
     for (const item of transfer.items) {
       if (item.item.itemType !== "INVENTORY") continue;
 
-      const qty = D(item.qty);
+      // Use receivedQty if provided, otherwise fall back to original qty
+      const qty = receivedMap.has(item.itemId) ? receivedMap.get(item.itemId) : D(item.qty);
+
+      if (qty.lessThanOrEqualTo(0)) continue;
+
+      // Save receivedQty on the item record using raw query (new field)
+      await tx.$executeRawUnsafe(
+        `UPDATE "stock_transfer_items" SET "receivedQty" = $1 WHERE id = $2`,
+        qty.toFixed(6),
+        item.id,
+      );
 
       const inventory = await tx.inventory.upsert({
         where:  { warehouseId_itemId: { warehouseId: transfer.destinationWarehouseId, itemId: item.itemId } },
@@ -250,4 +272,213 @@ const generateTransferInMovements = async (transfer) => {
   });
 };
 
-module.exports = { getAll, getById, create, updateStatus };
+// ── Delete transfer ────────────────────────────────────────────────────
+// PENDING  → hard delete (no movements exist)
+// IN_TRANSIT → reversal movements at source + delete Accurate TRANSFER_OUT + CANCELLED
+const deleteTransfer = async (id, userRole, actingBranchId) => {
+  const transfer = await repo.findById(id);
+  if (!transfer) throw new AppError("Transfer tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  if (transfer.status === "RECEIVED") {
+    throw new AppError(
+      "Transfer sudah diterima. Batalkan penerimaan dari gudang tujuan terlebih dahulu",
+      StatusCodes.BAD_REQUEST,
+    );
+  }
+  if (transfer.status === "CANCELLED") {
+    throw new AppError("Transfer sudah dibatalkan", StatusCodes.BAD_REQUEST);
+  }
+
+  // Authorization: only source branch (or super user)
+  if (!BYPASS_ROLES.includes(userRole) && actingBranchId) {
+    const srcBranchId = transfer.sourceWarehouse?.branchId;
+    if (srcBranchId && srcBranchId !== actingBranchId) {
+      throw new AppError("Hanya cabang asal yang bisa menghapus transfer ini", StatusCodes.FORBIDDEN);
+    }
+  }
+
+  if (transfer.status === "PENDING") {
+    // No movements — safe to hard delete
+    await prisma.$transaction([
+      prisma.stockTransferItem.deleteMany({ where: { transferId: id } }),
+      prisma.stockTransfer.delete({ where: { id } }),
+    ]);
+    return { deleted: true };
+  }
+
+  // IN_TRANSIT — create reversal movements, delete Accurate, mark CANCELLED
+  await validatePeriodOpen(new Date());
+
+  // Delete Accurate TRANSFER_OUT (best effort)
+  if (transfer.accurateTransferId) {
+    try {
+      const { accurateRequest } = require("../accurate/accurate.client");
+      await accurateRequest(`/item-transfer/delete.do?id=${transfer.accurateTransferId}`, { method: "DELETE" });
+    } catch (err) {
+      console.warn(`[delete transfer] Accurate delete failed (ignored): ${err.message}`);
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.stockTransfer.update({
+      where: { id },
+      data:  {
+        status:                "CANCELLED",
+        accurateTransferId:    null,
+        accurateTransferNumber: null,
+      },
+    });
+
+    for (const item of transfer.items) {
+      if (item.item.itemType !== "INVENTORY") continue;
+
+      const qty = D(item.qty);
+
+      // Reversal: return stock to source warehouse
+      const inventory = await tx.inventory.upsert({
+        where:  { warehouseId_itemId: { warehouseId: transfer.sourceWarehouseId, itemId: item.itemId } },
+        create: { warehouseId: transfer.sourceWarehouseId, itemId: item.itemId, qtyOnHand: 0, qtyReserved: 0, qtyAvailable: 0 },
+        update: {},
+        select: { id: true, qtyOnHand: true, qtyReserved: true, qtyAvailable: true },
+      });
+
+      const qtyBefore = D(inventory.qtyOnHand);
+      const qtyAfter  = qtyBefore.add(qty);
+
+      await tx.inventoryMovement.create({
+        data: {
+          inventoryId:   inventory.id,
+          movementType:  "TRANSFER_IN",
+          sourceModule:  "TRANSFER",
+          createdSource: "USER",
+          warehouseId:   transfer.sourceWarehouseId,
+          qtyBefore,
+          qtyChange:     qty,
+          qtyAfter,
+          referenceType: "TRANSFER",
+          referenceId:   transfer.id,
+          referenceNo:   transfer.transferNo,
+          notes:         `Pembatalan transfer ke ${transfer.destinationWarehouse.name}: ${item.item.name}`,
+        },
+      });
+
+      const reserved   = D(inventory.qtyReserved ?? 0);
+      const available  = qtyAfter.sub(reserved);
+      await tx.inventory.update({
+        where: { id: inventory.id },
+        data:  { qtyOnHand: qtyAfter, qtyAvailable: available },
+      });
+    }
+  });
+
+  return { cancelled: true };
+};
+
+// ── Undo Receive ───────────────────────────────────────────────────────
+// RECEIVED → reversal movements at destination + clear Accurate TRANSFER_IN + back to IN_TRANSIT
+const undoReceive = async (id, userRole, actingBranchId) => {
+  const transfer = await repo.findById(id);
+  if (!transfer) throw new AppError("Transfer tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  if (transfer.status !== "RECEIVED") {
+    throw new AppError(
+      `Hanya transfer dengan status RECEIVED yang bisa dibatalkan penerimaannya, saat ini: ${transfer.status}`,
+      StatusCodes.BAD_REQUEST,
+    );
+  }
+
+  // Authorization: only destination branch (or super user)
+  if (!BYPASS_ROLES.includes(userRole) && actingBranchId) {
+    const dstBranchId = transfer.destinationWarehouse?.branchId;
+    if (dstBranchId && dstBranchId !== actingBranchId) {
+      throw new AppError("Hanya cabang tujuan yang bisa membatalkan penerimaan ini", StatusCodes.FORBIDDEN);
+    }
+  }
+
+  await validatePeriodOpen(new Date());
+
+  // Fetch receivedQty per item BEFORE the transaction (new field, not in Prisma client SELECT)
+  const receivedQtyRows = await prisma.$queryRawUnsafe(
+    `SELECT id, "receivedQty", qty FROM "stock_transfer_items" WHERE "transferId" = $1`,
+    id,
+  );
+  const receivedQtyMap = new Map(
+    receivedQtyRows.map((r) => [r.id, r.receivedQty != null ? D(r.receivedQty) : null]),
+  );
+
+  // Delete Accurate TRANSFER_IN (best effort)
+  const syncRepo = require("./stockTransfer.sync.repository");
+  const accurateReceiveId = await syncRepo.findReceiveAccurateId(id);
+  if (accurateReceiveId) {
+    try {
+      const { accurateRequest } = require("../accurate/accurate.client");
+      await accurateRequest(`/item-transfer/delete.do?id=${accurateReceiveId}`, { method: "DELETE" });
+    } catch (err) {
+      console.warn(`[undo receive] Accurate delete TRANSFER_IN failed (ignored): ${err.message}`);
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // Revert status and clear Accurate receive fields
+    await tx.$executeRawUnsafe(
+      `UPDATE "stock_transfers"
+       SET status = 'IN_TRANSIT', "accurateReceiveId" = NULL, "accurateReceiveNumber" = NULL, "lastReceiveSyncAt" = NULL
+       WHERE id = $1`,
+      id,
+    );
+
+    // Reset receivedQty on items
+    await tx.$executeRawUnsafe(
+      `UPDATE "stock_transfer_items" SET "receivedQty" = NULL WHERE "transferId" = $1`,
+      id,
+    );
+
+    for (const item of transfer.items) {
+      if (item.item.itemType !== "INVENTORY") continue;
+
+      // Use pre-fetched receivedQty, fall back to item.qty
+      const receivedQty = receivedQtyMap.get(item.id);
+      const qty = receivedQty ?? D(item.qty);
+      if (qty.lessThanOrEqualTo(0)) continue;
+
+      // Reversal: remove stock from destination warehouse
+      const inventory = await tx.inventory.upsert({
+        where:  { warehouseId_itemId: { warehouseId: transfer.destinationWarehouseId, itemId: item.itemId } },
+        create: { warehouseId: transfer.destinationWarehouseId, itemId: item.itemId, qtyOnHand: 0, qtyReserved: 0, qtyAvailable: 0 },
+        update: {},
+        select: { id: true, qtyOnHand: true, qtyReserved: true, qtyAvailable: true },
+      });
+
+      const qtyBefore = D(inventory.qtyOnHand);
+      const qtyAfter  = qtyBefore.sub(qty);
+
+      await tx.inventoryMovement.create({
+        data: {
+          inventoryId:   inventory.id,
+          movementType:  "TRANSFER_OUT",
+          sourceModule:  "TRANSFER",
+          createdSource: "USER",
+          warehouseId:   transfer.destinationWarehouseId,
+          qtyBefore,
+          qtyChange:     qty.negated(),
+          qtyAfter,
+          referenceType: "TRANSFER",
+          referenceId:   transfer.id,
+          referenceNo:   transfer.transferNo,
+          notes:         `Pembatalan penerimaan dari ${transfer.sourceWarehouse.name}: ${item.item.name}`,
+        },
+      });
+
+      const reserved  = D(inventory.qtyReserved ?? 0);
+      const available = qtyAfter.sub(reserved);
+      await tx.inventory.update({
+        where: { id: inventory.id },
+        data:  { qtyOnHand: qtyAfter, qtyAvailable: available },
+      });
+    }
+  });
+
+  return repo.findById(id);
+};
+
+module.exports = { getAll, getById, create, updateStatus, deleteTransfer, undoReceive };

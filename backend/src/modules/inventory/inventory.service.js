@@ -12,7 +12,8 @@ const {
   findTreatmentSessionForServiceMovement,
   findWarehouseByBranchId,
 } = require("./inventory.repository");
-const { validatePeriodOpen } = require("./inventory.period.service");
+const { validatePeriodOpen }          = require("./inventory.period.service");
+const { pushAdjustmentToAccurate }    = require("./inventory.adjustment.sync.service");
 
 const D = (v) => new Prisma.Decimal(String(v));
 
@@ -482,6 +483,154 @@ const reverseServiceUsageMovement = async (movementId, materialUsageItemId) => {
   ]);
 };
 
+// ── Stock Adjustment (INV-013) ────────────────────────────────────────
+//
+// Creates an ADJUSTMENT movement: sets qtyOnHand to the physical count (qtyActual),
+// computes the signed qtyChange, and updates inventory balances.
+// Requires a reason (selisih stok, barang rusak, barang hilang, koreksi).
+// Permission: SUPER_ADMIN and OWNER only — enforced at route level.
+
+const createStockAdjustment = async (inventoryId, { qtyActual, reason, notes, glAccountId, createdByEmployeeId }) => {
+  await validatePeriodOpen(new Date());
+
+  const result = await prisma.$transaction(async (tx) => {
+    const inventory = await tx.inventory.findUnique({
+      where:  { id: inventoryId },
+      select: { id: true, qtyOnHand: true, qtyReserved: true, warehouseId: true },
+    });
+    if (!inventory) throw new AppError("Inventory not found", StatusCodes.NOT_FOUND);
+
+    const qtyBefore    = D(inventory.qtyOnHand);
+    const qtyAfter     = D(qtyActual);
+    const qtyChange    = qtyAfter.sub(qtyBefore);
+    const newAvailable = computeAvailable(qtyAfter, inventory.qtyReserved);
+
+    const movement = await tx.inventoryMovement.create({
+      data: {
+        inventoryId:         inventory.id,
+        movementType:        "ADJUSTMENT",
+        sourceModule:        "ADJUSTMENT",
+        createdSource:       "USER",
+        warehouseId:         inventory.warehouseId,
+        qtyBefore,
+        qtyChange,
+        qtyAfter,
+        referenceType:       "MANUAL",
+        reason,
+        notes:               notes ?? `Penyesuaian stok: ${reason}`,
+        glAccountId:         glAccountId ?? null,
+        createdByEmployeeId: createdByEmployeeId ?? null,
+      },
+      select: { id: true },
+    });
+
+    await tx.inventory.update({
+      where: { id: inventory.id },
+      data:  { qtyOnHand: qtyAfter, qtyAvailable: newAvailable },
+    });
+
+    return {
+      movementId: movement.id,
+      qtyBefore:  qtyBefore.toFixed(6),
+      qtyChange:  qtyChange.toFixed(6),
+      qtyAfter:   qtyAfter.toFixed(6),
+    };
+  });
+
+  // Push ke Accurate (best-effort — jika gagal, ERP adjustment tetap tersimpan)
+  let accurateSynced = false;
+  let accurateError  = null;
+  if (glAccountId) {
+    try {
+      await pushAdjustmentToAccurate(result.movementId);
+      accurateSynced = true;
+    } catch (err) {
+      console.error("[adjustment] Accurate push failed:", err.message);
+      accurateError = err.message;
+    }
+  }
+
+  return { ...result, accurateSynced, accurateError };
+};
+
+// ── Batch Stock Adjustment (INV-013) ─────────────────────────────────
+//
+// Processes multiple inventory adjustments in a single transaction.
+// Each item gets its own ADJUSTMENT movement. After the transaction,
+// attempts to push each movement to Accurate (best-effort).
+
+const createBatchStockAdjustment = async ({ glAccountId, reason, notes, items, createdByEmployeeId }) => {
+  await validatePeriodOpen(new Date());
+
+  const movementIds = await prisma.$transaction(async (tx) => {
+    const ids = [];
+
+    for (const { inventoryId, qtyActual } of items) {
+      const inventory = await tx.inventory.findUnique({
+        where:  { id: inventoryId },
+        select: { id: true, qtyOnHand: true, qtyReserved: true, warehouseId: true },
+      });
+      if (!inventory) throw new AppError(`Inventory ${inventoryId} tidak ditemukan`, StatusCodes.NOT_FOUND);
+
+      const qtyBefore    = D(inventory.qtyOnHand);
+      const qtyAfter     = D(qtyActual);
+      const qtyChange    = qtyAfter.sub(qtyBefore);
+      const newAvailable = computeAvailable(qtyAfter, inventory.qtyReserved);
+
+      const movement = await tx.inventoryMovement.create({
+        data: {
+          inventoryId:         inventory.id,
+          movementType:        "ADJUSTMENT",
+          sourceModule:        "ADJUSTMENT",
+          createdSource:       "USER",
+          warehouseId:         inventory.warehouseId,
+          qtyBefore,
+          qtyChange,
+          qtyAfter,
+          referenceType:       "MANUAL",
+          reason,
+          notes:               notes ?? `Penyesuaian stok: ${reason}`,
+          glAccountId:         glAccountId ?? null,
+          createdByEmployeeId: createdByEmployeeId ?? null,
+        },
+        select: { id: true },
+      });
+
+      await tx.inventory.update({
+        where: { id: inventory.id },
+        data:  { qtyOnHand: qtyAfter, qtyAvailable: newAvailable },
+      });
+
+      ids.push({ movementId: movement.id, qtyBefore: qtyBefore.toFixed(6), qtyChange: qtyChange.toFixed(6), qtyAfter: qtyAfter.toFixed(6) });
+    }
+
+    return ids;
+  });
+
+  // Push ke Accurate (best-effort per movement)
+  let syncedCount = 0;
+  const accurateErrors = [];
+
+  if (glAccountId) {
+    for (const { movementId } of movementIds) {
+      try {
+        await pushAdjustmentToAccurate(movementId);
+        syncedCount++;
+      } catch (err) {
+        console.error(`[batch adjustment] Accurate push failed movementId=${movementId}:`, err.message);
+        accurateErrors.push(err.message);
+      }
+    }
+  }
+
+  return {
+    adjustedCount:  movementIds.length,
+    movements:      movementIds,
+    accurateSynced: syncedCount,
+    accurateErrors: accurateErrors.length > 0 ? accurateErrors : null,
+  };
+};
+
 // ── Reservation helpers (future use) ──────────────────────────────────
 //
 // These functions prepare the backend for booking-driven reservations.
@@ -541,6 +690,8 @@ module.exports = {
   reverseInvoiceServiceMovements,
   generateServiceMovement,
   reverseServiceUsageMovement,
+  createStockAdjustment,
+  createBatchStockAdjustment,
   reserveInventory,
   releaseReservation,
 };

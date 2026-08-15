@@ -4,6 +4,8 @@ const {
   listMovements,
   listInventories,
   generateServiceMovement,
+  createStockAdjustment,
+  createBatchStockAdjustment,
 } = require("./inventory.service");
 const { syncInventoryFromAccurate } = require("./inventory.sync.service");
 const {
@@ -49,6 +51,25 @@ const generateServiceMovementController = async (req, res, next) => {
   }
 };
 
+const createAdjustmentController = async (req, res, next) => {
+  try {
+    const { id }              = req.params;
+    const createdByEmployeeId = req.user?.employeeId ?? null;
+    const result = await createStockAdjustment(id, { ...req.body, createdByEmployeeId });
+    return success(res, result, "Penyesuaian stok berhasil dibuat");
+  } catch (err) {
+    next(err);
+  }
+};
+
+const createBatchAdjustmentController = async (req, res, next) => {
+  try {
+    const createdByEmployeeId = req.user?.employeeId ?? null;
+    const result = await createBatchStockAdjustment({ ...req.body, createdByEmployeeId });
+    return success(res, result, `${result.adjustedCount} penyesuaian stok berhasil dibuat`);
+  } catch (err) { next(err); }
+};
+
 const closePeriodController = async (req, res, next) => {
   try {
     const { year, month }    = req.body;
@@ -75,6 +96,8 @@ module.exports = {
   getInventoriesController,
   syncController,
   generateServiceMovementController,
+  createAdjustmentController,
+  createBatchAdjustmentController,
   closePeriodController,
   reopenPeriodController,
 };

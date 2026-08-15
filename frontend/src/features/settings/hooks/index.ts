@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/lib/toast";
 import { fetchShifts, createShift, updateShift, deleteShift } from "@/features/schedule/api/shift.api";
+import { fetchGlAccounts, syncGlAccounts, updateGlAccountUsage } from "@/features/inventory/api";
 import {
   fetchEmployees, fetchEmployee, createEmployee, updateEmployee, updateEmployeeBranches, deleteEmployee,
 } from "../api/employee.api";
@@ -250,7 +252,15 @@ export const useSyncCashAccounts = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: syncCashAccounts,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["cashAccounts"] }); },
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ["cashAccounts"] });
+      if (result.message) {
+        toast.error(result.message);
+      } else {
+        toast.success(`${result.synced} cash account berhasil disinkronkan`);
+      }
+    },
+    onError: (err: Error) => toast.error(err.message ?? "Sync cash account gagal"),
   });
 };
 
@@ -481,6 +491,34 @@ export const useCancelCustomerMembership = (customerId: string) => {
       qc.invalidateQueries({ queryKey: ["memberships", "customer", customerId] });
       qc.invalidateQueries({ queryKey: ["customers"] });
     },
+  });
+};
+
+// ── GL Accounts ───────────────────────────────────────────────────────
+export const useAllGlAccounts = () =>
+  useQuery({ queryKey: ["gl-accounts", "all"], queryFn: () => fetchGlAccounts(), staleTime: 5 * 60 * 1000 });
+
+export const useUpdateGlAccountUsage = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, usage }: { id: string; usage: string | null }) => updateGlAccountUsage(id, usage),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["gl-accounts"] });
+    },
+    onError: (err: Error) => toast.error(err.message ?? "Gagal update penggunaan akun"),
+  });
+};
+
+export const useSyncAllGlAccounts = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: syncGlAccounts,
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ["gl-accounts"] });
+      qc.invalidateQueries({ queryKey: ["cashAccounts"] });
+      toast.success(`${result.synced} GL akun berhasil disinkronkan dari Accurate`);
+    },
+    onError: (err: Error) => toast.error(err.message ?? "Sync GL akun gagal"),
   });
 };
 

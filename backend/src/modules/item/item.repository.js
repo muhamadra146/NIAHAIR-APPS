@@ -3,6 +3,7 @@ const prisma = require("../../config/prisma");
 const INCLUDE = {
   category:           { select: { id: true, name: true } },
   defaultUnit:        { select: { id: true, name: true } },
+  purchaseUnit:       { select: { id: true, name: true } },
   commissionCategory: { select: { id: true, code: true, name: true } },
   itemUnits: {
     select: {

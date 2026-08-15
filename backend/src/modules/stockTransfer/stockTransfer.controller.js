@@ -28,15 +28,38 @@ const createController = async (req, res, next) => {
 
 const updateStatusController = async (req, res, next) => {
   try {
-    const { status } = req.body;
+    const { status, receivedItems } = req.body;
     const result = await svc.updateStatus(
       req.params.id,
       status,
       req.user?.roleCode,
       req.branchId ?? null,
+      receivedItems ?? null,
     );
     return success(res, result, "Status transfer diperbarui");
   } catch (err) { next(err); }
 };
 
-module.exports = { getAllController, getByIdController, createController, updateStatusController };
+const deleteController = async (req, res, next) => {
+  try {
+    const result = await svc.deleteTransfer(
+      req.params.id,
+      req.user?.roleCode,
+      req.branchId ?? null,
+    );
+    return success(res, result, "Transfer berhasil dihapus");
+  } catch (err) { next(err); }
+};
+
+const undoReceiveController = async (req, res, next) => {
+  try {
+    const result = await svc.undoReceive(
+      req.params.id,
+      req.user?.roleCode,
+      req.branchId ?? null,
+    );
+    return success(res, result, "Penerimaan transfer berhasil dibatalkan");
+  } catch (err) { next(err); }
+};
+
+module.exports = { getAllController, getByIdController, createController, updateStatusController, deleteController, undoReceiveController };

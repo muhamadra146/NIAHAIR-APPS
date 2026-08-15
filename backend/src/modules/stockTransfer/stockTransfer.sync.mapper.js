@@ -5,12 +5,18 @@ const formatDate = (date) => {
   return `${dd}/${mm}/${d.getFullYear()}`;
 };
 
+// Accurate item-transfer API field names (confirmed from API response):
+// - warehouseId         = Gudang (source)
+// - referenceWarehouseId = Gudang Tujuan (destination)
+// - itemTransferType    = "TRANSFER_OUT" (Kirim) or "TRANSFER_IN" (Terima)
+// - detailItem          = line items array
 const mapTransferToAccurate = (transfer) => ({
-  transDate:        formatDate(transfer.transferDate),
-  description:      transfer.notes ?? `Transfer ${transfer.transferNo}`,
-  fromWarehouseId:  transfer.sourceWarehouse.accurateWarehouseId,
-  toWarehouseId:    transfer.destinationWarehouse.accurateWarehouseId,
-  detailItemTransfer: transfer.items
+  transDate:            formatDate(transfer.transferDate),
+  description:          transfer.notes ?? `Transfer ${transfer.transferNo}`,
+  itemTransferType:     "TRANSFER_OUT",
+  warehouseId:          transfer.sourceWarehouse.accurateWarehouseId,
+  referenceWarehouseId: transfer.destinationWarehouse.accurateWarehouseId,
+  detailItem: transfer.items
     .filter((it) => it.item.itemType === "INVENTORY")
     .map((it) => ({
       itemId:   it.item.accurateItemId,

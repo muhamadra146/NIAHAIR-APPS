@@ -7,8 +7,8 @@ export const fetchCashAccounts = async (params: CashAccountListParams = {}): Pro
   return data.data;
 };
 
-export const syncCashAccounts = async (): Promise<{ synced: number; skipped: number }> => {
-  const { data } = await api.post<ApiResponse<{ synced: number; skipped: number }>>("/cash-accounts/sync/accurate");
+export const syncCashAccounts = async (): Promise<{ synced: number; skipped: number; message?: string }> => {
+  const { data } = await api.post<ApiResponse<{ synced: number; skipped: number; message?: string }>>("/cash-accounts/sync/accurate");
   return data.data;
 };
 

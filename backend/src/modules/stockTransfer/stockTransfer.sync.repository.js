@@ -28,6 +28,7 @@ const findTransferForSync = (id) =>
         select: {
           id:              true,
           qty:             true,
+          receivedQty:     true,
           accurateDetailId: true,
           item: {
             select: {
@@ -60,10 +61,32 @@ const markTransferSynced = ({ id, accurateTransferId, accurateTransferNumber }) 
     },
   });
 
+const markTransferReceiveSynced = ({ id, accurateReceiveId, accurateReceiveNumber }) =>
+  prisma.$executeRawUnsafe(
+    `UPDATE "stock_transfers"
+     SET "accurateReceiveId" = $1, "accurateReceiveNumber" = $2, "lastReceiveSyncAt" = NOW()
+     WHERE id = $3`,
+    accurateReceiveId,
+    accurateReceiveNumber ?? null,
+    id,
+  );
+
 const markTransferItemSynced = (itemId, accurateDetailId) =>
   prisma.stockTransferItem.update({
     where: { id: itemId },
     data:  { accurateDetailId },
   });
 
-module.exports = { findTransferForSync, markTransferSynced, markTransferItemSynced };
+const findReceiveAccurateId = (id) =>
+  prisma.$queryRawUnsafe(
+    `SELECT "accurateReceiveId" FROM "stock_transfers" WHERE id = $1`,
+    id,
+  ).then((rows) => rows[0]?.accurateReceiveId ?? null);
+
+module.exports = {
+  findTransferForSync,
+  markTransferSynced,
+  markTransferReceiveSynced,
+  markTransferItemSynced,
+  findReceiveAccurateId,
+};

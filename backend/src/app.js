@@ -57,6 +57,9 @@ const settingRouter                 = require("./modules/setting/setting.route")
 const itemCategoryRouter            = require("./modules/itemCategory/itemCategory.route");
 const holidayRouter                 = require("./modules/holiday/holiday.route");
 const materialUsageItemRouter       = require("./modules/materialUsage/materialUsageItem.route");
+const glAccountRouter               = require("./modules/glAccount/glAccount.route");
+const supplierRouter                = require("./modules/supplier/supplier.route");
+const purchaseRouter                = require("./modules/purchase/purchase.route");
 
 
 const app = express();
@@ -146,6 +149,9 @@ v1.use("/stock-transfers",                      stockTransferRouter);
 v1.use("/app-settings",                         settingRouter);
 v1.use("/item-categories",                      itemCategoryRouter);
 v1.use("/material-usage-items",                 materialUsageItemRouter);
+v1.use("/gl-accounts",                          glAccountRouter);
+v1.use("/suppliers",                            supplierRouter);
+v1.use("/purchase-invoices",                    purchaseRouter);
 
 app.use("/api/v1", v1);
 

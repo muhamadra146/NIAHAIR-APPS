@@ -4,7 +4,8 @@ const { syncDepositToAccurate }   = require("../modules/deposit/deposit.sync.ser
 const { syncInvoiceToAccurate }   = require("../modules/invoice/invoice.sync.service");
 const { syncPaymentToAccurate }        = require("../modules/payment/payment.sync.service");
 const { syncDepositPaymentToAccurate } = require("../modules/depositPayment/depositPayment.sync.service");
-const { syncTransferToAccurate }       = require("../modules/stockTransfer/stockTransfer.sync.service");
+const { syncTransferToAccurate, syncTransferReceiveToAccurate } = require("../modules/stockTransfer/stockTransfer.sync.service");
+const { pushPurchaseInvoiceToAccurate } = require("../modules/purchase/purchase.accurate.sync.service");
 
 // ── Overlap guard — prevents concurrent execution ─────────────────────
 let running = false;
@@ -47,6 +48,16 @@ const HANDLERS = {
   STOCK_TRANSFER: async (job) => {
     if (job.direction === "APP_TO_ACCURATE") {
       await syncTransferToAccurate(job.entityId);
+    }
+  },
+  STOCK_TRANSFER_RECEIVE: async (job) => {
+    if (job.direction === "APP_TO_ACCURATE") {
+      await syncTransferReceiveToAccurate(job.entityId);
+    }
+  },
+  PURCHASE_INVOICE: async (job) => {
+    if (job.direction === "APP_TO_ACCURATE") {
+      await pushPurchaseInvoiceToAccurate(job.entityId);
     }
   },
 };
