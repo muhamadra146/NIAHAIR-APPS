@@ -109,14 +109,17 @@ export interface Appointment {
 }
 
 export interface AppointmentListParams {
-  page?:        number;
-  limit?:       number;
-  branchId?:    string;
-  status?:      AppointmentStatus | "";
-  customerId?:  string;
-  employeeId?:  string;
-  startDate?:   string;
-  endDate?:     string;
+  page?:                number;
+  limit?:               number;
+  branchId?:            string;
+  status?:              AppointmentStatus | "";
+  customerId?:          string;
+  employeeId?:          string;
+  startDate?:           string;
+  endDate?:             string;
+  search?:              string;
+  /** Cari appointment yang di-reschedule DARI tanggal ini (YYYY-MM-DD) */
+  rescheduledFromDate?: string;
 }
 
 export interface ServiceInput {

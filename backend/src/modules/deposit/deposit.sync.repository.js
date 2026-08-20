@@ -10,6 +10,7 @@ const findDepositForSync = (id) =>
       createdAt:             true,
       notes:                 true,
       accurateDepositId:     true,
+      branchId:              true,   // needed for Accurate branch assignment on update
       customer: {
         select: {
           customerNo:         true,

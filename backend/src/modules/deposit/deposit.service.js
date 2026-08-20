@@ -82,7 +82,7 @@ const getDepositById = async (id) => {
 
 // ── Create ────────────────────────────────────────────────────────────
 
-const createDeposit = async ({ customerId, appointmentId, amount, notes, branchId, createdByEmployeeId }) => {
+const createDeposit = async ({ customerId, appointmentId, amount, notes, paidAt, branchId, createdByEmployeeId }) => {
   const customer = await findCustomerById(customerId);
   if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
 
@@ -104,7 +104,7 @@ const createDeposit = async ({ customerId, appointmentId, amount, notes, branchI
     createdByEmployeeId: createdByEmployeeId ?? null,
     amount: D(amount),
     status: "UNPAID",
-    paidAt: null,
+    paidAt: paidAt ? new Date(paidAt) : null,
     notes:  notes ?? null,
   });
 

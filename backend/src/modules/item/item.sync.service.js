@@ -158,7 +158,7 @@ const syncItemUnitsAndPrices = async (itemId, accurateItem) => {
 
 // ── Main sync ─────────────────────────────────────────────────────────
 
-const syncItemsFromAccurate = async () => {
+const syncItemsFromAccurate = async ({ accurateBranchId } = {}) => {
   let page = 1;
   let pageCount = 1;
   let accurateRowCount = 0;
@@ -178,10 +178,11 @@ const syncItemsFromAccurate = async () => {
   // Prevents the same Accurate item from being written twice when
   // the API returns duplicate IDs across page boundaries.
   const processedIds = new Set();
+  const branchFilter = accurateBranchId ? `&branchId=${accurateBranchId}` : "";
 
   do {
     const response = await accurateRequest(
-      `${ACCURATE_ITEM_LIST}?fields=${ACCURATE_FIELDS}&sp.page=${page}`
+      `${ACCURATE_ITEM_LIST}?fields=${ACCURATE_FIELDS}&sp.page=${page}${branchFilter}`
     );
 
     if (!response.s) {

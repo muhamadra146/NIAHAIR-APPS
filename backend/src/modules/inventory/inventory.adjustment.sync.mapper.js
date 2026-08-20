@@ -10,10 +10,11 @@ const formatDate = (date) => {
 const resolveAdjustmentType = (qtyChange) =>
   Number(qtyChange) >= 0 ? "ADJUSTMENT_IN" : "ADJUSTMENT_OUT";
 
-const mapAdjustmentToAccurate = ({ movement, inventory, glAccount, unitCostPrice = 0 }) => ({
+const mapAdjustmentToAccurate = ({ movement, inventory, glAccount, unitCostPrice = 0, accurateBranchId = null }) => ({
   transDate:   formatDate(movement.createdAt),
   description: movement.notes ?? movement.reason ?? "Penyesuaian Stok",
   glAccountId: glAccount.accurateGlAccountId,
+  ...(accurateBranchId ? { branchId: accurateBranchId } : {}),
   detailItem: [
     {
       itemId:             inventory.item.accurateItemId,

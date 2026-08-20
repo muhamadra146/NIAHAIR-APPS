@@ -114,18 +114,27 @@ const generateSaleMovement = async (invoiceId, createdBy) => {
     const invoice = await findInvoiceForSaleMovement(invoiceId);
     if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
 
-    const warehouse = await findWarehouseByBranchId(invoice.branchId);
-    if (!warehouse) {
-      throw new AppError(
-        `Branch ${invoice.branchId} has no mapped warehouse — sync warehouses from Accurate and map via PUT /warehouses/:id/branch`,
-        StatusCodes.UNPROCESSABLE_ENTITY
-      );
-    }
+    // Warehouse hanya dibutuhkan untuk INVENTORY items — resolve sekali saat pertama kali diperlukan
+    let warehouse = null;
+    const getWarehouse = async () => {
+      if (warehouse) return warehouse;
+      warehouse = await findWarehouseByBranchId(invoice.branchId);
+      if (!warehouse) {
+        throw new AppError(
+          `Branch ${invoice.branchId} has no mapped warehouse — sync warehouses from Accurate and map via PUT /warehouses/:id/branch`,
+          StatusCodes.UNPROCESSABLE_ENTITY
+        );
+      }
+      return warehouse;
+    };
 
     let created = 0;
 
     for (const invoiceItem of invoice.items) {
       if (invoiceItem.item.itemType !== "INVENTORY") continue;
+
+      // Cek warehouse hanya saat ada INVENTORY item
+      await getWarehouse();
 
       const alreadyMoved = await tx.inventoryMovement.count({
         where: { movementType: "SALE", referenceType: "INVOICE", referenceId: invoiceItem.id },

@@ -143,32 +143,8 @@ const getAvailableStaff = async ({ date, branchId, startTime, endTime, excludeAp
       return r.shift.startTime <= startTime && r.shift.endTime >= endTime;
     });
 
-    // Filter: exclude employees with overlapping appointments
-    const employeeIds = records.map((r) => r.employeeId);
-    if (employeeIds.length > 0) {
-      const dateStr  = date.split("T")[0];
-      const reqStart = new Date(`${dateStr}T${startTime}:00`);
-      const reqEnd   = new Date(`${dateStr}T${endTime}:00`);
-
-      const appointmentFilter = {
-        branchId,
-        startTime: { lt: reqEnd },
-        endTime:   { gt: reqStart },
-        status:    { notIn: ["CANCELLED", "NO_SHOW"] },
-      };
-      if (excludeAppointmentId) appointmentFilter.id = { not: excludeAppointmentId };
-
-      const conflicts = await prisma.appointmentStaff.findMany({
-        where: {
-          employeeId:  { in: employeeIds },
-          appointment: appointmentFilter,
-        },
-        select: { employeeId: true },
-      });
-
-      const conflictSet = new Set(conflicts.map((c) => c.employeeId));
-      records = records.filter((r) => !conflictSet.has(r.employeeId));
-    }
+    // Note: overlap/conflict filter dihapus — karyawan boleh handle lebih dari 1 client
+    // di jam yang sama (diatur oleh manager salon)
   }
 
   // For today: mark staff who have already checked out

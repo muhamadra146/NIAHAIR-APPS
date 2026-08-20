@@ -1,16 +1,18 @@
 // ── Branch ────────────────────────────────────────────────────────────
 export interface Branch {
-  id:           string;
-  code:         string;
-  name:         string;
-  address:      string | null;
-  city:         string | null;
-  province:     string | null;
-  phone:        string | null;
-  latitude:     number | null;
-  longitude:    number | null;
-  radiusMeters: number;
-  isActive:     boolean;
+  id:               string;
+  code:             string;
+  name:             string;
+  address:          string | null;
+  city:             string | null;
+  province:         string | null;
+  phone:            string | null;
+  latitude:         number | null;
+  longitude:        number | null;
+  radiusMeters:     number;
+  isActive:         boolean;
+  accurateBranchId: number | null;
+  lastSyncAt:       string | null;
 }
 
 // ── Employee Role (job title) ──────────────────────────────────────────

@@ -19,6 +19,8 @@ const HANDLERS = {
     }
     // ACCURATE_TO_APP is a bulk pull handled by the sync endpoint — not queued per-item
   },
+  // BRANCH sync is a bulk pull triggered via POST /branches/sync-accurate — not per-item queued
+  BRANCH:     async (_job) => { /* bulk pull — handled by syncFromAccurateController */ },
   WAREHOUSE:  async (job) => { /* Phase 10G.2 */ },
   ITEM:       async (job) => { /* Phase 10G.2 */ },
   UNIT:       async (job) => { /* Phase 10G.2 */ },

@@ -2,7 +2,8 @@ const { success } = require("../../common/responses/apiResponse");
 const {
   listWarehouses, getWarehouseById,
   syncWarehouses,
-  updateWarehouseBranchMapping, updateWarehouseMapping,
+  updateWarehouseBranchMapping, removeWarehouseBranchMapping, updateWarehouseMapping,
+  deleteWarehouse,
 } = require("./warehouse.service");
 
 const getAllController = async (req, res, next) => {
@@ -38,8 +39,23 @@ const updateMappingController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const removeBranchMappingController = async (req, res, next) => {
+  try {
+    const result = await removeWarehouseBranchMapping(req.params.id);
+    return success(res, result, "Warehouse removed from branch");
+  } catch (err) { next(err); }
+};
+
+const deleteController = async (req, res, next) => {
+  try {
+    await deleteWarehouse(req.params.id);
+    return success(res, null, "Warehouse deleted");
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   getAllController, getByIdController,
   syncController,
-  updateBranchMappingController, updateMappingController,
+  updateBranchMappingController, removeBranchMappingController, updateMappingController,
+  deleteController,
 };

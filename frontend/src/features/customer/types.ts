@@ -1,4 +1,9 @@
 export type CustomerGender = "MALE" | "FEMALE";
+
+export interface MembershipOption {
+  id:   string;
+  name: string;
+}
 export type CustomerSyncStatus = "PENDING" | "SYNCED" | "FAILED";
 
 export interface CustomerNote {
@@ -39,11 +44,13 @@ export interface Customer {
 }
 
 export interface CustomerListParams {
-  page?:       number;
-  limit?:      number;
-  search?:     string;
-  isActive?:   boolean;
-  syncStatus?: CustomerSyncStatus;
+  page?:         number;
+  limit?:        number;
+  search?:       string;
+  isActive?:     boolean;
+  syncStatus?:   CustomerSyncStatus;
+  membershipId?: string; // UUID | "none" (tanpa membership)
+  hasDeposit?:   "true" | "false"; // "true" = ada sisa, "false" = tidak ada
 }
 
 export interface CreateCustomerInput {

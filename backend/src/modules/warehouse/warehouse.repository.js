@@ -34,7 +34,8 @@ const findBranchById = (id) =>
 
 // ── Write ─────────────────────────────────────────────────────────────
 
-// Accurate-owned fields only; branchId is NOT set here (admin maps separately)
+// Accurate does NOT carry branch info — branchId is assigned manually by admin.
+// On CREATE: branchId = null. On UPDATE: do NOT touch branchId (preserve manual assignment).
 const upsertFromAccurate = ({ accurateWarehouseId, name, isActive }) =>
   prisma.warehouse.upsert({
     where:  { accurateWarehouseId },
@@ -57,8 +58,10 @@ const updateAccurateMapping = (id, accurateWarehouseId) =>
     include: INCLUDE,
   });
 
+const hardDelete = (id) => prisma.warehouse.delete({ where: { id } });
+
 module.exports = {
   findAll, count, findById, findByBranchId,
   findByAccurateId, findBranchById,
-  upsertFromAccurate, updateBranchMapping, updateAccurateMapping,
+  upsertFromAccurate, updateBranchMapping, updateAccurateMapping, hardDelete,
 };

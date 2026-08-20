@@ -41,6 +41,7 @@ import { LeavePage }                  from "@/features/leave/pages/LeavePage";
 import { MyPayslipPage }             from "@/features/payroll/pages/MyPayslipPage";
 import { BpjsReportPage }           from "@/features/payroll/pages/BpjsReportPage";
 import { CorrectionPage }            from "@/features/attendance/pages/CorrectionPage";
+import { ComplaintPage }             from "@/features/complaint/pages/ComplaintPage";
 import { PermissionPage }            from "@/features/attendance/pages/PermissionPage";
 import { SickLeavePage }             from "@/features/attendance/pages/SickLeavePage";
 import { GenerateKomisiPage }         from "@/features/invoice/pages/GenerateKomisiPage";
@@ -125,6 +126,8 @@ export const router = createBrowserRouter([
           { path: "/my-kasbon/:id",  element: <MyLoanDetailPage /> },
           // Attendance Correction
           { path: "/attendance-corrections", element: <CorrectionPage /> },
+          // Complaints
+          { path: "/complaints", element: <ComplaintPage /> },
           // Permission (Izin)
           { path: "/permissions", element: <PermissionPage /> },
           // Sick Leave (Sakit)

@@ -22,7 +22,7 @@ const buildDescription = (dp) => {
   return lines.join("\n");
 };
 
-const mapDepositPaymentToAccurate = (dp) => ({
+const mapDepositPaymentToAccurate = (dp, accurateBranchId = null) => ({
   customerNo:    dp.deposit.customer.customerNo,
   transDate:     formatDate(dp.paidAt),
   description:   buildDescription(dp),
@@ -30,6 +30,7 @@ const mapDepositPaymentToAccurate = (dp) => ({
   paymentMethod: "BANK_TRANSFER",
   chequeAmount:  Number(dp.amount),
   totalPayment:  Number(dp.amount),
+  ...(accurateBranchId ? { branchId: accurateBranchId } : {}),
   detailInvoice: [
     {
       invoiceId:     dp.deposit.accurateDepositId,

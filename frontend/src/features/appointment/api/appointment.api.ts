@@ -36,14 +36,16 @@ interface AppointmentListData {
 export const fetchAppointments = async (params: AppointmentListParams) => {
   const res = await api.get<ApiResponse<AppointmentListData>>("/appointments", {
     params: {
-      page:       params.page       ?? 1,
-      limit:      params.limit      ?? 20,
-      branchId:   params.branchId   || undefined,
-      status:     params.status     || undefined,
-      customerId: params.customerId || undefined,
-      employeeId: params.employeeId || undefined,
-      startDate:  params.startDate  || undefined,
-      endDate:    params.endDate    || undefined,
+      page:                 params.page                 ?? 1,
+      limit:                params.limit                ?? 20,
+      branchId:             params.branchId             || undefined,
+      status:               params.status               || undefined,
+      customerId:           params.customerId           || undefined,
+      employeeId:           params.employeeId           || undefined,
+      startDate:            params.startDate            || undefined,
+      endDate:              params.endDate              || undefined,
+      search:               params.search               || undefined,
+      rescheduledFromDate:  params.rescheduledFromDate  || undefined,
     },
   });
   return res.data.data;
@@ -71,6 +73,12 @@ export const changeAppointmentStatus = async (id: string, body: ChangeStatusInpu
 
 export const rescheduleAppointment = async (id: string, body: RescheduleInput) => {
   const res = await api.patch<ApiResponse<Appointment>>(`/appointments/${id}/reschedule`, body);
+  return res.data.data;
+};
+
+/** Update destinasi reschedule yang sudah ada (tanpa membuat entri history baru) */
+export const updateRescheduleAppointment = async (id: string, historyId: string, body: RescheduleInput) => {
+  const res = await api.patch<ApiResponse<Appointment>>(`/appointments/${id}/reschedule/${historyId}`, body);
   return res.data.data;
 };
 

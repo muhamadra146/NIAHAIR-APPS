@@ -6,7 +6,8 @@ const { ROLES }    = require("../../common/constants/role.constant");
 const {
   getAllController, getByIdController,
   syncController,
-  updateBranchMappingController, updateMappingController,
+  updateBranchMappingController, removeBranchMappingController, updateMappingController,
+  deleteController,
 } = require("./warehouse.controller");
 const { updateBranchMappingSchema, updateAccurateMappingSchema } = require("./warehouse.validation");
 
@@ -19,7 +20,9 @@ router.get("/",    authenticate, getAllController);
 router.get("/:id", authenticate, getByIdController);
 
 // Admin mapping routes
+router.delete("/:id",               authenticate, authorize(ROLES.SUPER_ADMIN), deleteController);
 router.put("/:id/branch",           authenticate, authorize(ROLES.SUPER_ADMIN), validate(updateBranchMappingSchema),   updateBranchMappingController);
+router.delete("/:id/branch",        authenticate, authorize(ROLES.SUPER_ADMIN), removeBranchMappingController);
 router.put("/:id/accurate-mapping", authenticate, authorize(ROLES.SUPER_ADMIN), validate(updateAccurateMappingSchema), updateMappingController);
 
 module.exports = router;

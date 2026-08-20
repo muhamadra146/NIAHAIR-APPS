@@ -5,6 +5,7 @@ import type {
   CustomerListParams,
   CreateCustomerInput,
   UpdateCustomerInput,
+  MembershipOption,
 } from "../types";
 
 export async function fetchCustomers(params: CustomerListParams = {}): Promise<PaginatedResponse<Customer>> {
@@ -25,4 +26,11 @@ export async function createCustomer(input: CreateCustomerInput): Promise<Custom
 export async function updateCustomer(id: string, input: UpdateCustomerInput): Promise<Customer> {
   const { data } = await api.put<ApiResponse<Customer>>(`/customers/${id}`, input);
   return data.data;
+}
+
+export async function fetchMembershipOptions(): Promise<MembershipOption[]> {
+  const { data } = await api.get<ApiResponse<PaginatedResponse<MembershipOption>>>("/memberships", {
+    params: { limit: 100 },
+  });
+  return data.data.data ?? [];
 }

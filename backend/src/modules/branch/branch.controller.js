@@ -1,5 +1,6 @@
 const { success, created } = require("../../common/responses/apiResponse");
 const { getAll, getById, createBranch, updateBranch, deleteBranch } = require("./branch.service");
+const { syncBranchesFromAccurate, mapBranchToAccurate } = require("./branchAccurate.service");
 
 const getAllController = async (req, res, next) => {
   try {
@@ -46,4 +47,30 @@ const deleteController = async (req, res, next) => {
   }
 };
 
-module.exports = { getAllController, getByIdController, createController, updateController, deleteController };
+const syncFromAccurateController = async (req, res, next) => {
+  try {
+    const result = await syncBranchesFromAccurate();
+    return success(res, result, "Branch sync from Accurate complete");
+  } catch (err) {
+    next(err);
+  }
+};
+
+const mapToAccurateController = async (req, res, next) => {
+  try {
+    const result = await mapBranchToAccurate(req.params.id, Number(req.body.accurateBranchId));
+    return success(res, result, "Branch mapped to Accurate");
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = {
+  getAllController,
+  getByIdController,
+  createController,
+  updateController,
+  deleteController,
+  syncFromAccurateController,
+  mapToAccurateController,
+};

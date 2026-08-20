@@ -14,17 +14,18 @@ const {
 const ACCURATE_VENDOR_LIST = "/vendor/list.do";
 const ACCURATE_FIELDS      = "id,no,name,email,mobilePhone,address1,inactive";
 
-const syncSuppliersFromAccurate = async () => {
+const syncSuppliersFromAccurate = async ({ accurateBranchId } = {}) => {
   let page      = 1;
   let pageCount = 1;
   let created   = 0;
   let updated   = 0;
   let failed    = 0;
   const processedIds = new Set();
+  const branchFilter = accurateBranchId ? `&branchId=${accurateBranchId}` : "";
 
   do {
     const response = await accurateRequest(
-      `${ACCURATE_VENDOR_LIST}?fields=${ACCURATE_FIELDS}&sp.page=${page}`
+      `${ACCURATE_VENDOR_LIST}?fields=${ACCURATE_FIELDS}&sp.page=${page}${branchFilter}`
     );
 
     console.log(`[supplier sync] raw response s=${response.s} sp=${JSON.stringify(response.sp)} d_length=${response.d?.length}`);

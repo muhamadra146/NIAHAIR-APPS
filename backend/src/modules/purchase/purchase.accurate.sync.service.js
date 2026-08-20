@@ -4,6 +4,7 @@ const { StatusCodes }     = require("http-status-codes");
 const AppError            = require("../../common/errors/AppError");
 const prisma              = require("../../config/prisma");
 const { accurateRequest } = require("../accurate/accurate.client");
+const { getAccurateBranchId } = require("../branch/branch.repository");
 const { mapPurchaseInvoiceToAccurate } = require("./purchase.sync.mapper");
 
 const ACCURATE_PURCHASE_INVOICE_SAVE = "/purchase-invoice/save.do";
@@ -59,9 +60,12 @@ const pushPurchaseInvoiceToAccurate = async (purchaseInvoiceId) => {
     );
   }
 
+  // Look up Accurate branch ID for this purchase invoice
+  const accurateBranchId = await getAccurateBranchId(invoice.branchId);
+
   // Try with supplierInvoiceNo first; if Accurate rejects as duplicate, retry with internal invoiceNo
   const primaryBillNo = invoice.supplierInvoiceNo || invoice.invoiceNo;
-  let payload  = mapPurchaseInvoiceToAccurate(invoice, primaryBillNo);
+  let payload  = mapPurchaseInvoiceToAccurate(invoice, primaryBillNo, accurateBranchId);
 
   let response = await accurateRequest(ACCURATE_PURCHASE_INVOICE_SAVE, {
     method: "POST",
@@ -72,7 +76,7 @@ const pushPurchaseInvoiceToAccurate = async (purchaseInvoiceId) => {
     const isDuplicate = JSON.stringify(response).includes("sudah ada");
     if (isDuplicate) {
       console.log("[purchase sync] billNumber duplicate, retrying with internal invoiceNo");
-      payload  = mapPurchaseInvoiceToAccurate(invoice, invoice.invoiceNo);
+      payload  = mapPurchaseInvoiceToAccurate(invoice, invoice.invoiceNo, accurateBranchId);
       response = await accurateRequest(ACCURATE_PURCHASE_INVOICE_SAVE, {
         method: "POST",
         body:   payload,

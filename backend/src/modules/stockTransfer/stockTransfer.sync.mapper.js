@@ -10,12 +10,13 @@ const formatDate = (date) => {
 // - referenceWarehouseId = Gudang Tujuan (destination)
 // - itemTransferType    = "TRANSFER_OUT" (Kirim) or "TRANSFER_IN" (Terima)
 // - detailItem          = line items array
-const mapTransferToAccurate = (transfer) => ({
+const mapTransferToAccurate = (transfer, accurateBranchId = null) => ({
   transDate:            formatDate(transfer.transferDate),
   description:          transfer.notes ?? `Transfer ${transfer.transferNo}`,
   itemTransferType:     "TRANSFER_OUT",
   warehouseId:          transfer.sourceWarehouse.accurateWarehouseId,
   referenceWarehouseId: transfer.destinationWarehouse.accurateWarehouseId,
+  ...(accurateBranchId ? { branchId: accurateBranchId } : {}),
   detailItem: transfer.items
     .filter((it) => it.item.itemType === "INVENTORY")
     .map((it) => ({

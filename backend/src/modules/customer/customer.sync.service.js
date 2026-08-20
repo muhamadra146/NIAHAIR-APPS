@@ -9,7 +9,7 @@ const ACCURATE_CUSTOMER_DETAIL = (id) => `/customer/detail.do?id=${id}`;
 // list.do only provides IDs for pagination — detail.do is the authoritative source.
 const ACCURATE_FIELDS = "id";
 
-const syncCustomersFromAccurate = async () => {
+const syncCustomersFromAccurate = async ({ accurateBranchId } = {}) => {
   let page = 1;
   let pageCount = 1;
   let accurateRowCount = 0;
@@ -29,10 +29,11 @@ const syncCustomersFromAccurate = async () => {
   // Prevents the same Accurate customer from being written twice when
   // the API returns duplicate IDs across page boundaries.
   const processedIds = new Set();
+  const branchFilter = accurateBranchId ? `&branchId=${accurateBranchId}` : "";
 
   do {
     const response = await accurateRequest(
-      `${ACCURATE_CUSTOMER_LIST}?fields=${ACCURATE_FIELDS}&sp.page=${page}`
+      `${ACCURATE_CUSTOMER_LIST}?fields=${ACCURATE_FIELDS}&sp.page=${page}${branchFilter}`
     );
 
     if (!response.s) {

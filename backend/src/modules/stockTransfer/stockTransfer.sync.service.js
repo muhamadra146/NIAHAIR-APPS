@@ -1,4 +1,5 @@
-const { accurateRequest }    = require("../accurate/accurate.client");
+const { accurateRequest }       = require("../accurate/accurate.client");
+const { getAccurateBranchId }   = require("../branch/branch.repository");
 const { mapTransferToAccurate } = require("./stockTransfer.sync.mapper");
 const {
   findTransferForSync,
@@ -55,7 +56,12 @@ const syncTransferToAccurate = async (transferId) => {
     }
   }
 
-  const payload = mapTransferToAccurate(transfer);
+  // Look up Accurate branch ID via source warehouse's branch
+  const accurateBranchId = transfer.sourceWarehouse?.branchId
+    ? await getAccurateBranchId(transfer.sourceWarehouse.branchId)
+    : null;
+
+  const payload = mapTransferToAccurate(transfer, accurateBranchId);
 
   console.log("[transfer sync payload]", JSON.stringify(payload));
 

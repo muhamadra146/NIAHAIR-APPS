@@ -17,17 +17,25 @@ import type { DepositPayment } from "../types";
 const CAN_EDIT: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
 
 const STATUS_LABEL: Record<string, string> = {
+  PENDING:      "Menunggu",
   UNPAID:       "Belum Dibayar",
+  PARTIAL:      "Sebagian Dibayar",
   PAID:         "Aktif",
   PARTIAL_USED: "Sebagian Terpakai",
   USED:         "Habis",
+  CANCELLED:    "Dibatalkan",
+  REFUNDED:     "Dikembalikan",
 };
 
 const STATUS_COLOR: Record<string, string> = {
+  PENDING:      "text-orange-600 border-orange-300",
   UNPAID:       "text-yellow-600 border-yellow-300",
+  PARTIAL:      "text-amber-600 border-amber-300",
   PAID:         "text-green-600 border-green-300",
   PARTIAL_USED: "text-blue-600 border-blue-300",
   USED:         "text-muted-foreground",
+  CANCELLED:    "text-red-500 border-red-300",
+  REFUNDED:     "text-purple-600 border-purple-300",
 };
 
 export function DepositDetailPage() {
@@ -67,7 +75,9 @@ export function DepositDetailPage() {
     );
   }
 
-  const canPay = deposit.status === "UNPAID" && payments.length === 0;
+  // Bisa bayar jika status UNPAID — tidak perlu cek payments.length
+  // (jika payment dihapus, status kembali ke UNPAID dan user harus bisa bayar lagi)
+  const canPay = deposit.status === "UNPAID";
 
   return (
     <PageContainer>

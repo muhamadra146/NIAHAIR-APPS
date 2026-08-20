@@ -34,6 +34,10 @@ api.interceptors.response.use(
       window.location.href = "/login";
     }
     const message = error.response?.data?.message ?? error.message;
-    return Promise.reject(new Error(message));
+    // Jika ada field-level errors dari validation middleware, gabungkan ke message
+    const fieldErrors: { field: string; message: string }[] | undefined =
+      error.response?.data?.errors;
+    const detail = fieldErrors?.map((e) => e.message).join(", ");
+    return Promise.reject(new Error(detail ? `${message}: ${detail}` : message));
   }
 );

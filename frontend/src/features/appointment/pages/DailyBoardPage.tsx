@@ -30,6 +30,7 @@ import {
   changeAppointmentStatus,
   updateAppointment,
   rescheduleAppointment,
+  updateRescheduleAppointment,
 } from "../api/appointment.api";
 import { fetchAvailableStaff } from "@/features/schedule/api/staffSchedule.api";
 import type { Appointment, AppointmentStatus, AvailableStaff } from "../types";
@@ -354,11 +355,14 @@ function WorkAssignDialog({
 
 function RescheduleDialog({
   appointment,
+  historyId,
   open,
   onClose,
   onSuccess,
 }: {
   appointment: Appointment;
+  /** Jika diisi, UPDATE entri history ini (tidak membuat entri baru) */
+  historyId?:  string;
   open:        boolean;
   onClose:     () => void;
   onSuccess:   () => void;
@@ -379,7 +383,12 @@ function RescheduleDialog({
     if (!reason.trim()) { setError("Alasan wajib diisi."); return; }
     setSaving(true);
     try {
-      await rescheduleAppointment(appointment.id, { visitDate, startTime, endTime, reason: reason.trim() });
+      if (historyId) {
+        // Update destinasi reschedule yang sudah ada — tidak buat entri history baru
+        await updateRescheduleAppointment(appointment.id, historyId, { visitDate, startTime, endTime, reason: reason.trim() });
+      } else {
+        await rescheduleAppointment(appointment.id, { visitDate, startTime, endTime, reason: reason.trim() });
+      }
       onSuccess();
       onClose();
     } catch (err: unknown) {
@@ -923,16 +932,19 @@ function AppointmentListRow({
   onReschedule,
   onCancel,
   checkingInvoice,
+  isRescheduledView,
 }: {
-  appointment:     Appointment;
-  date:            string;
-  advancingId:     string | null;
-  onAdvance:       (id: string, status: AppointmentStatus) => void;
-  onStaffSaved:    () => void;
-  onInvoice?:      (appt: Appointment) => void;
-  onReschedule?:   (appt: Appointment) => void;
-  onCancel?:       (appt: Appointment) => void;
-  checkingInvoice?: boolean;
+  appointment:       Appointment;
+  date:              string;
+  advancingId:       string | null;
+  onAdvance:         (id: string, status: AppointmentStatus) => void;
+  onStaffSaved:      () => void;
+  onInvoice?:        (appt: Appointment) => void;
+  onReschedule?:     (appt: Appointment, historyId?: string) => void;
+  onCancel?:         (appt: Appointment) => void;
+  checkingInvoice?:  boolean;
+  /** True saat ditampilkan di tab Reschedule — sembunyikan advance/staff, tampilkan badge Reschedule */
+  isRescheduledView?: boolean;
 }) {
   const [showStaff,  setShowStaff]  = useState(false);
   const [showAssign, setShowAssign] = useState(false);
@@ -943,6 +955,13 @@ function AppointmentListRow({
   const cfg       = STATUS_CONFIG[a.status];
   const isDone    = a.status === "COMPLETED";
   const isClosed  = ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(a.status);
+
+  // Di tab Reschedule: sembunyikan tombol aksi jika appointment sudah
+  // diproses (status ≠ BOOKED) atau sudah di-reschedule lagi dari tanggal setelahnya
+  const isActionable = !isRescheduledView || (
+    a.status === "BOOKED" &&
+    !(a.rescheduleHistories ?? []).some((h) => h.oldVisitDate.split("T")[0] > date)
+  );
 
   const startTime = new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
   const endTime   = new Date(a.endTime).toLocaleTimeString("id-ID",   { hour: "2-digit", minute: "2-digit" });
@@ -995,10 +1014,17 @@ function AppointmentListRow({
             )}
           </div>
           {/* Status badge */}
-          <span className={`shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full ${cfg.bg} ${cfg.text} border ${cfg.border}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot} shrink-0`} />
-            {cfg.label}
-          </span>
+          {isRescheduledView ? (
+            <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+              <CalendarClock className="h-3 w-3 shrink-0" />
+              Reschedule
+            </span>
+          ) : (
+            <span className={`shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full ${cfg.bg} ${cfg.text} border ${cfg.border}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot} shrink-0`} />
+              {cfg.label}
+            </span>
+          )}
         </div>
 
         {/* Services */}
@@ -1052,8 +1078,8 @@ function AppointmentListRow({
 
       {/* Action column */}
       <div className="shrink-0 flex flex-col items-end justify-center gap-1 px-3 py-2.5 border-l border-slate-100">
-        {/* Primary advance button */}
-        {next && nextLabel && (
+        {/* Primary advance button — disembunyikan di tab Reschedule */}
+        {!isRescheduledView && next && nextLabel && (
           <Button
             size="sm"
             className="h-7 px-3 text-xs rounded-lg whitespace-nowrap"
@@ -1069,23 +1095,35 @@ function AppointmentListRow({
           <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100" title="Detail" asChild>
             <Link to={`/appointments/${a.id}`}><Eye className="h-3 w-3" /></Link>
           </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100" title="Atur Staff"
-            onClick={(e) => { e.stopPropagation(); setShowStaff((v) => !v); }}>
-            <Users className="h-3 w-3" />
-          </Button>
-          {a.status === "IN_PROGRESS" && onInvoice && (
+          {/* Atur Staff — disembunyikan di tab Reschedule (staff diatur ulang di tanggal baru) */}
+          {!isRescheduledView && (
+            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100" title="Atur Staff"
+              onClick={(e) => { e.stopPropagation(); setShowStaff((v) => !v); }}>
+              <Users className="h-3 w-3" />
+            </Button>
+          )}
+          {!isRescheduledView && a.status === "IN_PROGRESS" && onInvoice && (
             <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-blue-500 hover:text-blue-700 hover:bg-blue-50" title="Invoice"
               onClick={() => onInvoice(a)} disabled={checkingInvoice}>
               {checkingInvoice ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
             </Button>
           )}
-          {RESCHEDULABLE.includes(a.status) && onReschedule && (
+          {isActionable && RESCHEDULABLE.includes(a.status) && onReschedule && (
             <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50" title="Reschedule"
-              onClick={() => onReschedule(a)}>
+              onClick={() => {
+                // Saat isRescheduledView, cari history yang oldVisitDate = tanggal view ini
+                // supaya UPDATE entri yang ada (bukan buat baru → double history)
+                const historyId = isRescheduledView
+                  ? (a.rescheduleHistories ?? []).find(
+                      (h) => h.oldVisitDate.split("T")[0] === date
+                    )?.id
+                  : undefined;
+                onReschedule(a, historyId);
+              }}>
               <CalendarClock className="h-3 w-3" />
             </Button>
           )}
-          {CANCELLABLE.includes(a.status) && onCancel && (
+          {isActionable && CANCELLABLE.includes(a.status) && onCancel && (
             <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50" title="Batalkan"
               onClick={() => onCancel(a)}>
               <Ban className="h-3 w-3" />
@@ -1121,8 +1159,9 @@ export function DailyBoardPage() {
   const [invoiceAppt, setInvoiceAppt]             = useState<Appointment | null>(null);
   const [invoiceExistingId, setInvoiceExistingId] = useState<string | null>(null);
   const [checkingInvoice, setCheckingInvoice]     = useState<string | null>(null);
-  const [rescheduleAppt, setRescheduleAppt]       = useState<Appointment | null>(null);
-  const [cancelAppt, setCancelAppt]               = useState<Appointment | null>(null);
+  const [rescheduleAppt, setRescheduleAppt]           = useState<Appointment | null>(null);
+  const [rescheduleHistoryId, setRescheduleHistoryId] = useState<string | undefined>(undefined);
+  const [cancelAppt, setCancelAppt]                   = useState<Appointment | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -1135,15 +1174,35 @@ export function DailyBoardPage() {
     staleTime: 0,
   });
 
-  const appointments = data?.appointments ?? [];
+  // Query terpisah: appointment yang di-reschedule DARI tanggal ini
+  // (appointment sudah pindah ke tanggal lain, tidak muncul di query utama)
+  const { data: rescheduledFromData } = useQuery({
+    queryKey: ["daily-board-rescheduled-from", date, branchId],
+    queryFn:  () =>
+      fetchAppointments({ page: 1, limit: 200, branchId: branchId ?? undefined, rescheduledFromDate: date }),
+    staleTime: 0,
+  });
+
+  const appointments                = data?.appointments ?? [];
+  const rescheduledFromAppointments = rescheduledFromData?.appointments ?? [];
+
+  // Tab Reschedule: hilangkan yang sudah CANCELLED — mereka pindah ke tab Dibatalkan
+  // Tombol aksi di-hide via isActionable untuk status non-BOOKED lainnya
+  const rescheduledFromVisible   = rescheduledFromAppointments.filter((a) => a.status !== "CANCELLED");
+  // Appointment yg di-reschedule lalu di-cancel: tampil di tab Dibatalkan
+  const rescheduledFromCancelled = rescheduledFromAppointments.filter((a) => a.status === "CANCELLED");
+
+  // Semua appointment yang di-cancel pada tanggal ini (visitDate = tanggal view)
+  // — termasuk yang datang via reschedule (rescheduleHistories > 0)
+  const cancelledHere = appointments.filter((a) => a.status === "CANCELLED");
 
   // Filtered appointments for flat views
   const filteredAppointments = (() => {
     if (boardFilter === "ACTIVE")      return appointments.filter((a) => ["BOOKED","CONFIRMED","CHECK_IN","IN_PROGRESS","COMPLETED"].includes(a.status));
     if (boardFilter === "COMPLETED")   return appointments.filter((a) => a.status === "COMPLETED");
-    if (boardFilter === "CANCELLED")   return appointments.filter((a) => a.status === "CANCELLED");
-    if (boardFilter === "RESCHEDULED") return appointments.filter((a) => (a.rescheduleHistories ?? []).length > 0);
-    return appointments; // ALL
+    if (boardFilter === "CANCELLED")   return [...cancelledHere, ...rescheduledFromCancelled];
+    if (boardFilter === "RESCHEDULED") return rescheduledFromVisible;
+    return [...appointments, ...rescheduledFromVisible, ...rescheduledFromCancelled]; // ALL — termasuk reschedule aktif & yg dibatalkan
   })();
 
   const byStatus = Object.fromEntries(
@@ -1205,11 +1264,13 @@ export function DailyBoardPage() {
 
   function onStaffSaved() {
     qc.invalidateQueries({ queryKey: ["daily-board"] });
+    qc.invalidateQueries({ queryKey: ["daily-board-rescheduled-from"] });
     qc.invalidateQueries({ queryKey: ["appointments"] });
   }
 
   function onActionSuccess() {
     qc.invalidateQueries({ queryKey: ["daily-board"] });
+    qc.invalidateQueries({ queryKey: ["daily-board-rescheduled-from"] });
     qc.invalidateQueries({ queryKey: ["appointments"] });
   }
 
@@ -1224,7 +1285,13 @@ export function DailyBoardPage() {
     }
   }
 
+
   // ── Shared card props ──────────────────────────────────────────────
+
+  function handleReschedule(appt: Appointment, historyId?: string) {
+    setRescheduleAppt(appt);
+    setRescheduleHistoryId(historyId);
+  }
 
   const cardProps = {
     date,
@@ -1232,7 +1299,7 @@ export function DailyBoardPage() {
     onAdvance:    handleAdvance,
     onStaffSaved,
     onInvoice:    handleInvoiceClick,
-    onReschedule: setRescheduleAppt,
+    onReschedule: handleReschedule,
     onCancel:     setCancelAppt,
   };
 
@@ -1336,9 +1403,11 @@ export function DailyBoardPage() {
             const cnt = tab.key === "ACTIVE"
               ? appointments.filter((a) => ["BOOKED","CONFIRMED","CHECK_IN","IN_PROGRESS","COMPLETED"].includes(a.status)).length
               : tab.key === "ALL"
-              ? appointments.length
+              ? appointments.length + rescheduledFromVisible.length + rescheduledFromCancelled.length
               : tab.key === "RESCHEDULED"
-              ? appointments.filter((a) => (a.rescheduleHistories ?? []).length > 0).length
+              ? rescheduledFromVisible.length
+              : tab.key === "CANCELLED"
+              ? cancelledHere.length + rescheduledFromCancelled.length
               : appointments.filter((a) => a.status === tab.key).length;
             const isActive = boardFilter === tab.key;
             return (
@@ -1420,7 +1489,7 @@ export function DailyBoardPage() {
                   onAdvance={handleAdvance}
                   onStaffSaved={onStaffSaved}
                   onInvoice={handleInvoiceClick}
-                  onReschedule={setRescheduleAppt}
+                  onReschedule={handleReschedule}
                   onCancel={setCancelAppt}
                   checkingInvoice={checkingInvoice === a.id}
                 />
@@ -1480,7 +1549,7 @@ export function DailyBoardPage() {
           </DndContext>
 
         ) : (
-          /* ── FLAT LIST for Selesai / Dibatalkan / No Show / Semua ── */
+          /* ── FLAT LIST for Selesai / Dibatalkan / Reschedule / Semua ── */
           <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 space-y-2">
             {filteredAppointments.length === 0 ? (
@@ -1502,9 +1571,10 @@ export function DailyBoardPage() {
                     onAdvance={handleAdvance}
                     onStaffSaved={onStaffSaved}
                     onInvoice={handleInvoiceClick}
-                    onReschedule={setRescheduleAppt}
+                    onReschedule={handleReschedule}
                     onCancel={setCancelAppt}
                     checkingInvoice={checkingInvoice === a.id}
+                    isRescheduledView={boardFilter === "RESCHEDULED"}
                   />
                 ))
             )}
@@ -1531,9 +1601,10 @@ export function DailyBoardPage() {
       {rescheduleAppt && (
         <RescheduleDialog
           appointment={rescheduleAppt}
+          historyId={rescheduleHistoryId}
           open
-          onClose={() => setRescheduleAppt(null)}
-          onSuccess={() => { setRescheduleAppt(null); onActionSuccess(); }}
+          onClose={() => { setRescheduleAppt(null); setRescheduleHistoryId(undefined); }}
+          onSuccess={() => { setRescheduleAppt(null); setRescheduleHistoryId(undefined); onActionSuccess(); }}
         />
       )}
 

@@ -4,9 +4,10 @@ const { paginate, paginationMeta } = require("../../utils/pagination");
 const {
   findAll, count, findById,
   findBranchById,
-  updateBranchMapping, updateAccurateMapping,
+  updateBranchMapping, updateAccurateMapping, hardDelete,
 } = require("./warehouse.repository");
 const { syncWarehousesFromAccurate } = require("./warehouseAccurate.service");
+const prisma = require("../../config/prisma");
 
 // ── List ──────────────────────────────────────────────────────────────
 
@@ -47,6 +48,12 @@ const updateWarehouseBranchMapping = async (id, { branchId }) => {
   return updateBranchMapping(id, branchId);
 };
 
+const removeWarehouseBranchMapping = async (id) => {
+  const warehouse = await findById(id);
+  if (!warehouse) throw new AppError("Warehouse not found", StatusCodes.NOT_FOUND);
+  return updateBranchMapping(id, null);
+};
+
 // ── Accurate ID mapping (manual override) ────────────────────────────
 
 const updateWarehouseMapping = async (id, { accurateWarehouseId }) => {
@@ -56,10 +63,44 @@ const updateWarehouseMapping = async (id, { accurateWarehouseId }) => {
   return updateAccurateMapping(id, accurateWarehouseId);
 };
 
+const deleteWarehouse = async (id) => {
+  const warehouse = await findById(id);
+  if (!warehouse) throw new AppError("Warehouse not found", StatusCodes.NOT_FOUND);
+
+  // Guard: cek relasi sebelum hard delete
+  const [inventoryCount, transferCount, purchaseCount] = await Promise.all([
+    prisma.inventory.count({ where: { warehouseId: id } }),
+    prisma.stockTransfer.count({
+      where: { OR: [{ sourceWarehouseId: id }, { destinationWarehouseId: id }] },
+    }),
+    prisma.purchaseInvoice.count({ where: { warehouseId: id } }),
+  ]);
+
+  if (inventoryCount > 0)
+    throw new AppError(
+      `Tidak bisa dihapus: ${inventoryCount} data inventory masih terhubung ke warehouse ini`,
+      StatusCodes.CONFLICT
+    );
+  if (transferCount > 0)
+    throw new AppError(
+      `Tidak bisa dihapus: ${transferCount} stock transfer masih menggunakan warehouse ini`,
+      StatusCodes.CONFLICT
+    );
+  if (purchaseCount > 0)
+    throw new AppError(
+      `Tidak bisa dihapus: ${purchaseCount} purchase invoice masih terhubung ke warehouse ini`,
+      StatusCodes.CONFLICT
+    );
+
+  return hardDelete(id);
+};
+
 module.exports = {
   listWarehouses,
   getWarehouseById,
   syncWarehouses,
   updateWarehouseBranchMapping,
+  removeWarehouseBranchMapping,
   updateWarehouseMapping,
+  deleteWarehouse,
 };

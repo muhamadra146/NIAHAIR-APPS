@@ -1,5 +1,5 @@
 export type InvoiceStatus = "UNPAID" | "PAID" | "CANCELLED";
-export type DepositStatus = "UNPAID" | "PAID" | "PARTIAL_USED" | "USED";
+export type DepositStatus = "PENDING" | "UNPAID" | "PARTIAL" | "PAID" | "PARTIAL_USED" | "USED" | "REFUNDED" | "CANCELLED";
 
 export interface InvoiceCustomer {
   id:          string;
@@ -162,6 +162,7 @@ export interface CreateDepositInput {
   amount:        number;
   appointmentId?: string;
   notes?:        string;
+  paidAt?:       string; // YYYY-MM-DD — tanggal deposit (opsional)
 }
 
 export interface UpdateDepositInput {

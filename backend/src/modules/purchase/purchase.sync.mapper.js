@@ -28,7 +28,7 @@ const resolvePaymentTermId = (paymentTerms) => {
 /**
  * Maps a fully-included PurchaseInvoice to an Accurate purchase-invoice payload.
  */
-const mapPurchaseInvoiceToAccurate = (invoice, billNumber) => {
+const mapPurchaseInvoiceToAccurate = (invoice, billNumber, accurateBranchId = null) => {
   const syncableItems = invoice.items.filter((item) => item.item.accurateItemId);
 
   const detailItem = syncableItems.map((item) => {
@@ -55,6 +55,7 @@ const mapPurchaseInvoiceToAccurate = (invoice, billNumber) => {
     description:  invoice.notes ?? "",
     taxable:      invoice.taxable,
     inclusiveTax: invoice.inclusiveTax,
+    ...(accurateBranchId ? { branchId: accurateBranchId } : {}),
     detailItem,
   };
 

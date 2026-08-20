@@ -30,7 +30,7 @@ const buildCustomerNo = async () => {
   return `CUS-${String(maxSeq + 1).padStart(6, "0")}`;
 };
 
-const getAll = async ({ page, limit, search, isActive, syncStatus, sortBy }) => {
+const getAll = async ({ page, limit, search, isActive, syncStatus, sortBy, membershipId, hasDeposit }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
   const orderBy = resolveOrderBy(sortBy, ORDER_MAP);
 
@@ -50,6 +50,20 @@ const getAll = async ({ page, limit, search, isActive, syncStatus, sortBy }) => 
   }
 
   if (syncStatus) where.syncStatus = syncStatus;
+
+  // Filter membership: "none" = tanpa membership, string ID = membership tertentu
+  if (membershipId === "none") {
+    where.membershipId = null;
+  } else if (membershipId) {
+    where.membershipId = membershipId;
+  }
+
+  // Filter deposit: "true" = ada sisa deposit (PAID / PARTIAL_USED), "false" = tidak ada sisa
+  if (hasDeposit === "true") {
+    where.deposits = { some: { status: { in: ["PAID", "PARTIAL_USED"] } } };
+  } else if (hasDeposit === "false") {
+    where.deposits = { none: { status: { in: ["PAID", "PARTIAL_USED"] } } };
+  }
 
   const [customers, total] = await Promise.all([
     findAll({ skip, take, where, orderBy }),

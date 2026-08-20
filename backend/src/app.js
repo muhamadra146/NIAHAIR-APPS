@@ -60,6 +60,7 @@ const materialUsageItemRouter       = require("./modules/materialUsage/materialU
 const glAccountRouter               = require("./modules/glAccount/glAccount.route");
 const supplierRouter                = require("./modules/supplier/supplier.route");
 const purchaseRouter                = require("./modules/purchase/purchase.route");
+const complaintRouter               = require("./modules/complaint/complaint.route");
 
 
 const app = express();
@@ -152,6 +153,7 @@ v1.use("/material-usage-items",                 materialUsageItemRouter);
 v1.use("/gl-accounts",                          glAccountRouter);
 v1.use("/suppliers",                            supplierRouter);
 v1.use("/purchase-invoices",                    purchaseRouter);
+v1.use("/complaints",                           complaintRouter);
 
 app.use("/api/v1", v1);
 

@@ -15,6 +15,13 @@ const errorHandler = (err, req, res, next) => {
   if (err.code === "P2025") {
     return errorResponse(res, "Record not found", StatusCodes.NOT_FOUND);
   }
+  if (err.code === "P2003") {
+    return errorResponse(
+      res,
+      "Tidak bisa dihapus: data masih digunakan oleh record lain",
+      StatusCodes.CONFLICT
+    );
+  }
 
   // Express JSON parse error
   if (err.type === "entity.parse.failed") {

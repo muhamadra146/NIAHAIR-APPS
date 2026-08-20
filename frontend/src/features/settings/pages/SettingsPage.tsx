@@ -11,10 +11,10 @@ import { Pagination } from "@/components/common/Pagination";
 import {
   useEmployeeRoles, useCreateEmployeeRole, useUpdateEmployeeRole, useDeleteEmployeeRole,
   useUsers, useCreateUser, useUpdateUser, useResetUserPassword, useDeleteUser,
-  useBranches, useCreateBranch, useUpdateBranch, useDeleteBranch,
+  useBranches, useCreateBranch, useUpdateBranch, useDeleteBranch, useSyncBranchesFromAccurate, useMapBranchToAccurate,
   usePaymentMethods, useCreatePaymentMethod, useUpdatePaymentMethod, useDeletePaymentMethod,
   useCashAccounts, useCreateCashAccount, useUpdateCashAccount, useDeleteCashAccount,
-  useWarehouses, useSyncWarehouses, useUpdateWarehouseBranch, useUpdateWarehouseAccurate,
+  useWarehouses, useSyncWarehouses, useUpdateWarehouseBranch, useUpdateWarehouseAccurate, useDeleteWarehouse,
   useShiftMasters, useCreateShift, useUpdateShift, useDeleteShift,
   useAllGlAccounts, useSyncAllGlAccounts, useUpdateGlAccountUsage,
 } from "../hooks";
@@ -42,6 +42,9 @@ import { AttendanceSettingsTab } from "../components/attendance/AttendanceSettin
 import { HolidayTab }            from "../components/holiday/HolidayTab";
 
 import type { EmployeeRole, User, Branch, PaymentMethod, CashAccount, Warehouse, ShiftMaster } from "../types";
+import type { BranchSyncResult } from "../api/branch.api";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { SimpleSelect } from "@/components/ui/simple-select";
 import type { EmployeeRoleFormValues } from "../schemas/employeeRole.schema";
 import type { CreateUserFormValues, UpdateUserFormValues, ResetPasswordFormValues } from "../schemas/user.schema";
 import type { BranchFormValues } from "../schemas/branch.schema";
@@ -297,17 +300,56 @@ function BranchTab() {
   const [editBranch, setEdit]     = useState<Branch | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Accurate mapping dialog state
+  const [syncResult, setSyncResult]               = useState<BranchSyncResult | null>(null);
+  const [mappingOpen, setMappingOpen]             = useState(false);
+  const [selections, setSelections]               = useState<Record<number, string>>({});
+  const [mappingError, setMappingError]           = useState<string | null>(null);
+
   const { data, isLoading } = useBranches({ limit: 100 });
   const branches = data?.data ?? [];
 
-  const createMut = useCreateBranch();
-  const updateMut = useUpdateBranch(editBranch?.id ?? "");
-  const deleteMut = useDeleteBranch();
+  const createMut  = useCreateBranch();
+  const updateMut  = useUpdateBranch(editBranch?.id ?? "");
+  const deleteMut  = useDeleteBranch();
+  const syncMut    = useSyncBranchesFromAccurate();
+  const mapMut     = useMapBranchToAccurate();
 
   function openCreate() { setEdit(null); setFormError(null); setFormOpen(true); }
   function openEdit(b: Branch) { setEdit(b); setFormError(null); setFormOpen(true); }
   async function handleDelete(b: Branch) {
-    try { await deleteMut.mutateAsync(b.id); } catch { /* ignored */ }
+    try { await deleteMut.mutateAsync(b.id); } catch { /* error shown by hook onError toast */ }
+  }
+
+  async function handleSync() {
+    try {
+      const result = await syncMut.mutateAsync();
+      if (result.unmatched > 0) {
+        setSyncResult(result);
+        setSelections({});
+        setMappingError(null);
+        setMappingOpen(true);
+      }
+    } catch { /* toast handled by hook */ }
+  }
+
+  async function handleConfirmMapping() {
+    setMappingError(null);
+    const entries = Object.entries(selections).filter(([, branchId]) => branchId !== "");
+    if (entries.length === 0) {
+      setMappingOpen(false);
+      return;
+    }
+    try {
+      await Promise.all(
+        entries.map(([accurateId, branchId]) =>
+          mapMut.mutateAsync({ branchId, accurateBranchId: Number(accurateId) })
+        )
+      );
+      setMappingOpen(false);
+    } catch (err: unknown) {
+      setMappingError(apiErr(err, "Gagal menyimpan mapping"));
+    }
   }
 
   async function handleSubmit(values: BranchFormValues) {
@@ -338,6 +380,13 @@ function BranchTab() {
     }
   }
 
+  // Branches that are not yet mapped (no accurateBranchId)
+  const unmappedLocal = branches.filter((b) => !b.accurateBranchId);
+  const localOptions  = unmappedLocal.map((b) => ({ value: b.id, label: b.name }));
+
+  // Accurate branches that weren't auto-matched
+  const unmatchedAccurate = syncResult?.results.filter((r) => r.status === "unmatched") ?? [];
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -345,9 +394,24 @@ function BranchTab() {
           <h2 className="text-base font-semibold">Branches</h2>
           <p className="text-sm text-muted-foreground">Salon locations</p>
         </div>
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />New Branch
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleSync}
+            disabled={syncMut.isPending}
+          >
+            {syncMut.isPending ? (
+              <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent inline-block" />
+            ) : (
+              <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            )}
+            Sync Accurate
+          </Button>
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="mr-2 h-4 w-4" />New Branch
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -355,6 +419,63 @@ function BranchTab() {
           <BranchTable branches={branches} isLoading={isLoading} onEdit={openEdit} onDelete={handleDelete} />
         </CardContent>
       </Card>
+
+      {/* Manual Mapping Dialog — shown when auto-sync couldn't match all Accurate branches */}
+      <Dialog open={mappingOpen} onOpenChange={setMappingOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Mapping Manual Cabang Accurate</DialogTitle>
+            <DialogDescription>
+              {unmatchedAccurate.length} cabang dari Accurate tidak cocok secara otomatis.
+              Pilih cabang lokal yang sesuai untuk setiap nama Accurate di bawah ini.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {unmatchedAccurate.map((acc) => (
+              <div key={acc.accurateBranchId} className="grid grid-cols-2 items-center gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{acc.name}</p>
+                  <p className="text-xs text-muted-foreground">ID Accurate: {acc.accurateBranchId}</p>
+                </div>
+                <SimpleSelect
+                  value={selections[acc.accurateBranchId] ?? ""}
+                  onChange={(val) =>
+                    setSelections((prev) => ({ ...prev, [acc.accurateBranchId]: val }))
+                  }
+                  options={localOptions}
+                  placeholder="— Pilih cabang —"
+                />
+              </div>
+            ))}
+
+            {unmatchedAccurate.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Semua cabang sudah ter-mapping.
+              </p>
+            )}
+
+            {mappingError && (
+              <p className="text-sm text-destructive">{mappingError}</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMappingOpen(false)} disabled={mapMut.isPending}>
+              Lewati
+            </Button>
+            <Button
+              onClick={handleConfirmMapping}
+              disabled={mapMut.isPending || Object.values(selections).every((v) => !v)}
+            >
+              {mapMut.isPending ? (
+                <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent inline-block" />
+              ) : null}
+              Simpan Mapping
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <BranchForm
         open={formOpen}
@@ -757,6 +878,7 @@ function WarehouseTab() {
   const syncMut               = useSyncWarehouses();
   const updateBranchMut       = useUpdateWarehouseBranch(editWh?.id ?? "");
   const updateAccurateMut     = useUpdateWarehouseAccurate(editWh?.id ?? "");
+  const deleteMut             = useDeleteWarehouse();
 
   const isPending = updateBranchMut.isPending || updateAccurateMut.isPending;
 
@@ -764,6 +886,10 @@ function WarehouseTab() {
     setEditWh(wh);
     setFormError(null);
     setFormOpen(true);
+  }
+
+  async function handleDelete(wh: Warehouse) {
+    try { await deleteMut.mutateAsync(wh.id); } catch { /* error shown by hook onError toast */ }
   }
 
   async function handleSync() {
@@ -814,7 +940,7 @@ function WarehouseTab() {
 
       <Card>
         <CardContent className="p-0">
-          <WarehouseTable warehouses={warehouses} isLoading={isLoading} onEdit={openEdit} />
+          <WarehouseTable warehouses={warehouses} isLoading={isLoading} onEdit={openEdit} onDelete={handleDelete} />
         </CardContent>
       </Card>
 

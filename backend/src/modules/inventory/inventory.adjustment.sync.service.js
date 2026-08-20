@@ -2,6 +2,7 @@ const { StatusCodes }             = require("http-status-codes");
 const AppError                     = require("../../common/errors/AppError");
 const prisma                       = require("../../config/prisma");
 const { accurateRequest }          = require("../accurate/accurate.client");
+const { getAccurateBranchId }      = require("../branch/branch.repository");
 const { mapAdjustmentToAccurate }  = require("./inventory.adjustment.sync.mapper");
 
 const ACCURATE_ITEM_ADJUSTMENT_SAVE = "/item-adjustment/save.do";
@@ -22,7 +23,7 @@ const pushAdjustmentToAccurate = async (movementId) => {
       inventory: {
         select: {
           id:        true,
-          warehouse: { select: { id: true, name: true, accurateWarehouseId: true } },
+          warehouse: { select: { id: true, name: true, branchId: true, accurateWarehouseId: true } },
           item: {
             select: {
               id:            true,
@@ -88,11 +89,17 @@ const pushAdjustmentToAccurate = async (movementId) => {
   });
   const unitCostPrice = itemPrice?.costPrice ? Number(itemPrice.costPrice) : 0;
 
+  // Look up Accurate branch ID via the warehouse's branch
+  const accurateBranchId = movement.inventory.warehouse.branchId
+    ? await getAccurateBranchId(movement.inventory.warehouse.branchId)
+    : null;
+
   const payload = mapAdjustmentToAccurate({
     movement,
-    inventory:      movement.inventory,
-    glAccount:      movement.glAccount,
+    inventory:       movement.inventory,
+    glAccount:       movement.glAccount,
     unitCostPrice,
+    accurateBranchId,
   });
 
   console.log("[adjustment sync payload]", JSON.stringify(payload));

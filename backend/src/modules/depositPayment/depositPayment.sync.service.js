@@ -1,4 +1,6 @@
-const { accurateRequest } = require("../accurate/accurate.client");
+const { accurateRequest }                                     = require("../accurate/accurate.client");
+const { getAccurateBranchId }                                 = require("../branch/branch.repository");
+const prisma                                                  = require("../../config/prisma");
 const { findDepositPaymentForSync, markDepositPaymentSynced } = require("./depositPayment.sync.repository");
 const { mapDepositPaymentToAccurate }                         = require("./depositPayment.sync.mapper");
 
@@ -34,7 +36,14 @@ const syncDepositPaymentToAccurate = async (depositPaymentId) => {
     throw new Error("Cash account not synced to Accurate yet");
   }
 
-  const payload = mapDepositPaymentToAccurate(dp);
+  // Look up Accurate branch ID via the deposit's branch
+  const dpBranch = await prisma.depositPayment.findUnique({
+    where:  { id: depositPaymentId },
+    select: { deposit: { select: { branchId: true } } },
+  });
+  const accurateBranchId = await getAccurateBranchId(dpBranch?.deposit?.branchId);
+
+  const payload = mapDepositPaymentToAccurate(dp, accurateBranchId);
 
   console.log("[deposit-payment sync payload]", JSON.stringify(payload));
 

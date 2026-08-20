@@ -36,14 +36,42 @@ const update = async (id, body) => {
 
 const remove = async (id) => {
   await getById(id);
-  const usedCount = await repo.countCustomers(id);
-  if (usedCount > 0) {
+
+  // Guard: customer yang FK-nya masih menunjuk ke membership ini
+  const activeCustomerCount = await repo.countCustomers(id);
+  if (activeCustomerCount > 0) {
     throw new AppError(
-      `Tidak bisa menghapus membership yang masih digunakan oleh ${usedCount} pelanggan`,
-      StatusCodes.BAD_REQUEST
+      `Tidak bisa dihapus: ${activeCustomerCount} pelanggan masih menggunakan membership ini`,
+      StatusCodes.CONFLICT
     );
   }
-  return repo.remove(id);
+
+  // Guard: subscription ACTIVE (bukan expired/cancelled)
+  const activeSubscriptionCount = await prisma.customerMembership.count({
+    where: { membershipId: id, status: "ACTIVE" },
+  });
+  if (activeSubscriptionCount > 0) {
+    throw new AppError(
+      `Tidak bisa dihapus: ${activeSubscriptionCount} pelanggan masih memiliki subscription membership aktif`,
+      StatusCodes.CONFLICT
+    );
+  }
+
+  // Guard: invoice yang masih menggunakan membership ini
+  const invoiceCount = await prisma.invoice.count({ where: { membershipId: id } });
+  if (invoiceCount > 0) {
+    throw new AppError(
+      `Tidak bisa dihapus: ${invoiceCount} invoice masih terhubung ke membership ini`,
+      StatusCodes.CONFLICT
+    );
+  }
+
+  // Riwayat (EXPIRED/CANCELLED) bisa dihapus bersama membership dalam satu transaksi
+  return prisma.$transaction(async (tx) => {
+    await tx.membershipHistory.deleteMany({ where: { membershipId: id } });
+    await tx.customerMembership.deleteMany({ where: { membershipId: id } });
+    await tx.membership.delete({ where: { id } });
+  });
 };
 
 const getActiveMembership = (customerId) => repo.findActiveMembership(customerId);

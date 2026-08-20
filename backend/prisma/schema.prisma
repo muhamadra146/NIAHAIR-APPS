@@ -48,6 +48,9 @@ model Branch {
 
   isActive Boolean @default(true)
 
+  accurateBranchId Int?      @unique
+  lastSyncAt       DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -71,6 +74,7 @@ model Branch {
   correctionRequests    AttendanceCorrectionRequest[]
   permissionRequests    PermissionRequest[]
   sickLeaves            SickLeave[]
+  complaints            Complaint[]
 
   @@map("branches")
 }
@@ -224,6 +228,8 @@ model Employee {
   inventoryMovements    InventoryMovement[] @relation("InventoryMovementCreatedBy")
   inventoryPeriods      InventoryPeriod[]   @relation("InventoryPeriodClosedBy")
   purchaseInvoices      PurchaseInvoice[]   @relation("PurchaseInvoiceCreatedBy")
+
+  complaintsAbout Complaint[] @relation("ComplaintEmployee")
 
   @@index([roleId])
   @@index([homeBranchId])
@@ -693,7 +699,7 @@ enum InventoryPeriodStatus {
 model Warehouse {
   id String @id @default(uuid())
 
-  branchId String? @unique
+  branchId String?
 
   accurateWarehouseId Int? @unique
 
@@ -1099,6 +1105,8 @@ model Appointment {
 
   photos AppointmentPhoto[]
 
+  complaints Complaint[]
+
   @@index([customerId])
   @@index([branchId])
   @@index([visitDate])
@@ -1406,6 +1414,8 @@ model Invoice {
   overtimeCharges OvertimeCharge[]
 
   consultationNote ClientConsultationNote?
+
+  complaints Complaint[]
 
   @@index([customerId])
   @@index([branchId])
@@ -2884,4 +2894,89 @@ model PurchaseInvoiceItem {
   @@index([itemId])
   @@index([unitId])
   @@map("purchase_invoice_items")
+}
+
+
+// =====================================================
+// COMPLAINTS
+// =====================================================
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum ComplaintCategory {
+  HASIL_LAYANAN
+  SIKAP_KARYAWAN
+  WAKTU_TUNGGU
+  HARGA
+  FASILITAS
+  PRODUK
+  LAINNYA
+}
+
+enum ComplaintSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Complaint {
+  id          String @id @default(uuid())
+  complaintNo String @unique
+
+  branchId      String
+  appointmentId String
+  invoiceId     String?
+
+  // Karyawan yang dikomplain (opsional, bisa dari appointment staff)
+  employeeId String?
+
+  category    ComplaintCategory
+  severity    ComplaintSeverity @default(MEDIUM)
+  description String
+
+  status    ComplaintStatus @default(OPEN)
+  handledBy String?         // userId manager yang handle
+
+  // Follow up & komunikasi
+  followUpDate DateTime? // Tanggal Follow up
+  chatNotes    String?   // Log chat / komunikasi dengan klien
+
+  // Resolusi
+  resolutionNotes String?
+  followUpAction  String?
+  resolvedAt      DateTime?
+
+  // Perbaikan / Redo
+  repairDate      DateTime? // Tanggal Perbaikan
+  repairNotes     String?   // Keterangan hasil perbaikan
+  repairStaff     String?   // Nama hairstylist/colorist yg perbaiki
+  repairAssistant String?   // Nama asisten perbaikan
+
+  // Pemotongan komisi (diisi manual saat resolve)
+  correctedStrands          Int?
+  totalStrands              Int?
+  commissionId              String?
+  commissionDeductionAmount Decimal? @db.Decimal(18, 2)
+
+  createdBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branch      Branch      @relation(fields: [branchId], references: [id])
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  invoice     Invoice?    @relation(fields: [invoiceId], references: [id])
+  employee    Employee?   @relation("ComplaintEmployee", fields: [employeeId], references: [id])
+
+  @@index([branchId])
+  @@index([appointmentId])
+  @@index([invoiceId])
+  @@index([employeeId])
+  @@index([status])
+  @@map("complaints")
 }

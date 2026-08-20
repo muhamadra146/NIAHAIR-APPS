@@ -104,7 +104,9 @@ export function MembershipTab() {
     try {
       await deleteMut.mutateAsync(deleteId);
       setDeleteId(null);
-    } catch (err) { setError(apiErr(err)); }
+    } catch {
+      // error handled by hook's onError toast
+    }
   }
 
   return (
@@ -237,7 +239,6 @@ export function MembershipTab() {
           <p className="text-sm text-muted-foreground py-2">
             Yakin ingin menghapus membership ini? Membership yang sedang digunakan pelanggan tidak bisa dihapus.
           </p>
-          {error && <p className="text-sm text-red-600">{error}</p>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>Batal</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleteMut.isPending}>

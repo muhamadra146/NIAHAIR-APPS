@@ -17,6 +17,7 @@ const {
   updateController,
   changeStatusController,
   rescheduleController,
+  updateRescheduleController,
   deleteController,
 } = require("./appointment.controller");
 
@@ -64,6 +65,15 @@ router.patch(
   authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.ADMIN, ROLES.MANAGER, ROLES.CASHIER),
   validate(rescheduleSchema),
   rescheduleController
+);
+
+// Update destinasi reschedule yang sudah ada (ubah newVisitDate di history) — tidak membuat entri baru
+router.patch(
+  "/:id/reschedule/:historyId",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  validate(rescheduleSchema),
+  updateRescheduleController
 );
 
 module.exports = router;

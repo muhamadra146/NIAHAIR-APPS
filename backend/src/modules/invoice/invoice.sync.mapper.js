@@ -19,7 +19,8 @@ const formatDate = (date) => {
 // warehouse: { accurateWarehouseId: Int } — pass null for service-only invoices
 // accurateId: Int — pass to UPDATE an existing Accurate invoice, null to CREATE
 // currentAccurateItemIds: Int[] — Accurate line item IDs to delete before re-adding
-const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccurateItemIds = []) => {
+// accurateBranchId: Int — Accurate branch ID; required for multi-branch Accurate setup
+const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccurateItemIds = [], accurateBranchId = null) => {
   // On UPDATE: delete ALL current Accurate line items (fetched live from Accurate in service),
   // then add all current items fresh. "Replace all" strategy — reliable regardless of DB state.
   const deleteEntries = currentAccurateItemIds.map((id) => ({ id, _status: "DELETE" }));
@@ -134,13 +135,14 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
 
   const payload = {
     ...(accurateId ? { id: accurateId } : {}),
-    customerNo:  invoice.customer.customerNo,
-    transDate:   formatDate(invoice.invoiceDate),
-    description: invoice.notes
+    customerNo:   invoice.customer.customerNo,
+    transDate:    formatDate(invoice.invoiceDate),
+    description:  invoice.notes
       ? `Invoice ${invoice.invoiceNo}\n${invoice.notes}`
       : `Invoice ${invoice.invoiceNo}`,
-    taxable:     invoice.taxable,
+    taxable:      invoice.taxable,
     inclusiveTax: invoice.inclusiveTax,
+    ...(accurateBranchId ? { branchId: accurateBranchId } : {}),
     detailItem,
   };
 

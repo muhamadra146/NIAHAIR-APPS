@@ -24,6 +24,7 @@ import {
   Thermometer,
   Sparkles,
   ShoppingCart,
+  AlertCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -111,6 +112,14 @@ export const sidebarNav: NavItem[] = [
     label: "Catatan Klien",
     href:  "/consultation-notes",
     icon:  NotebookPen,
+    roles: ALL_ROLES,
+    group: "Operasional",
+  },
+
+  {
+    label: "Komplain Client",
+    href:  "/complaints",
+    icon:  AlertCircle,
     roles: ALL_ROLES,
     group: "Operasional",
   },
@@ -218,13 +227,14 @@ export const sidebarNav: NavItem[] = [
     roles: ALL_ROLES,
     group: "Kehadiran",
   },
-  {
-    label: "Koreksi Absen",
-    href:  "/attendance-corrections",
-    icon:  RotateCcw,
-    roles: ALL_ROLES,
-    group: "Kehadiran",
-  },
+  // Koreksi Absen disembunyikan — manager langsung edit absen via manualSet
+  // {
+  //   label: "Koreksi Absen",
+  //   href:  "/attendance-corrections",
+  //   icon:  RotateCcw,
+  //   roles: ALL_ROLES,
+  //   group: "Kehadiran",
+  // },
 
   // ── Keuangan Saya ─────────────────────────────────────────────────────────
   {

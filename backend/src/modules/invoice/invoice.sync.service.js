@@ -1,5 +1,6 @@
-const { accurateRequest }        = require("../accurate/accurate.client");
+const { accurateRequest }         = require("../accurate/accurate.client");
 const { findWarehouseByBranchId } = require("../inventory/inventory.repository");
+const { getAccurateBranchId }     = require("../branch/branch.repository");
 const {
   findInvoiceForSync,
   markInvoiceSynced,
@@ -67,7 +68,10 @@ const syncInvoiceToAccurate = async (invoiceId) => {
     console.log(`[invoice sync] current Accurate items: ${currentAccurateItemIds.join(",")}`);
   }
 
-  const payload = mapInvoiceToAccurate(invoice, warehouse, isUpdate ? invoice.accurateInvoiceId : null, currentAccurateItemIds);
+  // Look up Accurate branch ID for this invoice's branch
+  const accurateBranchId = await getAccurateBranchId(invoice.branchId);
+
+  const payload = mapInvoiceToAccurate(invoice, warehouse, isUpdate ? invoice.accurateInvoiceId : null, currentAccurateItemIds, accurateBranchId);
 
   const response = await accurateRequest(ACCURATE_INVOICE_SAVE, {
     method: "POST",

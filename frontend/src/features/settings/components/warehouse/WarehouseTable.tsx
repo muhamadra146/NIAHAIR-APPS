@@ -1,4 +1,5 @@
-import { Pencil } from "lucide-react";
+import { useState } from "react";
+import { Pencil, Trash2, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,6 +9,7 @@ interface Props {
   warehouses: Warehouse[];
   isLoading:  boolean;
   onEdit:     (warehouse: Warehouse) => void;
+  onDelete:   (warehouse: Warehouse) => void;
 }
 
 function formatSync(lastSyncAt: string | null) {
@@ -36,7 +38,8 @@ function EmptyState() {
 }
 
 /* ── Mobile card ─────────────────────────────────────────────────── */
-function MobileCardList({ warehouses, onEdit }: { warehouses: Warehouse[]; onEdit: (w: Warehouse) => void }) {
+function MobileCardList({ warehouses, onEdit, onDelete }: Omit<Props, "isLoading">) {
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   return (
     <div className="divide-y divide-border md:hidden">
       {warehouses.map((w) => (
@@ -48,10 +51,37 @@ function MobileCardList({ warehouses, onEdit }: { warehouses: Warehouse[]; onEdi
                 <p className="font-mono text-xs text-muted-foreground">ID: {w.accurateWarehouseId}</p>
               )}
             </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => onEdit(w)}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
+            <div className="flex items-center gap-1 shrink-0">
+              {confirmId === w.id ? (
+                <>
+                  <Button variant="destructive" size="sm" className="h-7 text-xs px-2"
+                    onClick={() => { onDelete(w); setConfirmId(null); }}>
+                    Hapus
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs px-2"
+                    onClick={() => setConfirmId(null)}>
+                    Batal
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(w)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => setConfirmId(w.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
+          {confirmId === w.id && (
+            <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Warehouse akan <strong>dihapus permanen</strong>. Lanjutkan?
+            </div>
+          )}
           <div className="mt-2 flex flex-wrap gap-1">
             {w.branch
               ? <Badge variant="secondary" className="text-xs">{w.branch.name}</Badge>
@@ -71,7 +101,8 @@ function MobileCardList({ warehouses, onEdit }: { warehouses: Warehouse[]; onEdi
 }
 
 /* ── Desktop table ───────────────────────────────────────────────── */
-function DesktopTable({ warehouses, onEdit }: { warehouses: Warehouse[]; onEdit: (w: Warehouse) => void }) {
+function DesktopTable({ warehouses, onEdit, onDelete }: Omit<Props, "isLoading">) {
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   return (
     <div className="hidden md:block">
       <table className="w-full text-sm">
@@ -82,7 +113,7 @@ function DesktopTable({ warehouses, onEdit }: { warehouses: Warehouse[]; onEdit:
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Branch</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Last Sync</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actions</th>
+            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -104,10 +135,33 @@ function DesktopTable({ warehouses, onEdit }: { warehouses: Warehouse[]; onEdit:
                 </Badge>
               </td>
               <td className="px-4 py-3 text-muted-foreground">{formatSync(w.lastSyncAt)}</td>
-              <td className="px-4 py-3">
-                <Button variant="ghost" size="icon" onClick={() => onEdit(w)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
+              <td className="px-4 py-3 text-right">
+                {confirmId === w.id ? (
+                  <div className="flex items-center justify-end gap-2">
+                    <span className="text-xs text-red-600 flex items-center gap-1">
+                      <AlertTriangle className="h-3.5 w-3.5" /> Hapus permanen?
+                    </span>
+                    <Button variant="destructive" size="sm" className="h-7 text-xs"
+                      onClick={() => { onDelete(w); setConfirmId(null); }}>
+                      Ya
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 text-xs"
+                      onClick={() => setConfirmId(null)}>
+                      Batal
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => onEdit(w)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon"
+                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => setConfirmId(w.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </td>
             </tr>
           ))}
@@ -117,13 +171,13 @@ function DesktopTable({ warehouses, onEdit }: { warehouses: Warehouse[]; onEdit:
   );
 }
 
-export function WarehouseTable({ warehouses, isLoading, onEdit }: Props) {
+export function WarehouseTable({ warehouses, isLoading, onEdit, onDelete }: Props) {
   if (isLoading) return <LoadingState />;
   if (warehouses.length === 0) return <EmptyState />;
   return (
     <>
-      <MobileCardList warehouses={warehouses} onEdit={onEdit} />
-      <DesktopTable   warehouses={warehouses} onEdit={onEdit} />
+      <MobileCardList warehouses={warehouses} onEdit={onEdit} onDelete={onDelete} />
+      <DesktopTable   warehouses={warehouses} onEdit={onEdit} onDelete={onDelete} />
     </>
   );
 }

@@ -25,6 +25,7 @@ const {
   updateWithStaff,
   changeStatusWithTransaction,
   rescheduleWithTransaction,
+  updateRescheduleHistoryWithTransaction,
 } = require("./appointment.repository");
 
 // ── Status transition rules ───────────────────────────────────────────
@@ -59,7 +60,7 @@ const buildBookingNo = async () => {
 
 // ── List ──────────────────────────────────────────────────────────────
 
-const listAppointments = async ({ page, limit, customerId, branchId, status, startDate, endDate, sortBy, employeeId }) => {
+const listAppointments = async ({ page, limit, customerId, branchId, status, startDate, endDate, sortBy, employeeId, search, rescheduledFromDate }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
   const orderBy = resolveOrderBy(sortBy, ORDER_MAP, "-visitDate");
 
@@ -68,8 +69,21 @@ const listAppointments = async ({ page, limit, customerId, branchId, status, sta
   if (branchId)    where.branchId    = branchId;
   if (status)      where.status      = status;
   if (employeeId)  where.staffs      = { some: { employeeId } };
+  if (search)      where.OR          = [
+    { bookingNo: { contains: search, mode: "insensitive" } },
+    { customer:  { name: { contains: search, mode: "insensitive" } } },
+  ];
 
-  if (startDate || endDate) {
+  if (rescheduledFromDate) {
+    // Cari appointment yang pernah di-reschedule DARI tanggal ini
+    // (oldVisitDate = tanggal ini, bukan visitDate saat ini)
+    const start = new Date(rescheduledFromDate + "T00:00:00+07:00");
+    const end   = new Date(rescheduledFromDate + "T23:59:59+07:00");
+    where.rescheduleHistories = {
+      some: { oldVisitDate: { gte: start, lte: end } },
+    };
+    // Tidak filter by visitDate — appointment ini sudah pindah ke tanggal lain
+  } else if (startDate || endDate) {
     where.visitDate = {};
     if (startDate) where.visitDate.gte = new Date(startDate);
     if (endDate)   where.visitDate.lte = new Date(endDate);
@@ -256,6 +270,38 @@ const rescheduleAppointment = async (id, body, userId) => {
   return rescheduleWithTransaction({ appointment, newVisitDate, newStartTime, newEndTime, reason, userId });
 };
 
+// ── Update reschedule (ubah destinasi entri history yang sudah ada) ──────
+
+const updateRescheduleById = async (appointmentId, historyId, body) => {
+  const appointment = await findById(appointmentId);
+  if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+
+  if (["COMPLETED", "CANCELLED"].includes(appointment.status)) {
+    throw new AppError(
+      `Cannot modify reschedule of a ${appointment.status.toLowerCase()} appointment`,
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
+  // Pastikan history ada dan milik appointment ini
+  const history = (appointment.rescheduleHistories ?? []).find((h) => h.id === historyId);
+  if (!history) throw new AppError("Reschedule history not found", StatusCodes.NOT_FOUND);
+
+  const { visitDate, startTime, endTime, reason } = body;
+  const newVisitDate = new Date(visitDate);
+  const newStartTime = combineDatetime(visitDate, startTime);
+  const newEndTime   = combineDatetime(visitDate, endTime);
+
+  return updateRescheduleHistoryWithTransaction({
+    appointmentId,
+    historyId,
+    newVisitDate,
+    newStartTime,
+    newEndTime,
+    reason,
+  });
+};
+
 const deleteAppointmentById = async (id) => {
   const appointment = await findById(id);
   if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
@@ -286,5 +332,6 @@ module.exports = {
   updateAppointmentById,
   changeAppointmentStatus,
   rescheduleAppointment,
+  updateRescheduleById,
   deleteAppointmentById,
 };

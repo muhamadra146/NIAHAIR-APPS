@@ -17,6 +17,15 @@ export const updateWarehouseBranch = async (id: string, input: UpdateWarehouseBr
   return data.data;
 };
 
+export const removeWarehouseFromBranch = async (id: string): Promise<Warehouse> => {
+  const { data } = await api.delete<ApiResponse<Warehouse>>(`/warehouses/${id}/branch`);
+  return data.data;
+};
+
+export const deleteWarehouse = async (id: string): Promise<void> => {
+  await api.delete(`/warehouses/${id}`);
+};
+
 export const updateWarehouseAccurate = async (id: string, input: UpdateWarehouseAccurateInput): Promise<Warehouse> => {
   const { data } = await api.put<ApiResponse<Warehouse>>(`/warehouses/${id}/accurate-mapping`, input);
   return data.data;

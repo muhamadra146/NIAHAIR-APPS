@@ -10,17 +10,18 @@ const CASH_ACCOUNT_USAGE = "CASH_ACCOUNT";
 const ACCURATE_GLACCOUNT_LIST = "/glaccount/list.do";
 const ACCURATE_FIELDS = "id,no,name,suspended,accountType";
 
-const syncGlAccountsFromAccurate = async () => {
+const syncGlAccountsFromAccurate = async ({ accurateBranchId } = {}) => {
   let page      = 1;
   let pageCount = 1;
   let created   = 0;
   let updated   = 0;
   let failed    = 0;
   const processedIds = new Set();
+  const branchFilter = accurateBranchId ? `&branchId=${accurateBranchId}` : "";
 
   do {
     const response = await accurateRequest(
-      `${ACCURATE_GLACCOUNT_LIST}?fields=${ACCURATE_FIELDS}&sp.page=${page}`
+      `${ACCURATE_GLACCOUNT_LIST}?fields=${ACCURATE_FIELDS}&sp.page=${page}${branchFilter}`
     );
 
     if (!response.s) {

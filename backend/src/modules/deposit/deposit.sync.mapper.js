@@ -10,7 +10,7 @@ const formatDate = (date) => {
   return `${dd}/${mm}/${d.getFullYear()}`;
 };
 
-const mapDepositToAccurate = (deposit) => ({
+const mapDepositToAccurate = (deposit, accurateBranchId = null) => ({
   customerNo:       deposit.customer.customerNo,
   transDate:        formatDate(deposit.createdAt),
   salesDownPayment: true,
@@ -22,6 +22,7 @@ const mapDepositToAccurate = (deposit) => ({
       : `Deposit ${deposit.customer.customerNo ?? deposit.id}`;
     return deposit.notes ? `${base}\n${deposit.notes}` : base;
   })(),
+  ...(accurateBranchId ? { branchId: accurateBranchId } : {}),
 });
 
 module.exports = { mapDepositToAccurate };

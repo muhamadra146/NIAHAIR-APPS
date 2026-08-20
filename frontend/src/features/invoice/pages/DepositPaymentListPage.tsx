@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Plus, Search, Upload, X, ImageIcon, Trash2 } from "lucide-react";
+import { ChevronRight, Plus, Search, Upload, X, ImageIcon, Trash2, Eye } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";

@@ -14,6 +14,7 @@ const findTransferForSync = (id) =>
         select: {
           id:                  true,
           name:                true,
+          branchId:            true,
           accurateWarehouseId: true,
         },
       },
@@ -21,6 +22,7 @@ const findTransferForSync = (id) =>
         select: {
           id:                  true,
           name:                true,
+          branchId:            true,
           accurateWarehouseId: true,
         },
       },

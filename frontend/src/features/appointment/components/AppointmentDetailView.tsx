@@ -7,9 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Home, Store, Plus, Loader2, Trash2, Upload, X, ImageIcon, FileText, ExternalLink } from "lucide-react";
+import { Home, Store, Plus, Loader2, Trash2, Upload, X, ImageIcon, FileText, ExternalLink, CalendarClock, CalendarDays, CheckCircle, XCircle, AlertCircle, Clock } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import { AppointmentStatusBadge } from "./AppointmentStatusBadge";
 import { fetchDeposits, linkDepositToAppointment, fetchInvoices } from "@/features/invoice/api";
 import { CreateInvoiceDialog } from "@/features/invoice/components/CreateInvoiceDialog";
 import { useAuthStore } from "@/stores/authStore";
@@ -21,7 +20,7 @@ import {
   type AppointmentPhotoType,
 } from "../api/appointment.api";
 import { toast } from "@/lib/toast";
-import type { Appointment } from "../types";
+import type { Appointment, AppointmentStatusHistory, AppointmentRescheduleHistory } from "../types";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -116,30 +115,111 @@ function StaffTab({ a }: { a: Appointment }) {
   );
 }
 
+// ── History helpers ───────────────────────────────────────────────────
+
+const HISTORY_STATUS_ICON: Partial<Record<string, React.ReactNode>> = {
+  BOOKED:      <CalendarDays className="h-3.5 w-3.5" />,
+  CONFIRMED:   <CheckCircle  className="h-3.5 w-3.5" />,
+  CHECK_IN:    <CheckCircle  className="h-3.5 w-3.5" />,
+  IN_PROGRESS: <Clock        className="h-3.5 w-3.5" />,
+  COMPLETED:   <CheckCircle  className="h-3.5 w-3.5" />,
+  CANCELLED:   <XCircle      className="h-3.5 w-3.5" />,
+  NO_SHOW:     <AlertCircle  className="h-3.5 w-3.5" />,
+};
+
+const HISTORY_STATUS_COLOR: Partial<Record<string, string>> = {
+  BOOKED:      "bg-rose-50 text-rose-600 border-rose-200",
+  CONFIRMED:   "bg-blue-50 text-blue-600 border-blue-200",
+  CHECK_IN:    "bg-violet-50 text-violet-600 border-violet-200",
+  IN_PROGRESS: "bg-amber-50 text-amber-600 border-amber-200",
+  COMPLETED:   "bg-emerald-50 text-emerald-600 border-emerald-200",
+  CANCELLED:   "bg-red-50 text-red-600 border-red-200",
+  NO_SHOW:     "bg-slate-50 text-slate-600 border-slate-200",
+};
+
+function fmtDt(iso: string | null | undefined) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("id-ID", {
+    day: "numeric", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+function fmtFullDate(iso: string) {
+  return new Date(iso).toLocaleDateString("id-ID", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+}
+function padZ(n: number) { return String(n).padStart(2, "0"); }
+function toHHMM(iso: string) {
+  const d = new Date(iso);
+  return `${padZ(d.getHours())}:${padZ(d.getMinutes())}`;
+}
+
 function HistoryTab({ a }: { a: Appointment }) {
-  if (a.statusHistories.length === 0) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">No history.</p>;
+  type TimelineEvent =
+    | { kind: "status";     ts: string; entry: AppointmentStatusHistory }
+    | { kind: "reschedule"; ts: string; entry: AppointmentRescheduleHistory };
+
+  const events: TimelineEvent[] = [
+    ...a.statusHistories.map((e) => ({ kind: "status" as const, ts: e.createdAt, entry: e })),
+    ...(a.rescheduleHistories ?? []).map((e) => ({ kind: "reschedule" as const, ts: e.createdAt, entry: e })),
+  ].sort((x, y) => new Date(x.ts).getTime() - new Date(y.ts).getTime());
+
+  if (events.length === 0) {
+    return <p className="text-sm text-slate-400 py-6 text-center">Belum ada riwayat.</p>;
   }
+
   return (
-    <div className="py-2">
-      <ol className="relative border-l border-border ml-3 space-y-4">
-        {a.statusHistories.map((h) => (
-          <li key={h.id} className="ml-4">
-            <div className="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full border border-background bg-muted-foreground" />
-            <div className="flex flex-wrap items-center gap-2">
-              {h.oldStatus
-                ? <><AppointmentStatusBadge status={h.oldStatus} /><span className="text-xs text-muted-foreground">→</span></>
-                : null}
-              <AppointmentStatusBadge status={h.newStatus} />
+    <ol className="relative border-l border-slate-200 space-y-6 pl-6 py-4">
+      {events.map((ev, i) => {
+        if (ev.kind === "status") {
+          const h   = ev.entry as AppointmentStatusHistory;
+          const icon = HISTORY_STATUS_ICON[h.newStatus] ?? <Clock className="h-3.5 w-3.5" />;
+          const cls  = HISTORY_STATUS_COLOR[h.newStatus] ?? "bg-slate-50 text-slate-600 border-slate-200";
+          return (
+            <li key={i} className="relative">
+              <span className={`absolute -left-9 flex h-6 w-6 items-center justify-center rounded-full border ${cls}`}>
+                {icon}
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">
+                  {h.oldStatus
+                    ? `${h.oldStatus} → ${h.newStatus}`
+                    : `Booking dibuat · ${h.newStatus}`}
+                </p>
+                {h.notes && <p className="text-xs text-slate-500 mt-0.5 italic">"{h.notes}"</p>}
+                {h.newStatus === "CANCELLED" && a.cancelReason && (
+                  <p className="text-xs text-red-600 mt-0.5">Alasan: {a.cancelReason}</p>
+                )}
+                <p className="text-xs text-slate-400 mt-1">{fmtDt(h.createdAt)}</p>
+              </div>
+            </li>
+          );
+        }
+
+        const r = ev.entry as AppointmentRescheduleHistory;
+        return (
+          <li key={i} className="relative">
+            <span className="absolute -left-9 flex h-6 w-6 items-center justify-center rounded-full border bg-indigo-50 text-indigo-600 border-indigo-200">
+              <CalendarClock className="h-3.5 w-3.5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Reschedule</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Dari: {fmtFullDate(r.oldVisitDate)}, {toHHMM(r.oldStartTime)}–{toHHMM(r.oldEndTime)}
+              </p>
+              <p className="text-xs text-indigo-600 mt-0.5">
+                Ke: {fmtFullDate(r.newVisitDate)}, {toHHMM(r.newStartTime)}–{toHHMM(r.newEndTime)}
+              </p>
+              {r.reason && (
+                <p className="text-xs text-slate-500 mt-0.5 italic">Alasan: "{r.reason}"</p>
+              )}
+              <p className="text-xs text-slate-400 mt-1">{fmtDt(r.createdAt)}</p>
             </div>
-            {h.notes && <p className="mt-1 text-xs text-muted-foreground">{h.notes}</p>}
-            <time className="mt-0.5 block text-xs text-muted-foreground">
-              {new Date(h.createdAt).toLocaleString("id-ID")}
-            </time>
           </li>
-        ))}
-      </ol>
-    </div>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -719,7 +799,7 @@ export function AppointmentDetailView({ appointment }: { appointment: Appointmen
           Staff{appointment.staffs.length > 0 && ` (${appointment.staffs.length})`}
         </TabsTrigger>
         <TabsTrigger value="dp">DP</TabsTrigger>
-        <TabsTrigger value="history">History</TabsTrigger>
+        <TabsTrigger value="history">Riwayat</TabsTrigger>
         <TabsTrigger value="invoice">Invoice</TabsTrigger>
       </TabsList>
       <TabsContent value="details">  <DetailsTab a={appointment} /></TabsContent>

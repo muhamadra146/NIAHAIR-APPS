@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Plus, Search, ArrowRight, Eye, Trash2 } from "lucide-react";
+import { Plus, Search, ArrowRight, Eye, Trash2, Link2, Clock } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,20 +14,28 @@ import { formatDate, formatCurrency } from "@/lib/utils";
 import { useDeposits, useCreateDeposit, useDeleteDeposit, useDepositSummary } from "../hooks";
 import type { DepositStatus, Deposit } from "../types";
 
-const ALL_STATUSES: DepositStatus[] = ["UNPAID", "PAID", "PARTIAL_USED", "USED"];
+const ALL_STATUSES: DepositStatus[] = ["UNPAID", "PAID", "PARTIAL_USED", "USED", "CANCELLED", "REFUNDED"];
 
 const STATUS_LABEL: Record<string, string> = {
+  PENDING:      "Menunggu",
   UNPAID:       "Belum Dibayar",
+  PARTIAL:      "Sebagian Dibayar",
   PAID:         "Aktif",
   PARTIAL_USED: "Sebagian Terpakai",
   USED:         "Habis",
+  CANCELLED:    "Dibatalkan",
+  REFUNDED:     "Dikembalikan",
 };
 
 const STATUS_BADGE: Record<string, string> = {
+  PENDING:      "bg-orange-50 text-orange-700 border-orange-200",
   UNPAID:       "bg-yellow-50 text-yellow-700 border-yellow-200",
+  PARTIAL:      "bg-amber-50 text-amber-700 border-amber-200",
   PAID:         "bg-emerald-50 text-emerald-700 border-emerald-200",
   PARTIAL_USED: "bg-blue-50 text-blue-700 border-blue-200",
   USED:         "bg-slate-50 text-slate-500 border-slate-200",
+  CANCELLED:    "bg-red-50 text-red-500 border-red-200",
+  REFUNDED:     "bg-purple-50 text-purple-600 border-purple-200",
 };
 
 const CAN_DELETE: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
@@ -258,6 +266,7 @@ export function DepositListPage() {
                       <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Terpakai</th>
                       <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Sisa</th>
                       <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                      <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500" title="Status sinkronisasi Accurate">Sync</th>
                       <th className="px-5 py-3" />
                     </tr>
                   </thead>
@@ -293,7 +302,12 @@ export function DepositListPage() {
         open={formOpen}
         onOpenChange={setFormOpen}
         onSubmit={async (customerId, customerName, amount, notes, payDate) => {
-          const result = await createMutation.mutateAsync({ customerId, amount, notes: notes || undefined });
+          const result = await createMutation.mutateAsync({
+            customerId,
+            amount,
+            notes:  notes  || undefined,
+            paidAt: payDate || undefined,
+          });
           setFormOpen(false);
           setCreatedDeposit({ id: (result as Deposit).id, name: customerName, amount: String(amount), date: payDate });
         }}
@@ -441,6 +455,17 @@ function DepositRow({ deposit, canDelete, onDelete }: {
         >
           {STATUS_LABEL[deposit.status] ?? deposit.status}
         </Badge>
+      </td>
+      <td className="px-5 py-4 text-center">
+        {deposit.accurateDepositId ? (
+          <span title={`Accurate: ${deposit.accurateDepositNumber ?? deposit.accurateDepositId}`}>
+            <Link2 className="h-4 w-4 text-emerald-500 inline-block" />
+          </span>
+        ) : (
+          <span title="Belum disinkronkan ke Accurate">
+            <Clock className="h-4 w-4 text-slate-300 inline-block" />
+          </span>
+        )}
       </td>
       <td className="px-5 py-4">
         <div className="flex items-center gap-1">

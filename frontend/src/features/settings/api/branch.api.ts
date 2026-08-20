@@ -27,3 +27,21 @@ export const updateBranch = async (id: string, input: UpdateBranchInput): Promis
 export const deleteBranch = async (id: string): Promise<void> => {
   await api.delete(`/branches/${id}`);
 };
+
+export interface BranchSyncResult {
+  total: number;
+  matched: number;
+  unmatched: number;
+  failed: number;
+  results: { accurateBranchId: number; name: string; localId?: string; status: string; hint?: string }[];
+}
+
+export const syncBranchesFromAccurate = async (): Promise<BranchSyncResult> => {
+  const { data } = await api.post<{ data: BranchSyncResult }>("/branches/sync-accurate");
+  return data.data;
+};
+
+export const mapBranchToAccurate = async (branchId: string, accurateBranchId: number): Promise<Branch> => {
+  const { data } = await api.put<ApiResponse<Branch>>(`/branches/${branchId}/accurate-mapping`, { accurateBranchId });
+  return data.data;
+};

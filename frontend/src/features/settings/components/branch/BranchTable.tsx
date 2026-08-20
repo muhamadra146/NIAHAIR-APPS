@@ -1,8 +1,25 @@
 import { useState } from "react";
-import { Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { Pencil, Trash2, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Branch } from "../../types";
+
+function AccurateBadge({ accurateBranchId }: { accurateBranchId: number | null }) {
+  if (accurateBranchId) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        ID {accurateBranchId}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      <XCircle className="h-3.5 w-3.5" />
+      Belum mapped
+    </span>
+  );
+}
 
 interface Props { branches: Branch[]; isLoading: boolean; onEdit: (b: Branch) => void; onDelete: (b: Branch) => void }
 
@@ -52,7 +69,7 @@ function MobileCardList({ branches, onEdit, onDelete }: Omit<Props, "isLoading">
           {confirmId === b.id && (
             <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              Cabang akan dinonaktifkan. Konfirmasi?
+              Cabang akan <strong>dihapus permanen</strong>. Data tidak bisa dikembalikan!
             </div>
           )}
         </div>
@@ -72,6 +89,7 @@ function DesktopTable({ branches, onEdit, onDelete }: Omit<Props, "isLoading">) 
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">City</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Phone</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Accurate</th>
             <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
           </tr>
         </thead>
@@ -82,11 +100,12 @@ function DesktopTable({ branches, onEdit, onDelete }: Omit<Props, "isLoading">) 
               <td className="px-4 py-3 font-medium">{b.name}</td>
               <td className="px-4 py-3 text-muted-foreground">{b.city ?? "—"}</td>
               <td className="px-4 py-3 text-muted-foreground">{b.phone ?? "—"}</td>
+              <td className="px-4 py-3"><AccurateBadge accurateBranchId={b.accurateBranchId} /></td>
               <td className="px-4 py-3 text-right">
                 {confirmId === b.id ? (
                   <div className="flex items-center justify-end gap-2">
                     <span className="text-xs text-red-600 flex items-center gap-1">
-                      <AlertTriangle className="h-3.5 w-3.5" /> Nonaktifkan?
+                      <AlertTriangle className="h-3.5 w-3.5" /> Hapus permanen?
                     </span>
                     <Button variant="destructive" size="sm" className="h-7 text-xs"
                       onClick={() => { onDelete(b); setConfirmId(null); }}>

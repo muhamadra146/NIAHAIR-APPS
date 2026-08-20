@@ -10,8 +10,14 @@ const {
   createController,
   updateController,
   deleteController,
+  syncFromAccurateController,
+  mapToAccurateController,
 } = require("./branch.controller");
 const router = Router();
+
+// Accurate sync — must be BEFORE /:id routes
+router.post("/sync-accurate", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), syncFromAccurateController);
+router.put("/:id/accurate-mapping", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), mapToAccurateController);
 
 // CRUD routes
 router.get("/", authenticate, getAllController);

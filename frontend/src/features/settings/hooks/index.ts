@@ -8,7 +8,7 @@ import {
 import { fetchEmployeeRoles, createEmployeeRole, updateEmployeeRole, deleteEmployeeRole } from "../api/employeeRole.api";
 import { fetchUsers, createUser, updateUser, resetUserPassword, deleteUser } from "../api/user.api";
 import { fetchUserRoles } from "../api/userRole.api";
-import { fetchBranches, fetchAllBranches, createBranch, updateBranch, deleteBranch } from "../api/branch.api";
+import { fetchBranches, fetchAllBranches, createBranch, updateBranch, deleteBranch, syncBranchesFromAccurate, mapBranchToAccurate } from "../api/branch.api";
 import {
   fetchPaymentMethods, createPaymentMethod, updatePaymentMethod, deletePaymentMethod,
 } from "../api/paymentMethod.api";
@@ -17,7 +17,7 @@ import {
   syncCashAccounts,
 } from "../api/cashAccount.api";
 import {
-  fetchWarehouses, syncWarehouses, updateWarehouseBranch, updateWarehouseAccurate,
+  fetchWarehouses, syncWarehouses, updateWarehouseBranch, removeWarehouseFromBranch, updateWarehouseAccurate, deleteWarehouse,
 } from "../api/warehouse.api";
 import { fetchSalarySettings, createSalarySetting, updateSalarySetting } from "../api/salary.api";
 import { fetchLoansByEmployee, fetchLoans, createLoan, updateLoan, cancelLoan, addRepayment } from "../api/loan.api";
@@ -185,7 +185,40 @@ export const useDeleteBranch = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteBranch(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["branches"] }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["branches"] });
+      toast.success("Cabang berhasil dihapus");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+};
+
+export const useSyncBranchesFromAccurate = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: syncBranchesFromAccurate,
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ["branches"] });
+      if (result.unmatched > 0) {
+        toast.success(`Sync selesai: ${result.matched} ter-mapping, ${result.unmatched} perlu mapping manual`);
+      } else {
+        toast.success(`Sync selesai: semua ${result.matched} cabang ter-mapping`);
+      }
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+};
+
+export const useMapBranchToAccurate = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ branchId, accurateBranchId }: { branchId: string; accurateBranchId: number }) =>
+      mapBranchToAccurate(branchId, accurateBranchId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["branches"] });
+      toast.success("Mapping berhasil disimpan");
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 };
 
@@ -281,6 +314,30 @@ export const useUpdateWarehouseBranch = (id: string) => {
   return useMutation({
     mutationFn: (input: UpdateWarehouseBranchInput) => updateWarehouseBranch(id, input),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["warehouses"] }); },
+  });
+};
+
+export const useDeleteWarehouse = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteWarehouse(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["warehouses"] });
+      toast.success("Warehouse berhasil dihapus");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+};
+
+export const useRemoveWarehouseFromBranch = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (warehouseId: string) => removeWarehouseFromBranch(warehouseId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["warehouses"] });
+      toast.success("Warehouse dilepas dari cabang");
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 };
 
@@ -461,7 +518,11 @@ export const useDeleteMembership = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteMembership(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["memberships"] }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["memberships"] });
+      toast.success("Membership berhasil dihapus");
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 };
 

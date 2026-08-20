@@ -1,13 +1,16 @@
-const { StatusCodes }   = require("http-status-codes");
-const AppError          = require("../../common/errors/AppError");
+'use strict';
+
+const { StatusCodes }     = require("http-status-codes");
+const AppError            = require("../../common/errors/AppError");
 const { accurateRequest } = require("../accurate/accurate.client");
 const { upsertFromAccurate } = require("./warehouse.repository");
 
 const ACCURATE_WAREHOUSE_LIST = "/warehouse/list.do";
-// Request only the fields we use — less payload, faster response
-const ACCURATE_FIELDS = "id,name,suspended";
+const ACCURATE_FIELDS         = "id,name,suspended";
 
-const syncWarehousesFromAccurate = async () => {
+// Accurate warehouses do NOT carry branch info — branch assignment is manual.
+
+const syncWarehousesFromAccurate = async ({ accurateBranchId } = {}) => {
   let page      = 1;
   let pageCount = 1;
   let created   = 0;
@@ -15,10 +18,11 @@ const syncWarehousesFromAccurate = async () => {
   let failed    = 0;
 
   const processedIds = new Set();
+  const branchFilter = accurateBranchId ? `&branchId=${accurateBranchId}` : "";
 
   do {
     const response = await accurateRequest(
-      `${ACCURATE_WAREHOUSE_LIST}?fields=${ACCURATE_FIELDS}&sp.page=${page}`
+      `${ACCURATE_WAREHOUSE_LIST}?fields=${ACCURATE_FIELDS}&sp.page=${page}${branchFilter}`
     );
 
     if (!response.s) {
@@ -47,7 +51,6 @@ const syncWarehousesFromAccurate = async () => {
           isActive: !item.suspended,
         });
 
-        // upsert returns the row; if createdAt === updatedAt it was just created
         const isNew = result.createdAt.getTime() === result.updatedAt.getTime();
         if (isNew) {
           created++;

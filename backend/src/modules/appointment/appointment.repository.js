@@ -173,10 +173,35 @@ const rescheduleWithTransaction = ({ appointment, newVisitDate, newStartTime, ne
 
     await tx.appointment.update({
       where: { id: appointment.id },
-      data:  { visitDate: newVisitDate, startTime: newStartTime, endTime: newEndTime },
+      data:  {
+        visitDate:  newVisitDate,
+        startTime:  newStartTime,
+        endTime:    newEndTime,
+        status:     "BOOKED",   // Reset ke BOOKED setelah reschedule — appointment harus mulai dari awal di tanggal baru
+        cancelReason: null,     // Bersihkan cancelReason jika sebelumnya ada
+      },
     });
 
     return tx.appointment.findUnique({ where: { id: appointment.id }, include: INCLUDE });
+  });
+
+// ── Update reschedule history (ubah destinasi tanggal tanpa buat entri baru) ──
+
+const updateRescheduleHistoryWithTransaction = ({ appointmentId, historyId, newVisitDate, newStartTime, newEndTime, reason }) =>
+  prisma.$transaction(async (tx) => {
+    // Update entri reschedule history yang ada — hanya ubah destinasi (new*)
+    await tx.appointmentRescheduleHistory.update({
+      where: { id: historyId, appointmentId },
+      data:  { newVisitDate, newStartTime, newEndTime, reason },
+    });
+
+    // Sinkronkan visitDate appointment ke destinasi baru
+    await tx.appointment.update({
+      where: { id: appointmentId },
+      data:  { visitDate: newVisitDate, startTime: newStartTime, endTime: newEndTime },
+    });
+
+    return tx.appointment.findUnique({ where: { id: appointmentId }, include: INCLUDE });
   });
 
 module.exports = {
@@ -191,4 +216,5 @@ module.exports = {
   updateWithStaff,
   changeStatusWithTransaction,
   rescheduleWithTransaction,
+  updateRescheduleHistoryWithTransaction,
 };
