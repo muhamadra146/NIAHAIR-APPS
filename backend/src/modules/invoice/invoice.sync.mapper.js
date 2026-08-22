@@ -91,30 +91,110 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
     }
   }
 
+  // ── Hitung alokasi biaya bahan baku ke layanan ───────────────────────
+  // Bahan baku (isMaterial=true) tidak masuk tagihan client, tapi harganya
+  // dialokasikan dari harga layanan sebelum di-sync ke Accurate.
+  // Sehingga di Accurate: layanan_price = original - alokasi_bahan_baku,
+  // dan total Accurate = grand total invoice (apa yang dibayar client).
+  //
+  // STRATEGI:
+  //   A) Group-based (lineGroup != null) — bahan baku dialokasikan ke layanan
+  //      yang memiliki lineGroup yang sama (explicit 1-to-1 mapping).
+  //      Berlaku untuk invoice yang dibuat setelah fitur grouping.
+  //   B) Proportional fallback (semua lineGroup = null) — biaya bahan baku
+  //      didistribusikan proporsional ke semua layanan (invoice lama).
+  const layananItems  = invoice.items.filter((l) => !l.isMaterial);
+  const materialItems = invoice.items.filter((l) => l.isMaterial);
+
+  // Map: invoiceItem.id → nominal biaya bahan baku yang dialokasikan ke layanan ini
+  const materialAllocationMap = {};
+
+  const hasSomeGrouped = materialItems.some((m) => m.lineGroup);
+
+  if (hasSomeGrouped) {
+    // ── A) Group-based allocation ──────────────────────────────────────
+    // Build: lineGroup → total biaya bahan baku dalam grup tersebut
+    const groupCostMap = {};
+    materialItems.forEach((m) => {
+      if (!m.lineGroup) return; // orphan — abaikan dari alokasi
+      const cost = Number(m.price) * Number(m.qty);
+      groupCostMap[m.lineGroup] = (groupCostMap[m.lineGroup] ?? 0) + cost;
+    });
+
+    // Setiap layanan menerima alokasi = total HPP bahan baku dalam grupnya
+    layananItems.forEach((line) => {
+      materialAllocationMap[line.id] = groupCostMap[line.lineGroup ?? ""] ?? 0;
+    });
+  } else {
+    // ── B) Proportional fallback (invoice lama tanpa lineGroup) ────────
+    const totalMaterialCost = materialItems.reduce(
+      (sum, l) => sum + Number(l.price) * Number(l.qty),
+      0
+    );
+    const totalLayananSubtotal = layananItems.reduce(
+      (sum, l) => sum + Number(l.subtotal),
+      0
+    );
+    if (totalMaterialCost > 0 && totalLayananSubtotal > 0) {
+      let distributed = 0;
+      layananItems.forEach((line, idx) => {
+        const isLast = idx === layananItems.length - 1;
+        const share  = isLast
+          ? totalMaterialCost - distributed
+          : Math.round((Number(line.subtotal) / totalLayananSubtotal) * totalMaterialCost);
+        materialAllocationMap[line.id] = share;
+        distributed += share;
+      });
+    }
+  }
+
   const addEntries = invoice.items.map((line) => {
+    const isMaterial = line.isMaterial === true;
+    const qty        = Number(line.qty);
+    const origPrice  = Number(line.price);
+
+    // Untuk bahan baku: kirim harga cost asli (tidak ada penyesuaian)
+    // Untuk layanan: kurangi harga dengan alokasi biaya bahan baku
+    let unitPrice;
+    if (isMaterial) {
+      unitPrice = origPrice;
+    } else {
+      const materialShare    = materialAllocationMap[line.id] ?? 0;
+      const adjustedSubtotal = Number(line.subtotal) - materialShare;
+      // unitPrice setelah alokasi — jaga 3 desimal agar tidak ada selisih pembulatan
+      unitPrice = qty > 0
+        ? parseFloat((adjustedSubtotal / qty).toFixed(3))
+        : origPrice;
+    }
+
     const entry = {
       itemNo:       line.item.itemCode,
       itemUnitName: line.unit.name,
-      quantity:     Number(line.qty),
-      unitPrice:    Number(line.price),
+      quantity:     qty,
+      unitPrice,
     };
 
-    // Route discount to the correct Accurate field based on discountType:
-    //   AMOUNT → itemCashDiscount (Rp nominal, no rounding loss)
-    //   PERCENT → itemDiscPercent (percentage, Accurate computes the nominal)
-    const discountAbs      = Number(line.discount ?? 0);
-    const membershipShare  = membershipDistributionMap[line.id] ?? 0;
-    if (discountAbs > 0 || membershipShare > 0) {
-      if (line.discountType === "PERCENT") {
-        const lineTotal = Number(line.price) * Number(line.qty);
-        if (lineTotal > 0) {
-          entry.itemDiscPercent = parseFloat(((discountAbs / lineTotal) * 100).toFixed(4));
+    // Bahan baku tidak punya diskon terpisah di Accurate — harganya sudah cost price
+    if (!isMaterial) {
+      // Route discount ke Accurate field yang benar:
+      //   AMOUNT → itemCashDiscount | PERCENT → itemDiscPercent
+      // Catatan: jika ada material allocation, diskon sudah ter-reflect di adjustedSubtotal
+      // (subtotal sudah setelah diskon), sehingga tidak perlu kirim discount lagi.
+      // Tapi kita tetap kirim discountPercent agar Accurate bisa display-nya
+      const discountAbs     = Number(line.discount ?? 0);
+      const membershipShare = membershipDistributionMap[line.id] ?? 0;
+      if (discountAbs > 0 || membershipShare > 0) {
+        if (line.discountType === "PERCENT") {
+          const lineTotal = origPrice * qty;
+          if (lineTotal > 0) {
+            entry.itemDiscPercent = parseFloat(((discountAbs / lineTotal) * 100).toFixed(4));
+          }
+          if (membershipShare > 0) {
+            entry.itemCashDiscount = membershipShare;
+          }
+        } else {
+          entry.itemCashDiscount = discountAbs + membershipShare;
         }
-        if (membershipShare > 0) {
-          entry.itemCashDiscount = membershipShare;
-        }
-      } else {
-        entry.itemCashDiscount = discountAbs + membershipShare;
       }
     }
 
@@ -123,8 +203,8 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
       entry.warehouseId = warehouse.accurateWarehouseId;
     }
 
-    // Tax line — only when the item is individually marked taxable
-    if (line.taxable === true) {
+    // Tax line — hanya untuk layanan yang taxable (bahan baku tidak kena PPN)
+    if (!isMaterial && line.taxable === true) {
       entry.tax1Name = "PPN";
     }
 

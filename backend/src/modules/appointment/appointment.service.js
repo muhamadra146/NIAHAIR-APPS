@@ -247,7 +247,28 @@ const changeAppointmentStatus = async (id, body, userId) => {
     }
   }
 
-  return changeStatusWithTransaction({ appointment, newStatus, notes, cancelReason, userId });
+  const result = await changeStatusWithTransaction({ appointment, newStatus, notes, cancelReason, userId });
+
+  // ── Side effects setelah status berhasil diubah ──────────────────────
+  if (newStatus === "IN_PROGRESS") {
+    // Auto-buat TreatmentSession — items akan ditambahkan saat invoice dibuat
+    try {
+      await openTreatmentSession(id);
+    } catch (err) {
+      console.warn(`[appointment status] openTreatmentSession failed for ${id}: ${err.message}`);
+    }
+  }
+
+  if (newStatus === "COMPLETED") {
+    // Tutup TreatmentSession — set completedAt
+    try {
+      await closeTreatmentSession(id);
+    } catch (err) {
+      console.warn(`[appointment status] closeTreatmentSession failed for ${id}: ${err.message}`);
+    }
+  }
+
+  return result;
 };
 
 const rescheduleAppointment = async (id, body, userId) => {
@@ -323,6 +344,51 @@ const deleteAppointmentById = async (id) => {
     prisma.treatmentSession.updateMany({ where: { appointmentId: id }, data: { appointmentId: null } }),
     prisma.appointment.delete({ where: { id } }),
   ]);
+};
+
+// ── Treatment Session Lifecycle ───────────────────────────────────────
+//
+// TreatmentSession dikelola oleh status booking, bukan invoice:
+//   IN_PROGRESS → openTreatmentSession  (buat session, belum ada items)
+//   COMPLETED   → closeTreatmentSession (set completedAt)
+//
+// TreatmentItems tetap dibuat oleh invoice service saat invoice dibuat/diupdate.
+
+const openTreatmentSession = async (appointmentId) => {
+  const appointment = await prisma.appointment.findUnique({
+    where:  { id: appointmentId },
+    select: { id: true, customerId: true, branchId: true },
+  });
+  if (!appointment) return null;
+
+  // Idempotent: jika session sudah ada, return existing
+  const existing = await prisma.treatmentSession.findFirst({
+    where:  { appointmentId },
+    select: { id: true },
+  });
+  if (existing) return existing;
+
+  return prisma.treatmentSession.create({
+    data: {
+      appointmentId,
+      customerId: appointment.customerId,
+      branchId:   appointment.branchId,
+      startedAt:  new Date(),
+    },
+  });
+};
+
+const closeTreatmentSession = async (appointmentId) => {
+  const session = await prisma.treatmentSession.findFirst({
+    where:  { appointmentId },
+    select: { id: true, completedAt: true },
+  });
+  if (!session || session.completedAt) return null;
+
+  return prisma.treatmentSession.update({
+    where: { id: session.id },
+    data:  { completedAt: new Date() },
+  });
 };
 
 module.exports = {

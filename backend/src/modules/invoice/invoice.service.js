@@ -141,8 +141,12 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   let totalSubtotal = D("0");
   let totalDiscount = D("0");
   let totalTax      = D("0");
+  // totalSubtotal / totalTax hanya dari item layanan (isMaterial=false)
+  // item bahan baku (isMaterial=true) tidak masuk grand total — hanya COGS internal
 
   for (const line of items) {
+    const isMaterial = line.isMaterial === true;
+
     const item = await findItemById(line.itemId);
     if (!item) throw new AppError(`Item not found: ${line.itemId}`, StatusCodes.NOT_FOUND);
 
@@ -178,9 +182,9 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
       ? price.mul(qty).mul(discountPercent).div(D("100")).toDecimalPlaces(2)
       : D(line.discountAmount ?? 0);
 
-    // Apply PERCENTAGE membership discount on SERVICE items — must be before grossLine
-    // so invoice_items.subtotal is correct and totalTax isn't overstated for taxable items
+    // Apply PERCENTAGE membership discount hanya pada layanan (bukan bahan baku)
     if (
+      !isMaterial &&
       !membershipDiscountOverride &&
       activeMembership?.membership?.discountType === "PERCENTAGE" &&
       item.itemType === "SERVICE"
@@ -195,7 +199,8 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
 
     const grossLine       = price.mul(qty).sub(discount);
 
-    const lineTaxable = taxable && (line.taxable ?? false);
+    // Bahan baku tidak kena PPN (pajak hanya untuk layanan yg masuk tagihan)
+    const lineTaxable = !isMaterial && taxable && (line.taxable ?? false);
 
     let lineSubtotal, itemTax;
     if (!lineTaxable) {
@@ -211,9 +216,12 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
       itemTax      = grossLine.mul(D("0.11")).toDecimalPlaces(2);
     }
 
-    totalSubtotal = totalSubtotal.add(lineSubtotal);
-    totalDiscount = totalDiscount.add(discount);
-    totalTax      = totalTax.add(itemTax);
+    // Bahan baku TIDAK masuk total yang ditagih ke client
+    if (!isMaterial) {
+      totalSubtotal = totalSubtotal.add(lineSubtotal);
+      totalDiscount = totalDiscount.add(discount);
+      totalTax      = totalTax.add(itemTax);
+    }
 
     itemsData.push({
       itemId:         line.itemId,
@@ -227,6 +235,8 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
       taxable:         lineTaxable,
       taxName:         lineTaxable ? "PPN" : null,
       taxRate:         lineTaxable ? D("11") : D("0"),
+      isMaterial,
+      lineGroup:       line.lineGroup ?? null,
     });
   }
 
@@ -413,11 +423,12 @@ const resetTreatmentSessionItems = async (invoiceId) => {
   // Recreate from updated invoice items
   const invoice = await prisma.invoice.findUnique({
     where:  { id: invoiceId },
-    select: { items: { select: { itemId: true, unitId: true, qty: true, price: true } } },
+    select: { items: { select: { itemId: true, unitId: true, qty: true, price: true, isMaterial: true } } },
   });
   if (!invoice) return;
 
-  for (const line of invoice.items) {
+  // Hanya buat TreatmentItem dari layanan (isMaterial=false)
+  for (const line of invoice.items.filter((i) => !i.isMaterial)) {
     const itemUnit = await prisma.itemUnit.findFirst({
       where:  { itemId: line.itemId, unitId: line.unitId },
       select: { conversionFactor: true },
@@ -474,8 +485,11 @@ const updateInvoice = async (id, body, userId) => {
   let totalDiscount = D("0");
   let totalTax      = D("0");
   let membershipDiscountRunning = D("0");
+  // totalSubtotal / totalTax hanya dari item layanan (isMaterial=false)
 
   for (const line of items) {
+    const isMaterial = line.isMaterial === true;
+
     const item = await findItemById(line.itemId);
     if (!item) throw new AppError(`Item not found: ${line.itemId}`, StatusCodes.NOT_FOUND);
 
@@ -503,7 +517,9 @@ const updateInvoice = async (id, body, userId) => {
       ? price.mul(qty).mul(discountPercent).div(D("100")).toDecimalPlaces(2)
       : D(line.discountAmount ?? 0);
 
+    // Membership discount hanya untuk layanan (bukan bahan baku)
     if (
+      !isMaterial &&
       !membershipDiscountOverride &&
       activeMembership?.membership?.discountType === "PERCENTAGE" &&
       item.itemType === "SERVICE"
@@ -517,7 +533,8 @@ const updateInvoice = async (id, body, userId) => {
     }
 
     const grossLine       = price.mul(qty).sub(discount);
-    const lineTaxable     = taxable && (line.taxable ?? false);
+    // Bahan baku tidak kena PPN
+    const lineTaxable     = !isMaterial && taxable && (line.taxable ?? false);
 
     let lineSubtotal, itemTax;
     if (!lineTaxable) {
@@ -531,9 +548,12 @@ const updateInvoice = async (id, body, userId) => {
       itemTax      = grossLine.mul(D("0.11")).toDecimalPlaces(2);
     }
 
-    totalSubtotal = totalSubtotal.add(lineSubtotal);
-    totalDiscount = totalDiscount.add(discount);
-    totalTax      = totalTax.add(itemTax);
+    // Bahan baku tidak masuk total tagihan client
+    if (!isMaterial) {
+      totalSubtotal = totalSubtotal.add(lineSubtotal);
+      totalDiscount = totalDiscount.add(discount);
+      totalTax      = totalTax.add(itemTax);
+    }
 
     itemsData.push({
       itemId:          line.itemId,
@@ -547,6 +567,8 @@ const updateInvoice = async (id, body, userId) => {
       taxable:         lineTaxable,
       taxName:         lineTaxable ? "PPN" : null,
       taxRate:         lineTaxable ? D("11") : D("0"),
+      isMaterial,
+      lineGroup:       line.lineGroup ?? null,
     });
   }
 
@@ -712,9 +734,14 @@ const applyDepositToInvoice = async (invoiceId, { depositId, amount }, userId) =
 
 // ── Setup Treatment Session ───────────────────────────────────────────
 //
-// Creates one TreatmentSession per invoice (linked to invoice + appointment if any).
-// For each invoice line item, creates a TreatmentItem using the item's unit price snapshot.
-// Idempotent: if a session already exists for this invoice, returns the existing one.
+// Menghubungkan invoice ke TreatmentSession dan membuat TreatmentItem dari item layanan.
+//
+// FLOW BARU (setelah redesign):
+//   - TreatmentSession dibuat saat booking → IN_PROGRESS (bukan dari invoice).
+//   - Fungsi ini dipanggil saat invoice dibuat/diupdate:
+//     1. Jika session sudah ada (dari IN_PROGRESS) → link invoiceId + buat TreatmentItems.
+//     2. Jika belum ada (walk-in / edge case) → buat session + items sekaligus.
+//   - Idempotent: jika session sudah punya items, tidak lakukan apa-apa.
 
 const setupTreatmentSession = async (invoiceId) => {
   const invoice = await prisma.invoice.findUnique({
@@ -727,25 +754,14 @@ const setupTreatmentSession = async (invoiceId) => {
       status:        true,
       items: {
         select: {
-          id:     true,
-          itemId: true,
-          unitId: true,
-          qty:    true,
-          price:  true,
+          id:         true,
+          itemId:     true,
+          unitId:     true,
+          qty:        true,
+          price:      true,
+          isMaterial: true,
           item:   { select: { id: true, name: true, itemCode: true, itemType: true } },
           unit:   { select: { id: true, name: true } },
-        },
-      },
-      appointment: {
-        select: {
-          id:     true,
-          staffs: {
-            select: {
-              id:      true,
-              slotKey: true,
-              employee: { select: { id: true, name: true, employeeCode: true } },
-            },
-          },
         },
       },
     },
@@ -753,43 +769,64 @@ const setupTreatmentSession = async (invoiceId) => {
 
   if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
 
-  // Idempotent: return existing session if already set up (with items)
-  const existingSession = await prisma.treatmentSession.findFirst({
-    where: { invoiceId },
-    include: {
-      treatmentItems: {
-        include: {
-          item:        { select: { id: true, name: true, itemCode: true } },
-          unit:        { select: { id: true, name: true } },
-          assignments: {
-            include: {
-              employee: { select: { id: true, name: true, employeeCode: true } },
-            },
-          },
-        },
-      },
-    },
-  });
-  // If session exists and already has items, return it as-is
-  if (existingSession && existingSession.treatmentItems.length > 0) return existingSession;
-  // Create session + items in a transaction (delete empty session atomically if needed)
+  // ── Cari session yang sudah ada ──────────────────────────────────────
+  // Prioritas: cari via appointmentId (dibuat saat IN_PROGRESS), lalu via invoiceId
+  let existingSession = null;
+
+  if (invoice.appointmentId) {
+    existingSession = await prisma.treatmentSession.findFirst({
+      where: { appointmentId: invoice.appointmentId },
+      include: { treatmentItems: { select: { id: true } } },
+    });
+  }
+
+  if (!existingSession) {
+    existingSession = await prisma.treatmentSession.findFirst({
+      where: { invoiceId },
+      include: { treatmentItems: { select: { id: true } } },
+    });
+  }
+
+  // Idempotent: session sudah ada dan sudah punya items → return
+  if (existingSession && existingSession.treatmentItems.length > 0) {
+    // Pastikan invoiceId sudah terhubung (jika session dibuat sebelum invoice)
+    if (!existingSession.invoiceId) {
+      await prisma.treatmentSession.update({
+        where: { id: existingSession.id },
+        data:  { invoiceId },
+      });
+    }
+    return existingSession;
+  }
+
+  // ── Buat atau update session + items dalam transaction ───────────────
   return prisma.$transaction(async (tx) => {
-    // If session exists but is empty (e.g. created before fix), delete and recreate atomically
+    let sessionId;
+
     if (existingSession) {
-      await tx.treatmentSession.delete({ where: { id: existingSession.id } });
+      // Session sudah ada (dari IN_PROGRESS) tapi belum punya items → link invoiceId
+      await tx.treatmentSession.update({
+        where: { id: existingSession.id },
+        data:  { invoiceId },
+      });
+      sessionId = existingSession.id;
+    } else {
+      // Belum ada session → buat baru (walk-in atau edge case)
+      const session = await tx.treatmentSession.create({
+        data: {
+          customerId:    invoice.customerId,
+          branchId:      invoice.branchId,
+          invoiceId,
+          appointmentId: invoice.appointmentId ?? null,
+          startedAt:     new Date(),
+        },
+      });
+      sessionId = session.id;
     }
 
-    const session = await tx.treatmentSession.create({
-      data: {
-        customerId:    invoice.customerId,
-        branchId:      invoice.branchId,
-        invoiceId,
-        appointmentId: invoice.appointmentId ?? null,
-        startedAt:     new Date(),
-      },
-    });
-
-    const serviceItems = invoice.items;
+    // Hanya buat TreatmentItem dari layanan (isMaterial=false)
+    // Bahan baku (isMaterial=true) tidak masuk treatment session
+    const serviceItems = invoice.items.filter((i) => !i.isMaterial);
 
     for (const line of serviceItems) {
       // conversionSnapshot: fetch from item_units for the unit used on this invoice line
@@ -801,7 +838,7 @@ const setupTreatmentSession = async (invoiceId) => {
 
       await tx.treatmentItem.create({
         data: {
-          treatmentSessionId: session.id,
+          treatmentSessionId: sessionId,
           itemId:             line.itemId,
           unitId:             line.unitId,
           qty:                line.qty,
@@ -812,7 +849,7 @@ const setupTreatmentSession = async (invoiceId) => {
     }
 
     return tx.treatmentSession.findUnique({
-      where: { id: session.id },
+      where: { id: sessionId },
       include: {
         treatmentItems: {
           include: {

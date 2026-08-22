@@ -57,6 +57,10 @@ interface LineItem {
   price:        string;
   discount:     string;
   discountType: "AMOUNT" | "PERCENT";
+  /** true = bahan baku (internal COGS, tidak masuk tagihan client) */
+  isMaterial:   boolean;
+  /** UUID shared antara layanan dan bahan bakunya — null hanya untuk data lama */
+  lineGroup:    string;
   itemUnits:    ItemUnitOption[];
   itemPrices:   ItemPriceOption[];
 }
@@ -74,9 +78,12 @@ function resolvePrice(prices: ItemPriceOption[], unitId: string, branchId: strin
   return global ? global.sellingPrice : "0";
 }
 
+
 function buildLineFromItem(
   item: { id: string; name: string; itemCode: string; itemType: string; itemPrices: ItemPriceOption[]; itemUnits: ItemUnitOption[] },
   branchId: string,
+  isMaterial = false,
+  lineGroup = "",
 ): LineItem | null {
   if (!item.itemUnits?.length) return null;
   const defUnit = item.itemUnits.find((u) => u.isDefault) ?? item.itemUnits[0];
@@ -91,6 +98,8 @@ function buildLineFromItem(
     price:      resolvePrice(item.itemPrices ?? [], unitId, branchId),
     discount:     "0",
     discountType: "AMOUNT",
+    isMaterial,
+    lineGroup,
     itemUnits:    item.itemUnits,
     itemPrices:   item.itemPrices ?? [],
   };
@@ -163,9 +172,15 @@ export function CreateInvoiceDialog({
 
   // ── Line items ──
   const [lines, setLines]           = useState<LineItem[]>([]);
+  // Layanan search
   const [itemSearch, setItemSearch] = useState("");
   const [itemResults, setItemResults] = useState<Parameters<typeof buildLineFromItem>[0][]>([]);
   const itemTimer = useRef<ReturnType<typeof setTimeout>>();
+  // Bahan baku search — per-layanan (Option A: grouping)
+  const [activeMaterialGroupId, setActiveMaterialGroupId] = useState<string | null>(null);
+  const [materialSearch, setMaterialSearch] = useState("");
+  const [materialResults, setMaterialResults] = useState<Parameters<typeof buildLineFromItem>[0][]>([]);
+  const materialTimer = useRef<ReturnType<typeof setTimeout>>();
 
   // ── Deposits ──
   const [selectedDeps, setSelectedDeps] = useState<SelectedDeposit[]>([]);
@@ -317,6 +332,7 @@ export function CreateInvoiceDialog({
     setSelectedAppt(null); setExistingInvoiceId(null);
     setSelectedCustomer(null); setCustSearch(""); setCustResults([]);
     setLines([]); setItemSearch(""); setItemResults([]);
+    setActiveMaterialGroupId(null); setMaterialSearch(""); setMaterialResults([]);
     setSelectedDeps([]); setDepOpen(false);
     setMembershipDiscApplied(false);
     setFixedMembershipDiscount("0");
@@ -356,7 +372,7 @@ export function CreateInvoiceDialog({
     }
   }
 
-  // ── Item search ───────────────────────────────────────────────────────
+  // ── Item search (Layanan) ─────────────────────────────────────────────
   function handleItemSearch(e: React.ChangeEvent<HTMLInputElement>) {
     const q = e.target.value; setItemSearch(q);
     clearTimeout(itemTimer.current);
@@ -368,8 +384,10 @@ export function CreateInvoiceDialog({
   }
 
   function addLine(item: Parameters<typeof buildLineFromItem>[0]) {
-    if (lines.find((l) => l.itemId === item.id)) return;
-    let line = buildLineFromItem(item, branchId);
+    // Cek duplikat di section layanan saja
+    if (lines.find((l) => l.itemId === item.id && !l.isMaterial)) return;
+    const lineGroup = crypto.randomUUID(); // UUID unik untuk setiap layanan
+    let line = buildLineFromItem(item, branchId, false, lineGroup);
     if (!line) return;
     if (membershipDiscApplied && activeMembership) {
       line = applyDiscountToLine(line, activeMembership);
@@ -379,10 +397,11 @@ export function CreateInvoiceDialog({
   }
 
   async function quickAddService(serviceItem: { id: string; name: string; itemCode: string }) {
-    if (lines.find((l) => l.itemId === serviceItem.id)) return;
+    if (lines.find((l) => l.itemId === serviceItem.id && !l.isMaterial)) return;
     try {
       const full = await fetchFullItem(serviceItem.id);
-      let line = buildLineFromItem(full, branchId);
+      const lineGroup = crypto.randomUUID(); // UUID unik untuk layanan ini
+      let line = buildLineFromItem(full, branchId, false, lineGroup);
       if (!line) return;
       if (membershipDiscApplied && activeMembership) {
         line = applyDiscountToLine(line, activeMembership);
@@ -393,8 +412,34 @@ export function CreateInvoiceDialog({
     }
   }
 
+  // ── Item search (Bahan Baku) — linked ke layanan tertentu via lineGroup ──
+  function handleMaterialSearch(e: React.ChangeEvent<HTMLInputElement>) {
+    const q = e.target.value; setMaterialSearch(q);
+    clearTimeout(materialTimer.current);
+    if (q.length < 1) { setMaterialResults([]); return; }
+    materialTimer.current = setTimeout(async () => {
+      const items = await fetchInvoiceItems(q);
+      setMaterialResults(items);
+    }, 300);
+  }
+
+  function closeMaterialSearch() {
+    setActiveMaterialGroupId(null);
+    setMaterialSearch("");
+    setMaterialResults([]);
+  }
+
+  function addMaterialLine(item: Parameters<typeof buildLineFromItem>[0], lineGroup: string) {
+    // Bahan baku mewarisi lineGroup dari layanan induknya
+    const line = buildLineFromItem(item, branchId, true, lineGroup);
+    if (!line) return;
+    setLines((prev) => [...prev, line]);
+    closeMaterialSearch();
+  }
+
   function applyDiscountToLine(line: LineItem, m: NonNullable<typeof activeMembership>): LineItem {
-    if (m.discountType === "PERCENTAGE" && line.itemType === "SERVICE") {
+    // Membership discount hanya untuk layanan (bukan bahan baku)
+    if (!line.isMaterial && m.discountType === "PERCENTAGE" && line.itemType === "SERVICE") {
       return { ...line, discountType: "PERCENT", discount: String(m.discountValue) };
     }
     return line; // FIXED_AMOUNT handled at invoice level; non-SERVICE items unchanged
@@ -420,7 +465,17 @@ export function CreateInvoiceDialog({
   }
 
   function removeLine(idx: number) {
-    setLines((prev) => prev.filter((_, i) => i !== idx));
+    const removed = lines[idx];
+    if (!removed.isMaterial && removed.lineGroup) {
+      // Hapus layanan + semua bahan baku yang terhubung (lineGroup sama)
+      setLines((prev) =>
+        prev.filter((l, i) => i !== idx && !(l.isMaterial && l.lineGroup === removed.lineGroup))
+      );
+    } else {
+      setLines((prev) => prev.filter((_, i) => i !== idx));
+    }
+    // Tutup bahan baku search jika yang sedang aktif di-remove
+    if (activeMaterialGroupId === removed.lineGroup) closeMaterialSearch();
   }
 
   function updateLine<K extends keyof LineItem>(idx: number, key: K, val: LineItem[K]) {
@@ -466,7 +521,8 @@ export function CreateInvoiceDialog({
   }
 
   // ── Estimate totals (client-side preview) ─────────────────────────────
-  const subtotalEst = lines.reduce((sum, l) => {
+  // Hanya hitung dari layanan (isMaterial=false) — bahan baku tidak masuk tagihan
+  const subtotalEst = lines.filter((l) => !l.isMaterial).reduce((sum, l) => {
     const price = parseFloat(l.price) || 0;
     const qty   = parseFloat(l.qty) || 1;
     const disc  = parseFloat(l.discount) || 0;
@@ -474,6 +530,12 @@ export function CreateInvoiceDialog({
       ? price * qty * (1 - disc / 100)
       : price * qty - disc;
     return sum + Math.max(0, gross);
+  }, 0);
+  // Total bahan baku (COGS internal — hanya untuk info internal)
+  const materialTotalEst = lines.filter((l) => l.isMaterial).reduce((sum, l) => {
+    const price = parseFloat(l.price) || 0;
+    const qty   = parseFloat(l.qty) || 1;
+    return sum + price * qty;
   }, 0);
   const taxEst         = taxable && !inclusiveTax ? subtotalEst * 0.11 : 0;
   const fixedMembershipDiscountAmt =
@@ -493,8 +555,33 @@ export function CreateInvoiceDialog({
       const fullItems = await Promise.all(
         existingInvoice.items.map((li) => fetchFullItem(li.itemId))
       );
+      // Untuk invoice lama tanpa lineGroup: generate UUID baru per layanan,
+      // lalu assign bahan baku ke layanan pertama (sementara, manual re-grouping bisa dilakukan via edit)
+      const layananItems = existingInvoice.items.filter((li) => !li.isMaterial);
+      // Map: existing lineGroup (or generated UUID per layanan) — untuk restore grouping
+      const groupMap: Record<string, string> = {};
+      layananItems.forEach((li, i) => {
+        if (li.lineGroup) {
+          groupMap[li.id] = li.lineGroup;
+        } else {
+          // Buat UUID baru untuk layanan lama yang tidak punya lineGroup
+          groupMap[li.id] = `legacy-${i}-${crypto.randomUUID()}`;
+        }
+      });
+      const firstLayananGroup = groupMap[layananItems[0]?.id ?? ""] ?? crypto.randomUUID();
+
       const newLines: LineItem[] = existingInvoice.items.map((li, idx) => {
         const full = fullItems[idx];
+        // Tentukan lineGroup untuk item ini
+        let lineGroup: string;
+        if (!li.isMaterial) {
+          lineGroup = groupMap[li.id] ?? crypto.randomUUID();
+        } else if (li.lineGroup) {
+          lineGroup = li.lineGroup;
+        } else {
+          // Bahan baku lama tanpa lineGroup → assign ke layanan pertama
+          lineGroup = firstLayananGroup;
+        }
         return {
           itemId:       li.itemId,
           itemName:     full.name,
@@ -505,6 +592,8 @@ export function CreateInvoiceDialog({
           price:        String(li.price),
           discount:     li.discountType === "PERCENT" ? String(li.discountPercent ?? "0") : String(li.discount),
           discountType: (li.discountType as "AMOUNT" | "PERCENT") ?? "AMOUNT",
+          isMaterial:   li.isMaterial ?? false,
+          lineGroup,
           itemUnits:    full.itemUnits ?? [],
           itemPrices:   full.itemPrices ?? [],
         };
@@ -526,7 +615,8 @@ export function CreateInvoiceDialog({
     e.preventDefault();
     if (mode === "booking" && !selectedAppt) { setError("Pilih booking terlebih dahulu"); return; }
     if (mode === "walkin" && !selectedCustomer) { setError("Pilih customer terlebih dahulu"); return; }
-    if (lines.length === 0) { setError("Tambahkan minimal 1 item"); return; }
+    const layananLines = lines.filter((l) => !l.isMaterial);
+    if (layananLines.length === 0) { setError("Tambahkan minimal 1 layanan"); return; }
 
     for (const l of lines) {
       if (!l.unitId) { setError(`Pilih satuan untuk: ${l.itemName}`); return; }
@@ -555,7 +645,9 @@ export function CreateInvoiceDialog({
         discountType:    l.discountType,
         discountAmount:  l.discountType === "AMOUNT" ? (parseFloat(l.discount) || 0) : 0,
         discountPercent: l.discountType === "PERCENT" ? (parseFloat(l.discount) || 0) : undefined,
-        taxable,
+        taxable:         l.isMaterial ? false : taxable, // bahan baku tidak kena PPN
+        isMaterial:      l.isMaterial,
+        lineGroup:       l.lineGroup || undefined,
       }));
 
       // ── Update existing invoice ──
@@ -925,35 +1017,85 @@ export function CreateInvoiceDialog({
                   {formatDate(existingInvoice.invoiceDate)}
                 </p>
 
-                {/* Items */}
-                {(existingInvoice.items ?? []).length > 0 && (
+                {/* Items — Layanan (grouped dengan bahan baku di bawahnya) */}
+                {(existingInvoice.items ?? []).filter((l) => !l.isMaterial).length > 0 && (
                   <div className="space-y-1.5">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Item</p>
-                    <div className="rounded-md border border-border overflow-hidden">
-                      <div className="grid grid-cols-[1fr_70px_50px_90px_80px] gap-1 bg-muted/50 px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase">
-                        <span>Nama</span>
-                        <span>Satuan</span>
-                        <span>Qty</span>
-                        <span>Harga</span>
-                        <span className="text-right">Subtotal</span>
-                      </div>
-                      {existingInvoice.items!.map((line) => (
-                        <div key={line.id} className="border-t border-border/50 px-2.5 py-2">
-                          <div className="flex items-center gap-2">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-medium truncate">{line.item?.name ?? "—"}</p>
-                              <p className="text-[10px] text-muted-foreground">{line.item?.itemCode}</p>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Layanan</p>
+                    <div className="space-y-1.5">
+                      {existingInvoice.items!.filter((l) => !l.isMaterial).map((line) => {
+                        // Cari bahan baku yang terhubung ke layanan ini via lineGroup
+                        const relatedMaterials = line.lineGroup
+                          ? (existingInvoice.items ?? []).filter(
+                              (m) => m.isMaterial && m.lineGroup === line.lineGroup
+                            )
+                          : [];
+                        return (
+                          <div key={line.id} className="rounded-md border border-border overflow-hidden">
+                            {/* Layanan row */}
+                            <div className="flex items-center gap-2 px-2.5 py-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-medium truncate">{line.item?.name ?? "—"}</p>
+                                <p className="text-[10px] text-muted-foreground">{line.item?.itemCode}</p>
+                              </div>
+                              <div className="grid grid-cols-[60px_40px_80px_80px] gap-1 text-xs text-right shrink-0">
+                                <span className="text-muted-foreground text-[10px]">{line.unit?.name ?? "—"}</span>
+                                <span className="text-[10px]">{line.qty}</span>
+                                <span className="text-[10px]">{formatCurrency(line.price)}</span>
+                                <span className="font-semibold">{formatCurrency(line.subtotal)}</span>
+                              </div>
                             </div>
-                            <div className="grid grid-cols-[70px_50px_90px_80px] gap-1 text-xs text-right shrink-0">
-                              <span className="text-muted-foreground">{line.unit?.name ?? "—"}</span>
-                              <span>{line.qty}</span>
-                              <span>{formatCurrency(line.price)}</span>
-                              <span className="font-semibold">{formatCurrency(line.subtotal)}</span>
-                            </div>
+                            {/* Bahan baku terhubung */}
+                            {relatedMaterials.map((mat) => (
+                              <div key={mat.id} className="flex items-center gap-2 px-2.5 py-1.5 border-t border-dashed border-border/40 bg-muted/10">
+                                <span className="text-[10px] text-muted-foreground/50 w-3 shrink-0">└</span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[10px] font-medium truncate text-muted-foreground">{mat.item?.name ?? "—"}</p>
+                                  <p className="text-[9px] text-muted-foreground/60">{mat.item?.itemCode} · HPP</p>
+                                </div>
+                                <div className="grid grid-cols-[60px_40px_80px_80px] gap-1 text-[10px] text-right shrink-0">
+                                  <span className="text-muted-foreground">{mat.unit?.name ?? "—"}</span>
+                                  <span className="text-muted-foreground">{mat.qty}</span>
+                                  <span className="text-muted-foreground">{formatCurrency(mat.price)}</span>
+                                  <span className="font-medium text-muted-foreground">{formatCurrency(mat.subtotal)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Bahan baku lama tanpa lineGroup (orphan) */}
+                    {(() => {
+                      const orphans = (existingInvoice.items ?? []).filter(
+                        (m) => m.isMaterial && !m.lineGroup
+                      );
+                      if (!orphans.length) return null;
+                      return (
+                        <div className="space-y-1 mt-2">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                            Bahan Baku
+                            <span className="text-[9px] border border-dashed border-border rounded px-1">Internal</span>
+                          </p>
+                          <div className="rounded-md border border-dashed border-border overflow-hidden">
+                            {orphans.map((mat) => (
+                              <div key={mat.id} className="flex items-center gap-2 px-2.5 py-1.5 border-t first:border-0 border-border/40 bg-muted/5">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-medium truncate text-muted-foreground">{mat.item?.name ?? "—"}</p>
+                                  <p className="text-[10px] text-muted-foreground/60">{mat.item?.itemCode}</p>
+                                </div>
+                                <div className="grid grid-cols-[60px_40px_80px_80px] gap-1 text-xs text-right shrink-0">
+                                  <span className="text-muted-foreground text-[10px]">{mat.unit?.name ?? "—"}</span>
+                                  <span className="text-[10px]">{mat.qty}</span>
+                                  <span className="text-[10px]">{formatCurrency(mat.price)}</span>
+                                  <span className="font-medium text-muted-foreground">{formatCurrency(mat.subtotal)}</span>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -1187,152 +1329,244 @@ export function CreateInvoiceDialog({
               </div>
             )}
 
-            {/* ── Items / PPN / Notes / Summary — create or edit mode ── */}
-            {(!existingInvoiceId || editMode) && <div className="space-y-2">
-              <Label className="text-sm font-semibold">Item <span className="text-destructive">*</span></Label>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <Input
-                  value={itemSearch}
-                  onChange={handleItemSearch}
-                  placeholder="Cari layanan atau produk…"
-                  className="pl-8"
-                  disabled={!editMode && (mode === "booking" ? !selectedAppt : !selectedCustomer)}
-                />
-                {itemResults.length > 0 && (
-                  <div className="absolute z-20 mt-1 w-full rounded-md border border-input bg-background shadow-lg max-h-48 overflow-y-auto">
-                    {itemResults.map((r) => (
-                      <button key={r.id} type="button" onClick={() => addLine(r)}
-                        className="w-full px-3 py-2.5 text-left text-sm hover:bg-muted/50 border-b border-border/40 last:border-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium truncate">{r.name}</span>
-                          <span className={cn(
-                            "shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium",
-                            r.itemType === "SERVICE"
-                              ? "bg-blue-50 text-blue-600 border border-blue-200"
-                              : "bg-amber-50 text-amber-600 border border-amber-200"
-                          )}>
-                            {r.itemType === "SERVICE" ? "Layanan" : "Produk"}
-                          </span>
-                        </div>
-                        <span className="text-xs text-muted-foreground">{r.itemCode}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {!editMode && mode === "booking" && !selectedAppt && (
-                <p className="text-xs text-muted-foreground">Pilih booking terlebih dahulu.</p>
-              )}
-              {!editMode && mode === "walkin" && !selectedCustomer && (
-                <p className="text-xs text-muted-foreground">Pilih customer terlebih dahulu.</p>
-              )}
+            {/* ── SECTION LAYANAN (+ Bahan Baku di bawah masing-masing) — create or edit mode ── */}
+            {(!existingInvoiceId || editMode) && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm font-semibold">Layanan</Label>
+                  <span className="text-destructive text-sm">*</span>
+                  <span className="text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5">Tampil di struk</span>
+                </div>
 
-              {lines.length > 0 && (
-                <div className="rounded-md border border-border overflow-hidden">
-                  {/* Header */}
-                  <div className="grid grid-cols-[1fr_90px_60px_90px_100px_28px] gap-1.5 bg-muted/50 px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                    <span>Item</span>
-                    <span>Satuan</span>
-                    <span>Qty</span>
-                    <span>Harga</span>
-                    <span>Diskon</span>
-                    <span />
-                  </div>
-                  {lines.map((line, idx) => {
+                {/* Search layanan */}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    value={itemSearch}
+                    onChange={handleItemSearch}
+                    placeholder="Cari layanan atau produk…"
+                    className="pl-8"
+                    disabled={!editMode && (mode === "booking" ? !selectedAppt : !selectedCustomer)}
+                  />
+                  {itemResults.length > 0 && (
+                    <div className="absolute z-20 mt-1 w-full rounded-md border border-input bg-background shadow-lg max-h-48 overflow-y-auto">
+                      {itemResults.map((r) => (
+                        <button key={r.id} type="button" onClick={() => addLine(r)}
+                          className="w-full px-3 py-2.5 text-left text-sm hover:bg-muted/50 border-b border-border/40 last:border-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium truncate">{r.name}</span>
+                            <span className={cn(
+                              "shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium",
+                              r.itemType === "SERVICE"
+                                ? "bg-blue-50 text-blue-600 border border-blue-200"
+                                : "bg-amber-50 text-amber-600 border border-amber-200"
+                            )}>
+                              {r.itemType === "SERVICE" ? "Layanan" : "Produk"}
+                            </span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">{r.itemCode}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {!editMode && mode === "booking" && !selectedAppt && (
+                  <p className="text-xs text-muted-foreground">Pilih booking terlebih dahulu.</p>
+                )}
+                {!editMode && mode === "walkin" && !selectedCustomer && (
+                  <p className="text-xs text-muted-foreground">Pilih customer terlebih dahulu.</p>
+                )}
+
+                {/* ── Layanan cards (grouped dengan bahan baku) ── */}
+                {(() => {
+                  const indexedLines = lines.map((l, i) => ({ ...l, _idx: i }));
+                  const layananLines = indexedLines.filter((l) => !l.isMaterial);
+                  return layananLines.map((line) => {
+                    const idx = line._idx;
+                    const materialLines = indexedLines.filter(
+                      (l) => l.isMaterial && l.lineGroup === line.lineGroup
+                    );
                     const _price = parseFloat(line.price) || 0;
                     const _qty   = parseFloat(line.qty) || 1;
                     const _disc  = parseFloat(line.discount) || 0;
                     const sub    = Math.max(0, line.discountType === "PERCENT"
                       ? _price * _qty * (1 - _disc / 100)
-                      : _price * _qty - _disc
+                      : _price * _qty - _disc);
+                    const groupHPP = materialLines.reduce(
+                      (s, m) => s + (parseFloat(m.price) || 0) * (parseFloat(m.qty) || 1),
+                      0
                     );
+                    const isMatOpen = activeMaterialGroupId === line.lineGroup;
+
                     return (
-                      <div
-                        key={idx}
-                        className="border-t border-border/50 grid grid-cols-[1fr_90px_60px_90px_100px_28px] gap-1.5 items-center px-2.5 py-2"
-                      >
-                        {/* Item name */}
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold truncate">{line.itemName}</p>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className="text-[10px] text-muted-foreground">{line.itemCode}</span>
-                            <span className={cn(
-                              "text-[9px] px-1 py-px rounded font-medium",
-                              line.itemType === "SERVICE" ? "bg-blue-50 text-blue-500" : "bg-amber-50 text-amber-500"
-                            )}>
-                              {line.itemType === "SERVICE" ? "Layanan" : "Produk"}
-                            </span>
+                      <div key={line.lineGroup} className="rounded-md border border-border overflow-visible">
+                        {/* ── Layanan row ── */}
+                        <div className="grid grid-cols-[1fr_90px_60px_90px_100px_28px] gap-1.5 items-center px-2.5 py-2">
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold truncate">{line.itemName}</p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className="text-[10px] text-muted-foreground">{line.itemCode}</span>
+                              <span className={cn("text-[9px] px-1 py-px rounded font-medium",
+                                line.itemType === "SERVICE" ? "bg-blue-50 text-blue-500" : "bg-amber-50 text-amber-500")}>
+                                {line.itemType === "SERVICE" ? "Layanan" : "Produk"}
+                              </span>
+                            </div>
+                            {sub > 0 && <p className="text-[10px] text-muted-foreground mt-0.5">= {formatCurrency(sub)}</p>}
                           </div>
-                          {sub > 0 && (
-                            <p className="text-[10px] text-muted-foreground mt-0.5">= {formatCurrency(sub)}</p>
-                          )}
-                        </div>
-                        {/* Satuan */}
-                        <select
-                          value={line.unitId}
-                          onChange={(e) => updateLine(idx, "unitId", e.target.value)}
-                          className="h-8 rounded border border-input bg-background px-1.5 text-xs w-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        >
-                          {line.itemUnits.length === 0 && <option value="">—</option>}
-                          {line.itemUnits.map((u) => (
-                            <option key={u.unit.id} value={u.unit.id}>{u.unit.name}</option>
-                          ))}
-                        </select>
-                        {/* Qty */}
-                        <Input
-                          type="number" min="0.01" step="0.01"
-                          value={line.qty}
-                          onChange={(e) => updateLine(idx, "qty", e.target.value)}
-                          className="h-8 text-xs px-2"
-                        />
-                        {/* Harga */}
-                        <Input
-                          type="number" min="0" step="1"
-                          value={line.price}
-                          onChange={(e) => updateLine(idx, "price", e.target.value)}
-                          className="h-8 text-xs px-2"
-                          placeholder="0"
-                        />
-                        {/* Diskon */}
-                        <div className="flex gap-1 items-center">
-                          <button
-                            type="button"
-                            onClick={() => updateLine(idx, "discountType", line.discountType === "AMOUNT" ? "PERCENT" : "AMOUNT")}
-                            className={cn(
-                              "h-8 w-8 shrink-0 rounded border text-[10px] font-bold transition-colors",
-                              line.discountType === "PERCENT"
-                                ? "bg-primary text-white border-primary"
-                                : "bg-muted text-muted-foreground border-border hover:border-primary/50"
-                            )}
-                          >
-                            {line.discountType === "PERCENT" ? "%" : "Rp"}
+                          <select value={line.unitId} onChange={(e) => updateLine(idx, "unitId", e.target.value)}
+                            className="h-8 rounded border border-input bg-background px-1.5 text-xs w-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                            {line.itemUnits.length === 0 && <option value="">—</option>}
+                            {line.itemUnits.map((u) => <option key={u.unit.id} value={u.unit.id}>{u.unit.name}</option>)}
+                          </select>
+                          <Input type="number" min="0.01" step="0.01" value={line.qty}
+                            onChange={(e) => updateLine(idx, "qty", e.target.value)} className="h-8 text-xs px-2" />
+                          <Input type="number" min="0" step="1" value={line.price}
+                            onChange={(e) => updateLine(idx, "price", e.target.value)} className="h-8 text-xs px-2" placeholder="0" />
+                          <div className="flex gap-1 items-center">
+                            <button type="button"
+                              onClick={() => updateLine(idx, "discountType", line.discountType === "AMOUNT" ? "PERCENT" : "AMOUNT")}
+                              className={cn("h-8 w-8 shrink-0 rounded border text-[10px] font-bold transition-colors",
+                                line.discountType === "PERCENT" ? "bg-primary text-white border-primary" : "bg-muted text-muted-foreground border-border hover:border-primary/50")}>
+                              {line.discountType === "PERCENT" ? "%" : "Rp"}
+                            </button>
+                            <Input type="number" min="0" max={line.discountType === "PERCENT" ? "100" : undefined}
+                              step={line.discountType === "PERCENT" ? "0.1" : "1"} value={line.discount}
+                              onChange={(e) => updateLine(idx, "discount", e.target.value)}
+                              className="h-8 text-xs px-2 min-w-0" placeholder="0" />
+                          </div>
+                          <button type="button" onClick={() => removeLine(idx)}
+                            className="flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors">
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
-                          <Input
-                            type="number"
-                            min="0"
-                            max={line.discountType === "PERCENT" ? "100" : undefined}
-                            step={line.discountType === "PERCENT" ? "0.1" : "1"}
-                            value={line.discount}
-                            onChange={(e) => updateLine(idx, "discount", e.target.value)}
-                            className="h-8 text-xs px-2 min-w-0"
-                            placeholder="0"
-                          />
                         </div>
-                        {/* Hapus */}
-                        <button
-                          type="button"
-                          onClick={() => removeLine(idx)}
-                          className="flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+
+                        {/* ── Bahan baku untuk layanan ini ── */}
+                        {(materialLines.length > 0 || isMatOpen) && (
+                          <div className="border-t border-dashed border-border/50 bg-muted/5">
+                            {/* Header kolom bahan baku */}
+                            {materialLines.length > 0 && (
+                              <div className="grid grid-cols-[16px_1fr_90px_60px_90px_28px] gap-1.5 bg-muted/20 px-2.5 py-1 text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
+                                <span />
+                                <span>Bahan Baku</span><span>Satuan</span><span>Qty</span><span>Harga (HPP)</span><span />
+                              </div>
+                            )}
+                            {/* Bahan baku rows */}
+                            {materialLines.map((mat) => {
+                              const mIdx  = mat._idx;
+                              const mCost = (parseFloat(mat.price) || 0) * (parseFloat(mat.qty) || 1);
+                              return (
+                                <div key={mIdx} className="grid grid-cols-[16px_1fr_90px_60px_90px_28px] gap-1.5 items-center px-2.5 py-1.5 border-t border-border/30">
+                                  <span className="text-[10px] text-muted-foreground/50 text-center">└</span>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-medium truncate">{mat.itemName}</p>
+                                    <div className="flex items-center gap-1 mt-0.5">
+                                      <span className="text-[9px] text-muted-foreground">{mat.itemCode}</span>
+                                      {mCost > 0 && <span className="text-[9px] text-muted-foreground/60">HPP {formatCurrency(mCost)}</span>}
+                                    </div>
+                                  </div>
+                                  <select value={mat.unitId} onChange={(e) => updateLine(mIdx, "unitId", e.target.value)}
+                                    className="h-8 rounded border border-input bg-background px-1.5 text-xs w-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                                    {mat.itemUnits.length === 0 && <option value="">—</option>}
+                                    {mat.itemUnits.map((u) => <option key={u.unit.id} value={u.unit.id}>{u.unit.name}</option>)}
+                                  </select>
+                                  <Input type="number" min="0.01" step="0.01" value={mat.qty}
+                                    onChange={(e) => updateLine(mIdx, "qty", e.target.value)} className="h-8 text-xs px-2" />
+                                  <Input type="number" min="0" step="1" value={mat.price}
+                                    onChange={(e) => updateLine(mIdx, "price", e.target.value)} className="h-8 text-xs px-2" placeholder="0" />
+                                  <button type="button" onClick={() => removeLine(mIdx)}
+                                    className="flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors">
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+
+                            {/* Footer: total HPP group + tambah bahan baku */}
+                            <div className="flex items-center justify-between px-2.5 py-1.5 border-t border-dashed border-border/30">
+                              {groupHPP > 0 ? (
+                                <span className="text-[9px] text-muted-foreground">HPP: {formatCurrency(groupHPP)}</span>
+                              ) : <span />}
+                              {isMatOpen ? (
+                                <div className="relative flex-1 ml-2">
+                                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+                                  <input
+                                    type="text"
+                                    value={materialSearch}
+                                    onChange={handleMaterialSearch}
+                                    onBlur={(e) => {
+                                      // Delay close agar klik pada result sempat terjadi
+                                      setTimeout(() => {
+                                        if (!materialResults.length) closeMaterialSearch();
+                                      }, 200);
+                                    }}
+                                    placeholder="Cari bahan baku…"
+                                    autoFocus
+                                    className="w-full h-7 pl-6 pr-2 text-xs rounded border border-input bg-background outline-none focus:ring-1 focus:ring-ring"
+                                  />
+                                  {materialResults.length > 0 && (
+                                    <div className="absolute z-30 bottom-full mb-1 left-0 right-0 rounded-md border border-input bg-background shadow-lg max-h-40 overflow-y-auto">
+                                      {materialResults.map((r) => (
+                                        <button key={r.id} type="button"
+                                          onMouseDown={(e) => e.preventDefault()} // cegah blur sebelum click
+                                          onClick={() => addMaterialLine(r, line.lineGroup)}
+                                          className="w-full px-3 py-2 text-left text-xs hover:bg-muted/50 border-b border-border/40 last:border-0">
+                                          <div className="flex items-center justify-between gap-2">
+                                            <span className="font-medium truncate">{r.name}</span>
+                                            <span className={cn(
+                                              "shrink-0 text-[9px] px-1 py-px rounded font-medium",
+                                              r.itemType === "SERVICE"
+                                                ? "bg-blue-50 text-blue-600 border border-blue-200"
+                                                : "bg-amber-50 text-amber-600 border border-amber-200"
+                                            )}>
+                                              {r.itemType === "SERVICE" ? "Layanan" : "Produk"}
+                                            </span>
+                                          </div>
+                                          <span className="text-[10px] text-muted-foreground">{r.itemCode}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (activeMaterialGroupId) closeMaterialSearch();
+                                    setActiveMaterialGroupId(line.lineGroup);
+                                  }}
+                                  className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  Tambah bahan baku
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Tombol tambah bahan baku (jika section bahan baku belum tampil) */}
+                        {materialLines.length === 0 && !isMatOpen && (
+                          <div className="border-t border-dashed border-border/30 px-2.5 py-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (activeMaterialGroupId) closeMaterialSearch();
+                                setActiveMaterialGroupId(line.lineGroup);
+                              }}
+                              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <Plus className="h-3 w-3" />
+                              Tambah bahan baku
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
-                  })}
-                </div>
-              )}
-            </div>}
+                  });
+                })()}
+              </div>
+            )}
 
             {/* ── PPN / Notes / Summary — create or edit mode ── */}
             {(!existingInvoiceId || editMode) && (
@@ -1364,10 +1598,10 @@ export function CreateInvoiceDialog({
                   />
                 </div>
 
-                {lines.length > 0 && (
+                {lines.filter((l) => !l.isMaterial).length > 0 && (
                   <div className="rounded-md border border-border bg-muted/30 p-3 text-xs space-y-1">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Estimasi subtotal</span>
+                      <span className="text-muted-foreground">Estimasi subtotal layanan</span>
                       <span className="font-medium">{formatCurrency(subtotalEst)}</span>
                     </div>
                     {taxable && !inclusiveTax && (
@@ -1394,6 +1628,12 @@ export function CreateInvoiceDialog({
                         {formatCurrency(outstandingEst)}
                       </span>
                     </div>
+                    {materialTotalEst > 0 && (
+                      <div className="flex justify-between border-t border-dashed border-border pt-1 mt-1 text-muted-foreground text-[10px]">
+                        <span>Total HPP bahan baku (internal)</span>
+                        <span>{formatCurrency(materialTotalEst)}</span>
+                      </div>
+                    )}
                     <p className="text-[10px] text-muted-foreground/70">
                       * Harga final dihitung server berdasarkan price list
                     </p>
@@ -1451,7 +1691,7 @@ export function CreateInvoiceDialog({
                 <Button type="submit" disabled={
                   submitting ||
                   (mode === "booking" ? !selectedAppt : !selectedCustomer) ||
-                  lines.length === 0
+                  lines.filter((l) => !l.isMaterial).length === 0
                 }>
                   {submitting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Membuat…</> : "Buat Invoice"}
                 </Button>

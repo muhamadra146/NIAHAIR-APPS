@@ -9,6 +9,10 @@ const itemSchema = object({
   discountAmount:  optional(pipe(number(), minValue(0))),
   discountPercent: optional(pipe(number(), minValue(0))),
   taxable:         optional(boolean()),
+  // true = bahan baku (internal COGS) — tidak masuk grand total & struk client
+  isMaterial:      optional(boolean()),
+  // UUID shared antara layanan dan bahan bakunya — untuk alokasi HPP per layanan di Accurate
+  lineGroup:       optional(string()),
 });
 
 const createInvoiceSchema = object({

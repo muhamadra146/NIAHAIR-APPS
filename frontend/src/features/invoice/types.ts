@@ -38,6 +38,10 @@ export interface InvoiceLineItem {
   taxable:         boolean;
   taxName:         string | null;
   taxRate:         string;
+  /** true = bahan baku (internal COGS, tidak tampil di struk client) */
+  isMaterial:      boolean;
+  /** UUID shared antara layanan dan bahan bakunya */
+  lineGroup:       string | null;
   item?:           InvoiceItemRef;
   unit?:           InvoiceUnitRef;
 }
@@ -123,6 +127,10 @@ export interface CreateInvoiceItemInput {
   discountAmount?: number;
   discountPercent?: number;
   taxable?:        boolean;
+  /** true = bahan baku (internal COGS) */
+  isMaterial?:     boolean;
+  /** UUID shared antara layanan dan bahan bakunya */
+  lineGroup?:      string | null;
 }
 
 export interface CreateInvoiceInput {

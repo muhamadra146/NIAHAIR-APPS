@@ -1454,6 +1454,14 @@ model InvoiceItem {
 
   taxRate Decimal @default(0) @db.Decimal(18, 2)
 
+  // true = bahan baku (internal COGS, tidak masuk tagihan client / struk)
+  // false = layanan (default, tampil di struk dan masuk grand total)
+  isMaterial Boolean @default(false)
+
+  // UUID yang sama antara layanan dan bahan bakunya — untuk alokasi HPP per layanan
+  // Null = tidak ada bahan baku yang terhubung (layanan standalone)
+  lineGroup  String?
+
   notes String?
 
   createdAt DateTime @default(now())

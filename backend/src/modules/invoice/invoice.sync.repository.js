@@ -28,9 +28,12 @@ const findInvoiceForSync = async (id) => {
           id:                      true,
           qty:                     true,
           price:                   true,
+          subtotal:                true,
           discount:                true,
           discountType:            true,
           taxable:                 true,
+          isMaterial:              true,
+          lineGroup:               true,
           accurateInvoiceDetailId: true,
           item: {
             select: {
