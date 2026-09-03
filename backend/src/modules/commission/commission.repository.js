@@ -19,6 +19,15 @@ const INCLUDE = {
   invoiceItem: {
     select: { id: true, itemId: true, qty: true, price: true, subtotal: true },
   },
+  // Invoice summary untuk per-invoice grouping di UI
+  invoice: {
+    select: {
+      invoiceNo:   true,
+      invoiceDate: true,
+      grandTotal:  true,
+      customer:    { select: { name: true } },
+    },
+  },
 };
 
 // ── Management reads ──────────────────────────────────────────────────
@@ -98,6 +107,15 @@ const findInvoiceForGeneration = (invoiceId, tx) => {
                 select: {
                   id:                   true,
                   commissionCategoryId: true,
+                  serviceJobSlots: {
+                    where: { isActive: true },
+                    select: {
+                      id:             true,
+                      slotKey:        true,
+                      label:          true,
+                      commissionRate: true,
+                    },
+                  },
                 },
               },
               assignments: {
@@ -106,6 +124,31 @@ const findInvoiceForGeneration = (invoiceId, tx) => {
                   employeeId: true,
                   workQty:    true,
                   slotKey:    true,
+                },
+              },
+              jobAssignments: {
+                where: { employeeId: { not: null } },
+                select: {
+                  id:               true,
+                  employeeId:       true,
+                  serviceJobSlotId: true,
+                  commissionJobId:  true,
+                  workQty:          true,
+                  commissionAmount: true,  // nominal manual — dipakai langsung jika ada
+                  serviceJobSlot: {
+                    select: {
+                      id:             true,
+                      slotKey:        true,
+                      commissionRate: true,
+                      commissionMode: true,
+                      roleId:         true,
+                      isMainJob:      true,
+                      slotType:       true,
+                      serviceJobRole: {
+                        select: { id: true, commissionRate: true },
+                      },
+                    },
+                  },
                 },
               },
             },

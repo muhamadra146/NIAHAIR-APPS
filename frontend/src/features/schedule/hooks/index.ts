@@ -13,10 +13,12 @@ export const useShifts = () =>
 
 export const useRoster = (params: RosterParams, enabled = true) =>
   useQuery({
-    queryKey: ["roster", params],
-    queryFn:  () => fetchRoster(params),
-    enabled:  enabled && !!params.branchId && !!params.startDate,
-    retry:    1,
+    queryKey:           ["roster", params],
+    queryFn:            () => fetchRoster(params),
+    enabled:            enabled && !!params.branchId && !!params.startDate,
+    retry:              2,
+    retryDelay:         1000,
+    refetchOnWindowFocus: true,  // auto-recover setelah server restart
   });
 
 export const useBulkSchedule = () => {

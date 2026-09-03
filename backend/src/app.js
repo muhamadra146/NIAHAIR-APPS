@@ -19,6 +19,7 @@ const employeeRoleRouter = require("./modules/employeeRole/employeeRole.route");
 const branchRouter = require("./modules/branch/branch.route");
 const commissionRuleRouter     = require("./modules/commissionRule/commissionRule.route");
 const commissionCategoryRouter = require("./modules/commissionCategory/commissionCategory.route");
+const commissionJobRouter      = require("./modules/commissionJob/commissionJob.route");
 const unitRouter               = require("./modules/unit/unit.route");
 const treatmentRouter               = require("./modules/treatment/treatment.route");
 const treatmentItemRouter           = require("./modules/treatmentItem/treatmentItem.route");
@@ -61,6 +62,8 @@ const glAccountRouter               = require("./modules/glAccount/glAccount.rou
 const supplierRouter                = require("./modules/supplier/supplier.route");
 const purchaseRouter                = require("./modules/purchase/purchase.route");
 const complaintRouter               = require("./modules/complaint/complaint.route");
+const serviceJobSlotRouter          = require("./modules/serviceJobSlot/serviceJobSlot.route");
+const serviceJobRoleRouter          = require("./modules/serviceJobRole/serviceJobRole.route");
 
 
 const app = express();
@@ -103,11 +106,14 @@ const v1 = express.Router();
 v1.use("/auth", authRouter);
 v1.use("/customers", customerRouter);
 v1.use("/items", itemRouter);
+v1.use("/items/:itemId/job-slots", serviceJobSlotRouter);
+v1.use("/items/:itemId/job-roles", serviceJobRoleRouter);
 v1.use("/employees", employeeRouter);
 v1.use("/employee-roles", employeeRoleRouter);
 v1.use("/branches", branchRouter);
-v1.use("/commission-rules",      commissionRuleRouter);
-v1.use("/commission-categories", commissionCategoryRouter);
+v1.use("/commission-rules",                                     commissionRuleRouter);
+v1.use("/commission-categories",                                commissionCategoryRouter);
+v1.use("/commission-categories/:categoryId/jobs",               commissionJobRouter);
 v1.use("/units",               unitRouter);
 v1.use("/treatment-sessions", treatmentRouter);
 v1.use("/treatment-items",    treatmentItemRouter);

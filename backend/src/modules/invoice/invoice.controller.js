@@ -12,6 +12,10 @@ const {
   getCommissionGenerateList,
   skipCommission,
   resetCommissionSkip,
+  getJobAssignmentInvoices,
+  submitJobAssignments,
+  getCommissionWorksheet,
+  finalizeCommissionFromCalculator,
 } = require("./invoice.service");
 const { generateCommission } = require("../commission/commission.service");
 
@@ -146,4 +150,50 @@ module.exports = {
   commissionGenerateListController,
   skipCommissionController,
   resetCommissionSkipController,
+  jobAssignmentsController,
+  submitJobAssignmentsController,
+  commissionWorksheetController,
+  finalizeCommissionController,
 };
+
+async function jobAssignmentsController(req, res, next) {
+  try {
+    const { branchId, startDate, endDate } = req.query;
+    const result = await getJobAssignmentInvoices({ branchId, startDate, endDate });
+    return success(res, result, "Job assignment invoices fetched");
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function submitJobAssignmentsController(req, res, next) {
+  try {
+    const { sessions } = req.body;
+    if (!sessions || !Array.isArray(sessions)) {
+      return next(new (require("../../common/errors/AppError"))("sessions wajib diisi", 400));
+    }
+    const result = await submitJobAssignments(req.params.id, sessions);
+    return success(res, result, "Job assignment berhasil disimpan. Lanjutkan ke kalkulator komisi.");
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function commissionWorksheetController(req, res, next) {
+  try {
+    const result = await getCommissionWorksheet(req.params.id);
+    return success(res, result, "Commission worksheet fetched");
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function finalizeCommissionController(req, res, next) {
+  try {
+    const { rows } = req.body;
+    const result = await finalizeCommissionFromCalculator(req.params.id, rows);
+    return success(res, result, `${result.created} komisi berhasil disimpan`);
+  } catch (err) {
+    next(err);
+  }
+}

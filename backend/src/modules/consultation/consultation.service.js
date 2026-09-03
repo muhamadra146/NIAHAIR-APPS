@@ -1,7 +1,8 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
-const prisma = require("../../config/prisma");
+const prisma     = require("../../config/prisma");
+const cloudinary = require("../../config/cloudinary");
 const {
   findAll,
   count,
@@ -136,6 +137,36 @@ const getStatsData = async ({ branchId, startDate, endDate }) => {
   return getStats(where);
 };
 
+// ── Upload Foto Before/After ──────────────────────────────────────────
+
+const uploadNotePhoto = async (id, { url, publicId, type }, user) => {
+  const note = await findById(id);
+  if (!note) throw new AppError("Catatan tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  // Non-manager: harus terkait dengan invoice catatan ini
+  if (!isManager(user.roleCode)) {
+    const assigned = await isEmployeeAssignedToInvoice(note.invoiceId, user.employeeId);
+    if (!assigned) {
+      throw new AppError("Anda tidak memiliki akses ke catatan ini", StatusCodes.FORBIDDEN);
+    }
+  }
+
+  if (type !== "BEFORE" && type !== "AFTER") {
+    throw new AppError("type harus BEFORE atau AFTER", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
+  const isBefore = type === "BEFORE";
+  const urlField = isBefore ? "beforePhotoUrl"      : "afterPhotoUrl";
+  const pidField = isBefore ? "beforePhotoPublicId" : "afterPhotoPublicId";
+
+  // Hapus asset Cloudinary lama sebelum diganti (cegah orphan)
+  if (note[pidField]) {
+    await cloudinary.uploader.destroy(note[pidField]).catch(() => {});
+  }
+
+  return update(id, { [urlField]: url, [pidField]: publicId });
+};
+
 // ── Delete ────────────────────────────────────────────────────────────
 
 const deleteNote = async (id, user) => {
@@ -152,4 +183,4 @@ const deleteNote = async (id, user) => {
   await remove(id);
 };
 
-module.exports = { listNotes, getNoteById, getNoteByInvoiceId, createNote, updateNote, deleteNote, getStatsData };
+module.exports = { listNotes, getNoteById, getNoteByInvoiceId, createNote, updateNote, uploadNotePhoto, deleteNote, getStatsData };

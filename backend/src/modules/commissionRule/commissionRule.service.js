@@ -67,8 +67,10 @@ const createCommissionRule = async (body) => {
     throw new AppError("Percentage commission cannot exceed 100", StatusCodes.BAD_REQUEST);
   }
 
-  const slotKey   = body.slotKey ?? null;
-  const duplicate = await findDuplicate(body.employeeId, body.commissionCategoryId, slotKey, body.effectiveDate);
+  const slotKey        = body.slotKey        ?? null;
+  const commissionJobId = body.commissionJobId ?? null;
+
+  const duplicate = await findDuplicate(body.employeeId, body.commissionCategoryId, slotKey, body.effectiveDate, commissionJobId);
   if (duplicate) {
     throw new AppError(
       "Rule komisi dengan karyawan, kategori, role, dan tanggal berlaku yang sama sudah ada",
@@ -80,6 +82,7 @@ const createCommissionRule = async (body) => {
     employeeId:           body.employeeId,
     commissionCategoryId: body.commissionCategoryId,
     slotKey,
+    commissionJobId,
     commissionType:       body.commissionType,
     commissionValue:      body.commissionValue,
     commissionBase:       body.commissionBase ?? "AFTER_DISCOUNT_BEFORE_TAX",

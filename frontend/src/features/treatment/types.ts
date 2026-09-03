@@ -206,3 +206,51 @@ export interface BulkSaveMaterialUsageRow {
   unitId:          string;
   qty:             number;
 }
+
+// ── Job Assignments (sistem komisi baru) ──────────────────────────────────────
+
+export type CommissionMode = "FIXED_RATE" | "WORK_QTY";
+export type SlotType       = "PERCENTAGE" | "FLAT";
+
+export interface JobAssignmentEntry {
+  id:               string;
+  employeeId:       string | null;
+  employeeName:     string | null;
+  workQty:          number | null;  // helaian — hanya relevan untuk WORK_QTY
+  commissionAmount: string | null;  // nominal komisi manual (Rp); null = belum diisi
+  notes:            string | null;
+}
+
+export interface JobAssignmentSlot {
+  serviceJobSlotId: string;
+  slotKey:          string;
+  label:            string;
+  commissionRate:   string;
+  commissionMode:   CommissionMode;
+  isRequired:       boolean;
+  sortOrder:        number;
+  // Role-based fields — null untuk slot lama (backward compat)
+  roleId:             string | null;
+  roleName:           string | null;
+  roleCommissionRate: string | null;
+  isMainJob:          boolean;
+  slotType:           SlotType;
+  assignments:        JobAssignmentEntry[];  // plural — WORK_QTY / role MAIN bisa banyak
+}
+
+export interface JobAssignmentItem {
+  treatmentItemId: string;
+  itemId:          string;
+  itemName:        string;
+  subtotal:        string;
+  slots:           JobAssignmentSlot[];
+}
+
+export interface UpsertJobAssignmentInput {
+  treatmentItemId:  string;
+  serviceJobSlotId: string;
+  employeeId:       string | null;
+  workQty?:         number | null;  // helaian untuk WORK_QTY slot
+  commissionAmount?: number | null; // nominal komisi manual (Rp); null = hitung otomatis dari rate
+  notes?:           string;
+}

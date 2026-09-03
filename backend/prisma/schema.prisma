@@ -65,7 +65,6 @@ model Branch {
   deposits              Deposit[]
   payments              Payment[]
   treatmentSessions     TreatmentSession[]
-  branchCommissionRules BranchCommissionRule[]
   staffSchedules        StaffSchedule[]
   attendances           Attendance[]
   loans                 Loan[]
@@ -214,7 +213,6 @@ model Employee {
   attendances              Attendance[]
   schedules                EmployeeSchedule[]
   leaves                   Leave[]
-  branchCommissionRules    BranchCommissionRule[]
   overtimeChargeEmployees  OvertimeChargeEmployee[]
   staffSchedules        StaffSchedule[]
   salarySettings        EmployeeSalarySettings[]
@@ -229,7 +227,8 @@ model Employee {
   inventoryPeriods      InventoryPeriod[]   @relation("InventoryPeriodClosedBy")
   purchaseInvoices      PurchaseInvoice[]   @relation("PurchaseInvoiceCreatedBy")
 
-  complaintsAbout Complaint[] @relation("ComplaintEmployee")
+  complaintsAbout         Complaint[]              @relation("ComplaintEmployee")
+  treatmentJobAssignments TreatmentJobAssignment[]
 
   @@index([roleId])
   @@index([homeBranchId])
@@ -560,6 +559,8 @@ model Item {
   materialUsageItems  MaterialUsageItem[]
   serviceMaterials    ServiceMaterial[]    @relation("ServiceMaterials")
   usedAsMaterial      ServiceMaterial[]    @relation("MaterialItems")
+  serviceJobSlots     ServiceJobSlot[]
+  serviceJobRoles     ServiceJobRole[]
 
   @@index([itemType])
   @@index([categoryId])
@@ -568,6 +569,87 @@ model Item {
   @@index([commissionCategoryId])
   @@index([name])
   @@map("items")
+}
+
+// =====================================================
+// SERVICE JOB SLOTS
+// =====================================================
+
+model ServiceJobSlot {
+  id String @id @default(uuid())
+
+  itemId String
+
+  slotKey String // e.g. "remove", "cuci", "service_lem", "bantu_masang"
+
+  label String // e.g. "Remove Rambut"
+
+  commissionRate Decimal @db.Decimal(8, 4) // % dari subtotal, e.g. 0.2500 = 0.25%
+
+  commissionMode CommissionMode @default(FIXED_RATE)
+  // FIXED_RATE: satu orang, komisi langsung = subtotal × rate
+  // WORK_QTY  : banyak orang, dibagi proporsional berdasarkan workQty (helaian)
+
+  // Role-based system (baru) — null = slot lama (backward compat, engine lama dipakai)
+  roleId    String?  // FK → ServiceJobRole
+  isMainJob Boolean  @default(false)   // true = job utama, dapat sisa pool setelah FLAT dibayar
+  slotType  SlotType @default(PERCENTAGE)
+  // PERCENTAGE: dapat bagian dari role pool (job utama, pakai workQty kalau banyak staff)
+  // FLAT      : dapat flat amount manual per treatment, dipotong dari pool terlebih dahulu
+
+  isRequired Boolean @default(false)
+
+  sortOrder Int @default(0)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item           Item             @relation(fields: [itemId], references: [id])
+  serviceJobRole ServiceJobRole?  @relation(fields: [roleId], references: [id])
+
+  treatmentJobAssignments TreatmentJobAssignment[]
+
+  commissions Commission[] @relation("CommissionJobSlot")
+
+  @@unique([itemId, slotKey])
+  @@index([itemId])
+  @@index([roleId])
+  @@map("service_job_slots")
+}
+
+enum CommissionMode {
+  FIXED_RATE
+  WORK_QTY
+}
+
+enum SlotType {
+  PERCENTAGE // slot dapat bagian dari role pool (default, job utama)
+  FLAT       // slot dapat flat amount manual, dipotong dari pool terlebih dahulu
+}
+
+// =====================================================
+// SERVICE JOB ROLES
+// =====================================================
+
+model ServiceJobRole {
+  id             String  @id @default(uuid())
+  itemId         String
+  roleName       String  // e.g. "Pemasang", "Asisten"
+  commissionRate Decimal @db.Decimal(8, 4) // % dari subtotal item, e.g. 5.0000 = 5%
+  sortOrder      Int     @default(0)
+  isActive       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item  Item             @relation(fields: [itemId], references: [id])
+  slots ServiceJobSlot[]
+
+  @@unique([itemId, roleName])
+  @@index([itemId])
+  @@map("service_job_roles")
 }
 
 // =====================================================
@@ -1628,8 +1710,43 @@ model CommissionCategory {
 
   items           Item[]
   commissionRules CommissionRule[]
+  jobs            CommissionJob[]
 
   @@map("commission_categories")
+}
+
+// Job per kategori — daftar pekerjaan yang bisa dikerjakan dalam satu kategori layanan.
+// Contoh: kategori "Pasang Baru" → jobs: Pasang, Remove, Cuci, Styling, Bantu Pasang
+model CommissionJob {
+  id                   String   @id @default(uuid())
+  commissionCategoryId String
+  name                 String   // "Pasang Baru", "Remove", "Cuci"
+  jobKey               String   // "pasang_baru", "remove", "cuci" (URL-safe identifier)
+  sortOrder            Int      @default(0)
+  isActive             Boolean  @default(true)
+
+  // Chain deduction: jika diisi, job ini memotong base/komisi dari job yang ditunjuk.
+  // PERCENTAGE helper → potong BASE primary; FLAT helper → potong KOMISI primary.
+  deductsFromJobId String?   @map("deducts_from_job_id")
+  // Harga default per unit untuk PERCENTAGE helper (bisa di-override di kalkulator).
+  pricePerUnit     Decimal?  @db.Decimal(15, 2) @map("price_per_unit")
+  // Satuan unit helper — bebas diisi: "helai", "sesi", "cm", dll.
+  unit             String    @default("helai") @map("unit")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commissionCategory CommissionCategory       @relation(fields: [commissionCategoryId], references: [id])
+  commissionRules    CommissionRule[]
+  jobAssignments     TreatmentJobAssignment[]
+
+  // Self-referential: job ini memotong dari job lain dalam kategori yang sama
+  deductsFrom CommissionJob?  @relation("JobDeduction", fields: [deductsFromJobId], references: [id])
+  deductedBy  CommissionJob[] @relation("JobDeduction")
+
+  @@unique([commissionCategoryId, jobKey])
+  @@index([commissionCategoryId])
+  @@map("commission_jobs")
 }
 
 model CommissionRule {
@@ -1637,7 +1754,8 @@ model CommissionRule {
 
   employeeId           String
   commissionCategoryId String
-  slotKey              String?
+  slotKey              String?        // lama — backward compat
+  commissionJobId      String?        // baru — referensi ke CommissionJob
 
   commissionType CommissionType
 
@@ -1657,16 +1775,18 @@ model CommissionRule {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  employee Employee @relation(fields: [employeeId], references: [id])
-
+  employee           Employee           @relation(fields: [employeeId], references: [id])
   commissionCategory CommissionCategory @relation(fields: [commissionCategoryId], references: [id])
+  commissionJob      CommissionJob?     @relation(fields: [commissionJobId], references: [id])
 
   commissions Commission[]
 
   // coloristCondition masuk unique agar Surya/Ulvi bisa punya rule PRESENT dan ABSENT pada tanggal yang sama
-  @@unique([employeeId, commissionCategoryId, slotKey, coloristCondition, effectiveDate])
+  // commissionJobId masuk unique agar satu karyawan bisa punya rule berbeda per job dalam kategori yang sama
+  @@unique([employeeId, commissionCategoryId, slotKey, commissionJobId, coloristCondition, effectiveDate])
   @@index([employeeId])
   @@index([commissionCategoryId])
+  @@index([commissionJobId])
   @@map("commission_rules")
 }
 
@@ -1677,7 +1797,12 @@ model Commission {
 
   invoiceItemId String?
 
-  treatmentAssignmentId String
+  treatmentAssignmentId String?
+
+  // Untuk komisi berbasis job slot (sistem baru)
+  treatmentJobAssignmentId String?
+
+  serviceJobSlotId String?
 
   employeeId String
 
@@ -1727,7 +1852,9 @@ model Commission {
 
   invoiceItem InvoiceItem? @relation(fields: [invoiceItemId], references: [id])
 
-  treatmentAssignment TreatmentAssignment @relation(fields: [treatmentAssignmentId], references: [id])
+  treatmentAssignment    TreatmentAssignment?    @relation(fields: [treatmentAssignmentId],    references: [id])
+  treatmentJobAssignment TreatmentJobAssignment? @relation(fields: [treatmentJobAssignmentId], references: [id])
+  serviceJobSlot         ServiceJobSlot?         @relation("CommissionJobSlot", fields: [serviceJobSlotId], references: [id])
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
@@ -1736,10 +1863,12 @@ model Commission {
   commissionRule CommissionRule? @relation(fields: [commissionRuleId], references: [id])
 
   @@unique([treatmentAssignmentId])
+  @@unique([treatmentJobAssignmentId])
   @@index([invoiceId])
   @@index([employeeId])
   @@index([status])
   @@index([commissionRuleId])
+  @@index([serviceJobSlotId])
   @@map("commissions")
 }
 
@@ -1779,30 +1908,6 @@ model OvertimeChargeEmployee {
   @@map("overtime_charge_employees")
 }
 
-model BranchCommissionRule {
-  id String @id @default(uuid())
-
-  branchId String
-
-  employeeId String
-
-  commissionType CommissionType
-
-  commissionValue Decimal @db.Decimal(18, 2)
-
-  effectiveDate DateTime
-
-  endDate DateTime?
-
-  isActive Boolean @default(true)
-
-  createdAt DateTime @default(now())
-
-  branch   Branch   @relation(fields: [branchId], references: [id])
-  employee Employee @relation(fields: [employeeId], references: [id])
-
-  @@map("branch_commission_rules")
-}
 
 enum AttendanceStatus {
   PRESENT
@@ -2077,7 +2182,8 @@ model TreatmentItem {
 
   unit Unit @relation(fields: [unitId], references: [id])
 
-  assignments TreatmentAssignment[]
+  assignments    TreatmentAssignment[]
+  jobAssignments TreatmentJobAssignment[]
 
   materialUsages MaterialUsage[]
 
@@ -2085,6 +2191,51 @@ model TreatmentItem {
   @@index([itemId])
   @@index([unitId])
   @@map("treatment_items")
+}
+
+// =====================================================
+// TREATMENT JOB ASSIGNMENTS
+// =====================================================
+
+model TreatmentJobAssignment {
+  id String @id @default(uuid())
+
+  treatmentItemId String
+
+  // Sistem lama (ServiceJobSlot based) — nullable setelah migrasi ke sistem baru
+  serviceJobSlotId String?
+
+  // Sistem baru (CommissionJob based) — job dari kategori komisi item
+  commissionJobId String?
+
+  employeeId String? // null = tidak ada yang mengerjakan → tidak ada komisi
+
+  workQty Decimal? @db.Decimal(10, 2)
+  // Hanya relevan untuk slot.commissionMode = WORK_QTY (jumlah helaian)
+  // Null untuk FIXED_RATE
+
+  commissionAmount Decimal? @db.Decimal(18, 2)
+  // Nominal komisi yang diinput manual saat selesaikan treatment.
+  // Jika terisi → commission engine pakai nilai ini langsung (tidak kalkulasi ulang dari %).
+  // Jika null  → commission engine hitung dari rate × subtotal (backward compat).
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  treatmentItem  TreatmentItem   @relation(fields: [treatmentItemId], references: [id])
+  serviceJobSlot ServiceJobSlot? @relation(fields: [serviceJobSlotId], references: [id])
+  commissionJob  CommissionJob?  @relation(fields: [commissionJobId], references: [id])
+  employee       Employee?       @relation(fields: [employeeId], references: [id])
+
+  commission Commission?
+
+  @@index([treatmentItemId])
+  @@index([serviceJobSlotId])
+  @@index([commissionJobId])
+  @@index([employeeId])
+  @@map("treatment_job_assignments")
 }
 
 model TreatmentMedia {
@@ -2731,6 +2882,12 @@ model ClientConsultationNote {
   changesAfterUse String?
   interestingNote String
   additionalNotes String?
+
+  // D. Foto Before/After
+  beforePhotoUrl      String?
+  beforePhotoPublicId String?
+  afterPhotoUrl       String?
+  afterPhotoPublicId  String?
 
   filledAt  DateTime @default(now())
   createdAt DateTime @default(now())

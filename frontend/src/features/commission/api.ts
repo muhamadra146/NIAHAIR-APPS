@@ -3,8 +3,11 @@ import type { ApiResponse, PaginatedResponse } from "@/types/api";
 import type {
   Commission, CommissionListParams,
   CommissionCategory, CommissionCategoryListParams, CreateCommissionCategoryInput, UpdateCommissionCategoryInput,
+  CommissionJob, CreateCommissionJobInput, UpdateCommissionJobInput,
   CommissionRule, CommissionRuleListParams, CreateCommissionRuleInput, UpdateCommissionRuleInput,
   MasterItem, MasterItemListParams, UpdateItemCommissionInput,
+  ServiceJobSlot, CreateServiceJobSlotInput, UpdateServiceJobSlotInput,
+  ServiceJobRole, CreateServiceJobRoleInput, UpdateServiceJobRoleInput,
 } from "./types";
 
 interface CommissionListData {
@@ -72,6 +75,34 @@ export async function deleteCommissionCategory(id: string): Promise<void> {
   await api.delete(`/commission-categories/${id}`);
 }
 
+// ── Commission Jobs ───────────────────────────────────────────────────────────
+
+export async function fetchCommissionJobs(categoryId: string, all = false): Promise<CommissionJob[]> {
+  const { data } = await api.get<ApiResponse<CommissionJob[]>>(
+    `/commission-categories/${categoryId}/jobs`,
+    { params: all ? { all: "true" } : {} }
+  );
+  return data.data;
+}
+
+export async function createCommissionJob(categoryId: string, input: CreateCommissionJobInput): Promise<CommissionJob> {
+  const { data } = await api.post<ApiResponse<CommissionJob>>(
+    `/commission-categories/${categoryId}/jobs`, input
+  );
+  return data.data;
+}
+
+export async function updateCommissionJob(categoryId: string, id: string, input: UpdateCommissionJobInput): Promise<CommissionJob> {
+  const { data } = await api.put<ApiResponse<CommissionJob>>(
+    `/commission-categories/${categoryId}/jobs/${id}`, input
+  );
+  return data.data;
+}
+
+export async function deleteCommissionJob(categoryId: string, id: string): Promise<void> {
+  await api.delete(`/commission-categories/${categoryId}/jobs/${id}`);
+}
+
 // ── Commission Rules ──────────────────────────────────────────────────────────
 
 interface RuleListData { data: CommissionRule[]; meta: PaginatedResponse<CommissionRule>["meta"]; }
@@ -106,5 +137,53 @@ export async function fetchMasterItems(params: MasterItemListParams = {}): Promi
 
 export async function updateItemCommission(id: string, input: UpdateItemCommissionInput): Promise<MasterItem> {
   const { data } = await api.put<ApiResponse<MasterItem>>(`/items/${id}`, input);
+  return data.data;
+}
+
+// ── Service Job Slots ─────────────────────────────────────────────────────────
+
+export async function fetchJobSlots(itemId: string, all = false): Promise<ServiceJobSlot[]> {
+  const { data } = await api.get<ApiResponse<ServiceJobSlot[]>>(`/items/${itemId}/job-slots`, {
+    params: all ? { all: "true" } : undefined,
+  });
+  return data.data;
+}
+
+export async function createJobSlot(itemId: string, input: CreateServiceJobSlotInput): Promise<ServiceJobSlot> {
+  const { data } = await api.post<ApiResponse<ServiceJobSlot>>(`/items/${itemId}/job-slots`, input);
+  return data.data;
+}
+
+export async function updateJobSlot(itemId: string, id: string, input: UpdateServiceJobSlotInput): Promise<ServiceJobSlot> {
+  const { data } = await api.put<ApiResponse<ServiceJobSlot>>(`/items/${itemId}/job-slots/${id}`, input);
+  return data.data;
+}
+
+export async function deleteJobSlot(itemId: string, id: string): Promise<ServiceJobSlot> {
+  const { data } = await api.delete<ApiResponse<ServiceJobSlot>>(`/items/${itemId}/job-slots/${id}`);
+  return data.data;
+}
+
+// ── Service Job Roles ─────────────────────────────────────────────────────────
+
+export async function fetchJobRoles(itemId: string, all = false): Promise<ServiceJobRole[]> {
+  const { data } = await api.get<ApiResponse<ServiceJobRole[]>>(`/items/${itemId}/job-roles`, {
+    params: all ? { all: "true" } : undefined,
+  });
+  return data.data;
+}
+
+export async function createJobRole(itemId: string, input: CreateServiceJobRoleInput): Promise<ServiceJobRole> {
+  const { data } = await api.post<ApiResponse<ServiceJobRole>>(`/items/${itemId}/job-roles`, input);
+  return data.data;
+}
+
+export async function updateJobRole(itemId: string, id: string, input: UpdateServiceJobRoleInput): Promise<ServiceJobRole> {
+  const { data } = await api.put<ApiResponse<ServiceJobRole>>(`/items/${itemId}/job-roles/${id}`, input);
+  return data.data;
+}
+
+export async function deleteJobRole(itemId: string, id: string): Promise<ServiceJobRole> {
+  const { data } = await api.delete<ApiResponse<ServiceJobRole>>(`/items/${itemId}/job-roles/${id}`);
   return data.data;
 }

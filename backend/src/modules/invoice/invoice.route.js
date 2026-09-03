@@ -19,6 +19,10 @@ const {
   commissionGenerateListController,
   skipCommissionController,
   resetCommissionSkipController,
+  jobAssignmentsController,
+  submitJobAssignmentsController,
+  commissionWorksheetController,
+  finalizeCommissionController,
 } = require("./invoice.controller");
 
 const MANAGER_ROLES        = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER];
@@ -30,6 +34,7 @@ router.get("/",                 authenticate, getAllController);
 // Literal-path routes MUST come before /:id — Express matches first-registered-wins
 router.get("/daily-assignment",        authenticate, authorize(...DAILY_ASSIGN_ROLES), dailyAssignmentController);
 router.get("/commission-generate",     authenticate, authorize(...MANAGER_ROLES), commissionGenerateListController);
+router.get("/job-assignments",         authenticate, authorize(...DAILY_ASSIGN_ROLES), jobAssignmentsController);
 router.get("/:id",              authenticate, getByIdController);
 router.post("/",   authenticate, requireBranch, validate(createInvoiceSchema), createController);
 router.patch("/:id", authenticate, validate(updateInvoiceSchema), updateController);
@@ -37,7 +42,10 @@ router.post("/:invoiceId/deposits", authenticate, validate(applyDepositSchema), 
 router.patch("/:id/cancel",             authenticate, cancelController);
 router.delete("/:id",                   authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER), deleteController);
 router.post("/:id/setup-treatment",     authenticate, setupTreatmentController);
-router.post("/:id/generate-commission", authenticate, generateCommissionController);
+router.post("/:id/generate-commission",      authenticate, authorize(...MANAGER_ROLES), generateCommissionController);
+router.post("/:id/submit-job-assignments",   authenticate, authorize(...DAILY_ASSIGN_ROLES), submitJobAssignmentsController);
+router.get( "/:id/commission-worksheet",     authenticate, authorize(...DAILY_ASSIGN_ROLES), commissionWorksheetController);
+router.post("/:id/finalize-commission",      authenticate, authorize(...DAILY_ASSIGN_ROLES), finalizeCommissionController);
 router.post("/:id/skip-commission",     authenticate, authorize(...MANAGER_ROLES), skipCommissionController);
 router.post("/:id/reset-commission-skip", authenticate, authorize(...MANAGER_ROLES), resetCommissionSkipController);
 

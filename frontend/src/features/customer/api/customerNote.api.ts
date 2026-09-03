@@ -2,13 +2,34 @@ import { api } from "@/lib/axios";
 import type { ApiResponse } from "@/types/api";
 import type { CustomerNote } from "../types";
 
-export async function fetchCustomerNotes(customerId: string): Promise<CustomerNote[]> {
-  const { data } = await api.get<ApiResponse<CustomerNote[]>>(`/customers/${customerId}/notes`);
+export async function fetchCustomerNotes(
+  customerId: string,
+  params?: { skip?: number; take?: number },
+): Promise<CustomerNote[]> {
+  const { data } = await api.get<ApiResponse<CustomerNote[]>>(
+    `/customers/${customerId}/notes`,
+    { params },
+  );
   return data.data;
 }
 
 export async function createCustomerNote(customerId: string, note: string): Promise<CustomerNote> {
-  const { data } = await api.post<ApiResponse<CustomerNote>>(`/customers/${customerId}/notes`, { note });
+  const { data } = await api.post<ApiResponse<CustomerNote>>(
+    `/customers/${customerId}/notes`,
+    { note },
+  );
+  return data.data;
+}
+
+export async function updateCustomerNote(
+  customerId: string,
+  noteId: string,
+  note: string,
+): Promise<CustomerNote> {
+  const { data } = await api.put<ApiResponse<CustomerNote>>(
+    `/customers/${customerId}/notes/${noteId}`,
+    { note },
+  );
   return data.data;
 }
 

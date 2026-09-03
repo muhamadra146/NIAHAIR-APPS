@@ -19,6 +19,8 @@ import {
   fetchMaterialUsages,
   bulkSaveMaterialUsages,
   deleteMaterialUsageItem,
+  fetchJobAssignments,
+  upsertJobAssignments,
 } from "./api";
 import type {
   TreatmentListParams,
@@ -29,6 +31,7 @@ import type {
   CreateAssignmentInput,
   UpdateAssignmentInput,
   BulkSaveMaterialUsageRow,
+  UpsertJobAssignmentInput,
 } from "./types";
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
@@ -245,6 +248,31 @@ export function useDeleteMaterialUsageItem(sessionId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["material-usages", sessionId] });
       toast.success("Item material dihapus");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+// ── Job Assignments (sistem komisi baru) ──────────────────────────────────────
+
+export function useJobAssignments(sessionId: string) {
+  return useQuery({
+    queryKey:       ["job-assignments", sessionId],
+    queryFn:        () => fetchJobAssignments(sessionId),
+    enabled:        !!sessionId,
+    staleTime:      0,
+    refetchOnMount: true,
+  });
+}
+
+export function useUpsertJobAssignments(sessionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (assignments: UpsertJobAssignmentInput[]) =>
+      upsertJobAssignments(sessionId, assignments),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["job-assignments", sessionId] });
+      toast.success("Penugasan job disimpan");
     },
     onError: (err: Error) => toast.error(err.message),
   });

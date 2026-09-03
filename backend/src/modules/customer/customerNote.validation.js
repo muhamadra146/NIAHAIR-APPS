@@ -1,7 +1,19 @@
-const { object, string, pipe, minLength } = require("valibot");
+const { object, string, pipe, minLength, maxLength } = require("valibot");
 
 const createNoteSchema = object({
-  note: pipe(string(), minLength(1, "Isi catatan tidak boleh kosong")),
+  note: pipe(
+    string(),
+    minLength(1, "Isi catatan tidak boleh kosong"),
+    maxLength(500, "Catatan maksimal 500 karakter"),
+  ),
 });
 
-module.exports = { createNoteSchema };
+const updateNoteSchema = object({
+  note: pipe(
+    string(),
+    minLength(1, "Isi catatan tidak boleh kosong"),
+    maxLength(500, "Catatan maksimal 500 karakter"),
+  ),
+});
+
+module.exports = { createNoteSchema, updateNoteSchema };

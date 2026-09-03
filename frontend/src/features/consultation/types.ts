@@ -29,6 +29,12 @@ export interface ConsultationNote {
   interestingNote:        string;
   additionalNotes:        string | null;
 
+  // Foto Before/After (opsional)
+  beforePhotoUrl?:        string | null;
+  beforePhotoPublicId?:   string | null;
+  afterPhotoUrl?:         string | null;
+  afterPhotoPublicId?:    string | null;
+
   customer?:        { id: string; name: string; customerNo: string | null; mobilePhone: string | null };
   branch?:          { id: string; code: string; name: string };
   filledByEmployee?:{ id: string; employeeCode: string; name: string } | null;

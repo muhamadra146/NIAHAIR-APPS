@@ -1,5 +1,12 @@
-import { useState } from "react";
-import { RefreshCw, Edit2, Trash2 } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  fetchJobAssignmentInvoices,
+  type JobAssignmentInvoice,
+} from "@/features/invoice/api/commissionGenerate.api";
+import { RefreshCw, Edit2, Trash2, Loader2, CheckSquare, Calculator, CheckCircle2, ChevronDown, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
+import { toast } from "@/lib/toast";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +20,7 @@ import {
 import { useAuthStore } from "@/stores/authStore";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { MasterItemTab } from "../components/MasterItemTab";
+import { CommissionSettingsTab } from "@/features/settings/components/commission/CommissionSettingsTab";
 import {
   useCommissions,
   useApproveCommission,
@@ -21,6 +29,7 @@ import {
   useRegenerateCommission,
   useDeleteCommission,
 } from "../hooks";
+import { approveCommission } from "../api";
 import type { Commission, CommissionStatus } from "../types";
 
 const STATUS_TABS: { key: string; label: string }[] = [
@@ -45,13 +54,305 @@ const STATUS_BADGE: Record<string, string> = {
 const filterInputCls =
   "h-9 rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md focus-visible:shadow-md focus-visible:ring-ring/30";
 
+// ── Approval Tab ──────────────────────────────────────────────────────
+
+// Helper: apakah invoice sudah ada job assignment tapi belum ada komisi
+function isReadyToCalculate(inv: JobAssignmentInvoice): boolean {
+  if (inv._count.commissions > 0) return false;
+  return inv.treatmentSessions.some((s) =>
+    s.treatmentItems.some((ti) =>
+      ti.jobAssignments.some(
+        (ja) => ja.commissionJobId !== null && ja.employeeId !== null,
+      ),
+    ),
+  );
+}
+
+function ApprovalTab() {
+  const { branchId } = useAuthStore();
+  const qc           = useQueryClient();
+
+  const [startDate, setStart] = useState("");
+  const [endDate,   setEnd]   = useState("");
+  const [approvingSet, setApprovingSet] = useState<Set<string>>(new Set());
+
+  // Fetch PENDING commissions (sudah kalkulasi)
+  const { data, isLoading, isFetching, refetch } = useCommissions({
+    status:    "PENDING",
+    limit:     500,
+    branchId:  branchId  || undefined,
+    startDate: startDate || undefined,
+    endDate:   endDate   || undefined,
+  });
+
+  // Fetch job-assignment invoices (untuk deteksi "Siap Kalkulasi")
+  const { data: jaInvoices = [], isLoading: jaLoading } = useQuery({
+    queryKey: ["job-assignment-invoices", startDate, endDate, branchId],
+    queryFn:  () => fetchJobAssignmentInvoices({
+      startDate: startDate || undefined,
+      endDate:   endDate   || undefined,
+    }),
+    staleTime: 0,
+  });
+
+  // Invoice yang sudah diisi pengerjaan tapi belum dijalankan kalkulator
+  const readyToCalc = useMemo(
+    () => jaInvoices.filter(isReadyToCalculate),
+    [jaInvoices],
+  );
+
+  const allCommissions = data?.data ?? [];
+
+  // Group by invoiceId
+  const groups = useMemo(() => {
+    const map = new Map<string, Commission[]>();
+    allCommissions.forEach((c) => {
+      if (!map.has(c.invoiceId)) map.set(c.invoiceId, []);
+      map.get(c.invoiceId)!.push(c);
+    });
+    return Array.from(map.entries()).map(([invoiceId, items]) => ({
+      invoiceId,
+      items,
+      total: items.reduce((sum, c) => sum + Number(c.commissionAmount), 0),
+    }));
+  }, [allCommissions]);
+
+  async function handleApprove(ids: string[]) {
+    setApprovingSet(new Set(ids));
+    let success = 0;
+    let failed  = 0;
+    for (const id of ids) {
+      try {
+        await approveCommission(id);
+        success++;
+      } catch {
+        failed++;
+      }
+    }
+    setApprovingSet(new Set());
+    void qc.invalidateQueries({ queryKey: ["commissions"] });
+    if (failed === 0) {
+      toast.success(`${success} komisi disetujui`);
+    } else {
+      toast.error(`${success} berhasil, ${failed} gagal`);
+    }
+  }
+
+  const totalPending = allCommissions.length;
+  const isApproving  = approvingSet.size > 0;
+  const anyLoading   = isLoading || jaLoading;
+
+  return (
+    <div className="space-y-5">
+      {/* ── Filter + bulk button ───────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Date range */}
+        <div className="flex items-center gap-0 rounded-lg border border-input bg-background shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2">
+            <span className="text-xs text-muted-foreground shrink-0">Dari</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStart(e.target.value)}
+              className="text-sm bg-transparent focus:outline-none"
+            />
+          </div>
+          <span className="text-muted-foreground text-xs px-1 select-none border-x border-input bg-muted/30 py-2">
+            s/d
+          </span>
+          <div className="flex items-center gap-2 px-3 py-2">
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEnd(e.target.value)}
+              className="text-sm bg-transparent focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline" size="sm"
+            onClick={() => void refetch()}
+            disabled={anyLoading || isFetching}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isFetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+          {totalPending > 0 && (
+            <Button
+              size="sm"
+              disabled={isApproving}
+              onClick={() => void handleApprove(allCommissions.map((c) => c.id))}
+            >
+              {isApproving ? (
+                <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Menyetujui...</>
+              ) : (
+                <><CheckSquare className="mr-1.5 h-3.5 w-3.5" />Setujui Semua ({totalPending})</>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Loading ───────────────────────────────────────────── */}
+      {anyLoading && (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full rounded-xl" />
+          ))}
+        </div>
+      )}
+
+      {/* ── Siap Kalkulasi ─────────────────────────────────────── */}
+      {!anyLoading && readyToCalc.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+              Siap Kalkulasi
+            </span>
+            <span className="rounded-full border border-blue-200 bg-blue-100 px-1.5 py-0 text-[11px] font-semibold text-blue-700 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+              {readyToCalc.length}
+            </span>
+          </div>
+          {readyToCalc.map((inv) => (
+            <div
+              key={inv.id}
+              className="flex items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-800 px-5 py-3.5"
+            >
+              <div>
+                <p className="font-semibold text-sm">{inv.invoiceNo}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {inv.customer.name} · {formatDate(inv.invoiceDate)} · {formatCurrency(inv.grandTotal)}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link to={`/generate-komisi/${inv.id}/calculator`}>
+                  <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white">
+                    <Calculator className="h-3.5 w-3.5" />
+                    Kalkulasi
+                  </Button>
+                </Link>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled
+                  title="Jalankan kalkulasi dulu sebelum menyetujui"
+                  className="gap-1.5 opacity-40 cursor-not-allowed"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Setujui
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Menunggu Approval ──────────────────────────────────── */}
+      {!anyLoading && groups.length > 0 && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-400">
+            Menunggu Approval
+          </span>
+          <span className="rounded-full border border-purple-200 bg-purple-100 px-1.5 py-0 text-[11px] font-semibold text-purple-700 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800">
+            {groups.length}
+          </span>
+        </div>
+      )}
+
+      {/* ── Empty state ────────────────────────────────────────── */}
+      {!anyLoading && readyToCalc.length === 0 && groups.length === 0 && (
+        <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground">
+          <CheckCircle2 className="h-10 w-10 text-green-500" />
+          <p className="font-medium">Semua bersih</p>
+          <p className="text-sm">Tidak ada invoice yang perlu diproses</p>
+        </div>
+      )}
+
+      {/* ── Invoice groups (PENDING commissions) ─────────────── */}
+      {groups.map((group) => {
+        const groupApproving = group.items.some((c) => approvingSet.has(c.id));
+        return (
+          <div
+            key={group.invoiceId}
+            className="rounded-xl border border-border bg-card shadow-sm overflow-hidden"
+          >
+            {/* Group header */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 bg-muted/30 border-b border-border">
+              <div>
+                <p className="font-semibold tabular-nums">
+                  #{group.invoiceId.slice(-8).toUpperCase()}
+                </p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {group.items.length} komisi · Total{" "}
+                  <span className="font-medium text-foreground">
+                    {formatCurrency(group.total)}
+                  </span>
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link to={`/generate-komisi/${group.invoiceId}/calculator`}>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Calculator className="h-3.5 w-3.5" />
+                    Kalkulator
+                  </Button>
+                </Link>
+                <Button
+                  size="sm"
+                  disabled={groupApproving || isApproving}
+                  onClick={() => void handleApprove(group.items.map((c) => c.id))}
+                >
+                  {groupApproving
+                    ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Menyetujui...</>
+                    : "Setujui"
+                  }
+                </Button>
+              </div>
+            </div>
+
+            {/* Commission rows per employee */}
+            <div className="divide-y divide-border">
+              {group.items.map((c) => (
+                <div key={c.id} className="flex items-center justify-between px-5 py-3">
+                  <div>
+                    <p className="text-sm font-medium">{c.employee?.name ?? "—"}</p>
+                    {c.employee?.employeeCode && (
+                      <p className="text-xs text-muted-foreground">{c.employee.employeeCode}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {c.isManualOverride && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] bg-purple-50 text-purple-700 border-purple-200"
+                      >
+                        manual
+                      </Badge>
+                    )}
+                    <span className="text-sm font-semibold tabular-nums">
+                      {formatCurrency(c.commissionAmount)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+
 interface OverrideTarget { id: string; currentAmount: number; }
 
 export function CommissionListPage() {
   const { user, branchId } = useAuthStore();
   const isSuperAdmin = user?.role?.code === "SUPER_ADMIN";
 
-  const [activeTab, setActiveTab] = useState<"commissions" | "items">("commissions");
+  const [activeTab, setActiveTab] = useState<"commissions" | "approval" | "items" | "settings">("commissions");
 
   const [page, setPage]         = useState(1);
   const [status, setStatus]     = useState("");
@@ -78,7 +379,11 @@ export function CommissionListPage() {
   const regenerateMutation = useRegenerateCommission();
   const deleteMutation     = useDeleteCommission();
 
-  const [deleteTarget, setDeleteTarget] = useState<Commission | null>(null);
+  const [deleteTarget, setDeleteTarget]   = useState<Commission | null>(null);
+
+  // Per-invoice accordion state
+  const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
+  const [approvingIds, setApprovingIds]          = useState<Set<string>>(new Set());
 
   const commissions = data?.data ?? [];
   const meta        = data?.meta;
@@ -91,6 +396,60 @@ export function CommissionListPage() {
   const totalAmount = commissions.reduce(
     (sum, c) => sum + Number(c.commissionAmount), 0,
   );
+
+  // Group commissions by invoiceId for per-invoice accordion view
+  const invoiceGroups = useMemo(() => {
+    const map = new Map<string, Commission[]>();
+    commissions.forEach((c) => {
+      if (!map.has(c.invoiceId)) map.set(c.invoiceId, []);
+      map.get(c.invoiceId)!.push(c);
+    });
+    return Array.from(map.entries()).map(([invoiceId, items]) => {
+      const first = items[0];
+      return {
+        invoiceId,
+        invoiceNo:       first.invoice?.invoiceNo   ?? `…${invoiceId.slice(-8).toUpperCase()}`,
+        invoiceDate:     first.invoice?.invoiceDate ?? first.createdAt,
+        customer:        first.invoice?.customer?.name ?? "—",
+        grandTotal:      first.invoice?.grandTotal ?? null,
+        items,
+        totalCommission: items.reduce((sum, c) => sum + Number(c.commissionAmount), 0),
+      };
+    });
+  }, [commissions]);
+
+  const allExpanded = invoiceGroups.length > 0 && invoiceGroups.every((g) => expandedInvoices.has(g.invoiceId));
+
+  function toggleInvoice(id: string) {
+    setExpandedInvoices((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (allExpanded) {
+      setExpandedInvoices(new Set());
+    } else {
+      setExpandedInvoices(new Set(invoiceGroups.map((g) => g.invoiceId)));
+    }
+  }
+
+  const qc = useQueryClient();
+  async function handleGroupApprove(ids: string[]) {
+    setApprovingIds(new Set(ids));
+    let success = 0, failed = 0;
+    for (const id of ids) {
+      try { await approveCommission(id); success++; }
+      catch { failed++; }
+    }
+    setApprovingIds(new Set());
+    void qc.invalidateQueries({ queryKey: ["commissions"] });
+    if (failed === 0) toast.success(`${success} komisi disetujui`);
+    else toast.error(`${success} berhasil, ${failed} gagal`);
+  }
 
   function openOverride(c: Commission) {
     setOverrideTarget({ id: c.id, currentAmount: Number(c.commissionAmount) });
@@ -123,8 +482,10 @@ export function CommissionListPage() {
         {/* Page tabs */}
         <div className="flex gap-1 border-b border-border">
           {([
-            { key: "commissions", label: "Komisi" },
-            { key: "items",       label: "Master Item" },
+            { key: "commissions", label: "Komisi"      },
+            { key: "approval",    label: "Approval"    },
+            { key: "items",       label: "Master Item"  },
+            { key: "settings",    label: "Pengaturan"   },
           ] as const).map((tab) => (
             <button
               key={tab.key}
@@ -140,7 +501,9 @@ export function CommissionListPage() {
           ))}
         </div>
 
-        {activeTab === "items" && <MasterItemTab />}
+        {activeTab === "items"    && <MasterItemTab />}
+        {activeTab === "settings" && <CommissionSettingsTab />}
+        {activeTab === "approval" && <ApprovalTab />}
         {activeTab === "commissions" && (<>
 
         {/* Summary bar */}
@@ -208,66 +571,55 @@ export function CommissionListPage() {
                   Reset
                 </Button>
               )}
+              {/* Expand / Collapse all */}
+              {invoiceGroups.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={toggleAll}
+                  className="h-9 gap-1.5 text-xs text-muted-foreground ml-auto"
+                >
+                  {allExpanded
+                    ? <><ChevronsUpDown className="h-3.5 w-3.5" />Tutup Semua</>
+                    : <><ChevronsDownUp className="h-3.5 w-3.5" />Buka Semua</>
+                  }
+                </Button>
+              )}
             </div>
           </CardHeader>
 
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="space-y-3 p-5">
-                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
+              <div className="space-y-0 divide-y divide-border">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="px-5 py-4">
+                    <Skeleton className="h-4 w-48 mb-2" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                ))}
               </div>
-            ) : commissions.length === 0 ? (
+            ) : invoiceGroups.length === 0 ? (
               <p className="py-14 text-center text-sm text-slate-400">Tidak ada komisi.</p>
             ) : (
-              <>
-                {/* Desktop table */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-100 bg-slate-50/60">
-                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Karyawan</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Invoice</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Rate</th>
-                        <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Komisi</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Tanggal</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
-                        {isSuperAdmin && <th className="px-5 py-3" />}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {commissions.map((c) => (
-                        <CommissionRow
-                          key={c.id}
-                          commission={c}
-                          isSuperAdmin={isSuperAdmin}
-                          onApprove={() => approveMutation.mutate(c.id)}
-                          onPay={() => payMutation.mutate(c.id)}
-                          onOverride={() => openOverride(c)}
-                          onDelete={() => setDeleteTarget(c)}
-                          approving={approveMutation.isPending}
-                          paying={payMutation.isPending}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile cards */}
-                <div className="md:hidden divide-y divide-slate-100">
-                  {commissions.map((c) => (
-                    <CommissionCard
-                      key={c.id}
-                      commission={c}
-                      isSuperAdmin={isSuperAdmin}
-                      onApprove={() => approveMutation.mutate(c.id)}
-                      onPay={() => payMutation.mutate(c.id)}
-                      onOverride={() => openOverride(c)}
-                      approving={approveMutation.isPending}
-                      paying={payMutation.isPending}
-                    />
-                  ))}
-                </div>
-              </>
+              <div className="divide-y divide-border">
+                {invoiceGroups.map((group) => (
+                  <InvoiceGroupRow
+                    key={group.invoiceId}
+                    group={group}
+                    expanded={expandedInvoices.has(group.invoiceId)}
+                    onToggle={() => toggleInvoice(group.invoiceId)}
+                    isSuperAdmin={isSuperAdmin}
+                    approvingIds={approvingIds}
+                    onGroupApprove={(ids) => void handleGroupApprove(ids)}
+                    onApprove={(id) => approveMutation.mutate(id)}
+                    onPay={(id) => payMutation.mutate(id)}
+                    onOverride={openOverride}
+                    onDelete={(c) => setDeleteTarget(c)}
+                    approving={approveMutation.isPending}
+                    paying={payMutation.isPending}
+                  />
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -386,15 +738,163 @@ function SummaryCard({
   );
 }
 
-interface CommissionActionProps {
-  commission:  Commission;
-  isSuperAdmin: boolean;
-  onApprove:   () => void;
-  onPay:       () => void;
-  onOverride:  () => void;
-  onDelete:    () => void;
-  approving:   boolean;
-  paying:      boolean;
+// ── Per-invoice group type ────────────────────────────────────────────
+
+interface InvoiceGroup {
+  invoiceId:       string;
+  invoiceNo:       string;
+  invoiceDate:     string;
+  customer:        string;
+  grandTotal:      string | null;
+  items:           Commission[];
+  totalCommission: number;
+}
+
+interface InvoiceGroupRowProps {
+  group:          InvoiceGroup;
+  expanded:       boolean;
+  onToggle:       () => void;
+  isSuperAdmin:   boolean;
+  approvingIds:   Set<string>;
+  onGroupApprove: (ids: string[]) => void;
+  onApprove:      (id: string) => void;
+  onPay:          (id: string) => void;
+  onOverride:     (c: Commission) => void;
+  onDelete:       (c: Commission) => void;
+  approving:      boolean;
+  paying:         boolean;
+}
+
+function GroupStatusBadge({ items }: { items: Commission[] }) {
+  const counts = items.reduce((acc, c) => {
+    acc[c.status] = (acc[c.status] ?? 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const entries = Object.entries(counts);
+  if (entries.length === 1) {
+    const [s] = entries[0];
+    return (
+      <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${STATUS_BADGE[s] ?? ""}`}>
+        {STATUS_LABEL[s] ?? s}
+      </Badge>
+    );
+  }
+  return (
+    <div className="flex gap-1 flex-wrap">
+      {entries.map(([s, n]) => (
+        <Badge key={s} variant="outline" className={`text-[10px] px-1.5 py-0 ${STATUS_BADGE[s] ?? ""}`}>
+          {n} {STATUS_LABEL[s] ?? s}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
+function InvoiceGroupRow({
+  group, expanded, onToggle, isSuperAdmin,
+  approvingIds, onGroupApprove,
+  onApprove, onPay, onOverride, onDelete,
+  approving, paying,
+}: InvoiceGroupRowProps) {
+  const pendingItems    = group.items.filter((c) => c.status === "PENDING");
+  const isGroupApproving = pendingItems.some((c) => approvingIds.has(c.id));
+
+  return (
+    <div>
+      {/* Invoice header — clickable to expand/collapse */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex flex-wrap items-center gap-3 px-5 py-3.5 hover:bg-muted/30 transition-colors text-left"
+      >
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 ${expanded ? "" : "-rotate-90"}`}
+        />
+
+        {/* Invoice info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span className="font-semibold text-sm">{group.invoiceNo}</span>
+            <span className="text-xs text-muted-foreground">{group.customer}</span>
+            <span className="text-xs text-muted-foreground">{formatDate(group.invoiceDate)}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 mt-0.5">
+            <span className="text-xs text-muted-foreground">{group.items.length} komisi</span>
+            <GroupStatusBadge items={group.items} />
+          </div>
+        </div>
+
+        {/* Right side: total + approve button */}
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-sm font-bold tabular-nums">{formatCurrency(group.totalCommission)}</span>
+          {isSuperAdmin && pendingItems.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs gap-1"
+              disabled={isGroupApproving || approving}
+              onClick={(e) => { e.stopPropagation(); onGroupApprove(pendingItems.map((c) => c.id)); }}
+            >
+              {isGroupApproving
+                ? <Loader2 className="h-3 w-3 animate-spin" />
+                : <>Setujui{pendingItems.length > 1 ? ` (${pendingItems.length})` : ""}</>
+              }
+            </Button>
+          )}
+        </div>
+      </button>
+
+      {/* Expanded: per-employee commission rows */}
+      {expanded && (
+        <div className="border-t border-border/60 bg-muted/5">
+          {group.items.map((c, i) => (
+            <div
+              key={c.id}
+              className={`flex flex-wrap items-center gap-x-3 gap-y-2 pl-12 pr-5 py-3 ${
+                i < group.items.length - 1 ? "border-b border-border/40" : ""
+              }`}
+            >
+              {/* Employee */}
+              <div className="flex-1 min-w-[120px]">
+                <span className="text-sm font-medium">{c.employee?.name ?? "—"}</span>
+                {c.employee?.employeeCode && (
+                  <span className="ml-1.5 text-xs text-muted-foreground">{c.employee.employeeCode}</span>
+                )}
+              </div>
+
+              {/* Rate */}
+              <span className="text-xs text-muted-foreground w-12 text-right tabular-nums">
+                {c.commissionType === "PERCENTAGE"
+                  ? `${Number(c.commissionValue)}%`
+                  : formatCurrency(c.commissionValue)}
+              </span>
+
+              {/* Amount */}
+              <span className="text-sm font-semibold tabular-nums w-28 text-right">
+                {formatCurrency(c.commissionAmount)}
+              </span>
+
+              {/* Status badges */}
+              <CommissionStatusBadges commission={c} />
+
+              {/* Actions */}
+              {isSuperAdmin && (
+                <ActionButtons
+                  status={c.status}
+                  onApprove={() => onApprove(c.id)}
+                  onPay={() => onPay(c.id)}
+                  onOverride={() => onOverride(c)}
+                  onDelete={() => onDelete(c)}
+                  approving={approving}
+                  paying={paying}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function CommissionStatusBadges({ commission: c }: { commission: Commission }) {
@@ -415,78 +915,6 @@ function CommissionStatusBadges({ commission: c }: { commission: Commission }) {
         <Badge variant="outline" className="text-xs rounded-lg px-2 py-0.5 font-medium bg-purple-50 text-purple-700 border-purple-200">
           Manual
         </Badge>
-      )}
-    </div>
-  );
-}
-
-function CommissionRow({ commission: c, isSuperAdmin, onApprove, onPay, onOverride, onDelete, approving, paying }: CommissionActionProps) {
-  return (
-    <tr className="border-b border-slate-100 transition-colors hover:bg-slate-50/60">
-      <td className="px-5 py-4">
-        <p className="font-medium text-slate-800">{c.employee?.name ?? "—"}</p>
-        {c.employee?.employeeCode && (
-          <p className="text-xs text-slate-400 mt-0.5">{c.employee.employeeCode}</p>
-        )}
-      </td>
-      <td className="px-5 py-4 font-mono text-xs text-slate-400">{c.invoiceId.slice(-8).toUpperCase()}</td>
-      <td className="px-5 py-4">
-        <span className="text-xs text-slate-500">
-          {c.commissionType === "PERCENTAGE"
-            ? `${Number(c.commissionValue)}%`
-            : formatCurrency(c.commissionValue)}
-        </span>
-      </td>
-      <td className="px-5 py-4 text-right font-semibold text-slate-800 whitespace-nowrap">
-        {formatCurrency(c.commissionAmount)}
-      </td>
-      <td className="px-5 py-4 text-sm text-slate-500">{formatDate(c.createdAt)}</td>
-      <td className="px-5 py-4">
-        <CommissionStatusBadges commission={c} />
-      </td>
-      {isSuperAdmin && (
-        <td className="px-5 py-4">
-          <ActionButtons
-            status={c.status}
-            onApprove={onApprove}
-            onPay={onPay}
-            onOverride={onOverride}
-            onDelete={onDelete}
-            approving={approving}
-            paying={paying}
-          />
-        </td>
-      )}
-    </tr>
-  );
-}
-
-function CommissionCard({ commission: c, isSuperAdmin, onApprove, onPay, onOverride, onDelete, approving, paying }: CommissionActionProps) {
-  return (
-    <div className="px-5 py-4 space-y-2 hover:bg-slate-50/60 transition-colors">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="font-medium text-sm text-slate-800">{c.employee?.name ?? "—"}</p>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">Invoice …{c.invoiceId.slice(-8).toUpperCase()}</p>
-        </div>
-        <CommissionStatusBadges commission={c} />
-      </div>
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-slate-400">{formatDate(c.createdAt)}</span>
-        <span className="font-semibold text-slate-800">{formatCurrency(c.commissionAmount)}</span>
-      </div>
-      {isSuperAdmin && (
-        <div className="flex gap-2 pt-1">
-          <ActionButtons
-            status={c.status}
-            onApprove={onApprove}
-            onPay={onPay}
-            onOverride={onOverride}
-            onDelete={onDelete}
-            approving={approving}
-            paying={paying}
-          />
-        </div>
       )}
     </div>
   );

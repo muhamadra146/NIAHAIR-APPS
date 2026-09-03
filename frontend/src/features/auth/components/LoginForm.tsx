@@ -26,10 +26,8 @@ export function LoginForm() {
 
   const onSubmit = (values: LoginFormValues) => login(values);
 
-  const apiError = error
-    ? (error as { response?: { data?: { message?: string } } })
-        .response?.data?.message ?? "Login gagal"
-    : null;
+  // Interceptor axios sudah meng-normalize error menjadi plain Error object
+  const apiError = error ? (error as Error).message ?? "Login gagal" : null;
 
   return (
     <form

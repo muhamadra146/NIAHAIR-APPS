@@ -46,3 +46,19 @@ export async function fetchConsultationStats(params: { branchId?: string; startD
   const { data } = await api.get<ApiResponse<ConsultationStats>>("/consultation-notes/stats", { params });
   return data.data;
 }
+
+export async function uploadConsultationNotePhoto(
+  noteId: string,
+  file: File,
+  type: "BEFORE" | "AFTER",
+): Promise<ConsultationNote> {
+  const fd = new FormData();
+  fd.append("photo", file);
+  fd.append("type", type);
+  const { data } = await api.patch<ApiResponse<ConsultationNote>>(
+    `/consultation-notes/${noteId}/photos`,
+    fd,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
+  return data.data;
+}

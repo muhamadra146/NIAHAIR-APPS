@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { deleteCustomerNote } from "../api/customerNote.api";
+import { toast } from "@/lib/toast";
 
 export function useDeleteCustomerNote(customerId: string) {
   const qc = useQueryClient();
@@ -7,6 +8,10 @@ export function useDeleteCustomerNote(customerId: string) {
     mutationFn: (noteId: string) => deleteCustomerNote(customerId, noteId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["customer-notes", customerId] });
+      toast.success("Catatan berhasil dihapus");
+    },
+    onError: () => {
+      toast.error("Gagal menghapus catatan");
     },
   });
 }

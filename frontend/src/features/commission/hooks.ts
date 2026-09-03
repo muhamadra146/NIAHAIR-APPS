@@ -8,8 +8,12 @@ import {
   overrideCommission,
   regenerateCommission,
   deleteCommission,
+  fetchJobRoles,
+  createJobRole,
+  updateJobRole,
+  deleteJobRole,
 } from "./api";
-import type { CommissionListParams } from "./types";
+import type { CommissionListParams, CreateServiceJobRoleInput, UpdateServiceJobRoleInput } from "./types";
 
 export function useCommissions(params: CommissionListParams = {}) {
   return useQuery({
@@ -86,6 +90,54 @@ export function useRegenerateCommission() {
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["commissions"] });
       toast.success(`${result.created} komisi dibuat ulang`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+// ── Service Job Roles ─────────────────────────────────────────────────────────
+
+export function useJobRoles(itemId: string, all = false) {
+  return useQuery({
+    queryKey:  ["job-roles", itemId, all],
+    queryFn:   () => fetchJobRoles(itemId, all),
+    enabled:   !!itemId,
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateJobRole(itemId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateServiceJobRoleInput) => createJobRole(itemId, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["job-roles", itemId] });
+      toast.success("Role berhasil dibuat");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useUpdateJobRole(itemId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateServiceJobRoleInput }) =>
+      updateJobRole(itemId, id, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["job-roles", itemId] });
+      toast.success("Role berhasil diubah");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useDeleteJobRole(itemId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteJobRole(itemId, id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["job-roles", itemId] });
+      toast.success("Role dinonaktifkan");
     },
     onError: (err: Error) => toast.error(err.message),
   });

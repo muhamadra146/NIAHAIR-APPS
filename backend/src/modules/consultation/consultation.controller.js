@@ -1,10 +1,12 @@
 const { success, created } = require("../../common/responses/apiResponse");
+const AppError = require("../../common/errors/AppError");
 const {
   listNotes,
   getNoteById,
   getNoteByInvoiceId,
   createNote,
   updateNote,
+  uploadNotePhoto,
   deleteNote,
   getStatsData,
 } = require("./consultation.service");
@@ -72,12 +74,28 @@ const deleteController = async (req, res, next) => {
   }
 };
 
+const uploadPhotoController = async (req, res, next) => {
+  try {
+    if (!req.file) throw new AppError("File foto tidak ditemukan", 400);
+    const { type = "BEFORE" } = req.body;
+    const result = await uploadNotePhoto(
+      req.params.id,
+      { url: req.file.path, publicId: req.file.filename, type },
+      req.user
+    );
+    return success(res, result, "Foto berhasil diupload");
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getAllController,
   getByIdController,
   getByInvoiceController,
   createController,
   updateController,
+  uploadPhotoController,
   deleteController,
   getStatsController,
 };

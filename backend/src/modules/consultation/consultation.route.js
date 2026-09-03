@@ -4,12 +4,14 @@ const authorize     = require("../../middlewares/role.middleware");
 const validate      = require("../../middlewares/validate.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
 const { createNoteSchema, updateNoteSchema } = require("./consultation.validation");
+const uploadConsultationNote = require("../../middlewares/uploadConsultationNote.middleware");
 const {
   getAllController,
   getByIdController,
   getByInvoiceController,
   createController,
   updateController,
+  uploadPhotoController,
   deleteController,
   getStatsController,
 } = require("./consultation.controller");
@@ -30,6 +32,8 @@ router.get("/:id",    authenticate, getByIdController);
 
 // Create, update, delete — any authenticated (service handles ownership check)
 router.post("/",       authenticate, validate(createNoteSchema), createController);
+// Photo upload: WAJIB sebelum PATCH /:id agar Express tidak salah match "photos" sebagai :id
+router.patch("/:id/photos", authenticate, uploadConsultationNote.single("photo"), uploadPhotoController);
 router.patch("/:id",   authenticate, validate(updateNoteSchema), updateController);
 router.delete("/:id",  authenticate, deleteController);
 

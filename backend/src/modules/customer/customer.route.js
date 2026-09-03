@@ -4,7 +4,7 @@ const authorize = require("../../middlewares/role.middleware");
 const validate = require("../../middlewares/validate.middleware");
 const { ROLES } = require("../../common/constants/role.constant");
 const { createCustomerSchema, updateCustomerSchema } = require("./customer.validation");
-const { createNoteSchema } = require("./customerNote.validation");
+const { createNoteSchema, updateNoteSchema } = require("./customerNote.validation");
 const {
   getAllController,
   getByIdController,
@@ -13,7 +13,7 @@ const {
 } = require("./customer.controller");
 const { syncFromAccurateController } = require("./customer.sync.controller");
 const { syncToAccurateController, repairCustomerNoController, retryCustomerSyncController } = require("./customer.push.controller");
-const { getNotesController, createNoteController, deleteNoteController } = require("./customerNote.controller");
+const { getNotesController, createNoteController, updateNoteController, deleteNoteController } = require("./customerNote.controller");
 
 const router = Router();
 
@@ -29,9 +29,10 @@ router.post("/",   authenticate, validate(createCustomerSchema), createControlle
 router.put("/:id", authenticate, validate(updateCustomerSchema), updateController);
 
 // Notes (CRM-008)
-router.get( "/:id/notes",          authenticate, getNotesController);
-router.post("/:id/notes",          authenticate, validate(createNoteSchema), createNoteController);
-router.delete("/:id/notes/:noteId", authenticate, deleteNoteController);
+router.get(   "/:id/notes",           authenticate, getNotesController);
+router.post(  "/:id/notes",           authenticate, validate(createNoteSchema), createNoteController);
+router.put(   "/:id/notes/:noteId",   authenticate, validate(updateNoteSchema), updateNoteController);
+router.delete("/:id/notes/:noteId",   authenticate, deleteNoteController);
 
 // Manual push sync retry
 router.post("/:id/sync/accurate", authenticate, syncToAccurateController);

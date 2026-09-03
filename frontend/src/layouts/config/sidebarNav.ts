@@ -11,7 +11,6 @@ import {
   ClipboardList,
   BarChart3,
   Settings,
-  Scissors,
   BadgeDollarSign,
   CalendarRange,
   DollarSign,
@@ -94,18 +93,6 @@ export const sidebarNav: NavItem[] = [
     children: [
       { label: "Invoices",            href: "/invoices",         roles: POS_ROLES },
       { label: "Pembayaran Invoice",  href: "/invoice-payments", roles: POS_ROLES },
-    ],
-  },
-  {
-    label: "Treatments",
-    href:  "/treatments",
-    icon:  Scissors,
-    roles: [...MANAGEMENT_ROLES, "CASHIER", "STYLIST", "STAFF"],
-    group: "Operasional",
-    children: [
-      { label: "Dashboard",  href: "/treatments",           roles: [...MANAGEMENT_ROLES, "CASHIER", "STYLIST", "STAFF"] },
-      { label: "Aktif",      href: "/treatments/active",    roles: [...MANAGEMENT_ROLES, "CASHIER", "STYLIST", "STAFF"] },
-      { label: "Selesai",    href: "/treatments/completed", roles: [...MANAGEMENT_ROLES, "CASHIER", "STYLIST", "STAFF"] },
     ],
   },
   {

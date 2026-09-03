@@ -1,6 +1,5 @@
-import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/lib/toast";
@@ -76,19 +75,6 @@ export function TreatmentAssignmentSection({
 
   return (
     <div className="space-y-4">
-      {/* Link to treatment session */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Penugasan staff dikelola di halaman Treatment Session.
-        </p>
-        <Button variant="outline" size="sm" asChild>
-          <Link to={`/treatments/${session.id}`}>
-            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-            Buka Treatment
-          </Link>
-        </Button>
-      </div>
-
       {/* Read-only assignment summary per item */}
       {items.length === 0 && (
         <p className="text-sm text-muted-foreground py-2">Tidak ada item treatment.</p>

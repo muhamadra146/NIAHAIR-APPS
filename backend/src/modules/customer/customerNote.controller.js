@@ -1,9 +1,11 @@
 const { success, created } = require("../../common/responses/apiResponse");
-const { getNotes, createNote, deleteNote } = require("./customerNote.service");
+const { getNotes, createNote, updateNote, deleteNote } = require("./customerNote.service");
 
 const getNotesController = async (req, res, next) => {
   try {
-    const notes = await getNotes(req.params.id);
+    const skip = parseInt(req.query.skip ?? "0", 10);
+    const take = parseInt(req.query.take ?? "50", 10);
+    const notes = await getNotes(req.params.id, { skip, take });
     return success(res, notes, "Notes fetched");
   } catch (err) {
     next(err);
@@ -20,6 +22,20 @@ const createNoteController = async (req, res, next) => {
   }
 };
 
+const updateNoteController = async (req, res, next) => {
+  try {
+    const note = await updateNote(
+      req.params.id,
+      req.params.noteId,
+      req.body,
+      req.user?.roleCode,
+    );
+    return success(res, note, "Note updated");
+  } catch (err) {
+    next(err);
+  }
+};
+
 const deleteNoteController = async (req, res, next) => {
   try {
     await deleteNote(req.params.id, req.params.noteId, req.user?.roleCode);
@@ -29,4 +45,4 @@ const deleteNoteController = async (req, res, next) => {
   }
 };
 
-module.exports = { getNotesController, createNoteController, deleteNoteController };
+module.exports = { getNotesController, createNoteController, updateNoteController, deleteNoteController };

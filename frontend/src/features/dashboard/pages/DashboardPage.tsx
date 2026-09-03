@@ -4,7 +4,7 @@ import { StaffDashboardPage } from "./StaffDashboardPage";
 import {
   TrendingUp, Receipt, Wallet, CalendarDays,
   Users, BadgeDollarSign, ArrowUpRight,
-  Scissors, ChevronRight, Banknote,
+  ChevronRight, Banknote,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MetricCard } from "@/components/ui/MetricCard";
@@ -386,7 +386,6 @@ export function DashboardPage() {
               { label: "Booking",   icon: CalendarDays,   href: "/appointments", gradient: "from-violet-500/10 to-purple-500/10 hover:from-violet-500/20 hover:to-purple-500/20", icon_c: "text-violet-600" },
               { label: "Invoice",   icon: Receipt,        href: "/invoices",     gradient: "from-blue-500/10 to-indigo-500/10 hover:from-blue-500/20 hover:to-indigo-500/20",     icon_c: "text-blue-600" },
               { label: "Deposit",   icon: Wallet,         href: "/deposits",     gradient: "from-rose-500/10 to-pink-500/10 hover:from-rose-500/20 hover:to-pink-500/20",         icon_c: "text-rose-500" },
-              { label: "Treatment", icon: Scissors,       href: "/treatments",   gradient: "from-teal-500/10 to-emerald-500/10 hover:from-teal-500/20 hover:to-emerald-500/20",   icon_c: "text-teal-600" },
               { label: "Kasbon",    icon: Banknote,       href: "/loans",        gradient: "from-amber-500/10 to-orange-500/10 hover:from-amber-500/20 hover:to-orange-500/20",   icon_c: "text-amber-600" },
               { label: "Laporan",   icon: TrendingUp,     href: "/reports",      gradient: "from-slate-500/10 to-slate-700/10 hover:from-slate-500/20 hover:to-slate-700/20",     icon_c: "text-slate-600" },
             ].map((a, i) => {

@@ -82,6 +82,86 @@ const findDailyAssignment = ({ start, end, branchId }) => {
   });
 };
 
+// ── Job Assignment INCLUDE (berat — untuk GenerateKomisiPage baru) ────
+
+const JOB_ASSIGNMENT_INCLUDE = {
+  customer: { select: { id: true, name: true, customerNo: true } },
+  treatmentSessions: {
+    include: {
+      appointment: {
+        include: {
+          staffs: {
+            include: {
+              employee: { select: { id: true, name: true, employeeCode: true } },
+            },
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      },
+      treatmentItems: {
+        include: {
+          item: {
+            select: {
+              id: true, name: true, itemCode: true, itemType: true,
+              commissionCategoryId: true,
+              commissionCategory: {
+                select: {
+                  id: true, code: true, name: true,
+                  jobs: {
+                    where:   { isActive: true },
+                    select:  { id: true, name: true, jobKey: true, sortOrder: true, deductsFromJobId: true, pricePerUnit: true },
+                    orderBy: { sortOrder: "asc" },
+                  },
+                },
+              },
+              serviceJobRoles: {
+                where:   { isActive: true },
+                include: {
+                  slots: {
+                    where:   { isActive: true, isMainJob: true },
+                    select:  { id: true, slotKey: true, commissionMode: true, isMainJob: true },
+                  },
+                },
+                orderBy: { sortOrder: "asc" },
+              },
+            },
+          },
+          unit: { select: { id: true, name: true } },
+          jobAssignments: {
+            where:   { employeeId: { not: null } },
+            include: {
+              employee:      { select: { id: true, name: true, employeeCode: true } },
+              serviceJobSlot: {
+                include: { serviceJobRole: { select: { id: true, roleName: true, commissionRate: true } } },
+              },
+              commissionJob: { select: { id: true, name: true, jobKey: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  },
+  commissions: { select: { id: true, status: true } },
+  _count:      { select: { commissions: true } },
+};
+
+const findAllPaidForJobAssignment = ({ branchId, gteDate, lteDate }) => {
+  const where = { status: "PAID" };
+  if (branchId) where.branchId = branchId;
+  if (gteDate || lteDate) {
+    where.invoiceDate = {};
+    if (gteDate) where.invoiceDate.gte = gteDate;
+    if (lteDate) where.invoiceDate.lte = lteDate;
+  }
+  return prisma.invoice.findMany({
+    where,
+    include:  JOB_ASSIGNMENT_INCLUDE,
+    orderBy:  { invoiceDate: "desc" },
+    take:     200,
+  });
+};
+
 // ── List / single ─────────────────────────────────────────────────────
 
 const findAll = ({ skip, take, where, orderBy }) =>
@@ -366,6 +446,67 @@ const cancelWithTransaction = ({ invoice, userId }) =>
     return tx.invoice.findUnique({ where: { id: invoice.id }, include: INCLUDE });
   });
 
+// ── Commission Worksheet: single invoice with job assignments ────────
+//
+// `items` (InvoiceItem) is included so the service can resolve the correct
+// baseAmount the same way the commission engine does:
+//   baseAmount = invoiceItem.subtotal  (if matched by itemId)
+//              ?? treatmentItem.priceSnapshot  (fallback)
+
+const WORKSHEET_INCLUDE = {
+  customer:    { select: { id: true, name: true } },
+  commissions: { select: { id: true, status: true } },
+  // InvoiceItems — needed to resolve baseAmount per treatment item
+  items: { select: { id: true, itemId: true, subtotal: true } },
+  treatmentSessions: {
+    include: {
+      treatmentItems: {
+        // All scalar fields (priceSnapshot, qty, etc.) returned automatically
+        include: {
+          item: {
+            select: {
+              id:   true, name: true, itemCode: true,
+              commissionCategoryId: true,
+              commissionCategory: {
+                select: {
+                  id: true, code: true, name: true,
+                  jobs: {
+                    orderBy: { sortOrder: "asc" },
+                    select: {
+                      id: true, name: true, jobKey: true, sortOrder: true,
+                      deductsFromJobId: true,  // chain deduction target
+                      pricePerUnit:     true,  // default harga/unit untuk PERCENTAGE helper
+                      unit:             true,  // satuan unit (helai, sesi, cm, dll.)
+                    },
+                  },
+                },
+              },
+            },
+          },
+          jobAssignments: {
+            where:   { employeeId: { not: null }, commissionJobId: { not: null } },
+            include: {
+              employee:      { select: { id: true, name: true, employeeCode: true } },
+              commissionJob: {
+                select: {
+                  id: true, name: true, jobKey: true, sortOrder: true,
+                  deductsFromJobId: true,  // untuk worksheet chain calc
+                  pricePerUnit:     true,
+                  unit:             true,  // satuan unit
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  },
+};
+
+const findByIdForWorksheet = (id) =>
+  prisma.invoice.findUnique({ where: { id }, include: WORKSHEET_INCLUDE });
+
 module.exports = {
   findAll,
   count,
@@ -389,4 +530,6 @@ module.exports = {
   cancelWithTransaction,
   findDailyAssignment,
   findCommissionGenerateList,
+  findAllPaidForJobAssignment,
+  findByIdForWorksheet,
 };

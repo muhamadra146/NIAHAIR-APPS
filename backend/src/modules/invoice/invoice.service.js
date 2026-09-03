@@ -40,6 +40,8 @@ const {
   findMaxInvoiceSeqToday,
   findDailyAssignment,
   findCommissionGenerateList,
+  findAllPaidForJobAssignment,
+  findByIdForWorksheet,
 } = require("./invoice.repository");
 const { getActiveMembership } = require("../membership/membership.service");
 
@@ -1010,4 +1012,270 @@ const skipCommission = async (invoiceId) => {
   });
 };
 
-module.exports = { listInvoices, getInvoiceById, createInvoice, updateInvoice, applyDepositToInvoice, cancelInvoice, deleteInvoice, setupTreatmentSession, getDailyAssignment, getCommissionGenerateList, skipCommission, resetCommissionSkip };
+// ── Job Assignment Invoices ────────────────────────────────────────────
+
+const getJobAssignmentInvoices = async ({ branchId, startDate, endDate }) => {
+  // Konversi string tanggal (YYYY-MM-DD) ke range UTC yang benar untuk WIB (UTC+7)
+  const WIB = 7 * 60 * 60 * 1000;
+  let gteDate, lteDate;
+  if (startDate) {
+    const d = new Date(`${startDate}T00:00:00.000Z`);
+    gteDate = new Date(d.getTime() - WIB);                              // WIB midnight → UTC 17:00 prev day
+  }
+  if (endDate) {
+    const d = new Date(`${endDate}T00:00:00.000Z`);
+    lteDate = new Date(d.getTime() - WIB + 24 * 60 * 60 * 1000 - 1);  // WIB end-of-day → UTC 16:59:59 same day
+  }
+  const invoices = await findAllPaidForJobAssignment({ branchId, gteDate, lteDate });
+  return invoices;
+};
+
+// ── Submit Job Assignments + Auto-Generate Commission ─────────────────
+
+const { upsertMany: upsertManyJobAssignments } = require("../treatment/treatmentJobAssignment.repository");
+
+const submitJobAssignments = async (invoiceId, sessionsPayload) => {
+  // Tx 1: validasi + hapus PENDING + simpan assignments
+  let assignedCount = 0;
+  await prisma.$transaction(async (tx) => {
+    const invoice = await tx.invoice.findUnique({
+      where:  { id: invoiceId },
+      select: { id: true, status: true },
+    });
+    if (!invoice)              throw new AppError("Invoice tidak ditemukan",   StatusCodes.NOT_FOUND);
+    if (invoice.status !== "PAID") throw new AppError("Invoice harus berstatus PAID untuk generate komisi", StatusCodes.UNPROCESSABLE_ENTITY);
+
+    const existingCommissions = await tx.commission.findMany({
+      where:  { invoiceId },
+      select: { id: true, status: true },
+    });
+    const hasLocked = existingCommissions.some((c) => c.status === "APPROVED" || c.status === "PAID");
+    if (hasLocked) {
+      throw new AppError("Komisi sudah disetujui atau dibayar, tidak bisa diubah", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+    if (existingCommissions.length > 0) {
+      await tx.commission.deleteMany({ where: { invoiceId, status: "PENDING" } });
+    }
+
+    for (const { assignments } of sessionsPayload) {
+      if (!assignments?.length) continue;
+      await upsertManyJobAssignments(assignments, tx);
+      assignedCount += assignments.length;
+    }
+  });
+
+  // Tidak auto-generate — user akan buka CommissionCalculatorPage untuk hitung & finalize
+  return { assigned: assignedCount, commissionsCreated: 0, needsCalculator: true };
+};
+
+// ── Commission Worksheet ───────────────────────────────────────────────
+
+const { findActiveByEmployeeAndJob } = require("../commissionRule/commissionRule.repository");
+
+const getCommissionWorksheet = async (invoiceId) => {
+  const invoice = await findByIdForWorksheet(invoiceId);
+  if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (invoice.status !== "PAID") throw new AppError("Invoice harus berstatus PAID", StatusCodes.UNPROCESSABLE_ENTITY);
+
+  // Gunakan invoiceDate sebagai acuan aturan komisi (konsisten dengan commission engine)
+  const asOfDate = invoice.invoiceDate ? new Date(invoice.invoiceDate) : new Date();
+
+  const treatmentItems = [];
+
+  // Build an itemId → InvoiceItem map to resolve baseAmount (same logic as commission engine)
+  const invoiceItemMap = new Map();
+  for (const ii of invoice.items ?? []) {
+    if (!invoiceItemMap.has(ii.itemId)) invoiceItemMap.set(ii.itemId, ii);
+  }
+
+  for (const session of invoice.treatmentSessions ?? []) {
+    for (const ti of session.treatmentItems ?? []) {
+      const cat = ti.item?.commissionCategory;
+      if (!cat) continue; // item tanpa kategori komisi = skip
+
+      // Resolve baseAmount: prefer InvoiceItem.subtotal, fallback to priceSnapshot
+      const invoiceItem = invoiceItemMap.get(ti.item?.id);
+      const baseAmount  = invoiceItem
+        ? Number(invoiceItem.subtotal)
+        : Number(ti.priceSnapshot ?? 0);
+
+      // Group job assignments by commissionJobId
+      const jobMap = new Map();
+      for (const ja of ti.jobAssignments ?? []) {
+        if (!ja.commissionJobId || !ja.employeeId) continue;
+        if (!jobMap.has(ja.commissionJobId)) jobMap.set(ja.commissionJobId, []);
+        jobMap.get(ja.commissionJobId).push(ja);
+      }
+      if (jobMap.size === 0) continue;
+
+      // Build job list ordered by sortOrder from category.jobs
+      const jobs = [];
+      for (const jobDef of cat.jobs ?? []) {
+        const workers_raw = jobMap.get(jobDef.id);
+        if (!workers_raw?.length) continue;
+
+        // Fetch commission rule per worker
+        const workers = await Promise.all(workers_raw.map(async (ja) => {
+          const rule = await findActiveByEmployeeAndJob(ja.employeeId, cat.id, ja.commissionJobId, asOfDate);
+          return {
+            treatmentJobAssignmentId: ja.id,
+            employeeId:    ja.employeeId,
+            employeeName:  ja.employee?.name ?? "",
+            workQty:       ja.workQty !== null && ja.workQty !== undefined ? Number(ja.workQty) : null,
+            commissionRuleId:   rule?.id ?? null,
+            commissionType:     rule?.commissionType ?? null,
+            commissionValue:    rule?.commissionValue !== undefined ? String(rule.commissionValue) : null,
+            commissionBase:     rule?.commissionBase ?? null,
+            baseAmount:         baseAmount,   // passed to frontend for pre-fill calculation
+          };
+        }));
+
+        jobs.push({
+          commissionJobId:  jobDef.id,
+          jobName:          jobDef.name,
+          jobKey:           jobDef.jobKey,
+          sortOrder:        jobDef.sortOrder,
+          // Chain deduction fields — dipakai frontend untuk kalkulasi otomatis
+          deductsFromJobId: jobDef.deductsFromJobId ?? null,
+          pricePerUnit:     jobDef.pricePerUnit != null ? Number(jobDef.pricePerUnit) : null,
+          unit:             jobDef.unit ?? "helai",
+          workers,
+        });
+      }
+
+      if (jobs.length === 0) continue;
+
+      treatmentItems.push({
+        treatmentItemId: ti.id,
+        itemId:          ti.item?.id,
+        itemName:        ti.item?.name ?? "",
+        subtotal:        String(baseAmount),
+        // qty dalam helai = qty item × conversionSnapshot (mis: 1 TEBAL × 180 = 180 helai)
+        qty:             ti.qty !== null && ti.qty !== undefined
+          ? Math.round(Number(ti.qty) * Number(ti.conversionSnapshot ?? 1))
+          : null,
+        categoryId:      cat.id,
+        categoryName:    cat.name,
+        jobs,
+      });
+    }
+  }
+
+  return {
+    invoiceId:   invoice.id,
+    invoiceNo:   invoice.invoiceNo,
+    grandTotal:  String(invoice.grandTotal),
+    customer:    invoice.customer,
+    treatmentItems,
+    commissions: invoice.commissions ?? [],
+  };
+};
+
+// ── Finalize Commission From Calculator ───────────────────────────────
+//
+// Payload: { rows: [ { treatmentJobAssignmentId, commissionAmount, commissionRuleId?,
+//   commissionType, commissionValue, commissionBase, baseAmount,
+//   workQty?, workRatio?, notes? } ] }
+//
+// Backend validates TJAs belong to this invoice, deletes PENDING, creates new commissions.
+
+const finalizeCommissionFromCalculator = async (invoiceId, rows) => {
+  if (!rows?.length) throw new AppError("Tidak ada data komisi yang dikirim", StatusCodes.UNPROCESSABLE_ENTITY);
+
+  const invoice = await prisma.invoice.findUnique({
+    where:  { id: invoiceId },
+    select: { id: true, status: true },
+  });
+  if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (invoice.status !== "PAID") throw new AppError("Invoice harus berstatus PAID", StatusCodes.UNPROCESSABLE_ENTITY);
+
+  // Validate no APPROVED/PAID commissions
+  const locked = await prisma.commission.count({
+    where: { invoiceId, status: { in: ["APPROVED", "PAID"] } },
+  });
+  if (locked > 0) throw new AppError("Komisi sudah disetujui atau dibayar, tidak bisa diubah", StatusCodes.UNPROCESSABLE_ENTITY);
+
+  // Validasi duplikasi TJA dalam payload sebelum masuk DB
+  const rawTjaIds = rows.map((r) => r.treatmentJobAssignmentId).filter(Boolean);
+  const uniqueCheck = new Set(rawTjaIds);
+  if (uniqueCheck.size !== rawTjaIds.length) {
+    throw new AppError("Terdapat duplikasi treatmentJobAssignmentId dalam payload", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
+  // Fetch TJAs so we can fill employeeId + serviceItemId on Commission
+  const tjaIds = [...uniqueCheck];
+  const tjas   = await prisma.treatmentJobAssignment.findMany({
+    where:   { id: { in: tjaIds } },
+    include: {
+      treatmentItem: {
+        include: {
+          treatmentSession: { select: { invoiceId: true } },
+          item:             { select: { id: true } },
+        },
+      },
+    },
+  });
+
+  const tjaMap = new Map(tjas.map((t) => [t.id, t]));
+
+  // Validate all TJAs belong to this invoice
+  for (const tja of tjas) {
+    if (tja.treatmentItem?.treatmentSession?.invoiceId !== invoiceId) {
+      throw new AppError(`TreatmentJobAssignment ${tja.id} tidak milik invoice ini`, StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+  }
+
+  // Delete PENDING + create new
+  await prisma.$transaction(async (tx) => {
+    await tx.commission.deleteMany({ where: { invoiceId, status: "PENDING" } });
+
+    const data = rows.map((row) => {
+      const tja = tjaMap.get(row.treatmentJobAssignmentId);
+      if (!tja) throw new AppError(`TJA ${row.treatmentJobAssignmentId} tidak ditemukan`, StatusCodes.UNPROCESSABLE_ENTITY);
+
+      const serviceItemId = tja.treatmentItem?.item?.id;
+      if (!serviceItemId) throw new AppError(`TJA ${tja.id} tidak memiliki item yang valid`, StatusCodes.UNPROCESSABLE_ENTITY);
+
+      return {
+        invoiceId,
+        treatmentJobAssignmentId: row.treatmentJobAssignmentId,
+        employeeId:               tja.employeeId,
+        serviceItemId,
+        commissionRuleId:         row.commissionRuleId ?? null,
+        commissionType:           row.commissionType ?? "PERCENTAGE",
+        commissionValue:          String(row.commissionValue ?? 0),
+        commissionBase:           row.commissionBase ?? "AFTER_DISCOUNT",
+        baseAmount:               String(row.baseAmount ?? 0),
+        workQty:                  row.workQty !== undefined && row.workQty !== null ? String(row.workQty) : null,
+        workRatio:                row.workRatio !== undefined && row.workRatio !== null ? String(row.workRatio) : null,
+        commissionAmount:         String(row.commissionAmount ?? 0),
+        notes:                    row.notes ?? null,
+        status:                   "PENDING",
+      };
+    });
+
+    await tx.commission.createMany({ data });
+  });
+
+  const created = await prisma.commission.count({ where: { invoiceId, status: "PENDING" } });
+  return { created };
+};
+
+module.exports = {
+  listInvoices,
+  getInvoiceById,
+  createInvoice,
+  updateInvoice,
+  applyDepositToInvoice,
+  cancelInvoice,
+  deleteInvoice,
+  setupTreatmentSession,
+  getDailyAssignment,
+  getCommissionGenerateList,
+  skipCommission,
+  resetCommissionSkip,
+  getJobAssignmentInvoices,
+  submitJobAssignments,
+  getCommissionWorksheet,
+  finalizeCommissionFromCalculator,
+};

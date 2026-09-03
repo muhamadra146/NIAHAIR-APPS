@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,8 @@ import {
   CreditCard, Calendar, BadgePercent, FileText, Wallet,
   Scissors, Clock, CalendarDays, Image as ImageIcon,
   Receipt, MessageSquare, StickyNote, CheckCircle2, XCircle, Ban,
-  User, TrendingUp, Plus, Trash2, NotebookPen,
+  User, TrendingUp, Plus, Trash2, NotebookPen, Pencil, X, Check,
+  Camera, Loader2,
 } from "lucide-react";
 import type { Customer } from "../types";
 import { useAllMemberships, useCustomerMembership, useAssignMembership, useCancelCustomerMembership } from "@/features/settings/hooks";
@@ -20,8 +22,12 @@ import { AppointmentStatusBadge } from "@/features/appointment/components/Appoin
 import { useInvoices, useDeposits } from "@/features/invoice/hooks";
 import { useTreatments } from "@/features/treatment/hooks";
 import { useConsultationNotes } from "@/features/consultation/hooks";
+import { uploadConsultationNotePhoto } from "@/features/consultation/api";
+import { toast } from "@/lib/toast";
+import { useAuthStore } from "@/stores/authStore";
 import { useCustomerNotes } from "../hooks/useCustomerNotes";
 import { useCreateCustomerNote } from "../hooks/useCreateCustomerNote";
+import { useUpdateCustomerNote } from "../hooks/useUpdateCustomerNote";
 import { useDeleteCustomerNote } from "../hooks/useDeleteCustomerNote";
 
 interface CustomerDetailTabsProps {
@@ -571,9 +577,6 @@ function TreatmentHistoryTab({ customerId }: { customerId: string }) {
                   <p className="text-xs text-slate-400 truncate">{s.notes}</p>
                 )}
               </div>
-              <Button variant="ghost" size="sm" className="shrink-0 rounded-lg text-xs" asChild>
-                <Link to={`/treatments/${s.id}`}>Detail</Link>
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -652,6 +655,78 @@ function PhotosTab({ customerId }: { customerId: string }) {
 
 // ── Catatan Klien tab ─────────────────────────────────────────────────
 
+function PhotoUploadSlot({
+  noteId,
+  type,
+  url,
+}: {
+  noteId: string;
+  type:   "BEFORE" | "AFTER";
+  url:    string | null | undefined;
+}) {
+  const qc      = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const label   = type === "BEFORE" ? "Before" : "After";
+
+  const uploadMut = useMutation({
+    mutationFn: (file: File) => uploadConsultationNotePhoto(noteId, file, type),
+    onSuccess:  () => { void qc.invalidateQueries({ queryKey: ["consultation-notes"] }); },
+    onError:    (err: Error) => toast.error(err.message),
+  });
+
+  return (
+    <div className="flex-1">
+      {url ? (
+        <div className="relative group cursor-pointer" onClick={() => inputRef.current?.click()}>
+          <img
+            src={url}
+            alt={label}
+            className="w-full h-28 object-cover rounded-lg border border-border"
+          />
+          {/* Overlay tombol ganti foto */}
+          <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Camera className="h-5 w-5 text-white" />
+          </div>
+          {uploadMut.isPending && (
+            <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/50">
+              <Loader2 className="h-5 w-5 text-white animate-spin" />
+            </div>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploadMut.isPending}
+          className="flex w-full h-28 flex-col items-center justify-center rounded-lg border-2 border-dashed border-border hover:bg-muted/50 transition-colors text-muted-foreground gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {uploadMut.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Camera className="h-4 w-4" />
+          )}
+          <span className="text-[11px]">{uploadMut.isPending ? "Mengupload..." : `Upload ${label}`}</span>
+        </button>
+      )}
+      {/* Input file tersembunyi — capture="environment" buka kamera belakang di mobile */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) uploadMut.mutate(file);
+          // Reset input agar file yang sama bisa diupload ulang
+          e.target.value = "";
+        }}
+      />
+      <p className="mt-1 text-center text-[10px] text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
 function CatatanKlienTab({ customerId }: { customerId: string }) {
   const { data, isLoading } = useConsultationNotes({ customerId, limit: 50 });
   const notes = data?.data ?? [];
@@ -705,6 +780,12 @@ function CatatanKlienTab({ customerId }: { customerId: string }) {
                       Diisi: {note.filledByEmployee.name}
                     </p>
                   )}
+
+                  {/* ── Foto Before/After ── */}
+                  <div className="mt-3 flex gap-2">
+                    <PhotoUploadSlot noteId={note.id} type="BEFORE" url={note.beforePhotoUrl} />
+                    <PhotoUploadSlot noteId={note.id} type="AFTER"  url={note.afterPhotoUrl}  />
+                  </div>
                 </div>
                 <Link
                   to={`/consultation-notes/${note.id}/edit`}
@@ -875,55 +956,78 @@ function MembershipTab({ customer }: { customer: Customer }) {
 
 // ── Customer Notes tab (CRM-008) ──────────────────────────────────────
 
+const NOTE_MAX_LENGTH = 500;
+
+// Roles yang boleh edit & hapus (sama dengan backend CRM-008)
+const CAN_MANAGE_NOTE_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER"];
+
 function CustomerNotesTab({ customerId }: { customerId: string }) {
+  const user      = useAuthStore((s) => s.user);
+  const canManage = CAN_MANAGE_NOTE_ROLES.includes(user?.roleCode ?? "");
+
   const { data: notes = [], isLoading } = useCustomerNotes(customerId);
   const createMut = useCreateCustomerNote(customerId);
+  const updateMut = useUpdateCustomerNote(customerId);
   const deleteMut = useDeleteCustomerNote(customerId);
 
-  const [newNote, setNewNote]       = useState("");
+  const [newNote, setNewNote]           = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [error, setError]           = useState<string | null>(null);
+  // Edit state: noteId yang sedang diedit + teks sementara
+  const [editingId, setEditingId]       = useState<string | null>(null);
+  const [editText, setEditText]         = useState("");
+
+  function startEdit(n: { id: string; note: string }) {
+    setEditingId(n.id);
+    setEditText(n.note);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditText("");
+  }
 
   async function handleCreate() {
     if (!newNote.trim()) return;
-    setError(null);
-    try {
-      await createMut.mutateAsync(newNote.trim());
-      setNewNote("");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Gagal menyimpan catatan");
-    }
+    await createMut.mutateAsync(newNote.trim());
+    setNewNote("");
+  }
+
+  async function handleUpdate() {
+    if (!editingId || !editText.trim()) return;
+    await updateMut.mutateAsync({ noteId: editingId, note: editText.trim() });
+    cancelEdit();
   }
 
   async function handleDelete() {
     if (!deleteTarget) return;
-    try {
-      await deleteMut.mutateAsync(deleteTarget);
-      setDeleteTarget(null);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Gagal menghapus catatan");
-    }
+    await deleteMut.mutateAsync(deleteTarget);
+    setDeleteTarget(null);
   }
 
   if (isLoading) return <TabSkeleton />;
 
   return (
     <div className="space-y-4">
-      {/* Add new note */}
+      {/* ── Add new note ─────────────────────────────────────── */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+          <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <NotebookPen className="h-4 w-4 text-muted-foreground" />
             Tambah Catatan
           </div>
-          <textarea
-            placeholder="Tulis catatan tentang customer ini..."
-            value={newNote}
-            onChange={(e) => setNewNote(e.target.value)}
-            rows={3}
-            className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
-          />
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          <div className="relative">
+            <textarea
+              placeholder="Tulis catatan tentang customer ini... (maks. 500 karakter)"
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value.slice(0, NOTE_MAX_LENGTH))}
+              rows={3}
+              maxLength={NOTE_MAX_LENGTH}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+            />
+            <span className="absolute bottom-2 right-2 text-[10px] text-muted-foreground select-none">
+              {newNote.length}/{NOTE_MAX_LENGTH}
+            </span>
+          </div>
           <div className="flex justify-end">
             <Button
               size="sm"
@@ -937,7 +1041,7 @@ function CustomerNotesTab({ customerId }: { customerId: string }) {
         </CardContent>
       </Card>
 
-      {/* Notes list */}
+      {/* ── Notes list ───────────────────────────────────────── */}
       {notes.length === 0 ? (
         <EmptyState icon={<StickyNote className="h-5 w-5" />} message="Belum ada catatan." />
       ) : (
@@ -945,35 +1049,97 @@ function CustomerNotesTab({ customerId }: { customerId: string }) {
           {notes.map((n) => (
             <Card key={n.id}>
               <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-slate-800 whitespace-pre-wrap">{n.note}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
-                      <span>{formatDate(n.createdAt)}</span>
-                      {n.createdBy && (
-                        <>
-                          <span className="text-slate-200">·</span>
-                          <span>{n.createdBy}</span>
-                        </>
-                      )}
+                {editingId === n.id ? (
+                  /* ── Edit mode ── */
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <textarea
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value.slice(0, NOTE_MAX_LENGTH))}
+                        rows={3}
+                        maxLength={NOTE_MAX_LENGTH}
+                        autoFocus
+                        className="flex w-full rounded-md border border-ring bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+                      />
+                      <span className="absolute bottom-2 right-2 text-[10px] text-muted-foreground select-none">
+                        {editText.length}/{NOTE_MAX_LENGTH}
+                      </span>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={cancelEdit}
+                        disabled={updateMut.isPending}
+                      >
+                        <X className="mr-1 h-3.5 w-3.5" /> Batal
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleUpdate}
+                        disabled={!editText.trim() || updateMut.isPending}
+                      >
+                        <Check className="mr-1 h-3.5 w-3.5" />
+                        {updateMut.isPending ? "Menyimpan..." : "Simpan"}
+                      </Button>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 h-7 w-7 text-slate-400 hover:text-destructive"
-                    onClick={() => setDeleteTarget(n.id)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+                ) : (
+                  /* ── View mode ── */
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-slate-800 whitespace-pre-wrap dark:text-slate-200">
+                        {n.note}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
+                        <span>{formatDate(n.createdAt)}</span>
+                        {n.createdBy && (
+                          <>
+                            <span className="text-slate-300">·</span>
+                            <span>{n.createdBy}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Edit & Delete — hanya tampil untuk MANAGER+ (CRM-008) */}
+                    {canManage && (
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-slate-400 hover:text-foreground"
+                          onClick={() => startEdit(n)}
+                          disabled={deleteMut.isPending}
+                          title="Edit catatan"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-slate-400 hover:text-destructive"
+                          onClick={() => setDeleteTarget(n.id)}
+                          disabled={deleteMut.isPending && deleteTarget === n.id}
+                          title="Hapus catatan"
+                        >
+                          {deleteMut.isPending && deleteTarget === n.id ? (
+                            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
         </div>
       )}
 
-      {/* Delete confirmation dialog */}
+      {/* ── Delete confirmation dialog ────────────────────────── */}
       <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -984,7 +1150,11 @@ function CustomerNotesTab({ customerId }: { customerId: string }) {
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Batal</Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleteMut.isPending}>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteMut.isPending}
+            >
               {deleteMut.isPending ? "Menghapus..." : "Hapus"}
             </Button>
           </DialogFooter>

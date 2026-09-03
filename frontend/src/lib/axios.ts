@@ -29,9 +29,15 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Hanya redirect ke /login jika user sudah authenticated (ada token).
+    // Jangan redirect saat login gagal (401 dari /auth/login) —
+    // biarkan form menampilkan pesan error.
     if (error.response?.status === 401) {
-      useAuthStore.getState().logout();
-      window.location.href = "/login";
+      const { token } = useAuthStore.getState();
+      if (token) {
+        useAuthStore.getState().logout();
+        window.location.href = "/login";
+      }
     }
     const message = error.response?.data?.message ?? error.message;
     // Jika ada field-level errors dari validation middleware, gabungkan ke message

@@ -16,6 +16,8 @@ import type {
   ServiceMaterial,
   MaterialUsageItem,
   BulkSaveMaterialUsageRow,
+  JobAssignmentItem,
+  UpsertJobAssignmentInput,
 } from "./types";
 
 interface TreatmentListData {
@@ -149,4 +151,24 @@ export async function bulkSaveMaterialUsages(
 
 export async function deleteMaterialUsageItem(id: string): Promise<void> {
   await api.delete(`/material-usage-items/${id}`);
+}
+
+// ── Job Assignments (sistem komisi baru) ──────────────────────────────────────
+
+export async function fetchJobAssignments(sessionId: string): Promise<JobAssignmentItem[]> {
+  const { data } = await api.get<ApiResponse<JobAssignmentItem[]>>(
+    `/treatment-sessions/${sessionId}/job-assignments`,
+  );
+  return data.data ?? [];
+}
+
+export async function upsertJobAssignments(
+  sessionId: string,
+  assignments: UpsertJobAssignmentInput[],
+): Promise<JobAssignmentItem[]> {
+  const { data } = await api.put<ApiResponse<JobAssignmentItem[]>>(
+    `/treatment-sessions/${sessionId}/job-assignments`,
+    { assignments },
+  );
+  return data.data ?? [];
 }

@@ -25,13 +25,16 @@ import {
   createCommissionRule,
   updateCommissionRule,
   deleteCommissionRule,
+  fetchCommissionJobs,
 } from "@/features/commission/api";
 import type {
   CommissionCategory,
+  CommissionJob,
   CommissionRule,
   CommissionType,
   CommissionBase,
 } from "@/features/commission/types";
+import { CommissionJobPanel } from "@/features/commission/components/CommissionJobPanel";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -202,7 +205,8 @@ function CommissionCategorySection() {
         ) : (
           <ul className="divide-y divide-slate-100">
             {categories.map((cat) => (
-              <li key={cat.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50/70 transition-colors">
+              <li key={cat.id} className="border-b border-slate-100 last:border-0">
+                <div className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50/70 transition-colors">
                 {editId === cat.id ? (
                   <>
                     <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-mono text-slate-500">
@@ -269,6 +273,11 @@ function CommissionCategorySection() {
                     </div>
                   </>
                 )}
+                </div>
+                {/* Jobs per kategori */}
+                {editId !== cat.id && (
+                  <CommissionJobPanel categoryId={cat.id} categoryName={cat.name} />
+                )}
               </li>
             ))}
           </ul>
@@ -299,6 +308,7 @@ const SLOT_OPTIONS = [
 interface RuleFormState {
   employeeId:           string;
   commissionCategoryId: string;
+  commissionJobId:      string;  // "" = tidak pakai job system
   slotKey:              string;
   commissionType:       CommissionType;
   commissionValue:      string;
@@ -309,7 +319,7 @@ interface RuleFormState {
 }
 
 const EMPTY_RULE: RuleFormState = {
-  employeeId: "", commissionCategoryId: "", slotKey: "",
+  employeeId: "", commissionCategoryId: "", commissionJobId: "", slotKey: "",
   commissionType: "PERCENTAGE", commissionValue: "",
   commissionBase: "AFTER_DISCOUNT_BEFORE_TAX",
   effectiveDate: new Date().toISOString().split("T")[0],
@@ -336,6 +346,16 @@ function CommissionRuleSection() {
   });
   const categories = catData?.data ?? [];
 
+  // Fetch jobs for selected category (only when category is chosen)
+  const { data: jobsData } = useQuery({
+    queryKey:  ["commission-jobs", form.commissionCategoryId],
+    queryFn:   () => fetchCommissionJobs(form.commissionCategoryId, true),
+    enabled:   !!form.commissionCategoryId,
+    staleTime: 30_000,
+  });
+  const categoryJobs: CommissionJob[] = jobsData ?? [];
+  const hasJobs = categoryJobs.length > 0;
+
   const { data: ruleData, isLoading } = useQuery({
     queryKey: ["commission-rules", filterEmp, filterCat],
     queryFn:  () => fetchCommissionRules({
@@ -351,7 +371,8 @@ function CommissionRuleSection() {
     mutationFn: () => createCommissionRule({
       employeeId:           form.employeeId,
       commissionCategoryId: form.commissionCategoryId,
-      slotKey:              form.slotKey || null,
+      slotKey:              hasJobs ? null : (form.slotKey || null),
+      commissionJobId:      hasJobs ? (form.commissionJobId || null) : null,
       commissionType:       form.commissionType,
       commissionValue:      parseFloat(form.commissionValue),
       commissionBase:       form.commissionBase,
@@ -404,6 +425,7 @@ function CommissionRuleSection() {
     setForm({
       employeeId:           rule.employeeId,
       commissionCategoryId: rule.commissionCategoryId,
+      commissionJobId:      rule.commissionJobId ?? "",
       slotKey:              rule.slotKey ?? "",
       commissionType:       rule.commissionType,
       commissionValue:      String(rule.commissionValue),
@@ -434,19 +456,41 @@ function CommissionRuleSection() {
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs font-medium text-slate-600">Kategori Komisi</Label>
-        <select value={form.commissionCategoryId} onChange={(e) => setForm((f) => ({ ...f, commissionCategoryId: e.target.value }))} disabled={isEdit} className={selectCls}>
+        <select
+          value={form.commissionCategoryId}
+          onChange={(e) => setForm((f) => ({ ...f, commissionCategoryId: e.target.value, commissionJobId: "", slotKey: "" }))}
+          disabled={isEdit}
+          className={selectCls}
+        >
           <option value="">Pilih kategori…</option>
           {categories.filter((c) => c.isActive).map((c) => (
             <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
           ))}
         </select>
       </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium text-slate-600">Role <span className="text-slate-400 font-normal">(opsional)</span></Label>
-        <select value={form.slotKey} onChange={(e) => setForm((f) => ({ ...f, slotKey: e.target.value }))} disabled={isEdit} className={selectCls}>
-          {SLOT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-      </div>
+      {hasJobs ? (
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium text-slate-600">Job Komisi <span className="text-slate-400 font-normal">(opsional)</span></Label>
+          <select
+            value={form.commissionJobId}
+            onChange={(e) => setForm((f) => ({ ...f, commissionJobId: e.target.value }))}
+            disabled={isEdit}
+            className={selectCls}
+          >
+            <option value="">— Semua job —</option>
+            {categoryJobs.filter(j => j.isActive).map((j) => (
+              <option key={j.id} value={j.id}>{j.name}</option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium text-slate-600">Role <span className="text-slate-400 font-normal">(opsional)</span></Label>
+          <select value={form.slotKey} onChange={(e) => setForm((f) => ({ ...f, slotKey: e.target.value }))} disabled={isEdit} className={selectCls}>
+            {SLOT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      )}
       <div className="space-y-1.5">
         <Label className="text-xs font-medium text-slate-600">Tipe Komisi</Label>
         <select value={form.commissionType} onChange={(e) => setForm((f) => ({ ...f, commissionType: e.target.value as CommissionType }))} className={selectCls}>
@@ -569,7 +613,7 @@ function CommissionRuleSection() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/70">
-                  {["Karyawan","Kategori","Role","Nilai","Berlaku",""].map((h) => (
+                  {["Karyawan","Kategori","Job / Role","Nilai","Berlaku",""].map((h) => (
                     <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">{h}</th>
                   ))}
                 </tr>
@@ -587,9 +631,11 @@ function CommissionRuleSection() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      {rule.slotKey
-                        ? <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary capitalize">{rule.slotKey}</span>
-                        : <span className="text-xs text-slate-400 italic">Semua</span>}
+                      {rule.commissionJob?.name
+                        ? <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-700">{rule.commissionJob.name}</span>
+                        : rule.slotKey
+                          ? <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary capitalize">{rule.slotKey}</span>
+                          : <span className="text-xs text-slate-400 italic">Semua</span>}
                     </td>
                     <td className="px-4 py-3">
                       <p className="font-semibold text-slate-800">
