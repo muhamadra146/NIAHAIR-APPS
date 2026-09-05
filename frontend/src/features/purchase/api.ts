@@ -11,8 +11,10 @@ interface PurchaseListData {
 }
 
 export async function fetchSuppliers(): Promise<Supplier[]> {
-  const { data } = await api.get<ApiResponse<Supplier[]>>("/suppliers");
-  return data.data;
+  const { data } = await api.get<ApiResponse<{ data: Supplier[]; meta: unknown }>>("/suppliers", {
+    params: { limit: 100 },
+  });
+  return data.data.data;
 }
 
 export async function fetchPurchaseInvoices(params: PurchaseListParams = {}): Promise<PurchaseListData> {

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { EmptyState } from "@/components/common/EmptyState";
+import { Pagination } from "@/components/common/Pagination";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -56,15 +58,11 @@ export function InvoicePaymentListPage() {
   const hasFilter  = !!(paymentMethodId || startDate || endDate);
 
   return (
-    <PageContainer>
+    <PageContainer
+      title="Pembayaran Invoice"
+      subtitle={meta ? `${meta.total} pembayaran` : "Riwayat pembayaran invoice"}
+    >
       <div className="space-y-4 sm:space-y-5">
-        {/* Header */}
-        <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Pembayaran Invoice</h1>
-          <p className="text-sm text-muted-foreground">
-            {meta ? `${meta.total} pembayaran` : "Riwayat pembayaran invoice"}
-          </p>
-        </div>
 
         {/* Summary cards */}
         <div className="grid grid-cols-2 gap-3">
@@ -150,7 +148,7 @@ export function InvoicePaymentListPage() {
               ))}
             </div>
           ) : payments.length === 0 ? (
-            <p className="py-14 text-center text-sm text-slate-400">Tidak ada pembayaran.</p>
+            <EmptyState title="Belum ada pembayaran" description="Tidak ada pembayaran yang sesuai dengan filter" />
           ) : (
             <>
               {/* Mobile cards */}
@@ -227,16 +225,7 @@ export function InvoicePaymentListPage() {
           )}
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Halaman {page} dari {totalPages}</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Sebelumnya</Button>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Berikutnya</Button>
-            </div>
-          </div>
-        )}
+        <Pagination page={page} limit={20} total={meta?.total ?? 0} totalPages={totalPages} onPageChange={setPage} />
       </div>
 
       {/* Delete confirm */}

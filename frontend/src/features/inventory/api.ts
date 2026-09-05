@@ -63,7 +63,7 @@ export async function updateTransferStatus(
 
 export async function fetchItemCategories(): Promise<ItemCategory[]> {
   const { data } = await api.get<ApiResponse<{ data: ItemCategory[] }>>("/item-categories", {
-    params: { limit: 200 },
+    params: { limit: 100 },
   });
   return data.data.data;
 }
@@ -90,10 +90,10 @@ export async function createBatchStockAdjustment(
 }
 
 export async function fetchGlAccounts(params?: { category?: string; usage?: string }): Promise<GlAccount[]> {
-  const { data } = await api.get<ApiResponse<GlAccount[]>>("/gl-accounts", {
-    params: params ?? undefined,
+  const { data } = await api.get<ApiResponse<{ data: GlAccount[]; meta: unknown }>>("/gl-accounts", {
+    params: { limit: 100, ...(params ?? {}) },
   });
-  return data.data;
+  return data.data.data;
 }
 
 export async function updateGlAccountUsage(id: string, usage: string | null): Promise<GlAccount> {

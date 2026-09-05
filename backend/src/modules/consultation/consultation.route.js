@@ -18,7 +18,7 @@ const {
 
 const router = Router();
 
-const MANAGER_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER];
+const MANAGER_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.FINANCE];
 
 // Stats — management only; list — any authenticated (service enforces ownership for non-managers)
 router.get("/stats",            authenticate, authorize(...MANAGER_ROLES), getStatsController);

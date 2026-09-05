@@ -45,13 +45,8 @@ export function ReportsPage() {
   const params = { branchId: branchId ?? undefined, ...applied };
 
   return (
-    <PageContainer>
+    <PageContainer title="Laporan" subtitle="Ringkasan data operasional dan keuangan">
       <div className="space-y-4 sm:space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Laporan</h1>
-          <p className="text-sm text-muted-foreground">Ringkasan data operasional dan keuangan</p>
-        </div>
 
         {/* Date filter */}
         <Card>

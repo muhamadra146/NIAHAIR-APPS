@@ -2,11 +2,16 @@
 
 const prisma = require("../../config/prisma");
 
-const findAllByAppointment = (appointmentId) =>
+const findAllByAppointment = (appointmentId, { skip = 0, take = 10 } = {}) =>
   prisma.appointmentPhoto.findMany({
     where:   { appointmentId },
     orderBy: { createdAt: "asc" },
+    skip,
+    take,
   });
+
+const countByAppointment = (appointmentId) =>
+  prisma.appointmentPhoto.count({ where: { appointmentId } });
 
 const findById = (id) =>
   prisma.appointmentPhoto.findUnique({ where: { id } });
@@ -20,4 +25,4 @@ const create = (data) =>
 const remove = (id) =>
   prisma.appointmentPhoto.delete({ where: { id } });
 
-module.exports = { findAllByAppointment, findById, findAppointmentById, create, remove };
+module.exports = { findAllByAppointment, countByAppointment, findById, findAppointmentById, create, remove };

@@ -13,7 +13,7 @@ const {
 
 const router = Router();
 
-const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.ADMIN];
+const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER];
 
 const assignSchema = object({ membershipId: pipe(string(), minLength(1, "membershipId wajib diisi")) });
 

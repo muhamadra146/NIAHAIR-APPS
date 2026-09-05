@@ -1,6 +1,6 @@
 const prisma = require("../../config/prisma");
 
-const findAllByCategory = (categoryId, includeInactive = false) =>
+const findAllByCategory = (categoryId, includeInactive = false, { skip = 0, take = 10 } = {}) =>
   prisma.commissionJob.findMany({
     where: {
       commissionCategoryId: categoryId,
@@ -10,6 +10,16 @@ const findAllByCategory = (categoryId, includeInactive = false) =>
     include: {
       // Sertakan info job yang menjadi target potongan (untuk display di UI)
       deductsFrom: { select: { id: true, name: true } },
+    },
+    skip,
+    take,
+  });
+
+const countByCategory = (categoryId, includeInactive = false) =>
+  prisma.commissionJob.count({
+    where: {
+      commissionCategoryId: categoryId,
+      ...(includeInactive ? {} : { isActive: true }),
     },
   });
 
@@ -38,6 +48,7 @@ const countAssignments = (id) =>
 
 module.exports = {
   findAllByCategory,
+  countByCategory,
   findById,
   findByKey,
   create,

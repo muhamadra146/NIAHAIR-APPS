@@ -1,7 +1,9 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
+const { paginate, paginationMeta } = require("../../utils/pagination");
 const {
   findByItem,
+  countByItem,
   findById,
   create,
   update,
@@ -10,7 +12,6 @@ const {
   sumWorkQtyBySlot,
   findTreatmentItemById,
   findEmployeeById,
-  countByItem,
   updateManyWorkQty,
 } = require("./treatmentAssignment.repository");
 
@@ -22,10 +23,15 @@ const calcMaxWork = (treatmentItem) =>
 
 // ── Service ───────────────────────────────────────────────────────────
 
-const getByItem = async (treatmentItemId) => {
+const getByItem = async (treatmentItemId, { page, limit } = {}) => {
   const item = await findTreatmentItemById(treatmentItemId);
   if (!item) throw new AppError("Treatment item not found", StatusCodes.NOT_FOUND);
-  return findByItem(treatmentItemId);
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const [data, total] = await Promise.all([
+    findByItem(treatmentItemId, { skip, take }),
+    countByItem(treatmentItemId),
+  ]);
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
 const getById = async (id) => {

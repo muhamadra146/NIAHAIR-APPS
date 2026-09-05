@@ -18,22 +18,24 @@ const {
 
 const router = Router();
 
-const ALLOWED = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER];
+// OFFICE hanya view; INVENTORY + FINANCE bisa buat/edit
+const VIEW_ROLES  = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.INVENTORY, ROLES.FINANCE, ROLES.OFFICE];
+const WRITE_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.INVENTORY, ROLES.FINANCE];
 
-router.get("/",                              authenticate, authorize(...ALLOWED), listController);
-router.get("/items/:itemId/last-price",      authenticate, authorize(...ALLOWED), lastPriceController);
-router.get("/:id",                           authenticate, authorize(...ALLOWED), getController);
+router.get("/",                              authenticate, authorize(...VIEW_ROLES), listController);
+router.get("/items/:itemId/last-price",      authenticate, authorize(...VIEW_ROLES), lastPriceController);
+router.get("/:id",                           authenticate, authorize(...VIEW_ROLES), getController);
 
 router.post(
   "/",
-  authenticate, authorize(...ALLOWED),
+  authenticate, authorize(...WRITE_ROLES),
   validate(createPurchaseInvoiceSchema),
   createController
 );
 
 router.patch(
   "/:id",
-  authenticate, authorize(...ALLOWED),
+  authenticate, authorize(...WRITE_ROLES),
   validate(updatePurchaseInvoiceSchema),
   updateController
 );

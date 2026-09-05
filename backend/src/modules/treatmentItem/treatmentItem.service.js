@@ -1,7 +1,9 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
+const { paginate, paginationMeta } = require("../../utils/pagination");
 const {
   findBySession,
+  countBySession,
   findById,
   create,
   update,
@@ -12,10 +14,15 @@ const {
   findActiveItemPrice,
 } = require("./treatmentItem.repository");
 
-const getBySession = async (sessionId) => {
+const getBySession = async (sessionId, { page, limit } = {}) => {
   const session = await findSessionById(sessionId);
   if (!session) throw new AppError("Treatment session not found", StatusCodes.NOT_FOUND);
-  return findBySession(sessionId);
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const [data, total] = await Promise.all([
+    findBySession(sessionId, { skip, take }),
+    countBySession(sessionId),
+  ]);
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
 const getById = async (id) => {

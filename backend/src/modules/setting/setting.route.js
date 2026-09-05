@@ -9,6 +9,6 @@ const { getByKeyController, upsertController } = require("./setting.controller")
 const router = Router();
 
 router.get("/:key", authenticate, getByKeyController);
-router.put("/:key", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.ADMIN), validate(upsertSettingSchema), upsertController);
+router.put("/:key", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), validate(upsertSettingSchema), upsertController);
 
 module.exports = router;

@@ -16,7 +16,7 @@ const { getController: getJobAssignmentsController, upsertController: upsertJobA
 
 const router = Router();
 
-const MUTATE_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.ADMIN, ROLES.MANAGER, ROLES.CASHIER];
+const MUTATE_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER];
 
 router.get("/",    authenticate, getAllController);
 router.get("/:id", authenticate, getByIdController);

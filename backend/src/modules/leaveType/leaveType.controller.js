@@ -3,7 +3,7 @@ const svc = require("./leaveType.service");
 
 const getAllController = async (req, res, next) => {
   try {
-    const result = await svc.getAll(req.query.includeInactive === "true");
+    const result = await svc.getAll(req.query);
     return success(res, result, "Leave types fetched");
   } catch (err) { next(err); }
 };

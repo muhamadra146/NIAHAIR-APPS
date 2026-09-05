@@ -30,7 +30,7 @@ router.post(
   "/",
   authenticate,
   requireBranch,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER, ROLES.STAFF),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER, ROLES.STAFF_OPERASIONAL),
   validate(createAppointmentSchema),
   createController
 );
@@ -62,7 +62,7 @@ router.patch(
 router.patch(
   "/:id/reschedule",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.OFFICE, ROLES.MANAGER, ROLES.CASHIER),
   validate(rescheduleSchema),
   rescheduleController
 );
@@ -71,7 +71,7 @@ router.patch(
 router.patch(
   "/:id/reschedule/:historyId",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.OFFICE, ROLES.MANAGER, ROLES.CASHIER),
   validate(rescheduleSchema),
   updateRescheduleController
 );

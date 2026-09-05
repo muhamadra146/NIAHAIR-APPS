@@ -6,12 +6,12 @@ const INCLUDE = {
   repayments: { orderBy: { paidAt: "desc" } },
 };
 
-const findAll = ({ employeeId, branchId, status, page, limit }) => {
+const findAll = ({ employeeId, branchId, status, skip = 0, take = 10 }) => {
   const where = {};
   if (employeeId) where.employeeId = employeeId;
   if (branchId)   where.branchId   = branchId;
   if (status)     where.status     = status;
-  return prisma.loan.findMany({ where, include: INCLUDE, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit });
+  return prisma.loan.findMany({ where, include: INCLUDE, orderBy: { createdAt: "desc" }, skip, take });
 };
 
 const count = ({ employeeId, branchId, status }) => {
@@ -53,8 +53,8 @@ const findRepaymentsByLoan = (loanId) =>
   prisma.loanRepayment.findMany({ where: { loanId }, orderBy: { paidAt: "desc" } });
 
 const generateLoanNo = async () => {
-  const count = await prisma.loan.count();
-  return `KB${String(count + 1).padStart(5, "0")}`;
+  const c = await prisma.loan.count();
+  return `KB${String(c + 1).padStart(5, "0")}`;
 };
 
 const remove = (id) =>

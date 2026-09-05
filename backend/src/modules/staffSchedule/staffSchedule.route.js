@@ -21,7 +21,7 @@ router.get("/my",        authenticate, getMySchedulesController);
 router.post(
   "/bulk",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE),
   validate(bulkScheduleSchema),
   bulkUpsertController,
 );

@@ -45,8 +45,13 @@ import CommissionCalculatorPage        from "@/features/invoice/pages/Commission
 import { PurchasePage }              from "@/features/purchase/pages/PurchasePage";
 import { PurchaseDetailPage }        from "@/features/purchase/pages/PurchaseDetailPage";
 
+// ── Role Groups (mirrors sidebarNav.ts) ─────────────────────────────────────
+const ADMIN_ROLES        = ["SUPER_ADMIN", "OWNER"]                                     as const;
+const MANAGEMENT_ROLES   = ["SUPER_ADMIN", "OWNER", "MANAGER"]                          as const;
+const POS_ROLES          = ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER"]               as const;
+
 export const router = createBrowserRouter([
-  // ── Public routes ────────────────────────────────────────────────────
+  // ── Public routes ──────────────────────────────────────────────────────
   {
     element: <AuthLayout />,
     children: [
@@ -54,86 +59,135 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // ── Protected routes ─────────────────────────────────────────────────
+  // ── Protected routes ───────────────────────────────────────────────────
   {
-    element: <ProtectedRoute />,
+    element: <ProtectedRoute />,                              // auth + branch check
     children: [
-      // Branch selector — accessible before branchId is set
       { path: "/branch-select", element: <BranchSelectorPage /> },
 
       {
         element: <DashboardLayout />,
         children: [
-          { path: "/dashboard", element: <DashboardPage /> },
-          // Customers
-          { path: "/customers",     element: <CustomerListPage /> },
-          { path: "/customers/:id", element: <CustomerDetailPage /> },
-          // Appointments
-          { path: "/appointments",       element: <AppointmentListPage /> },
-          { path: "/appointments/:id",   element: <AppointmentDetailPage /> },
-          { path: "/booking-harian",     element: <DailyBoardPage /> },
-          // Schedule (Roster)
-          { path: "/schedule", element: <SchedulePage /> },
-          // Team / Attendance
-          { path: "/attendance", element: <TeamPage /> },
-          // Payroll
-          { path: "/payroll",      element: <PayrollPage /> },
-          { path: "/payroll/bpjs", element: <BpjsReportPage /> },
-          // Employees
-          { path: "/employees",     element: <EmployeeListPage /> },
-          { path: "/employees/:id", element: <EmployeeDetailPage /> },
-          // Treatments
-          // Invoices / POS
-          { path: "/invoices",     element: <InvoiceListPage /> },
-          { path: "/invoices/:id", element: <InvoiceDetailPage /> },
-          // Deposits
-          { path: "/deposits",              element: <DepositListPage /> },
-          { path: "/deposits/:id",          element: <DepositDetailPage /> },
-          { path: "/deposits/:id/pay",      element: <DepositPaymentPage /> },
-          { path: "/deposit-payments",      element: <DepositPaymentListPage /> },
-          { path: "/invoice-payments",      element: <InvoicePaymentListPage /> },
-          // Commissions
-          { path: "/commissions",                       element: <CommissionListPage /> },
-          { path: "/generate-komisi",                   element: <GenerateKomisiPage /> },
-          { path: "/generate-komisi/:id/calculator", element: <CommissionCalculatorPage /> },
-          // Inventory
-          { path: "/inventory", element: <InventoryPage /> },
-          // Pembelian
-          { path: "/purchases",     element: <PurchasePage /> },
-          { path: "/purchases/:id", element: <PurchaseDetailPage /> },
-          // Reports
-          { path: "/reports", element: <ReportsPage /> },
-          // Loans (Kasbon)
-          { path: "/loans",     element: <LoanListPage /> },
-          { path: "/loans/:id", element: <LoanDetailPage /> },
-          // Consultation Notes
-          { path: "/consultation-notes",          element: <ConsultationListPage /> },
-          { path: "/consultation-notes/new",      element: <ConsultationFormPage /> },
-          { path: "/consultation-notes/:id/edit", element: <ConsultationFormPage /> },
-          // Leave Management
-          { path: "/leaves", element: <LeavePage /> },
-          // My Payslip (employee self-service)
-          { path: "/my-payslip",     element: <MyPayslipPage /> },
-          { path: "/my-commission",  element: <MyCommissionPage /> },
-          // My Kasbon (employee self-service)
+
+          // ── ALL ROLES ────────────────────────────────────────────────
+          { path: "/dashboard",   element: <DashboardPage /> },
+          { path: "/leaves",      element: <LeavePage /> },
+          { path: "/permissions", element: <PermissionPage /> },
+          { path: "/sick-leaves", element: <SickLeavePage /> },
+          { path: "/my-payslip",  element: <MyPayslipPage /> },
           { path: "/my-kasbon",      element: <MyLoanPage /> },
           { path: "/my-kasbon/:id",  element: <MyLoanDetailPage /> },
-          // Attendance Correction
-          { path: "/attendance-corrections", element: <CorrectionPage /> },
-          // Complaints
-          { path: "/complaints", element: <ComplaintPage /> },
-          // Permission (Izin)
-          { path: "/permissions", element: <PermissionPage /> },
-          // Sick Leave (Sakit)
-          { path: "/sick-leaves", element: <SickLeavePage /> },
-          // Settings
-          { path: "/settings", element: <SettingsPage /> },
+
+          // ── STAFF_OPERASIONAL + CASHIER (self-service komisi) ─────
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","CASHIER","STAFF_OPERASIONAL"]} />,
+            children: [
+              { path: "/my-commission", element: <MyCommissionPage /> },
+            ],
+          },
+
+          // ── Operasional: incl. STAFF_OPERASIONAL + OFFICE + FINANCE (view-only handled in page)
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","CASHIER","STAFF_OPERASIONAL","OFFICE","FINANCE"]} />,
+            children: [
+              { path: "/booking-harian",          element: <DailyBoardPage /> },
+              { path: "/consultation-notes",      element: <ConsultationListPage /> },
+              { path: "/consultation-notes/new",  element: <ConsultationFormPage /> },
+              { path: "/consultation-notes/:id/edit", element: <ConsultationFormPage /> },
+            ],
+          },
+
+          // ── Operasional: POS + OFFICE + FINANCE (no STAFF_OPERASIONAL)
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","CASHIER","OFFICE","FINANCE"]} />,
+            children: [
+              { path: "/appointments",     element: <AppointmentListPage /> },
+              { path: "/appointments/:id", element: <AppointmentDetailPage /> },
+              { path: "/complaints",       element: <ComplaintPage /> },
+              { path: "/invoices",         element: <InvoiceListPage /> },
+              { path: "/invoices/:id",     element: <InvoiceDetailPage /> },
+              { path: "/deposits",             element: <DepositListPage /> },
+              { path: "/deposits/:id",         element: <DepositDetailPage /> },
+              { path: "/deposits/:id/pay",     element: <DepositPaymentPage /> },
+              { path: "/deposit-payments",     element: <DepositPaymentListPage /> },
+              { path: "/invoice-payments",     element: <InvoicePaymentListPage /> },
+            ],
+          },
+
+          // ── Data: Customers — POS + OFFICE (full) + FINANCE (view-only)
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","CASHIER","OFFICE","FINANCE"]} />,
+            children: [
+              { path: "/customers",     element: <CustomerListPage /> },
+              { path: "/customers/:id", element: <CustomerDetailPage /> },
+            ],
+          },
+
+          // ── Data: Employees, Schedule, Attendance — MANAGEMENT + OFFICE + FINANCE
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","OFFICE","FINANCE"]} />,
+            children: [
+              { path: "/employees",     element: <EmployeeListPage /> },
+              { path: "/employees/:id", element: <EmployeeDetailPage /> },
+              { path: "/schedule",      element: <SchedulePage /> },
+              { path: "/attendance",    element: <TeamPage /> },
+              { path: "/attendance-corrections", element: <CorrectionPage /> },
+            ],
+          },
+
+          // ── Data: Inventory & Pembelian — MANAGEMENT + INVENTORY + FINANCE + OFFICE (view-only)
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","INVENTORY","FINANCE","OFFICE"]} />,
+            children: [
+              { path: "/inventory",     element: <InventoryPage /> },
+              { path: "/purchases",     element: <PurchasePage /> },
+              { path: "/purchases/:id", element: <PurchaseDetailPage /> },
+            ],
+          },
+
+          // ── Keuangan: Commissions & Kasbon — MANAGEMENT (view) + FINANCE (full)
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","FINANCE"]} />,
+            children: [
+              { path: "/commissions", element: <CommissionListPage /> },
+              { path: "/loans",       element: <LoanListPage /> },
+              { path: "/loans/:id",   element: <LoanDetailPage /> },
+            ],
+          },
+
+          // ── Keuangan: Payroll & Generate Komisi — ADMIN + FINANCE
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","FINANCE"]} />,
+            children: [
+              { path: "/payroll",     element: <PayrollPage /> },
+              { path: "/payroll/bpjs", element: <BpjsReportPage /> },
+              { path: "/generate-komisi",               element: <GenerateKomisiPage /> },
+              { path: "/generate-komisi/:id/calculator", element: <CommissionCalculatorPage /> },
+            ],
+          },
+
+          // ── Reports — MANAGEMENT + INVENTORY + OFFICE + FINANCE
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","INVENTORY","OFFICE","FINANCE"]} />,
+            children: [
+              { path: "/reports", element: <ReportsPage /> },
+            ],
+          },
+
+          // ── Settings — ADMIN only
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER"]} />,
+            children: [
+              { path: "/settings", element: <SettingsPage /> },
+            ],
+          },
+
         ],
       },
     ],
   },
 
-  // ── Fallback ─────────────────────────────────────────────────────────
+  // ── Fallback ──────────────────────────────────────────────────────────
   { path: "/",  element: <Navigate to="/dashboard" replace /> },
   { path: "*",  element: <Navigate to="/dashboard" replace /> },
 ]);

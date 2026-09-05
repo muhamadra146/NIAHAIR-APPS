@@ -15,8 +15,8 @@ const syncSuppliersController = async (req, res, next) => {
 
 const getSuppliersController = async (req, res, next) => {
   try {
-    const suppliers = await getSuppliers();
-    success(res, suppliers, "OK");
+    const result = await getSuppliers(req.query);
+    success(res, result, "OK");
   } catch (err) {
     next(err);
   }

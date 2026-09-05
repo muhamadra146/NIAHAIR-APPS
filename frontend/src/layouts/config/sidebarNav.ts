@@ -18,7 +18,6 @@ import {
   NotebookPen,
   UmbrellaOff,
   FileText,
-  RotateCcw,
   HandHelping,
   Thermometer,
   Sparkles,
@@ -28,16 +27,18 @@ import {
 } from "lucide-react";
 
 export interface NavItem {
-  label:    string;
-  href:     string;
-  icon:     LucideIcon;
-  roles:    UserRole[];
-  group?:   string;
+  label:          string;
+  href:           string;
+  icon:           LucideIcon;
+  roles:          UserRole[];       // siapa yang BISA LIHAT menu ini
+  viewOnlyRoles?: UserRole[];       // subset dari roles yang hanya read-only (hide write buttons di page)
+  group?:         string;
   children?: Omit<NavItem, "children" | "icon" | "group">[];
 }
 
-const ALL_ROLES: UserRole[] = [
-  "SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER", "FINANCE", "STAFF", "STYLIST",
+// ── Role Groups ──────────────────────────────────────────────────────────────
+const ADMIN_ROLES: UserRole[] = [
+  "SUPER_ADMIN", "OWNER",
 ];
 
 const MANAGEMENT_ROLES: UserRole[] = [
@@ -48,8 +49,15 @@ const POS_ROLES: UserRole[] = [
   "SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER",
 ];
 
+const ALL_ROLES: UserRole[] = [
+  "SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER",
+  "STAFF_OPERASIONAL", "INVENTORY", "OFFICE", "FINANCE",
+];
+
+// ── Sidebar Nav ──────────────────────────────────────────────────────────────
 export const sidebarNav: NavItem[] = [
-  // ── Overview ──────────────────────────────────────────────────────────
+
+  // ── Overview ──────────────────────────────────────────────────────────────
   {
     label: "Dashboard",
     href:  "/dashboard",
@@ -58,32 +66,48 @@ export const sidebarNav: NavItem[] = [
     group: "Overview",
   },
 
-  // ── Operasional ───────────────────────────────────────────────────────
+  // ── Operasional ───────────────────────────────────────────────────────────
   {
-    label: "Deposit",
-    href:  "/deposits",
-    icon:  Wallet,
-    roles: POS_ROLES,
-    group: "Operasional",
+    label:          "Deposit",
+    href:           "/deposits",
+    icon:           Wallet,
+    roles:          [...POS_ROLES, "OFFICE", "FINANCE"],
+    viewOnlyRoles:  ["OFFICE", "FINANCE"],
+    group:          "Operasional",
     children: [
-      { label: "Deposit",            href: "/deposits",         roles: POS_ROLES },
-      { label: "Pembayaran Deposit", href: "/deposit-payments", roles: POS_ROLES },
+      {
+        label:         "Deposit",
+        href:          "/deposits",
+        roles:         [...POS_ROLES, "OFFICE", "FINANCE"],
+        viewOnlyRoles: ["OFFICE", "FINANCE"],
+      },
+      {
+        label:         "Pembayaran Deposit",
+        href:          "/deposit-payments",
+        roles:         [...POS_ROLES, "OFFICE", "FINANCE"],
+        viewOnlyRoles: ["OFFICE", "FINANCE"],
+      },
     ],
   },
+
   {
-    label: "Booking",
-    href:  "/appointments",
-    icon:  CalendarDays,
-    roles: [...MANAGEMENT_ROLES, "CASHIER", "STYLIST", "STAFF"],
-    group: "Operasional",
+    label:         "Booking",
+    href:          "/appointments",
+    icon:          CalendarDays,
+    roles:         [...POS_ROLES, "OFFICE", "FINANCE"],
+    viewOnlyRoles: ["OFFICE", "FINANCE"],
+    group:         "Operasional",
   },
+
   {
-    label: "Booking Harian",
-    href:  "/booking-harian",
-    icon:  KanbanSquare,
-    roles: [...MANAGEMENT_ROLES, "CASHIER", "STYLIST", "STAFF"],
-    group: "Operasional",
+    label:         "Booking Harian",
+    href:          "/booking-harian",
+    icon:          KanbanSquare,
+    roles:         [...POS_ROLES, "STAFF_OPERASIONAL", "OFFICE", "FINANCE"],
+    viewOnlyRoles: ["STAFF_OPERASIONAL", "OFFICE", "FINANCE"],
+    group:         "Operasional",
   },
+
   {
     label: "POS",
     href:  "/invoices",
@@ -91,108 +115,128 @@ export const sidebarNav: NavItem[] = [
     roles: POS_ROLES,
     group: "Operasional",
     children: [
-      { label: "Invoices",            href: "/invoices",         roles: POS_ROLES },
-      { label: "Pembayaran Invoice",  href: "/invoice-payments", roles: POS_ROLES },
+      { label: "Invoices",           href: "/invoices",          roles: POS_ROLES },
+      { label: "Pembayaran Invoice", href: "/invoice-payments",  roles: POS_ROLES },
     ],
   },
+
   {
-    label: "Catatan Klien",
-    href:  "/consultation-notes",
-    icon:  NotebookPen,
-    roles: ALL_ROLES,
-    group: "Operasional",
+    label:         "Catatan Klien",
+    href:          "/consultation-notes",
+    icon:          NotebookPen,
+    roles:         [...POS_ROLES, "STAFF_OPERASIONAL", "OFFICE", "FINANCE"],
+    viewOnlyRoles: ["OFFICE", "FINANCE"],
+    group:         "Operasional",
   },
 
   {
-    label: "Komplain Client",
-    href:  "/complaints",
-    icon:  AlertCircle,
-    roles: ALL_ROLES,
-    group: "Operasional",
+    label:         "Komplain Client",
+    href:          "/complaints",
+    icon:          AlertCircle,
+    roles:         [...POS_ROLES, "OFFICE", "FINANCE"],
+    viewOnlyRoles: ["OFFICE", "FINANCE"],
+    group:         "Operasional",
   },
 
-  // ── Keuangan ──────────────────────────────────────────────────────────
+  // ── Keuangan ──────────────────────────────────────────────────────────────
   {
-    label: "Commissions",
-    href:  "/commissions",
-    icon:  BadgeDollarSign,
-    roles: [...MANAGEMENT_ROLES, "FINANCE"],
-    group: "Keuangan",
+    label:         "Commissions",
+    href:          "/commissions",
+    icon:          BadgeDollarSign,
+    roles:         [...ADMIN_ROLES, "MANAGER", "FINANCE"],
+    viewOnlyRoles: ["MANAGER"],
+    group:         "Keuangan",
   },
+
   {
     label: "Generate Komisi",
     href:  "/generate-komisi",
     icon:  Sparkles,
-    roles: MANAGEMENT_ROLES,
+    roles: [...ADMIN_ROLES, "FINANCE"],
     group: "Keuangan",
   },
+
   {
-    label: "Kasbon",
-    href:  "/loans",
-    icon:  Banknote,
-    roles: MANAGEMENT_ROLES,
-    group: "Keuangan",
+    label:         "Kasbon",
+    href:          "/loans",
+    icon:          Banknote,
+    roles:         [...ADMIN_ROLES, "MANAGER", "FINANCE"],
+    viewOnlyRoles: ["MANAGER"],
+    group:         "Keuangan",
   },
+
   {
     label: "Payroll",
     href:  "/payroll",
     icon:  DollarSign,
-    roles: [...MANAGEMENT_ROLES, "FINANCE"],
+    roles: [...ADMIN_ROLES, "FINANCE"],
     group: "Keuangan",
   },
+
   {
     label: "Laporan BPJS",
     href:  "/payroll/bpjs",
     icon:  FileText,
-    roles: [...MANAGEMENT_ROLES, "FINANCE"],
+    roles: [...ADMIN_ROLES, "FINANCE"],
     group: "Keuangan",
   },
 
-  // ── Data ──────────────────────────────────────────────────────────────
+  // ── Data ──────────────────────────────────────────────────────────────────
   {
-    label: "Customers",
-    href:  "/customers",
-    icon:  Users,
-    roles: [...MANAGEMENT_ROLES, "CASHIER"],
-    group: "Data",
-  },
-  {
-    label: "Employees",
-    href:  "/employees",
-    icon:  UserCog,
-    roles: MANAGEMENT_ROLES,
-    group: "Data",
-  },
-  {
-    label: "Inventory",
-    href:  "/inventory",
-    icon:  Package,
-    roles: MANAGEMENT_ROLES,
-    group: "Data",
-  },
-  {
-    label: "Pembelian",
-    href:  "/purchases",
-    icon:  ShoppingCart,
-    roles: MANAGEMENT_ROLES,
-    group: "Data",
+    label:         "Customers",
+    href:          "/customers",
+    icon:          Users,
+    roles:         [...POS_ROLES, "OFFICE", "FINANCE"],
+    viewOnlyRoles: ["FINANCE"],
+    group:         "Data",
   },
 
-  // ── Kehadiran ─────────────────────────────────────────────────────────
   {
-    label: "Schedule",
-    href:  "/schedule",
-    icon:  CalendarRange,
-    roles: [...MANAGEMENT_ROLES, "STYLIST", "STAFF"],
-    group: "Kehadiran",
+    label:         "Employees",
+    href:          "/employees",
+    icon:          UserCog,
+    roles:         [...MANAGEMENT_ROLES, "OFFICE", "FINANCE"],
+    viewOnlyRoles: ["FINANCE"],
+    group:         "Data",
   },
+
   {
-    label: "Attendance",
-    href:  "/attendance",
-    icon:  ClipboardList,
-    roles: [...MANAGEMENT_ROLES, "STYLIST", "STAFF"],
-    group: "Kehadiran",
+    label:         "Inventory",
+    href:          "/inventory",
+    icon:          Package,
+    roles:         [...MANAGEMENT_ROLES, "INVENTORY", "OFFICE", "FINANCE"],
+    viewOnlyRoles: ["OFFICE"],
+    group:         "Data",
   },
+
+  {
+    label:         "Pembelian",
+    href:          "/purchases",
+    icon:          ShoppingCart,
+    roles:         [...MANAGEMENT_ROLES, "INVENTORY", "FINANCE", "OFFICE"],
+    viewOnlyRoles: ["OFFICE"],
+    group:         "Data",
+  },
+
+  // ── Kehadiran ─────────────────────────────────────────────────────────────
+  {
+    label:         "Schedule",
+    href:          "/schedule",
+    icon:          CalendarRange,
+    roles:         [...MANAGEMENT_ROLES, "OFFICE", "FINANCE"],
+    viewOnlyRoles: ["FINANCE"],
+    group:         "Kehadiran",
+  },
+
+  {
+    label:         "Attendance",
+    href:          "/attendance",
+    icon:          ClipboardList,
+    roles:         [...MANAGEMENT_ROLES, "OFFICE", "FINANCE"],
+    viewOnlyRoles: ["FINANCE"],
+    group:         "Kehadiran",
+  },
+
   {
     label: "Cuti",
     href:  "/leaves",
@@ -200,6 +244,7 @@ export const sidebarNav: NavItem[] = [
     roles: ALL_ROLES,
     group: "Kehadiran",
   },
+
   {
     label: "Izin",
     href:  "/permissions",
@@ -207,6 +252,7 @@ export const sidebarNav: NavItem[] = [
     roles: ALL_ROLES,
     group: "Kehadiran",
   },
+
   {
     label: "Sakit",
     href:  "/sick-leaves",
@@ -214,51 +260,46 @@ export const sidebarNav: NavItem[] = [
     roles: ALL_ROLES,
     group: "Kehadiran",
   },
-  // Koreksi Absen disembunyikan — manager langsung edit absen via manualSet
-  // {
-  //   label: "Koreksi Absen",
-  //   href:  "/attendance-corrections",
-  //   icon:  RotateCcw,
-  //   roles: ALL_ROLES,
-  //   group: "Kehadiran",
-  // },
 
   // ── Keuangan Saya ─────────────────────────────────────────────────────────
   {
     label: "Slip Gaji",
     href:  "/my-payslip",
     icon:  FileText,
-    roles: [...MANAGEMENT_ROLES, "STYLIST", "STAFF", "CASHIER"],
+    roles: ALL_ROLES,
     group: "Keuangan Saya",
   },
+
   {
     label: "Komisi Saya",
     href:  "/my-commission",
     icon:  BadgeDollarSign,
-    roles: ["STYLIST", "STAFF"],
+    roles: ["STAFF_OPERASIONAL", "CASHIER"],
     group: "Keuangan Saya",
   },
+
   {
     label: "Kasbon Saya",
     href:  "/my-kasbon",
     icon:  Banknote,
-    roles: [...MANAGEMENT_ROLES, "STYLIST", "STAFF", "CASHIER"],
+    roles: ALL_ROLES,
     group: "Keuangan Saya",
   },
 
-  // ── Lainnya ───────────────────────────────────────────────────────────
+  // ── Lainnya ───────────────────────────────────────────────────────────────
   {
     label: "Reports",
     href:  "/reports",
     icon:  BarChart3,
-    roles: ["SUPER_ADMIN", "OWNER", "MANAGER", "FINANCE"],
+    roles: [...ADMIN_ROLES, "MANAGER", "INVENTORY", "OFFICE", "FINANCE"],
     group: "Lainnya",
   },
+
   {
     label: "Settings",
     href:  "/settings",
     icon:  Settings,
-    roles: ["SUPER_ADMIN", "OWNER"],
+    roles: ADMIN_ROLES,
     group: "Lainnya",
   },
 ];

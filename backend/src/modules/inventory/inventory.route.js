@@ -33,20 +33,21 @@ router.post(
   generateServiceMovementController,
 );
 
-// Batch stock adjustment — SUPER_ADMIN and OWNER only (INV-013)
+// Stock adjustment — MANAGEMENT + INVENTORY + FINANCE
+const ADJUST_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.INVENTORY, ROLES.FINANCE];
+
 router.post(
   "/adjust-batch",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER),
+  authorize(...ADJUST_ROLES),
   validate(batchStockAdjustmentSchema),
   createBatchAdjustmentController,
 );
 
-// Single stock adjustment — SUPER_ADMIN and OWNER only (INV-013)
 router.post(
   "/:id/adjust",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER),
+  authorize(...ADJUST_ROLES),
   validate(stockAdjustmentSchema),
   createAdjustmentController,
 );

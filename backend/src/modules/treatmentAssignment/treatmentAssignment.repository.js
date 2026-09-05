@@ -19,12 +19,17 @@ const INCLUDE = {
 
 // ── TreatmentAssignment ───────────────────────────────────────────────
 
-const findByItem = (treatmentItemId) =>
+const findByItem = (treatmentItemId, { skip = 0, take = 10 } = {}) =>
   prisma.treatmentAssignment.findMany({
     where:   { treatmentItemId },
     orderBy: { createdAt: "asc" },
     include: INCLUDE,
+    skip,
+    take,
   });
+
+const countByItem = (treatmentItemId) =>
+  prisma.treatmentAssignment.count({ where: { treatmentItemId } });
 
 const findById = (id) =>
   prisma.treatmentAssignment.findUnique({ where: { id }, include: INCLUDE });
@@ -79,9 +84,6 @@ const findTreatmentItemById = (id) =>
     },
   });
 
-const countByItem = (treatmentItemId) =>
-  prisma.treatmentAssignment.count({ where: { treatmentItemId } });
-
 const updateManyWorkQty = (treatmentItemId, workQty) =>
   prisma.treatmentAssignment.updateMany({
     where: { treatmentItemId },
@@ -96,6 +98,7 @@ const findEmployeeById = (id) =>
 
 module.exports = {
   findByItem,
+  countByItem,
   findById,
   create,
   update,
@@ -104,6 +107,5 @@ module.exports = {
   sumWorkQtyBySlot,
   findTreatmentItemById,
   findEmployeeById,
-  countByItem,
   updateManyWorkQty,
 };

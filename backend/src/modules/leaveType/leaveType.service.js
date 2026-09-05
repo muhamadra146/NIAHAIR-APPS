@@ -1,9 +1,17 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
+const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo     = require("./leaveType.repository");
 
-const getAll = (includeInactive = false) =>
-  repo.findAll(includeInactive ? {} : { isActive: true });
+const getAll = async ({ page, limit, includeInactive } = {}) => {
+  const where = includeInactive === "true" ? {} : { isActive: true };
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const [data, total] = await Promise.all([
+    repo.findAll({ skip, take, where }),
+    repo.count(where),
+  ]);
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
+};
 
 const getById = async (id) => {
   const t = await repo.findById(id);

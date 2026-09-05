@@ -19,6 +19,9 @@ import {
   useDeletePayroll, useBulkGeneratePayroll,
 } from "../hooks";
 import { toast } from "@/lib/toast";
+import { filterInputCls } from "@/lib/ui-utils";
+import { EmptyState } from "@/components/common/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { Payroll, PayrollStatus, PayrollItem, GeneratePayrollInput, BulkGenerateResult } from "../types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -56,8 +59,7 @@ function StatusBadge({ status }: { status: PayrollStatus }) {
 
 const CAN_DELETE: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
 
-const filterInputCls =
-  "rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md focus-visible:shadow-md focus-visible:ring-ring/30";
+// filterInputCls imported from @/lib/ui-utils
 
 // ── Generate Dialog ───────────────────────────────────────────────────────────
 
@@ -554,14 +556,8 @@ export function PayrollPage() {
   }
 
   return (
-    <PageContainer>
+    <PageContainer title="Penggajian" subtitle="Kelola penggajian karyawan per bulan">
       <div className="space-y-5">
-
-        {/* Header */}
-        <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Payroll</h1>
-          <p className="text-sm text-muted-foreground">Kelola penggajian karyawan per bulan</p>
-        </div>
 
         {/* Filter bar */}
         <div className="flex flex-wrap items-end gap-3">
@@ -571,7 +567,7 @@ export function PayrollPage() {
               type="month"
               value={yearMonth}
               onChange={(e) => setYearMonth(e.target.value)}
-              className={`mt-1 h-9 w-auto ${filterInputCls}`}
+              className={`mt-1 w-auto ${filterInputCls}`}
             />
           </div>
           <div>
@@ -579,7 +575,7 @@ export function PayrollPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatus(e.target.value as PayrollStatus | "")}
-              className={`mt-1 h-9 block w-44 px-3 text-sm ${filterInputCls}`}
+              className={`mt-1 block w-44 px-3 text-sm ${filterInputCls}`}
             >
               <option value="">Semua Status</option>
               {(Object.keys(STATUS_CONFIG) as PayrollStatus[]).map((s) => (
@@ -600,14 +596,21 @@ export function PayrollPage() {
         {/* Payroll list */}
         <div className="space-y-2">
           {isLoading ? (
-            <p className="py-10 text-center text-sm text-slate-400">Memuat…</p>
+            <>
+              <Skeleton className="h-20 w-full rounded-2xl" />
+              <Skeleton className="h-20 w-full rounded-2xl" />
+              <Skeleton className="h-20 w-full rounded-2xl" />
+            </>
           ) : payrolls.length === 0 ? (
-            <div className="py-12 text-center">
-              <p className="text-sm text-slate-400">Belum ada payroll untuk periode ini</p>
-              <Button size="sm" className="mt-3 rounded-xl gap-1" onClick={() => setGenOpen(true)}>
-                <Plus className="h-3 w-3" /> Generate Payroll
-              </Button>
-            </div>
+            <EmptyState
+              title="Belum ada payroll"
+              description="Belum ada payroll untuk periode ini"
+              action={
+                <Button size="sm" className="rounded-xl gap-1" onClick={() => setGenOpen(true)}>
+                  <Plus className="h-3 w-3" /> Generate Payroll
+                </Button>
+              }
+            />
           ) : (
             payrolls.map((p) => (
               <Card

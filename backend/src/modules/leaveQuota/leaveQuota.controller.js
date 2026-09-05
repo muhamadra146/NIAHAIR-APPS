@@ -3,16 +3,14 @@ const svc = require("./leaveQuota.service");
 
 const getQuotasController = async (req, res, next) => {
   try {
-    const { employeeId, year } = req.query;
-    const result = await svc.getQuotas({ employeeId, year });
+    const result = await svc.getQuotas(req.query);
     return success(res, result, "Quotas fetched");
   } catch (err) { next(err); }
 };
 
 const getMyQuotasController = async (req, res, next) => {
   try {
-    const { year } = req.query;
-    const result = await svc.getMyQuotas(req.user.employeeId, year);
+    const result = await svc.getMyQuotas(req.user.employeeId, req.query);
     return success(res, result, "My quotas fetched");
   } catch (err) { next(err); }
 };

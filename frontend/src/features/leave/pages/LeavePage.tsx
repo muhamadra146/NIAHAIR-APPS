@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Plus, Check, X, Trash2, CalendarDays, Clock, AlertTriangle } from "lucide-react";
+import { EmptyState } from "@/components/common/EmptyState";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button }   from "@/components/ui/button";
 import { Input }    from "@/components/ui/input";
@@ -18,7 +19,8 @@ import type { Leave, LeaveStatus, CreateLeaveInput } from "../types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const ADMIN_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "ADMIN"];
+// OFFICE punya Approval/Verifikasi cuti sesuai access matrix
+const ADMIN_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"];
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
@@ -264,7 +266,7 @@ function AdminView() {
             {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
           </div>
         ) : leaves.length === 0 ? (
-          <div className="py-14 text-center text-sm text-slate-400">Tidak ada pengajuan cuti</div>
+          <EmptyState title="Belum ada pengajuan cuti" description="Tidak ada pengajuan cuti yang sesuai dengan filter" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -337,11 +339,11 @@ function MyLeaveView() {
             {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
           </div>
         ) : leaves.length === 0 ? (
-          <div className="flex flex-col items-center py-14 text-center">
-            <Clock className="mb-3 h-9 w-9 text-slate-200" />
-            <p className="text-sm font-medium text-slate-600">Belum ada pengajuan cuti</p>
-            <p className="mt-1 text-xs text-slate-400">Tekan tombol "Ajukan Cuti" untuk mulai</p>
-          </div>
+          <EmptyState
+            icon={<Clock className="w-6 h-6" />}
+            title="Belum ada pengajuan cuti"
+            description='Tekan tombol "Ajukan Cuti" untuk mulai'
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -379,15 +381,10 @@ export function LeavePage() {
   const isAdmin  = ADMIN_ROLES.includes(roleCode ?? "");
 
   return (
-    <PageContainer>
-      <div className="space-y-1 mb-5">
-        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
-          {isAdmin ? "Manajemen Cuti" : "Cuti Saya"}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {isAdmin ? "Kelola dan setujui pengajuan cuti karyawan" : "Ajukan dan lihat riwayat cuti kamu"}
-        </p>
-      </div>
+    <PageContainer
+      title={isAdmin ? "Manajemen Cuti" : "Cuti Saya"}
+      subtitle={isAdmin ? "Kelola dan setujui pengajuan cuti karyawan" : "Ajukan dan lihat riwayat cuti kamu"}
+    >
       {isAdmin ? <AdminView /> : <MyLeaveView />}
     </PageContainer>
   );

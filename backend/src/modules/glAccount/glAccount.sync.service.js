@@ -1,8 +1,9 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
+const { paginate, paginationMeta } = require("../../utils/pagination");
 const { accurateRequest } = require("../accurate/accurate.client");
 const { mapAccurateToGlAccount } = require("./glAccount.sync.mapper");
-const { findById, findByAccurateId, createFromAccurate, updateByAccurateId, findAllActive, updateUsage } = require("./glAccount.sync.repository");
+const { findById, findByAccurateId, createFromAccurate, updateByAccurateId, findAllActive, countActive, updateUsage } = require("./glAccount.sync.repository");
 const { findByAccurateAccountId, update: updateCashAccount } = require("../cashAccount/cashAccount.repository");
 
 const CASH_ACCOUNT_USAGE = "CASH_ACCOUNT";
@@ -65,7 +66,14 @@ const syncGlAccountsFromAccurate = async ({ accurateBranchId } = {}) => {
   return { created, updated, failed, synced: created + updated };
 };
 
-const getGlAccounts = ({ category, usage } = {}) => findAllActive({ category, usage });
+const getGlAccounts = async ({ category, usage, page, limit } = {}) => {
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const [data, total] = await Promise.all([
+    findAllActive({ category, usage, skip, take }),
+    countActive({ category, usage }),
+  ]);
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
+};
 
 const updateGlAccountUsage = async (id, newUsage) => {
   const glAccount = await findById(id);
@@ -73,7 +81,6 @@ const updateGlAccountUsage = async (id, newUsage) => {
 
   const oldUsage = glAccount.usage;
 
-  // Jika usage berubah dari CASH_ACCOUNT → cek dan auto-deactivate Cash Account terkait
   if (oldUsage === CASH_ACCOUNT_USAGE && newUsage !== CASH_ACCOUNT_USAGE) {
     if (glAccount.accurateGlAccountId) {
       const cashAccount = await findByAccurateAccountId(glAccount.accurateGlAccountId);

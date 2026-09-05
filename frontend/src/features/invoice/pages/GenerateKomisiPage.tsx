@@ -6,6 +6,7 @@ import {
   AlertCircle, ExternalLink, RefreshCw, Lock, X, Loader2,
 } from "lucide-react";
 import { Button }   from "@/components/ui/button";
+import { PageContainer } from "@/components/layout/PageContainer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast }    from "@/lib/toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -491,15 +492,11 @@ export function GenerateKomisiPage() {
   ].filter((g) => g.items.length > 0);
 
   return (
-    <div className="space-y-5 p-6">
-      {/* ── Header + date nav ───────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Generate Komisi</h1>
-          <p className="text-sm text-muted-foreground">{dateLabel}</p>
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0">
+    <PageContainer
+      title="Generate Komisi"
+      subtitle={dateLabel}
+      action={
+        <div className="flex items-center gap-1.5">
           <Button
             variant="outline" size="icon" className="h-8 w-8 rounded-lg"
             onClick={() => setDate((d) => shiftDate(d, -1))}
@@ -534,7 +531,9 @@ export function GenerateKomisiPage() {
             <RefreshCw className={`h-4 w-4 ${isLoading || isFetching ? "animate-spin" : ""}`} />
           </Button>
         </div>
-      </div>
+      }
+    >
+      <div className="space-y-5">
 
       {/* ── Summary ─────────────────────────────────────────────── */}
       {!isLoading && invoices.length > 0 && (
@@ -697,5 +696,6 @@ export function GenerateKomisiPage() {
         />
       )}
     </div>
+    </PageContainer>
   );
 }

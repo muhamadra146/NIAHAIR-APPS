@@ -11,7 +11,7 @@ const {
 
 const router = Router();
 
-const ALL_ADMIN = [ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.ADMIN];
+const ALL_ADMIN = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE];
 
 router.get("/",    authenticate, authorize(...ALL_ADMIN), getAllController);
 router.get("/:id", authenticate, authorize(...ALL_ADMIN), getByIdController);

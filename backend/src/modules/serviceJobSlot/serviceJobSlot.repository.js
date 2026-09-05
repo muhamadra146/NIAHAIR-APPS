@@ -1,6 +1,6 @@
 const prisma = require("../../config/prisma");
 
-const findAllByItem = (itemId, includeInactive = false) =>
+const findAllByItem = (itemId, includeInactive = false, { skip = 0, take = 10 } = {}) =>
   prisma.serviceJobSlot.findMany({
     where: {
       itemId,
@@ -12,6 +12,16 @@ const findAllByItem = (itemId, includeInactive = false) =>
       },
     },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    skip,
+    take,
+  });
+
+const countByItem = (itemId, includeInactive = false) =>
+  prisma.serviceJobSlot.count({
+    where: {
+      itemId,
+      ...(includeInactive ? {} : { isActive: true }),
+    },
   });
 
 const findById = (id) =>
@@ -32,4 +42,4 @@ const hardDelete = (id) =>
 const countAssignments = (id) =>
   prisma.treatmentJobAssignment.count({ where: { serviceJobSlotId: id } });
 
-module.exports = { findAllByItem, findById, findByItemAndSlotKey, create, update, hardDelete, countAssignments };
+module.exports = { findAllByItem, countByItem, findById, findByItemAndSlotKey, create, update, hardDelete, countAssignments };

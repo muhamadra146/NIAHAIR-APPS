@@ -6,7 +6,10 @@ import {
   Calendar, CheckCircle2, Clock, ExternalLink, AlertCircle,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { EmptyState } from "@/components/common/EmptyState";
+import { Pagination } from "@/components/common/Pagination";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button }  from "@/components/ui/button";
 import { Badge }   from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +17,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { useAuthStore } from "@/stores/authStore";
+import { useViewOnly } from "@/hooks/useViewOnly";
 import { formatDate } from "@/lib/utils";
 import { api } from "@/lib/axios";
 import { useConsultationNotes, useConsultationStats, useDeleteConsultationNote } from "../hooks";
@@ -95,7 +99,7 @@ function StatCard({ title, data, options, total, accent }: {
 
 // ── Note card (tab Semua Catatan) ──────────────────────────────────────────────
 
-function NoteCard({ note }: { note: ConsultationNote }) {
+function NoteCard({ note, isViewOnly = false }: { note: ConsultationNote; isViewOnly?: boolean }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const deleteMutation = useDeleteConsultationNote();
 
@@ -149,13 +153,15 @@ function NoteCard({ note }: { note: ConsultationNote }) {
               <Link to={`/consultation-notes/${note.id}/edit`}>
                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><Eye className="w-4 h-4" /></Button>
               </Link>
-              <Button
-                variant="ghost" size="sm"
-                className="h-8 w-8 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
-                onClick={() => setConfirmOpen(true)}
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
+              {!isViewOnly && (
+                <Button
+                  variant="ghost" size="sm"
+                  className="h-8 w-8 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                  onClick={() => setConfirmOpen(true)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -188,6 +194,7 @@ function NoteCard({ note }: { note: ConsultationNote }) {
 
 export function ConsultationListPage() {
   const { user, branchId } = useAuthStore();
+  const isViewOnly = useViewOnly();
   const roleCode  = user?.role?.code ?? "";
   const isManager = MANAGEMENT_ROLES.includes(roleCode);
 
@@ -261,48 +268,28 @@ export function ConsultationListPage() {
       title="Catatan Klien"
       subtitle={isManager ? "Rekap konsultasi semua klien" : "Isi dan kelola catatan klien"}
     >
-      {/* Tabs */}
-      <div className="flex items-center gap-2 mb-5 flex-wrap">
-        <div className="flex bg-muted rounded-xl p-1 gap-1">
-          <button
-            type="button"
-            onClick={() => setTab("isi")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-              tab === "isi" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "isi" | "list" | "stats")}>
+        <TabsList>
+          <TabsTrigger value="isi" className="gap-1.5">
             <PenLine className="w-4 h-4" /> Isi Catatan
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("list")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-              tab === "list" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
+          </TabsTrigger>
+          <TabsTrigger value="list" className="gap-1.5">
             <ClipboardList className="w-4 h-4" /> Semua Catatan
             {meta && meta.total > 0 && (
               <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-primary/15 text-primary text-[10px] font-semibold">
                 {meta.total}
               </span>
             )}
-          </button>
+          </TabsTrigger>
           {isManager && (
-            <button
-              type="button"
-              onClick={() => setTab("stats")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                tab === "stats" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
+            <TabsTrigger value="stats" className="gap-1.5">
               <BarChart3 className="w-4 h-4" /> Statistik
-            </button>
+            </TabsTrigger>
           )}
-        </div>
-      </div>
+        </TabsList>
 
-      {/* ── Tab: Isi Catatan ─────────────────────────────────────────────── */}
-      {tab === "isi" && (
+        {/* ── Tab: Isi Catatan ─────────────────────────────────────────────── */}
+        <TabsContent value="isi">
         <>
           {/* Date filter */}
           <div className="flex items-center gap-0 mb-4 w-fit rounded-lg border border-input bg-background shadow-sm overflow-hidden">
@@ -414,11 +401,13 @@ export function ConsultationListPage() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           {status === "belum" ? (
-                            <Link to={`/consultation-notes/new?invoiceId=${inv.id}`}>
-                              <Button size="sm" className="h-7 px-2.5 text-xs">
-                                Isi Sekarang
-                              </Button>
-                            </Link>
+                            !isViewOnly && (
+                              <Link to={`/consultation-notes/new?invoiceId=${inv.id}`}>
+                                <Button size="sm" className="h-7 px-2.5 text-xs">
+                                  Isi Sekarang
+                                </Button>
+                              </Link>
+                            )
                           ) : (
                             <Link to={`/consultation-notes/${noteId}/edit`}>
                               <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs">
@@ -435,44 +424,46 @@ export function ConsultationListPage() {
             </div>
           )}
         </>
-      )}
+        </TabsContent>
 
-      {/* ── Tab: Semua Catatan ───────────────────────────────────────────── */}
-      {tab === "list" && (
+        {/* ── Tab: Semua Catatan ───────────────────────────────────────────── */}
+        <TabsContent value="list">
         <>
           {loadingList ? (
             <div className="space-y-3">
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
             </div>
           ) : notes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-                <ClipboardList className="w-8 h-8 text-muted-foreground/40" />
-              </div>
-              <p className="font-medium mb-1">Belum ada catatan</p>
-              <p className="text-sm text-muted-foreground mb-4">Mulai isi catatan klien pertama</p>
-              <Button size="sm" onClick={() => setTab("isi")}>
-                <PenLine className="w-4 h-4 mr-1.5" /> Ke Tab Isi Catatan
-              </Button>
-            </div>
+            <EmptyState
+              icon={<ClipboardList className="w-6 h-6" />}
+              title="Belum ada catatan"
+              description="Mulai isi catatan klien pertama"
+              action={
+                <Button size="sm" onClick={() => setTab("isi")}>
+                  <PenLine className="w-4 h-4 mr-1.5" /> Ke Tab Isi Catatan
+                </Button>
+              }
+            />
           ) : (
             <div className="space-y-3">
-              {notes.map((note) => <NoteCard key={note.id} note={note} />)}
+              {notes.map((note) => <NoteCard key={note.id} note={note} isViewOnly={isViewOnly} />)}
             </div>
           )}
 
-          {totalPages > 1 && (
-            <div className="flex justify-center gap-2 mt-5">
-              <Button variant="outline" size="sm" disabled={listPage === 1} onClick={() => setListPage(p => p - 1)}>← Prev</Button>
-              <span className="text-sm self-center text-muted-foreground">Hal {listPage} / {totalPages}</span>
-              <Button variant="outline" size="sm" disabled={listPage === totalPages} onClick={() => setListPage(p => p + 1)}>Next →</Button>
-            </div>
-          )}
+          <Pagination
+            page={listPage}
+            limit={20}
+            total={meta?.total ?? 0}
+            totalPages={totalPages}
+            onPageChange={setListPage}
+          />
         </>
-      )}
+        </TabsContent>
 
-      {/* ── Tab: Statistik ──────────────────────────────────────────────── */}
-      {tab === "stats" && stats && (
+        {/* ── Tab: Statistik ──────────────────────────────────────────────── */}
+        {isManager && (
+        <TabsContent value="stats">
+        {stats && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Card className="text-center">
@@ -491,7 +482,10 @@ export function ConsultationListPage() {
             <StatCard title="Pengalaman Extension Sebelumnya" data={stats.previousExpType}  options={PREV_EXP_OPTIONS}       total={stats.total} accent="bg-green-50 text-green-700" />
           </div>
         </div>
-      )}
+        )}
+        </TabsContent>
+        )}
+      </Tabs>
     </PageContainer>
   );
 }

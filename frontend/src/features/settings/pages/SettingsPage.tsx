@@ -1058,12 +1058,7 @@ export function SettingsPage() {
   const [tab, setTab] = useState<string>("employees");
 
   return (
-    <PageContainer>
-      <div className="space-y-1 sm:space-y-2">
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Settings</h1>
-        <p className="text-sm text-slate-500">Manage employees, users, branches, and configuration</p>
-      </div>
-
+    <PageContainer title="Pengaturan" subtitle="Kelola karyawan, pengguna, cabang, dan konfigurasi">
       <Tabs value={tab} onValueChange={setTab} orientation="vertical" className="mt-6">
         {/* â"€â"€ Mobile: native select â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
         <div className="md:hidden mb-4">

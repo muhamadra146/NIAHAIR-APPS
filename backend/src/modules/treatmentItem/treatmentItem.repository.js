@@ -12,12 +12,17 @@ const INCLUDE = {
 
 // ── TreatmentItem ─────────────────────────────────────────────────────
 
-const findBySession = (treatmentSessionId) =>
+const findBySession = (treatmentSessionId, { skip = 0, take = 10 } = {}) =>
   prisma.treatmentItem.findMany({
     where:   { treatmentSessionId },
     orderBy: { createdAt: "asc" },
     include: INCLUDE,
+    skip,
+    take,
   });
+
+const countBySession = (treatmentSessionId) =>
+  prisma.treatmentItem.count({ where: { treatmentSessionId } });
 
 const findById = (id) =>
   prisma.treatmentItem.findUnique({ where: { id }, include: INCLUDE });
@@ -56,6 +61,7 @@ const findActiveItemPrice = (itemId, unitId) =>
 
 module.exports = {
   findBySession,
+  countBySession,
   findById,
   create,
   update,

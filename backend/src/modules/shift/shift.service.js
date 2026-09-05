@@ -1,19 +1,23 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
+const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo            = require("./shift.repository");
 
 const LOCKED_FIELDS = ["code", "startTime", "endTime", "isWorking"];
 
-const getAll = async ({ isActive } = {}) => {
+const getAll = async ({ isActive, page, limit } = {}) => {
   const where = {};
   if (isActive !== undefined && isActive !== "") {
     where.isActive = isActive === "true" || isActive === true;
   }
-  const [shifts, usedIds] = await Promise.all([
-    repo.findAll({ where }),
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const [shifts, usedIds, total] = await Promise.all([
+    repo.findAll({ skip, take, where }),
     repo.findUsedShiftIds(),
+    repo.count(where),
   ]);
-  return shifts.map((s) => ({ ...s, isUsed: usedIds.has(s.id) }));
+  const data = shifts.map((s) => ({ ...s, isUsed: usedIds.has(s.id) }));
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
 const getById = async (id) => {
@@ -82,7 +86,6 @@ const deleteShift = async (id) => {
 
   const isUsed = await repo.isShiftUsed(id);
   if (isUsed) {
-    // Shift is assigned to schedules — soft delete only
     return { ...(await repo.softDelete(id)), isUsed: true };
   }
   await repo.hardDelete(id);

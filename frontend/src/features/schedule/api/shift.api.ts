@@ -3,8 +3,10 @@ import type { ApiResponse } from "@/types/api";
 import type { Shift } from "../types";
 
 export const fetchShifts = async (params?: { isActive?: boolean }): Promise<Shift[]> => {
-  const { data } = await api.get<ApiResponse<Shift[]>>("/shifts", { params });
-  return data.data;
+  const { data } = await api.get<ApiResponse<{ data: Shift[]; meta: unknown }>>("/shifts", {
+    params: { limit: 100, ...params },
+  });
+  return data.data.data;
 };
 
 export const createShift = async (input: {

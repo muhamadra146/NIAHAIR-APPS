@@ -8,7 +8,7 @@ const {
 
 const getBySessionController = async (req, res, next) => {
   try {
-    const result = await getBySession(req.params.sessionId);
+    const result = await getBySession(req.params.sessionId, req.query);
     return success(res, result, "Treatment items fetched");
   } catch (err) {
     next(err);

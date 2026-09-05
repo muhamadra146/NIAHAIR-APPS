@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, BadgeDollarSign } from "lucide-react";
+import { EmptyState }      from "@/components/common/EmptyState";
+import { Pagination }      from "@/components/common/Pagination";
 import { PageContainer }   from "@/components/layout/PageContainer";
 import { Badge }           from "@/components/ui/badge";
 import { Button }          from "@/components/ui/button";
@@ -68,16 +70,11 @@ export function MyCommissionPage() {
   const pendingAmt  = allItems.filter(c => c.status === "PENDING").reduce((s, c) => s + Number(c.commissionAmount), 0);
 
   return (
-    <PageContainer>
+    <PageContainer
+      title="Komisi Saya"
+      subtitle={meta ? `${meta.total} komisi` : "Riwayat komisi kamu"}
+    >
       <div className="space-y-4 sm:space-y-5">
-
-        {/* Header */}
-        <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Komisi Saya</h1>
-          <p className="text-sm text-muted-foreground">
-            {meta ? `${meta.total} komisi` : "Riwayat komisi kamu"}
-          </p>
-        </div>
 
         {/* Summary cards */}
         <div className="grid grid-cols-3 gap-3">
@@ -167,11 +164,11 @@ export function MyCommissionPage() {
               ))}
             </div>
           ) : commissions.length === 0 ? (
-            <div className="flex flex-col items-center py-16 text-center gap-3">
-              <BadgeDollarSign className="h-10 w-10 text-slate-200" />
-              <p className="text-sm font-medium text-slate-600">Belum ada komisi</p>
-              <p className="text-xs text-slate-400">Komisi akan muncul setelah invoice selesai diproses</p>
-            </div>
+            <EmptyState
+              icon={<BadgeDollarSign className="w-6 h-6" />}
+              title="Belum ada komisi"
+              description="Komisi akan muncul setelah invoice selesai diproses"
+            />
           ) : (
             <>
               {/* Mobile */}
@@ -240,16 +237,7 @@ export function MyCommissionPage() {
           )}
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Halaman {page} dari {totalPages}</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Sebelumnya</Button>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Berikutnya</Button>
-            </div>
-          </div>
-        )}
+        <Pagination page={page} limit={20} total={meta?.total ?? 0} totalPages={totalPages} onPageChange={setPage} />
       </div>
     </PageContainer>
   );

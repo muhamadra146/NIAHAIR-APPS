@@ -17,18 +17,30 @@ const updateByAccurateId = (accurateGlAccountId, data) =>
     data:  { ...data, lastSyncAt: new Date() },
   });
 
-const findAllActive = ({ category, usage } = {}) => {
+const _buildGlWhere = ({ category, usage } = {}) => {
   const where = { isActive: true };
   if (category) {
     const categories = category.split(",").map((c) => c.trim()).filter(Boolean);
     if (categories.length > 0) where.category = { in: categories };
   }
   if (usage) where.usage = usage;
+  return where;
+};
+
+const findAllActive = ({ category, usage, skip = 0, take = 10 } = {}) => {
+  const where = _buildGlWhere({ category, usage });
   return prisma.glAccount.findMany({
     where,
     select:  { id: true, number: true, name: true, category: true, usage: true },
     orderBy: { number: "asc" },
+    skip,
+    take,
   });
+};
+
+const countActive = ({ category, usage } = {}) => {
+  const where = _buildGlWhere({ category, usage });
+  return prisma.glAccount.count({ where });
 };
 
 const findByCategory = (category) =>
@@ -52,4 +64,4 @@ const updateUsage = (id, usage) =>
     select: { id: true, number: true, name: true, category: true, usage: true },
   });
 
-module.exports = { findById, findByAccurateId, createFromAccurate, updateByAccurateId, findAllActive, findByCategory, findByUsage, updateUsage };
+module.exports = { findById, findByAccurateId, createFromAccurate, updateByAccurateId, findAllActive, countActive, findByCategory, findByUsage, updateUsage };

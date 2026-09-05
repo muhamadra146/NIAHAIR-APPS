@@ -1,10 +1,9 @@
 const prisma = require("../../config/prisma");
 
-const findAll = ({ year }) =>
-  prisma.holiday.findMany({
-    where: year ? { year: Number(year) } : undefined,
-    orderBy: { date: "asc" },
-  });
+const findAll = ({ skip = 0, take = 10, where = {} } = {}) =>
+  prisma.holiday.findMany({ where, skip, take, orderBy: { date: "asc" } });
+
+const count = (where = {}) => prisma.holiday.count({ where });
 
 const findById = (id) =>
   prisma.holiday.findUnique({ where: { id } });
@@ -27,4 +26,4 @@ const update = (id, data) =>
 const remove = (id) =>
   prisma.holiday.delete({ where: { id } });
 
-module.exports = { findAll, findById, findByDate, findInRange, create, update, remove };
+module.exports = { findAll, count, findById, findByDate, findInRange, create, update, remove };

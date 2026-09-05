@@ -1,30 +1,43 @@
 const prisma = require("../../config/prisma");
 
-const findBySession = (sessionId) =>
+const MATERIAL_INCLUDE = {
+  materialItem: {
+    select: {
+      id: true, name: true, itemCode: true, itemType: true,
+      category:    { select: { id: true, name: true } },
+      defaultUnit: { select: { id: true, name: true } },
+      itemUnits:   { select: { unitId: true, conversionFactor: true } },
+    },
+  },
+  unit: { select: { id: true, name: true } },
+  materialUsage: {
+    select: {
+      id: true,
+      treatmentItemId: true,
+    },
+  },
+};
+
+const findBySession = (sessionId, { skip = 0, take = 10 } = {}) =>
   prisma.materialUsageItem.findMany({
     where: {
       materialUsage: {
         treatmentItem: { treatmentSessionId: sessionId },
       },
     },
-    include: {
-      materialItem: {
-        select: {
-          id: true, name: true, itemCode: true, itemType: true,
-          category:    { select: { id: true, name: true } },
-          defaultUnit: { select: { id: true, name: true } },
-          itemUnits:   { select: { unitId: true, conversionFactor: true } },
-        },
-      },
-      unit: { select: { id: true, name: true } },
+    include: MATERIAL_INCLUDE,
+    orderBy: { createdAt: "asc" },
+    skip,
+    take,
+  });
+
+const countBySession = (sessionId) =>
+  prisma.materialUsageItem.count({
+    where: {
       materialUsage: {
-        select: {
-          id: true,
-          treatmentItemId: true,
-        },
+        treatmentItem: { treatmentSessionId: sessionId },
       },
     },
-    orderBy: { createdAt: "asc" },
   });
 
 const findOrCreateUsage = async (treatmentItemId) => {
@@ -68,6 +81,7 @@ const findSessionById = (id) =>
 
 module.exports = {
   findBySession,
+  countBySession,
   findOrCreateUsage,
   findUsageItemById,
   createUsageItem,

@@ -98,27 +98,25 @@ export function PurchasePage() {
   }
 
   return (
-    <PageContainer>
-      <div className="space-y-4 sm:space-y-6">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Pembelian</h1>
-            <p className="text-sm text-muted-foreground">Faktur pembelian barang dari pemasok</p>
-          </div>
-          <div className="flex gap-2">
-            {isSuperUser && (
-              <Button variant="outline" size="sm" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending} className="gap-1.5">
-                {syncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                Sync Pemasok
-              </Button>
-            )}
-            <Button size="sm" onClick={() => setShowCreate(true)} className="gap-1.5">
-              <Plus className="h-4 w-4" />
-              Buat Faktur
+    <PageContainer
+      title="Pembelian"
+      subtitle="Faktur pembelian barang dari pemasok"
+      action={
+        <div className="flex gap-2">
+          {isSuperUser && (
+            <Button variant="outline" size="sm" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending} className="gap-1.5">
+              {syncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Sync Pemasok
             </Button>
-          </div>
+          )}
+          <Button size="sm" onClick={() => setShowCreate(true)} className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            Buat Faktur
+          </Button>
         </div>
+      }
+    >
+      <div className="space-y-4 sm:space-y-6">
 
         {/* Filters */}
         <div className="flex gap-2 flex-wrap">

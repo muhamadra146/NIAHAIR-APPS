@@ -1,15 +1,17 @@
 const { StatusCodes }    = require("http-status-codes");
 const AppError           = require("../../common/errors/AppError");
+const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo               = require("./loan.repository");
 
-const getAll = async ({ employeeId, branchId, status, page = 1, limit = 20 }) => {
+const getAll = async ({ employeeId, branchId, status, page, limit } = {}) => {
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
   const [rows, total] = await Promise.all([
-    repo.findAll({ employeeId, branchId, status, page, limit }),
+    repo.findAll({ employeeId, branchId, status, skip, take }),
     repo.count({ employeeId, branchId, status }),
   ]);
   return {
     data: rows,
-    meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    meta: paginationMeta(total, pageNum, limitNum),
   };
 };
 

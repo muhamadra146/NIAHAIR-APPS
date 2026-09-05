@@ -11,7 +11,8 @@ const {
 
 const router = Router();
 
-const MANAGER_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.ADMIN];
+// OFFICE punya approval izin sesuai access matrix
+const MANAGER_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE];
 
 // Admin: all
 router.get("/",    authenticate, authorize(...MANAGER_ROLES), getAllController);

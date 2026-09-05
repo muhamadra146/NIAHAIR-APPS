@@ -71,14 +71,15 @@ const KPI_CONFIG = [
   { icon: Users,           label: "Kasbon Aktif",        href: "/loans"        },
 ] as const;
 
-const STAFF_ROLES = ["STAFF", "STYLIST"] as const;
+// STAFF_OPERASIONAL → tampilkan dashboard sederhana (view-only)
+const STAFF_ONLY_ROLES = ["STAFF_OPERASIONAL"] as const;
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export function DashboardPage() {
   const { user, branchId } = useAuthStore();
   const [period, setPeriod] = useState<Period>("month");
 
-  if (user?.roleCode && STAFF_ROLES.includes(user.roleCode as typeof STAFF_ROLES[number])) {
+  if (user?.roleCode && STAFF_ONLY_ROLES.includes(user.roleCode as typeof STAFF_ONLY_ROLES[number])) {
     return <StaffDashboardPage />;
   }
 

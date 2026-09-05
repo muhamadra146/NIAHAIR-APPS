@@ -7,7 +7,7 @@ const { createLeaveTypeSchema, updateLeaveTypeSchema } = require("./leaveType.va
 const { getAllController, getByIdController, createController, updateController } = require("./leaveType.controller");
 
 const router = Router();
-const ADMIN  = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.ADMIN];
+const ADMIN  = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE];
 
 router.get("/",     authenticate, getAllController);
 router.get("/:id",  authenticate, getByIdController);

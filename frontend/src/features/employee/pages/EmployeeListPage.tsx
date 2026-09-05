@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/common/EmptyState";
+import { Pagination } from "@/components/common/Pagination";
 import { useAuthStore } from "@/stores/authStore";
+import { useViewOnly } from "@/hooks/useViewOnly";
 import { fetchAllBranches } from "@/features/settings/api/branch.api";
 import { useEmployees, useCreateEmployee, useUploadEmployeeFiles, useDeactivateEmployee, useDeleteEmployee } from "../hooks";
 import { updateEmployeeBranches } from "../api";
@@ -24,6 +28,7 @@ function apiErr(err: unknown, fallback = "Terjadi kesalahan"): string {
 
 export function EmployeeListPage() {
   const { branchId: sessionBranchId, user } = useAuthStore();
+  const isViewOnly   = useViewOnly();
   const isSuperAdmin = user?.role?.code === "SUPER_ADMIN";
   const isManager    = ["SUPER_ADMIN", "OWNER", "MANAGER"].includes(user?.role?.code ?? "");
 
@@ -100,24 +105,23 @@ export function EmployeeListPage() {
   const selectedBranchName = branches.find((b) => b.id === filterBranch)?.name;
 
   return (
-    <PageContainer>
-      <div className="space-y-4 sm:space-y-6">
-
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Karyawan</h1>
-            <p className="text-sm text-muted-foreground">
-              {meta
-                ? `${meta.total} karyawan${selectedBranchName ? ` · ${selectedBranchName}` : ""}`
-                : "Kelola data karyawan"}
-            </p>
-          </div>
+    <PageContainer
+      title="Karyawan"
+      subtitle={
+        meta
+          ? `${meta.total} karyawan${selectedBranchName ? ` · ${selectedBranchName}` : ""}`
+          : "Kelola data karyawan"
+      }
+      action={
+        !isViewOnly ? (
           <Button onClick={() => { setFormError(null); setFormOpen(true); }} size="sm">
             <Plus className="mr-2 h-4 w-4" />
             Tambah Karyawan
           </Button>
-        </div>
+        ) : undefined
+      }
+    >
+      <div className="space-y-4 sm:space-y-6">
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
@@ -172,8 +176,9 @@ export function EmployeeListPage() {
           </div>
         </div>
 
-        {/* Table — flat border, no card */}
-        <div className="rounded-xl border border-slate-200 overflow-hidden">
+        {/* Table */}
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
           {isLoading ? (
             <div className="divide-y divide-slate-100">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -189,9 +194,7 @@ export function EmployeeListPage() {
               ))}
             </div>
           ) : employees.length === 0 ? (
-            <p className="py-14 text-center text-sm text-slate-400">
-              Tidak ada karyawan ditemukan.
-            </p>
+            <EmptyState title="Tidak ada karyawan" description="Tidak ada karyawan yang sesuai dengan filter" />
           ) : (
             <>
               {/* Mobile */}
@@ -369,21 +372,18 @@ export function EmployeeListPage() {
               </div>
             </>
           )}
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Halaman {meta?.page} dari {totalPages}</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Sebelumnya
-              </Button>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                Berikutnya
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            limit={20}
+            total={meta?.total ?? 0}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         )}
       </div>
 

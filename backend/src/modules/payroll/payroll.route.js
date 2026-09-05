@@ -12,8 +12,9 @@ const {
 
 const router = Router();
 
-const ALL_ADMIN = [ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.ADMIN];
-const APPROVERS = [ROLES.SUPER_ADMIN, ROLES.MANAGER];
+// Payroll: MANAGER tidak punya akses, hanya OWNER dan FINANCE
+const ALL_ADMIN = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.FINANCE];
+const APPROVERS = [ROLES.SUPER_ADMIN, ROLES.OWNER];
 
 // Employee self-service — must be BEFORE /:id
 router.get("/my",          authenticate, getMyController);

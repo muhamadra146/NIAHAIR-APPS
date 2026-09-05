@@ -14,8 +14,9 @@ const {
 
 const router = Router();
 
-const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.ADMIN];
-const ALL_STAFF   = Object.values(ROLES);
+// MANAGER hanya view; FINANCE + OWNER full access
+const VIEW_ROLES  = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.FINANCE];
+const WRITE_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.FINANCE];
 
 // ── Self-service (must be before /:id to avoid route conflict) ────────────────
 router.get("/my",
@@ -25,38 +26,35 @@ router.get("/my/:id",
   authenticate, getMyLoanByIdController,
 );
 
+// View — MANAGER bisa lihat
 router.get("/",
-  authenticate, authorize(...ADMIN_ROLES), getAllController,
+  authenticate, authorize(...VIEW_ROLES), getAllController,
 );
-
 router.get("/employee/:employeeId",
-  authenticate, authorize(...ADMIN_ROLES), getByEmployeeController,
+  authenticate, authorize(...VIEW_ROLES), getByEmployeeController,
 );
-
 router.get("/:id",
-  authenticate, authorize(...ADMIN_ROLES), getByIdController,
+  authenticate, authorize(...VIEW_ROLES), getByIdController,
 );
-
-router.post("/",
-  authenticate, authorize(...ADMIN_ROLES), validate(createLoanSchema), createController,
-);
-
-router.put("/:id",
-  authenticate, authorize(...ADMIN_ROLES), validate(updateLoanSchema), updateController,
-);
-
-router.post("/:id/cancel",
-  authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER), cancelController,
-);
-
-router.post("/:id/repayments",
-  authenticate, authorize(...ADMIN_ROLES), validate(addRepaymentSchema), addRepaymentController,
-);
-
 router.get("/:id/repayments",
-  authenticate, authorize(...ADMIN_ROLES), getRepaymentsController,
+  authenticate, authorize(...VIEW_ROLES), getRepaymentsController,
 );
 
+// Write — hanya FINANCE + OWNER (MANAGER tidak bisa buat/edit kasbon)
+router.post("/",
+  authenticate, authorize(...WRITE_ROLES), validate(createLoanSchema), createController,
+);
+router.put("/:id",
+  authenticate, authorize(...WRITE_ROLES), validate(updateLoanSchema), updateController,
+);
+router.post("/:id/cancel",
+  authenticate, authorize(...WRITE_ROLES), cancelController,
+);
+router.post("/:id/repayments",
+  authenticate, authorize(...WRITE_ROLES), validate(addRepaymentSchema), addRepaymentController,
+);
+
+// Delete — SUPER_ADMIN / OWNER only
 router.delete("/:id",
   authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), deleteController,
 );

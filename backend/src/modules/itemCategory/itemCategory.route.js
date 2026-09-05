@@ -5,7 +5,7 @@ const { ROLES }    = require("../../common/constants/role.constant");
 const { getAllController, syncController } = require("./itemCategory.controller");
 
 const router   = Router();
-const ALL_ADMIN = [ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.ADMIN];
+const ALL_ADMIN = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.INVENTORY, ROLES.FINANCE];
 
 router.get("/",     authenticate, getAllController);
 router.post("/sync", authenticate, authorize(...ALL_ADMIN), syncController);

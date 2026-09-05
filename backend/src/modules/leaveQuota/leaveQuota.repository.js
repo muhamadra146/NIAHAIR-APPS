@@ -5,6 +5,13 @@ const INCLUDE = {
   employee:  { select: { id: true, name: true, employeeCode: true } },
 };
 
+// Paginated list (manager view)
+const findAll = ({ skip = 0, take = 10, where = {} } = {}) =>
+  prisma.leaveQuota.findMany({ where, skip, take, include: INCLUDE, orderBy: [{ year: "desc" }, { leaveType: { name: "asc" } }] });
+
+const count = (where = {}) => prisma.leaveQuota.count({ where });
+
+// Internal use only (e.g. getBalance, incrementUsed)
 const findMany = (where) =>
   prisma.leaveQuota.findMany({ where, include: INCLUDE, orderBy: [{ year: "desc" }, { leaveType: { name: "asc" } }] });
 
@@ -39,4 +46,4 @@ const decrementUsed = (employeeId, leaveTypeId, year, days) =>
     include: INCLUDE,
   });
 
-module.exports = { findMany, findOne, findById, upsert, incrementUsed, decrementUsed };
+module.exports = { findAll, count, findMany, findOne, findById, upsert, incrementUsed, decrementUsed };

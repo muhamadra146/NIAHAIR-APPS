@@ -3,9 +3,10 @@ export type UserRole =
   | "OWNER"
   | "MANAGER"
   | "CASHIER"
-  | "FINANCE"
-  | "STAFF"
-  | "STYLIST";
+  | "STAFF_OPERASIONAL"
+  | "INVENTORY"
+  | "OFFICE"
+  | "FINANCE";
 
 export interface Branch {
   id:   string;

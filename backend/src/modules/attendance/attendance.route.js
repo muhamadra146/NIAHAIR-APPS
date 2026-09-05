@@ -15,14 +15,14 @@ const router = Router();
 // GET /attendance/roster?branchId=&date=   — daily roster with attendance status
 router.get("/roster",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.ADMIN),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE),
   getDailyRosterController,
 );
 
 // GET /attendance/report?branchId=&startDate=&endDate=&employeeId=
 router.get("/report",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.ADMIN),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE),
   getReportController,
 );
 
@@ -49,7 +49,7 @@ router.post("/check-out",
 // Admin/Manager manual set
 router.post("/manual",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.ADMIN),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE),
   validate(manualSetSchema),
   manualSetController,
 );

@@ -78,11 +78,11 @@ export async function deleteCommissionCategory(id: string): Promise<void> {
 // ── Commission Jobs ───────────────────────────────────────────────────────────
 
 export async function fetchCommissionJobs(categoryId: string, all = false): Promise<CommissionJob[]> {
-  const { data } = await api.get<ApiResponse<CommissionJob[]>>(
+  const { data } = await api.get<ApiResponse<{ data: CommissionJob[]; meta: unknown }>>(
     `/commission-categories/${categoryId}/jobs`,
-    { params: all ? { all: "true" } : {} }
+    { params: { limit: 100, ...(all ? { all: "true" } : {}) } }
   );
-  return data.data;
+  return data.data.data;
 }
 
 export async function createCommissionJob(categoryId: string, input: CreateCommissionJobInput): Promise<CommissionJob> {
@@ -143,10 +143,10 @@ export async function updateItemCommission(id: string, input: UpdateItemCommissi
 // ── Service Job Slots ─────────────────────────────────────────────────────────
 
 export async function fetchJobSlots(itemId: string, all = false): Promise<ServiceJobSlot[]> {
-  const { data } = await api.get<ApiResponse<ServiceJobSlot[]>>(`/items/${itemId}/job-slots`, {
-    params: all ? { all: "true" } : undefined,
+  const { data } = await api.get<ApiResponse<{ data: ServiceJobSlot[]; meta: unknown }>>(`/items/${itemId}/job-slots`, {
+    params: { limit: 100, ...(all ? { all: "true" } : {}) },
   });
-  return data.data;
+  return data.data.data;
 }
 
 export async function createJobSlot(itemId: string, input: CreateServiceJobSlotInput): Promise<ServiceJobSlot> {
@@ -167,10 +167,10 @@ export async function deleteJobSlot(itemId: string, id: string): Promise<Service
 // ── Service Job Roles ─────────────────────────────────────────────────────────
 
 export async function fetchJobRoles(itemId: string, all = false): Promise<ServiceJobRole[]> {
-  const { data } = await api.get<ApiResponse<ServiceJobRole[]>>(`/items/${itemId}/job-roles`, {
-    params: all ? { all: "true" } : undefined,
+  const { data } = await api.get<ApiResponse<{ data: ServiceJobRole[]; meta: unknown }>>(`/items/${itemId}/job-roles`, {
+    params: { limit: 100, ...(all ? { all: "true" } : {}) },
   });
-  return data.data;
+  return data.data.data;
 }
 
 export async function createJobRole(itemId: string, input: CreateServiceJobRoleInput): Promise<ServiceJobRole> {

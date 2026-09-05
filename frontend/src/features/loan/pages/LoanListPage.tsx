@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Search, ChevronRight, Trash2 } from "lucide-react";
+import { EmptyState } from "@/components/common/EmptyState";
+import { Pagination } from "@/components/common/Pagination";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAuthStore } from "@/stores/authStore";
+import { useViewOnly } from "@/hooks/useViewOnly";
 import { fetchEmployees } from "@/features/settings/api/employee.api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useLoans, useCreateLoan, useDeleteLoan } from "../hooks";
@@ -36,6 +39,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 export function LoanListPage() {
   const { branchId, user } = useAuthStore();
+  const isViewOnly          = useViewOnly();
   const navigate            = useNavigate();
 
   const [page, setPage]               = useState(1);
@@ -58,20 +62,19 @@ export function LoanListPage() {
   const totalPages = meta ? Math.ceil(meta.total / 20) : 1;
 
   return (
-    <PageContainer>
-      <div className="space-y-4 sm:space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Kasbon</h1>
-            <p className="text-sm text-muted-foreground">
-              {meta ? `${meta.total} kasbon` : "Kelola kasbon karyawan"}
-            </p>
-          </div>
+    <PageContainer
+      title="Kasbon"
+      subtitle={meta ? `${meta.total} kasbon` : "Kelola kasbon karyawan"}
+      action={
+        !isViewOnly ? (
           <Button onClick={() => setFormOpen(true)} size="sm" disabled={!branchId}>
             <Plus className="mr-2 h-4 w-4" />
             Tambah Kasbon
           </Button>
-        </div>
+        ) : undefined
+      }
+    >
+      <div className="space-y-4 sm:space-y-6">
 
         <Card>
           <CardHeader className="pb-3 pt-4">
@@ -95,7 +98,7 @@ export function LoanListPage() {
             {isLoading ? (
               <div className="space-y-3 p-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
             ) : loans.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted-foreground">Tidak ada kasbon.</p>
+              <EmptyState title="Belum ada kasbon" description="Tidak ada kasbon yang sesuai dengan filter" />
             ) : (
               <>
                 {/* Desktop */}
@@ -170,13 +173,13 @@ export function LoanListPage() {
         </Card>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Halaman {page} dari {totalPages}</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Sebelumnya</Button>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Berikutnya</Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            limit={20}
+            total={meta?.total ?? 0}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         )}
       </div>
 

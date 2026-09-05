@@ -14,7 +14,7 @@ const {
 
 const router = Router();
 
-const MANAGER_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.ADMIN];
+const MANAGER_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.INVENTORY];
 
 const updateStatusSchema = object({
   status:        picklist(["IN_TRANSIT", "RECEIVED"], "Status tidak valid"),

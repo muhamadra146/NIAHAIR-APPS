@@ -5,10 +5,14 @@ import {
   TrendingUp, Clock, CheckCircle2, ChevronDown, ChevronUp, Trash2, ChevronRight,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { Pagination } from "@/components/common/Pagination";
+import { EmptyState } from "@/components/common/EmptyState";
+import { filterInputCls } from "@/lib/ui-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAuthStore } from "@/stores/authStore";
 import { formatDate, formatCurrency, cn } from "@/lib/utils";
@@ -32,8 +36,7 @@ const STATUS_BADGE: Record<InvoiceStatus, string> = {
   CANCELLED: "bg-slate-50 text-slate-500 border-slate-200",
 };
 
-const filterInputCls =
-  "h-9 rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md focus-visible:shadow-md focus-visible:ring-ring/30";
+// filterInputCls imported from @/lib/ui-utils
 
 function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
   return (
@@ -178,24 +181,21 @@ function KasirPOSView() {
   }
 
   return (
-    <PageContainer>
+    <PageContainer
+      title="POS Kasir"
+      subtitle="Transaksi hari ini"
+      action={
+        <Button
+          onClick={() => setFormOpen(true)}
+          disabled={!branchId}
+          className="rounded-xl bg-pink-600 hover:bg-pink-700 text-white"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Buat Invoice
+        </Button>
+      }
+    >
       <div className="space-y-5">
-
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">POS Kasir</h1>
-            <p className="text-sm text-muted-foreground">Transaksi hari ini</p>
-          </div>
-          <Button
-            onClick={() => setFormOpen(true)}
-            disabled={!branchId}
-            className="rounded-xl bg-pink-600 hover:bg-pink-700 text-white"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Buat Invoice
-          </Button>
-        </div>
 
         {!branchId && (
           <p className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-700">
@@ -350,22 +350,17 @@ function ManagementView() {
   const totalPages = meta ? Math.ceil(meta.total / 20) : 1;
 
   return (
-    <PageContainer>
+    <PageContainer
+      title="Invoice / POS"
+      subtitle={meta ? `${meta.total} invoice` : "Kelola transaksi penjualan"}
+      action={
+        <Button onClick={() => setFormOpen(true)} size="sm" disabled={!branchId}>
+          <Plus className="mr-2 h-4 w-4" />
+          Buat Invoice
+        </Button>
+      }
+    >
       <div className="space-y-5 sm:space-y-6">
-
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Invoice / POS</h1>
-            <p className="text-sm text-muted-foreground">
-              {meta ? `${meta.total} invoice` : "Kelola transaksi penjualan"}
-            </p>
-          </div>
-          <Button onClick={() => setFormOpen(true)} size="sm" disabled={!branchId}>
-            <Plus className="mr-2 h-4 w-4" />
-            Buat Invoice
-          </Button>
-        </div>
 
         {!branchId && (
           <p className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-700">
@@ -413,8 +408,9 @@ function ManagementView() {
           )}
         </div>
 
-        {/* Table — flat border, no card */}
-        <div className="rounded-xl border border-slate-200 overflow-hidden">
+        {/* Table */}
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
           {isLoading ? (
             <div className="divide-y divide-slate-100">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -430,7 +426,7 @@ function ManagementView() {
               ))}
             </div>
           ) : invoices.length === 0 ? (
-            <p className="py-14 text-center text-sm text-slate-400">Tidak ada invoice.</p>
+            <EmptyState title="Belum ada invoice" description="Buat invoice baru untuk memulai transaksi" />
           ) : (
             <>
               {/* Mobile */}
@@ -509,17 +505,18 @@ function ManagementView() {
               </div>
             </>
           )}
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Halaman {page} dari {totalPages}</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Sebelumnya</Button>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Berikutnya</Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            limit={20}
+            total={meta?.total ?? 0}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         )}
       </div>
 

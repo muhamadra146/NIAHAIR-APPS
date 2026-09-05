@@ -101,8 +101,11 @@ export interface AppointmentPhoto {
 }
 
 export const fetchAppointmentPhotos = async (appointmentId: string): Promise<AppointmentPhoto[]> => {
-  const res = await api.get<ApiResponse<AppointmentPhoto[]>>(`/appointments/${appointmentId}/photos`);
-  return res.data.data;
+  const res = await api.get<ApiResponse<{ data: AppointmentPhoto[]; meta: unknown }>>(
+    `/appointments/${appointmentId}/photos`,
+    { params: { limit: 100 } },
+  );
+  return res.data.data.data;
 };
 
 export const uploadAppointmentPhoto = async (

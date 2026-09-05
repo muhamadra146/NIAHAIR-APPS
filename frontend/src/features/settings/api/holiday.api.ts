@@ -1,12 +1,12 @@
 import { api } from "@/lib/axios";
-import type { ApiResponse } from "@/types/api";
+import type { ApiResponse, PaginatedResponse } from "@/types/api";
 import type { Holiday, CreateHolidayInput, UpdateHolidayInput } from "../types";
 
 export const fetchHolidays = async (year?: number): Promise<Holiday[]> => {
-  const { data } = await api.get<ApiResponse<Holiday[]>>("/holidays", {
-    params: year ? { year } : {},
+  const { data } = await api.get<ApiResponse<PaginatedResponse<Holiday>>>("/holidays", {
+    params: { limit: 100, ...(year ? { year } : {}) },
   });
-  return data.data;
+  return data.data.data;
 };
 
 export const createHoliday = async (input: CreateHolidayInput): Promise<Holiday> => {

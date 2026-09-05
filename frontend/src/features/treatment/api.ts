@@ -50,8 +50,11 @@ export async function updateTreatment(id: string, input: UpdateTreatmentInput): 
 // ── Treatment Items ───────────────────────────────────────────────────────────
 
 export async function fetchTreatmentItems(sessionId: string): Promise<TreatmentItem[]> {
-  const { data } = await api.get<ApiResponse<TreatmentItem[]>>(`/treatment-sessions/${sessionId}/items`);
-  return data.data;
+  const { data } = await api.get<ApiResponse<{ data: TreatmentItem[]; meta: unknown }>>(
+    `/treatment-sessions/${sessionId}/items`,
+    { params: { limit: 100 } },
+  );
+  return data.data.data;
 }
 
 export async function createTreatmentItem(sessionId: string, input: CreateTreatmentItemInput): Promise<TreatmentItem> {
@@ -71,10 +74,11 @@ export async function deleteTreatmentItem(sessionId: string, itemId: string): Pr
 // ── Treatment Assignments ─────────────────────────────────────────────────────
 
 export async function fetchAssignments(sessionId: string, itemId: string): Promise<TreatmentAssignment[]> {
-  const { data } = await api.get<ApiResponse<TreatmentAssignment[]>>(
+  const { data } = await api.get<ApiResponse<{ data: TreatmentAssignment[]; meta: unknown }>>(
     `/treatment-items/${itemId}/assignments`,
+    { params: { limit: 100 } },
   );
-  return data.data;
+  return data.data.data;
 }
 
 export async function createAssignment(
@@ -132,10 +136,11 @@ export async function fetchServiceMaterials(serviceItemId: string): Promise<Serv
 }
 
 export async function fetchMaterialUsages(sessionId: string): Promise<MaterialUsageItem[]> {
-  const { data } = await api.get<ApiResponse<MaterialUsageItem[]>>(
+  const { data } = await api.get<ApiResponse<{ data: MaterialUsageItem[]; meta: unknown }>>(
     `/treatment-sessions/${sessionId}/material-usages`,
+    { params: { limit: 100 } },
   );
-  return data.data ?? [];
+  return data.data.data ?? [];
 }
 
 export async function bulkSaveMaterialUsages(

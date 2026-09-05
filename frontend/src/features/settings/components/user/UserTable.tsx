@@ -19,11 +19,12 @@ function getRoleBadgeClass(roleCode: string): string {
     case "SUPER_ADMIN": return "bg-slate-100 text-slate-800 border border-slate-200";
     case "OWNER":       return "bg-violet-50 text-violet-700 border border-violet-100";
     case "MANAGER":     return "bg-indigo-50 text-indigo-700 border border-indigo-100";
-    case "CASHIER":     return "bg-amber-50 text-amber-700 border border-amber-100";
-    case "FINANCE":     return "bg-emerald-50 text-emerald-700 border border-emerald-100";
-    case "STAFF":
-    case "STYLIST":
-    default:            return "bg-blue-50 text-blue-700 border border-blue-100";
+    case "CASHIER":           return "bg-amber-50 text-amber-700 border border-amber-100";
+    case "FINANCE":           return "bg-emerald-50 text-emerald-700 border border-emerald-100";
+    case "STAFF_OPERASIONAL": return "bg-blue-50 text-blue-700 border border-blue-100";
+    case "INVENTORY":         return "bg-orange-50 text-orange-700 border border-orange-100";
+    case "OFFICE":            return "bg-cyan-50 text-cyan-700 border border-cyan-100";
+    default:                  return "bg-slate-50 text-slate-700 border border-slate-200";
   }
 }
 

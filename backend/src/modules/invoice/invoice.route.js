@@ -26,7 +26,7 @@ const {
 } = require("./invoice.controller");
 
 const MANAGER_ROLES        = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER];
-const DAILY_ASSIGN_ROLES   = [...MANAGER_ROLES, ROLES.STAFF, ROLES.THERAPIST];
+const DAILY_ASSIGN_ROLES   = [...MANAGER_ROLES, ROLES.STAFF_OPERASIONAL];
 
 const router = Router();
 

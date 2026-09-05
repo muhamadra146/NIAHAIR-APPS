@@ -1,5 +1,6 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
+const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo     = require("./holiday.repository");
 
 const toDateOnly = (d) => {
@@ -8,8 +9,14 @@ const toDateOnly = (d) => {
   return date;
 };
 
-const getAll = async ({ year }) => {
-  return repo.findAll({ year });
+const getAll = async ({ year, page, limit } = {}) => {
+  const where = year ? { year: Number(year) } : {};
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const [data, total] = await Promise.all([
+    repo.findAll({ skip, take, where }),
+    repo.count(where),
+  ]);
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
 const getById = async (id) => {

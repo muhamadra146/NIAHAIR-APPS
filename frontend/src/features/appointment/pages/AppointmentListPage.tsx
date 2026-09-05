@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
+import { useViewOnly } from "@/hooks/useViewOnly";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Pagination } from "@/components/common/Pagination";
+import { filterInputCls } from "@/lib/ui-utils";
 import { useAppointments, useCreateAppointment } from "../hooks";
 import { AppointmentTable } from "../components/AppointmentTable";
 import { AppointmentCreateForm, type PendingPhoto } from "../components/AppointmentForm";
@@ -16,11 +20,9 @@ const ALL_STATUSES: AppointmentStatus[] = [
   "BOOKED", "CONFIRMED", "CHECK_IN", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW",
 ];
 
-const filterInputCls =
-  "h-9 rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md focus-visible:shadow-md focus-visible:ring-ring/30";
-
 export function AppointmentListPage() {
   const { branchId } = useAuthStore();
+  const isViewOnly = useViewOnly();
   const [page, setPage]         = useState(1);
   const [status, setStatus]     = useState<AppointmentStatus | "">("");
   const [startDate, setStart]   = useState("");
@@ -77,22 +79,19 @@ export function AppointmentListPage() {
   }
 
   return (
-    <PageContainer>
-      <div className="space-y-5 sm:space-y-6">
-
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Appointments</h1>
-            <p className="text-sm text-muted-foreground">
-              {meta ? `${meta.total} total` : "Manage appointment bookings"}
-            </p>
-          </div>
+    <PageContainer
+      title="Booking"
+      subtitle={meta ? `${meta.total.toLocaleString("id-ID")} total` : "Kelola booking janji temu"}
+      action={
+        !isViewOnly ? (
           <Button onClick={() => { setFormError(null); setFormOpen(true); }} size="sm">
             <Plus className="mr-2 h-4 w-4" />
-            New Booking
+            Booking Baru
           </Button>
-        </div>
+        ) : undefined
+      }
+    >
+      <div className="space-y-5 sm:space-y-6">
 
         {/* Filters */}
         <div className="flex flex-wrap items-end gap-3">
@@ -143,26 +142,22 @@ export function AppointmentListPage() {
           )}
         </div>
 
-        {/* Table — flat border, no card */}
-        <div className="rounded-xl border border-slate-200 overflow-hidden">
-          <AppointmentTable appointments={appointments} isLoading={isLoading} />
-        </div>
+        {/* Table */}
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
+            <AppointmentTable appointments={appointments} isLoading={isLoading} />
+          </CardContent>
+        </Card>
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">
-              Page {meta?.page} of {totalPages}
-            </span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Previous
-              </Button>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                Next
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            limit={20}
+            total={meta?.total ?? 0}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         )}
       </div>
 

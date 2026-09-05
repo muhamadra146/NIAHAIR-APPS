@@ -3,7 +3,7 @@ const { listPhotos, addPhoto, deletePhoto } = require("./appointmentPhoto.servic
 
 const listController = async (req, res, next) => {
   try {
-    const data = await listPhotos(req.params.appointmentId);
+    const data = await listPhotos(req.params.appointmentId, req.query);
     return success(res, data, "Photos fetched");
   } catch (err) { next(err); }
 };

@@ -89,20 +89,22 @@ const getSummary = async ({ branchId, startDate, endDate }) => {
 // ── Daily revenue ─────────────────────────────────────────────────────────────
 
 const getDailyRevenue = async ({ branchId, startDate, endDate }) => {
+  // NOTE: columns in the "invoices" table use camelCase (Prisma convention),
+  // so raw SQL must quote them exactly: "branchId", "invoiceDate", "grandTotal".
   const conditions = ["status = 'PAID'"];
   const values     = [];
   let   idx        = 1;
 
   if (branchId) {
-    conditions.push(`branch_id = $${idx++}::uuid`);
+    conditions.push(`"branchId" = $${idx++}`);
     values.push(branchId);
   }
   if (startDate) {
-    conditions.push(`invoice_date >= $${idx++}`);
+    conditions.push(`"invoiceDate" >= $${idx++}`);
     values.push(new Date(startDate));
   }
   if (endDate) {
-    conditions.push(`invoice_date <= $${idx++}`);
+    conditions.push(`"invoiceDate" <= $${idx++}`);
     values.push(new Date(endDate + "T23:59:59.999Z"));
   }
 
@@ -110,18 +112,22 @@ const getDailyRevenue = async ({ branchId, startDate, endDate }) => {
 
   const rows = await prisma.$queryRawUnsafe(
     `SELECT
-       DATE(invoice_date)      AS date,
+       DATE("invoiceDate")      AS date,
        COUNT(*)::int            AS invoice_count,
-       SUM(grand_total)         AS revenue
+       SUM("grandTotal")        AS revenue
      FROM invoices
      ${where}
-     GROUP BY DATE(invoice_date)
+     GROUP BY DATE("invoiceDate")
      ORDER BY date ASC`,
     ...values,
   );
 
   return rows.map((r) => ({
-    date:         r.date.toISOString().slice(0, 10),
+    // pg returns PostgreSQL `date` type as a string "YYYY-MM-DD", not a Date object.
+    // Guard against both: string (pg default) and Date (in case of custom parser).
+    date:         r.date instanceof Date
+      ? r.date.toISOString().slice(0, 10)
+      : String(r.date).slice(0, 10),
     invoiceCount: r.invoice_count,
     revenue:      r.revenue,
   }));

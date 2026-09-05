@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { Plus, CheckCircle, XCircle, X, Thermometer, AlertTriangle, Paperclip, FileImage } from "lucide-react";
+import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,8 +13,9 @@ import {
 } from "../hooks";
 import type { SickLeave } from "../types";
 
+// OFFICE punya Approval/Verifikasi sesuai access matrix
 const isManager = (role?: string) =>
-  ["SUPER_ADMIN", "OWNER", "MANAGER", "ADMIN"].includes(role ?? "");
+  ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"].includes(role ?? "");
 
 function statusBadge(status: SickLeave["status"]) {
   if (status === "APPROVED") return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 border text-xs">Disetujui</Badge>;
@@ -310,18 +312,17 @@ export function SickLeavePage() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold">Sakit</h1>
-          <p className="text-sm text-muted-foreground">
-            {manager ? "Kelola pengajuan sakit karyawan" : "Ajukan dan pantau izin sakit kamu"}
-          </p>
-        </div>
+    <PageContainer
+      className="max-w-3xl"
+      title="Pengajuan Sakit"
+      subtitle={manager ? "Kelola pengajuan sakit karyawan" : "Ajukan dan pantau izin sakit kamu"}
+      action={
         <Button size="sm" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4 mr-1" /> Ajukan Sakit
         </Button>
-      </div>
+      }
+    >
+      <div className="space-y-5">
 
       {/* No-letter warning banner for employees */}
       {!manager && noLetterCount >= 1 && (
@@ -433,5 +434,6 @@ export function SickLeavePage() {
       {reviewing     && <ReviewDialog sl={reviewing} onClose={() => setReviewing(null)} onViewPhoto={setLightboxUrl} />}
       {lightboxUrl   && <PhotoLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
     </div>
+    </PageContainer>
   );
 }

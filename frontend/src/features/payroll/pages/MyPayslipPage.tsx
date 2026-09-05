@@ -1,6 +1,7 @@
 import { useState } from "react";
 import logoNiahair from "@/assets/logo-niahair.png";
 import { ChevronLeft, ChevronRight, Banknote, Clock, CheckCircle2, AlertCircle, Printer } from "lucide-react";
+import { EmptyState }                from "@/components/common/EmptyState";
 import { PageContainer }             from "@/components/layout/PageContainer";
 import { Skeleton }                  from "@/components/ui/skeleton";
 import { Button }                    from "@/components/ui/button";
@@ -351,11 +352,7 @@ export function MyPayslipPage() {
   }
 
   return (
-    <PageContainer>
-      <div className="space-y-1 mb-6">
-        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Slip Gaji</h1>
-        <p className="text-sm text-muted-foreground">Riwayat slip gaji kamu</p>
-      </div>
+    <PageContainer title="Slip Gaji" subtitle="Riwayat slip gaji kamu">
 
       <div className="rounded-xl border border-slate-200 overflow-hidden">
         {isLoading ? (
@@ -370,11 +367,11 @@ export function MyPayslipPage() {
             ))}
           </div>
         ) : payrolls.length === 0 ? (
-          <div className="flex flex-col items-center py-16 text-center gap-3">
-            <Banknote className="h-10 w-10 text-slate-200" />
-            <p className="text-sm font-medium text-slate-600">Belum ada slip gaji</p>
-            <p className="text-xs text-slate-400">Slip gaji akan muncul setelah disetujui manager</p>
-          </div>
+          <EmptyState
+            icon={<Banknote className="w-6 h-6" />}
+            title="Belum ada slip gaji"
+            description="Slip gaji akan muncul setelah disetujui manager"
+          />
         ) : (
           <>
             {/* Mobile */}

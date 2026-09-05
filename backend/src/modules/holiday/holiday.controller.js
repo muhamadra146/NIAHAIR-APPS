@@ -3,7 +3,7 @@ const svc = require("./holiday.service");
 
 const getAllController = async (req, res, next) => {
   try {
-    const result = await svc.getAll({ year: req.query.year });
+    const result = await svc.getAll(req.query);
     return success(res, result, "Holidays fetched");
   } catch (err) { next(err); }
 };

@@ -1,6 +1,7 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const prisma   = require("../../config/prisma");
+const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo     = require("./commissionJob.repository");
 
 const sanitizeKey = (s) =>
@@ -8,11 +9,17 @@ const sanitizeKey = (s) =>
 
 // ── List ──────────────────────────────────────────────────────────────
 
-const listJobs = async (categoryId, { all = false } = {}) => {
+const listJobs = async (categoryId, { all = false, page, limit } = {}) => {
   const cat = await prisma.commissionCategory.findUnique({ where: { id: categoryId }, select: { id: true } });
   if (!cat) throw new AppError("Commission category not found", StatusCodes.NOT_FOUND);
 
-  return repo.findAllByCategory(categoryId, all === "true" || all === true);
+  const includeInactive = all === "true" || all === true;
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const [data, total] = await Promise.all([
+    repo.findAllByCategory(categoryId, includeInactive, { skip, take }),
+    repo.countByCategory(categoryId, includeInactive),
+  ]);
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
 // ── Create ────────────────────────────────────────────────────────────

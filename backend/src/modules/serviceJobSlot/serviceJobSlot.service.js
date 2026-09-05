@@ -1,15 +1,22 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const prisma = require("../../config/prisma");
+const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo = require("./serviceJobSlot.repository");
 
 // ── List ──────────────────────────────────────────────────────────────
 
-const listJobSlots = async (itemId, { all = false } = {}) => {
+const listJobSlots = async (itemId, { all = false, page, limit } = {}) => {
   const item = await prisma.item.findUnique({ where: { id: itemId }, select: { id: true } });
   if (!item) throw new AppError("Item not found", StatusCodes.NOT_FOUND);
 
-  return repo.findAllByItem(itemId, all === "true" || all === true);
+  const includeInactive = all === "true" || all === true;
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const [data, total] = await Promise.all([
+    repo.findAllByItem(itemId, includeInactive, { skip, take }),
+    repo.countByItem(itemId, includeInactive),
+  ]);
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
 // ── Create ────────────────────────────────────────────────────────────

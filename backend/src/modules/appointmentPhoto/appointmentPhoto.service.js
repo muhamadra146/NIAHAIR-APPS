@@ -1,16 +1,24 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const cloudinary      = require("../../config/cloudinary");
+const { paginate, paginationMeta } = require("../../utils/pagination");
 const {
   findAllByAppointment,
+  countByAppointment,
   findById,
   findAppointmentById,
   create,
   remove,
 } = require("./appointmentPhoto.repository");
 
-const listPhotos = (appointmentId) =>
-  findAllByAppointment(appointmentId);
+const listPhotos = async (appointmentId, { page, limit } = {}) => {
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const [data, total] = await Promise.all([
+    findAllByAppointment(appointmentId, { skip, take }),
+    countByAppointment(appointmentId),
+  ]);
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
+};
 
 const addPhoto = async ({ appointmentId, url, publicId, type = "REFERENCE", notes }) => {
   const appt = await findAppointmentById(appointmentId);

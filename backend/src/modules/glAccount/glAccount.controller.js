@@ -10,9 +10,9 @@ const syncGlAccountsController = async (req, res, next) => {
 
 const getGlAccountsController = async (req, res, next) => {
   try {
-    const { category, usage } = req.query;
-    const accounts = await getGlAccounts({ category, usage });
-    return success(res, accounts);
+    const { category, usage, page, limit } = req.query;
+    const result = await getGlAccounts({ category, usage, page, limit });
+    return success(res, result);
   } catch (err) { next(err); }
 };
 

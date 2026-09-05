@@ -39,11 +39,11 @@ export function Pagination({ page, total, totalPages, onPageChange }: Pagination
           onClick={() => onPageChange(page - 1)}
         >
           <ChevronLeft className="mr-1 h-4 w-4" />
-          Previous
+          Sebelumnya
         </Button>
 
         <span className="text-sm text-muted-foreground">
-          Page {page} / {totalPages}
+          Hal. {page} dari {totalPages}
         </span>
 
         <Button
@@ -51,7 +51,7 @@ export function Pagination({ page, total, totalPages, onPageChange }: Pagination
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
         >
-          Next
+          Selanjutnya
           <ChevronRight className="ml-1 h-4 w-4" />
         </Button>
       </div>
@@ -59,7 +59,7 @@ export function Pagination({ page, total, totalPages, onPageChange }: Pagination
       {/* ── Desktop layout ────────────────────────────────── */}
       <div className="hidden w-full items-center justify-between gap-2 md:flex">
         <p className="text-sm text-muted-foreground">
-          {total} result{total !== 1 ? "s" : ""}
+          {total.toLocaleString("id-ID")} data
         </p>
 
         <div className="flex items-center gap-1">
@@ -69,7 +69,7 @@ export function Pagination({ page, total, totalPages, onPageChange }: Pagination
             onClick={() => onPageChange(page - 1)}
           >
             <ChevronLeft className="mr-1 h-4 w-4" />
-            Previous
+            Sebelumnya
           </Button>
 
           {pages.map((p, i) =>
@@ -95,7 +95,7 @@ export function Pagination({ page, total, totalPages, onPageChange }: Pagination
             disabled={page >= totalPages}
             onClick={() => onPageChange(page + 1)}
           >
-            Next
+            Selanjutnya
             <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         </div>

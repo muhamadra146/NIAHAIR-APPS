@@ -2,6 +2,7 @@
 
 const { StatusCodes }              = require("http-status-codes");
 const AppError                     = require("../../common/errors/AppError");
+const { paginate, paginationMeta } = require("../../utils/pagination");
 const { accurateRequest }          = require("../accurate/accurate.client");
 const { mapAccurateToSupplier }    = require("./supplier.sync.mapper");
 const {
@@ -9,6 +10,7 @@ const {
   createFromAccurate,
   updateByAccurateId,
   findAllActive,
+  countActive,
 } = require("./supplier.sync.repository");
 
 const ACCURATE_VENDOR_LIST = "/vendor/list.do";
@@ -71,6 +73,13 @@ const syncSuppliersFromAccurate = async ({ accurateBranchId } = {}) => {
   return { created, updated, failed };
 };
 
-const getSuppliers = () => findAllActive();
+const getSuppliers = async ({ page, limit } = {}) => {
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const [data, total] = await Promise.all([
+    findAllActive({ skip, take }),
+    countActive(),
+  ]);
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
+};
 
 module.exports = { syncSuppliersFromAccurate, getSuppliers };

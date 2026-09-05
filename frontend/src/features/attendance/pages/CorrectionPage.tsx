@@ -15,7 +15,7 @@ import {
 } from "../hooks";
 import type { CorrectionRequest, CorrectionStatus, CreateCorrectionInput } from "../types";
 
-const ADMIN_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "ADMIN"];
+const ADMIN_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

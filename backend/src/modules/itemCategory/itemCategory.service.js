@@ -1,16 +1,18 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
+const { paginate, paginationMeta } = require("../../utils/pagination");
 const { accurateRequest } = require("../accurate/accurate.client");
 const repo = require("./itemCategory.repository");
 
 const ACCURATE_CATEGORY_LIST = "/item-category/list.do";
 
-const getAll = async ({ page = 1, limit = 200, search } = {}) => {
+const getAll = async ({ page, limit, search } = {}) => {
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
   const [data, total] = await Promise.all([
-    repo.findAll({ page, limit, search }),
+    repo.findAll({ skip, take, search }),
     repo.count(search),
   ]);
-  return { data, total, page: Number(page), limit: Number(limit) };
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
 // Two-pass sync:

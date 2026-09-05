@@ -3,7 +3,8 @@ const svc = require("./serviceJobSlot.service");
 
 const listController = async (req, res, next) => {
   try {
-    const result = await svc.listJobSlots(req.params.itemId, { all: req.query.all });
+    const { all, page, limit } = req.query;
+    const result = await svc.listJobSlots(req.params.itemId, { all, page, limit });
     return success(res, result, "Job slots fetched");
   } catch (err) {
     next(err);

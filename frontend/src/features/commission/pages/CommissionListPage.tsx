@@ -9,15 +9,20 @@ import { RefreshCw, Edit2, Trash2, Loader2, CheckSquare, Calculator, CheckCircle
 import { toast } from "@/lib/toast";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { filterInputCls } from "@/lib/ui-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Pagination } from "@/components/common/Pagination";
+import { EmptyState } from "@/components/common/EmptyState";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { useAuthStore } from "@/stores/authStore";
+import { useViewOnly } from "@/hooks/useViewOnly";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { MasterItemTab } from "../components/MasterItemTab";
 import { CommissionSettingsTab } from "@/features/settings/components/commission/CommissionSettingsTab";
@@ -51,8 +56,7 @@ const STATUS_BADGE: Record<string, string> = {
   PAID:     "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
 
-const filterInputCls =
-  "h-9 rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md focus-visible:shadow-md focus-visible:ring-ring/30";
+// filterInputCls imported from @/lib/ui-utils
 
 // ── Approval Tab ──────────────────────────────────────────────────────
 
@@ -350,6 +354,7 @@ interface OverrideTarget { id: string; currentAmount: number; }
 
 export function CommissionListPage() {
   const { user, branchId } = useAuthStore();
+  const isViewOnly   = useViewOnly();
   const isSuperAdmin = user?.role?.code === "SUPER_ADMIN";
 
   const [activeTab, setActiveTab] = useState<"commissions" | "approval" | "items" | "settings">("commissions");
@@ -468,43 +473,21 @@ export function CommissionListPage() {
   }
 
   return (
-    <PageContainer>
+    <PageContainer title="Komisi" subtitle="Kelola komisi karyawan">
       <div className="space-y-5 sm:space-y-6">
 
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Komisi</h1>
-            <p className="text-sm text-muted-foreground">Kelola komisi karyawan</p>
-          </div>
-        </div>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="space-y-5">
+          <TabsList>
+            <TabsTrigger value="commissions">Komisi</TabsTrigger>
+            {!isViewOnly && <TabsTrigger value="approval">Approval</TabsTrigger>}
+            {!isViewOnly && <TabsTrigger value="items">Master Item</TabsTrigger>}
+            {!isViewOnly && <TabsTrigger value="settings">Pengaturan</TabsTrigger>}
+          </TabsList>
 
-        {/* Page tabs */}
-        <div className="flex gap-1 border-b border-border">
-          {([
-            { key: "commissions", label: "Komisi"      },
-            { key: "approval",    label: "Approval"    },
-            { key: "items",       label: "Master Item"  },
-            { key: "settings",    label: "Pengaturan"   },
-          ] as const).map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                activeTab === tab.key
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {activeTab === "items"    && <MasterItemTab />}
-        {activeTab === "settings" && <CommissionSettingsTab />}
-        {activeTab === "approval" && <ApprovalTab />}
-        {activeTab === "commissions" && (<>
+          <TabsContent value="items"><MasterItemTab /></TabsContent>
+          <TabsContent value="settings"><CommissionSettingsTab /></TabsContent>
+          <TabsContent value="approval"><ApprovalTab /></TabsContent>
+          <TabsContent value="commissions" className="space-y-5"><>
 
         {/* Summary bar */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -599,7 +582,7 @@ export function CommissionListPage() {
                 ))}
               </div>
             ) : invoiceGroups.length === 0 ? (
-              <p className="py-14 text-center text-sm text-slate-400">Tidak ada komisi.</p>
+              <EmptyState title="Belum ada komisi" description="Belum ada komisi untuk filter yang dipilih" />
             ) : (
               <div className="divide-y divide-border">
                 {invoiceGroups.map((group) => (
@@ -626,15 +609,16 @@ export function CommissionListPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Halaman {page} dari {totalPages}</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Sebelumnya</Button>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Berikutnya</Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            limit={20}
+            total={meta?.total ?? 0}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         )}
-        </>)}
+        </></TabsContent>
+        </Tabs>
       </div>
 
       {/* Override dialog */}

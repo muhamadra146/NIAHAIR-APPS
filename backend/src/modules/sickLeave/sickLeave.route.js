@@ -13,7 +13,7 @@ const {
 
 const router = Router();
 
-const MANAGER_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.ADMIN];
+const MANAGER_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE];
 
 router.get("/",    authenticate, authorize(...MANAGER_ROLES), getAllController);
 router.get("/my",  authenticate, getMyController);

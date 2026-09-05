@@ -5,7 +5,8 @@ const svc = require("./commissionJob.service");
 const list = async (req, res, next) => {
   try {
     const { categoryId } = req.params;
-    const data = await svc.listJobs(categoryId, { all: req.query.all });
+    const { all, page, limit } = req.query;
+    const data = await svc.listJobs(categoryId, { all, page, limit });
     return success(res, data);
   } catch (e) { next(e); }
 };

@@ -2,12 +2,12 @@ const prisma = require("../../config/prisma");
 
 const PARENT_SELECT = { select: { id: true, name: true } };
 
-const findAll = ({ page = 1, limit = 200, search } = {}) => {
+const findAll = ({ skip = 0, take = 10, search } = {}) => {
   const where = search ? { name: { contains: search, mode: "insensitive" } } : {};
   return prisma.itemCategory.findMany({
     where,
-    skip:    (Number(page) - 1) * Number(limit),
-    take:    Number(limit),
+    skip,
+    take,
     orderBy: { name: "asc" },
     include: { parent: PARENT_SELECT },
   });

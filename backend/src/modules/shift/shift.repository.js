@@ -1,7 +1,9 @@
 const prisma = require("../../config/prisma");
 
-const findAll = ({ where = {} } = {}) =>
-  prisma.shift.findMany({ where, orderBy: [{ isWorking: "desc" }, { code: "asc" }] });
+const findAll = ({ skip = 0, take = 10, where = {} } = {}) =>
+  prisma.shift.findMany({ where, skip, take, orderBy: [{ isWorking: "desc" }, { code: "asc" }] });
+
+const count = (where = {}) => prisma.shift.count({ where });
 
 const findById = (id) => prisma.shift.findUnique({ where: { id } });
 
@@ -12,8 +14,8 @@ const create = (data) => prisma.shift.create({ data });
 const update = (id, data) => prisma.shift.update({ where: { id }, data });
 
 const isShiftUsed = async (id) => {
-  const count = await prisma.staffSchedule.count({ where: { shiftId: id } });
-  return count > 0;
+  const c = await prisma.staffSchedule.count({ where: { shiftId: id } });
+  return c > 0;
 };
 
 const findUsedShiftIds = async () => {
@@ -29,4 +31,4 @@ const softDelete = (id) => prisma.shift.update({ where: { id }, data: { isActive
 
 const hardDelete = (id) => prisma.shift.delete({ where: { id } });
 
-module.exports = { findAll, findById, findByCode, create, update, isShiftUsed, findUsedShiftIds, softDelete, hardDelete };
+module.exports = { findAll, count, findById, findByCode, create, update, isShiftUsed, findUsedShiftIds, softDelete, hardDelete };

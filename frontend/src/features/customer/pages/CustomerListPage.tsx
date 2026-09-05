@@ -3,6 +3,8 @@ import { Plus, Search, ChevronDown } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Pagination } from "@/components/common/Pagination";
 import { useCustomers } from "../hooks/useCustomers";
 import { useCreateCustomer } from "../hooks/useCreateCustomer";
 import { useMembershipOptions } from "../hooks/useMembershipOptions";
@@ -10,6 +12,7 @@ import { CustomerTable } from "../components/CustomerTable";
 import { CustomerForm } from "../components/CustomerForm";
 import type { CustomerFormValues } from "../schemas/customer.schema";
 import type { CustomerListParams } from "../types";
+import { useViewOnly } from "@/hooks/useViewOnly";
 
 /* ── Compact select (reusable locally) ──────────────────────────── */
 function FilterSelect({
@@ -36,6 +39,7 @@ function FilterSelect({
 }
 
 export function CustomerListPage() {
+  const isViewOnly = useViewOnly();
   const [page, setPage]           = useState(1);
   const [search, setSearch]       = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -105,21 +109,19 @@ export function CustomerListPage() {
   const hasActiveFilter = membershipFilter || depositFilter;
 
   return (
-    <PageContainer>
-      <div className="space-y-5">
-        {/* Page header */}
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Customers</h1>
-            <p className="text-sm text-muted-foreground">
-              {meta ? `${meta.total.toLocaleString("id-ID")} pelanggan terdaftar` : "Memuat data..."}
-            </p>
-          </div>
+    <PageContainer
+      title="Pelanggan"
+      subtitle={meta ? `${meta.total.toLocaleString("id-ID")} pelanggan terdaftar` : "Memuat data..."}
+      action={
+        !isViewOnly ? (
           <Button onClick={() => { setFormError(null); setFormOpen(true); }} size="sm">
             <Plus className="mr-2 h-4 w-4" />
-            Tambah Customer
+            Tambah Pelanggan
           </Button>
-        </div>
+        ) : undefined
+      }
+    >
+      <div className="space-y-5">
 
         {/* Search + Filters */}
         <div className="flex flex-wrap items-center gap-2">
@@ -164,25 +166,21 @@ export function CustomerListPage() {
         </div>
 
         {/* Table */}
-        <div className="rounded-xl border border-slate-200 overflow-hidden">
-          <CustomerTable customers={customers} isLoading={isLoading} />
-        </div>
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
+            <CustomerTable customers={customers} isLoading={isLoading} />
+          </CardContent>
+        </Card>
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">
-              Halaman {meta?.page} dari {totalPages}
-            </span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Sebelumnya
-              </Button>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                Selanjutnya
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            limit={15}
+            total={meta?.total ?? 0}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         )}
       </div>
 

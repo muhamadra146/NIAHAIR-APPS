@@ -1,13 +1,12 @@
 import { api } from "@/lib/axios";
+import type { ApiResponse, PaginatedResponse } from "@/types/api";
 import type { LeaveType, CreateLeaveTypeInput, UpdateLeaveTypeInput } from "../types";
 
-interface ApiResponse<T> { success: boolean; data: T; message: string }
-
 export const fetchLeaveTypes = async (includeInactive = false): Promise<LeaveType[]> => {
-  const res = await api.get<ApiResponse<LeaveType[]>>("/leave-types", {
-    params: includeInactive ? { includeInactive: "true" } : {},
+  const res = await api.get<ApiResponse<PaginatedResponse<LeaveType>>>("/leave-types", {
+    params: { limit: 100, ...(includeInactive ? { includeInactive: "true" } : {}) },
   });
-  return res.data.data;
+  return res.data.data.data;
 };
 
 export const createLeaveType = async (input: CreateLeaveTypeInput): Promise<LeaveType> => {

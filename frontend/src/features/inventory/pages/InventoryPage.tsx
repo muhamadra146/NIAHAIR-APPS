@@ -2,8 +2,12 @@ import { useState } from "react";
 import { ArrowDown, ArrowUp, Package, Search, Check, Loader2, SlidersHorizontal, RefreshCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
+import { useViewOnly } from "@/hooks/useViewOnly";
+import { EmptyState } from "@/components/common/EmptyState";
+import { Pagination } from "@/components/common/Pagination";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,35 +37,18 @@ export function InventoryPage() {
   const [activeTab, setActiveTab] = useState<Tab>("stock");
 
   return (
-    <PageContainer>
-      <div className="space-y-4 sm:space-y-6">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Inventory</h1>
-          <p className="text-sm text-muted-foreground">Saldo stok dan mutasi barang</p>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 border-b border-border">
+    <PageContainer title="Inventori" subtitle="Saldo stok dan mutasi barang">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)}>
+        <TabsList>
           {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                activeTab === tab.key
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tab.label}
-            </button>
+            <TabsTrigger key={tab.key} value={tab.key}>{tab.label}</TabsTrigger>
           ))}
-        </div>
-
-        {activeTab === "stock"      && <StockTab branchId={branchId} />}
-        {activeTab === "movements"  && <MovementsTab branchId={branchId} />}
-        {activeTab === "transfers"  && <TransferTab branchId={branchId} />}
-        {activeTab === "adjustment" && <BatchAdjustmentTab branchId={branchId} />}
-      </div>
+        </TabsList>
+        <TabsContent value="stock"><StockTab branchId={branchId} /></TabsContent>
+        <TabsContent value="movements"><MovementsTab branchId={branchId} /></TabsContent>
+        <TabsContent value="transfers"><TransferTab branchId={branchId} /></TabsContent>
+        <TabsContent value="adjustment"><BatchAdjustmentTab branchId={branchId} /></TabsContent>
+      </Tabs>
     </PageContainer>
   );
 }
@@ -180,7 +167,7 @@ function StockTab({ branchId }: { branchId?: string | null }) {
         {isLoading ? (
           <div className="space-y-3 p-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
         ) : inventories.length === 0 ? (
-          <p className="py-12 text-center text-sm text-muted-foreground">Tidak ada data stok.</p>
+          <EmptyState title="Belum ada data stok" description="Tidak ada stok yang sesuai dengan filter" />
         ) : (
           <>
             {/* Desktop */}
@@ -276,15 +263,7 @@ function StockTab({ branchId }: { branchId?: string | null }) {
         )}
       </CardContent>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm px-4 py-3 border-t">
-          <span className="text-muted-foreground">Halaman {page} dari {totalPages}</span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Sebelumnya</Button>
-            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Berikutnya</Button>
-          </div>
-        </div>
-      )}
+      <Pagination page={page} limit={30} total={meta?.total ?? 0} totalPages={totalPages} onPageChange={setPage} />
     </Card>
 
     {adjustTarget && (
@@ -374,7 +353,7 @@ function MovementsTab({ branchId }: { branchId?: string | null }) {
         {isLoading ? (
           <div className="space-y-3 p-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
         ) : movements.length === 0 ? (
-          <p className="py-12 text-center text-sm text-muted-foreground">Tidak ada mutasi stok.</p>
+          <EmptyState title="Belum ada mutasi stok" description="Tidak ada mutasi yang sesuai dengan filter" />
         ) : (
           <>
             {/* Desktop */}
@@ -460,15 +439,7 @@ function MovementsTab({ branchId }: { branchId?: string | null }) {
         )}
       </CardContent>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm px-4 py-3 border-t">
-          <span className="text-muted-foreground">Halaman {page} dari {totalPages}</span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Sebelumnya</Button>
-            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Berikutnya</Button>
-          </div>
-        </div>
-      )}
+      <Pagination page={page} limit={30} total={meta?.total ?? 0} totalPages={totalPages} onPageChange={setPage} />
     </Card>
   );
 }
@@ -486,6 +457,7 @@ interface TransferItemLine { itemId: string; qty: number; itemName: string; }
 
 function TransferTab({ branchId }: { branchId?: string | null }) {
   const { user } = useAuthStore();
+  const isViewOnly = useViewOnly();
   const [page, setPage]             = useState(1);
   const [filterStatus, setStatus]   = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -570,19 +542,22 @@ function TransferTab({ branchId }: { branchId?: string | null }) {
                 </button>
               ))}
             </div>
-            <Button size="sm" onClick={() => setShowCreate(true)} className="gap-1.5">
-              <Plus className="h-4 w-4" /> Buat Transfer
-            </Button>
+            {!isViewOnly && (
+              <Button size="sm" onClick={() => setShowCreate(true)} className="gap-1.5">
+                <Plus className="h-4 w-4" /> Buat Transfer
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
             <div className="space-y-3 p-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
           ) : transfers.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">
-              <ArrowLeftRight className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p>Belum ada transfer stok.</p>
-            </div>
+            <EmptyState
+              icon={<ArrowLeftRight className="w-6 h-6" />}
+              title="Belum ada transfer stok"
+              description="Buat transfer untuk memindahkan stok antar cabang"
+            />
           ) : (
             <>
               {/* Desktop */}
@@ -750,15 +725,7 @@ function TransferTab({ branchId }: { branchId?: string | null }) {
           )}
         </CardContent>
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm px-4 py-3 border-t">
-            <span className="text-muted-foreground">Halaman {page} dari {totalPages}</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Sebelumnya</Button>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Berikutnya</Button>
-            </div>
-          </div>
-        )}
+        <Pagination page={page} limit={20} total={meta?.total ?? 0} totalPages={totalPages} onPageChange={setPage} />
       </Card>
 
       {showCreate && <CreateTransferDialog onClose={() => setShowCreate(false)} />}
@@ -1339,10 +1306,11 @@ function BatchAdjustmentTab({ branchId }: { branchId?: string | null }) {
 
         <CardContent className="p-0">
           {lines.length === 0 ? (
-            <div className="py-16 text-center space-y-2">
-              <Package className="h-8 w-8 mx-auto text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">Belum ada item — cari dan tambahkan barang di atas</p>
-            </div>
+            <EmptyState
+              icon={<Package className="w-6 h-6" />}
+              title="Belum ada item"
+              description="Cari dan tambahkan barang di atas"
+            />
           ) : (
             <>
               {/* Desktop table */}

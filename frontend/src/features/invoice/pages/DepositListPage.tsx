@@ -2,13 +2,18 @@ import { useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Plus, Search, ArrowRight, Eye, Trash2, Link2, Clock } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { Pagination } from "@/components/common/Pagination";
+import { EmptyState } from "@/components/common/EmptyState";
+import { filterInputCls } from "@/lib/ui-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAuthStore } from "@/stores/authStore";
+import { useViewOnly } from "@/hooks/useViewOnly";
 import { fetchCustomers } from "@/features/customer/api/customer.api";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { useDeposits, useCreateDeposit, useDeleteDeposit, useDepositSummary } from "../hooks";
@@ -40,8 +45,7 @@ const STATUS_BADGE: Record<string, string> = {
 
 const CAN_DELETE: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
 
-// Shared input/select class used across filter controls
-const filterInputCls = "h-9 rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md focus:shadow-md focus-visible:ring-ring/30";
+// filterInputCls imported from @/lib/ui-utils
 
 export function DepositListPage() {
   const { branchId, user } = useAuthStore();
@@ -58,8 +62,9 @@ export function DepositListPage() {
   const filterTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [createdDeposit, setCreatedDeposit] = useState<{ id: string; name: string; amount: string; date: string } | null>(null);
 
+  const isViewOnly = useViewOnly();
   const deleteMutation = useDeleteDeposit();
-  const canDelete = user ? CAN_DELETE.includes(user.roleCode) : false;
+  const canDelete = !isViewOnly && (user ? CAN_DELETE.includes(user.roleCode) : false);
   const { data: summary } = useDepositSummary({ branchId: branchId || undefined });
 
   const { data, isLoading } = useDeposits({
@@ -100,22 +105,19 @@ export function DepositListPage() {
   const hasFilter = !!(selectedCust || status || startDate || endDate);
 
   return (
-    <PageContainer>
-      <div className="space-y-5 sm:space-y-6">
-
-        {/* ── Header ──────────────────────────────────────────── */}
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Deposit</h1>
-            <p className="text-sm text-muted-foreground">
-              {meta ? `${meta.total} deposit` : "Kelola deposit customer"}
-            </p>
-          </div>
+    <PageContainer
+      title="Deposit"
+      subtitle={meta ? `${meta.total} deposit` : "Kelola deposit customer"}
+      action={
+        !isViewOnly ? (
           <Button onClick={() => setFormOpen(true)} size="sm" disabled={!branchId}>
             <Plus className="mr-1.5 h-4 w-4" />
-            <span className="hidden xs:inline">Tambah </span>Deposit
+            Tambah Deposit
           </Button>
-        </div>
+        ) : undefined
+      }
+    >
+      <div className="space-y-5 sm:space-y-6">
 
         {/* ── Summary cards ───────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -230,8 +232,9 @@ export function DepositListPage() {
           )}
         </div>
 
-        {/* ── Table — flat border, no card ────────────────────── */}
-        <div className="rounded-xl border border-slate-200 overflow-hidden">
+        {/* ── Table ───────────────────────────────────────────── */}
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
           {isLoading ? (
             <div className="space-y-0 divide-y divide-slate-100">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -243,9 +246,7 @@ export function DepositListPage() {
               ))}
             </div>
           ) : deposits.length === 0 ? (
-            <p className="py-14 text-center text-sm text-slate-400">
-              Tidak ada deposit ditemukan.
-            </p>
+            <EmptyState title="Belum ada deposit" description="Tambahkan deposit pelanggan untuk memulai" />
           ) : (
             <>
               {/* Mobile cards */}
@@ -279,21 +280,18 @@ export function DepositListPage() {
               </div>
             </>
           )}
-        </div>
+          </CardContent>
+        </Card>
 
         {/* ── Pagination ───────────────────────────────────────── */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Halaman {page} dari {totalPages}</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Sebelumnya
-              </Button>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                Berikutnya
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            limit={20}
+            total={meta?.total ?? 0}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         )}
       </div>
 

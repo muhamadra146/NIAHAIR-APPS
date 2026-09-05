@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Plus, CheckCircle, XCircle, X, Clock } from "lucide-react";
+import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,8 +12,9 @@ import {
 } from "../hooks";
 import type { PermissionRequest, PermissionType } from "../types";
 
+// OFFICE punya Approval/Verifikasi sesuai access matrix
 const isManager = (role?: string) =>
-  ["SUPER_ADMIN", "OWNER", "MANAGER", "ADMIN"].includes(role ?? "");
+  ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"].includes(role ?? "");
 
 function statusBadge(status: PermissionRequest["status"]) {
   if (status === "APPROVED") return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 border text-xs">Disetujui</Badge>;
@@ -226,18 +228,17 @@ export function PermissionPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold">Izin</h1>
-          <p className="text-sm text-muted-foreground">
-            {manager ? "Kelola izin ketidakhadiran karyawan" : "Ajukan dan pantau izin kamu"}
-          </p>
-        </div>
+    <PageContainer
+      className="max-w-3xl"
+      title="Pengajuan Izin"
+      subtitle={manager ? "Kelola izin ketidakhadiran karyawan" : "Ajukan dan pantau izin kamu"}
+      action={
         <Button size="sm" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4 mr-1" /> Ajukan Izin
         </Button>
-      </div>
+      }
+    >
+      <div className="space-y-5">
 
       {/* Filter */}
       <div className="flex gap-2 flex-wrap">
@@ -320,5 +321,6 @@ export function PermissionPage() {
       {createOpen  && <CreateForm onClose={() => setCreateOpen(false)} />}
       {reviewing   && <ReviewDialog perm={reviewing} onClose={() => setReviewing(null)} />}
     </div>
+    </PageContainer>
   );
 }

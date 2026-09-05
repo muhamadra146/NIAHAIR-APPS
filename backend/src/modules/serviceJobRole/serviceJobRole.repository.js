@@ -13,7 +13,7 @@ const SLOT_SELECT = {
   isActive:       true,
 };
 
-const findAllByItem = (itemId, includeInactive = false) =>
+const findAllByItem = (itemId, includeInactive = false, { skip = 0, take = 10 } = {}) =>
   prisma.serviceJobRole.findMany({
     where: {
       itemId,
@@ -27,6 +27,16 @@ const findAllByItem = (itemId, includeInactive = false) =>
       },
     },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    skip,
+    take,
+  });
+
+const countByItem = (itemId, includeInactive = false) =>
+  prisma.serviceJobRole.count({
+    where: {
+      itemId,
+      ...(includeInactive ? {} : { isActive: true }),
+    },
   });
 
 const findById = (id) =>
@@ -65,6 +75,7 @@ const hardDelete = (id) =>
 
 module.exports = {
   findAllByItem,
+  countByItem,
   findById,
   findByItemAndName,
   create,

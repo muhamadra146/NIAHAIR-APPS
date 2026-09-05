@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo } from "react";
 import { Loader2, AlertCircle } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
+import { useViewOnly } from "@/hooks/useViewOnly";
+import { PageContainer } from "@/components/layout/PageContainer";
 import { useShifts, useRoster, useBulkSchedule } from "../hooks";
 import { RosterNav }        from "../components/RosterNav";
 import { RosterGrid }       from "../components/RosterGrid";
@@ -49,6 +51,7 @@ function daysInMonth(dateStr: string): number {
 
 export function SchedulePage() {
   const { branchId } = useAuthStore();
+  const isViewOnly = useViewOnly();
 
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [startDate, setStartDate] = useState<string>(() =>
@@ -158,14 +161,8 @@ export function SchedulePage() {
   }
 
   return (
-    <div className="space-y-4 p-4 sm:p-6">
-      {/* ── Header ──────────────────────────────────────────── */}
-      <div>
-        <h1 className="text-xl font-bold sm:text-2xl">Schedule</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Staff roster per branch · klik sel atau tombol&nbsp;<strong>+</strong>&nbsp;untuk assign shift
-        </p>
-      </div>
+    <PageContainer title="Jadwal" subtitle="Roster karyawan per cabang — klik sel atau tombol + untuk assign shift">
+      <div className="space-y-4">
 
       {/* ── Navigation ──────────────────────────────────────── */}
       <RosterNav
@@ -209,7 +206,7 @@ export function SchedulePage() {
             branchId={branchId}
             viewMode={viewMode}
             isPending={rosterLoading || bulkMut.isPending}
-            onCellSave={handleCellSave}
+            onCellSave={isViewOnly ? async () => {} : handleCellSave}
           />
         </div>
         <div className="w-64 shrink-0">
@@ -225,7 +222,7 @@ export function SchedulePage() {
           branchId={branchId}
           viewMode={viewMode}
           isPending={rosterLoading || bulkMut.isPending}
-          onCellSave={handleCellSave}
+          onCellSave={isViewOnly ? async () => {} : handleCellSave}
         />
       </div>
 
@@ -245,10 +242,11 @@ export function SchedulePage() {
             branchId={branchId}
             viewMode={viewMode}
             isPending={rosterLoading || bulkMut.isPending}
-            onCellSave={handleCellSave}
+            onCellSave={isViewOnly ? async () => {} : handleCellSave}
           />
         )}
       </div>
     </div>
+    </PageContainer>
   );
 }

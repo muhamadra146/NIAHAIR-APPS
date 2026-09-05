@@ -1,19 +1,31 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
+const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo     = require("./leaveQuota.repository");
 const leaveTypeRepo = require("../leaveType/leaveType.repository");
 
-const getQuotas = ({ employeeId, year } = {}) => {
+const getQuotas = async ({ employeeId, year, page, limit } = {}) => {
   const where = {};
   if (employeeId) where.employeeId = employeeId;
   if (year)       where.year = Number(year);
-  return repo.findMany(where);
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const [data, total] = await Promise.all([
+    repo.findAll({ skip, take, where }),
+    repo.count(where),
+  ]);
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
-const getMyQuotas = (employeeId, year) => {
+// Self-service: kuota milik sendiri — bounded per karyawan (max N jenis cuti)
+const getMyQuotas = async (employeeId, { year, page, limit } = {}) => {
   const where = { employeeId };
   if (year) where.year = Number(year);
-  return repo.findMany(where);
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const [data, total] = await Promise.all([
+    repo.findAll({ skip, take, where }),
+    repo.count(where),
+  ]);
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
 const assign = async ({ employeeId, leaveTypeId, year, totalDays }) => {

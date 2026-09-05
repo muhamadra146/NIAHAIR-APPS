@@ -3,6 +3,8 @@ import type React from "react";
 import { AlertCircle, Plus, ChevronDown, ChevronUp, Search, X, CalendarDays, User, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
+import { useViewOnly } from "@/hooks/useViewOnly";
+import { Pagination } from "@/components/common/Pagination";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +51,7 @@ const CATEGORY_LABELS: Record<ComplaintCategory, string> = {
 // ── Main Page ─────────────────────────────────────────────────────────
 export function ComplaintPage() {
   const { branchId } = useAuthStore();
+  const isViewOnly = useViewOnly();
   const [page, setPage]           = useState(1);
   const [filterStatus, setStatus] = useState<ComplaintStatus | "">("");
   const [showCreate, setShowCreate]   = useState(false);
@@ -71,12 +74,8 @@ export function ComplaintPage() {
   const totalPages  = meta ? Math.ceil(meta.total / 20) : 1;
 
   return (
-    <PageContainer>
+    <PageContainer title="Komplain Klien" subtitle="Data komplain dan penanganannya">
       <div className="space-y-4 sm:space-y-6">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Komplain Client</h1>
-          <p className="text-sm text-muted-foreground">Data komplain dan penanganannya</p>
-        </div>
 
         {/* ── Statistik ─────────────────────────────────────────── */}
         {statsData && <ComplaintStatsSection stats={statsData} />}
@@ -102,9 +101,11 @@ export function ComplaintPage() {
                   </button>
                 ))}
               </div>
-              <Button size="sm" onClick={() => setShowCreate(true)} className="gap-1.5">
-                <Plus className="h-4 w-4" /> Buat Komplain
-              </Button>
+              {!isViewOnly && (
+                <Button size="sm" onClick={() => setShowCreate(true)} className="gap-1.5">
+                  <Plus className="h-4 w-4" /> Buat Komplain
+                </Button>
+              )}
             </div>
           </CardHeader>
 
@@ -187,21 +188,23 @@ export function ComplaintPage() {
                               <p><span className="text-muted-foreground">Diselesaikan:</span> {formatDate(c.resolvedAt)}</p>
                             )}
                           </div>
-                          <div className="flex items-center gap-2">
-                            {c.status !== "CLOSED" && (
-                              <Button size="sm" variant="outline" className="h-7 text-xs"
-                                onClick={() => setSelected(c)}>
-                                Perbarui Status
+                          {!isViewOnly && (
+                            <div className="flex items-center gap-2">
+                              {c.status !== "CLOSED" && (
+                                <Button size="sm" variant="outline" className="h-7 text-xs"
+                                  onClick={() => setSelected(c)}>
+                                  Perbarui Status
+                                </Button>
+                              )}
+                              <Button
+                                size="sm" variant="outline"
+                                className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                                onClick={() => setDeleteTarget(c)}
+                              >
+                                <Trash2 className="h-3 w-3 mr-1" /> Hapus
                               </Button>
-                            )}
-                            <Button
-                              size="sm" variant="outline"
-                              className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                              onClick={() => setDeleteTarget(c)}
-                            >
-                              <Trash2 className="h-3 w-3 mr-1" /> Hapus
-                            </Button>
-                          </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -211,15 +214,7 @@ export function ComplaintPage() {
             )}
           </CardContent>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm px-4 py-3 border-t">
-              <span className="text-muted-foreground">Halaman {page} dari {totalPages}</span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Sebelumnya</Button>
-                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Berikutnya</Button>
-              </div>
-            </div>
-          )}
+          <Pagination page={page} limit={20} total={meta?.total ?? 0} totalPages={totalPages} onPageChange={setPage} />
         </Card>
       </div>
 

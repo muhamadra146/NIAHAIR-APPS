@@ -7,7 +7,7 @@ const { assignLeaveQuotaSchema } = require("./leaveQuota.validation");
 const { getQuotasController, getMyQuotasController, assignController } = require("./leaveQuota.controller");
 
 const router = Router();
-const ADMIN  = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.ADMIN];
+const ADMIN  = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE];
 
 router.get("/my",  authenticate, getMyQuotasController);
 router.get("/",    authenticate, authorize(...ADMIN), getQuotasController);

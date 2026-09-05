@@ -8,7 +8,7 @@ const {
 
 const getByItemController = async (req, res, next) => {
   try {
-    const result = await getByItem(req.params.itemId);
+    const result = await getByItem(req.params.itemId, req.query);
     return success(res, result, "Assignments fetched");
   } catch (err) {
     next(err);

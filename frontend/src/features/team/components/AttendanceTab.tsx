@@ -175,7 +175,7 @@ function StatsBar({ rows }: { rows: RosterAttendanceRow[] }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function AttendanceTab() {
+export function AttendanceTab({ readOnly = false }: { readOnly?: boolean } = {}) {
   const { branchId } = useAuthStore();
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [manualRow, setManualRow] = useState<RosterAttendanceRow | null>(null);
@@ -293,33 +293,35 @@ export function AttendanceTab() {
 
                   {/* Actions */}
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      {canCheckIn && (
+                    {!readOnly && (
+                      <div className="flex items-center justify-end gap-1">
+                        {canCheckIn && (
+                          <Button
+                            size="sm" variant="outline" className="gap-1 h-7 text-xs"
+                            onClick={() => handleCheckIn(row.scheduleId)}
+                            disabled={isActing}
+                          >
+                            <LogIn className="h-3 w-3" /> Masuk
+                          </Button>
+                        )}
+                        {canCheckOut && (
+                          <Button
+                            size="sm" variant="outline" className="gap-1 h-7 text-xs"
+                            onClick={() => handleCheckOut(row.scheduleId)}
+                            disabled={isActing}
+                          >
+                            <LogOut className="h-3 w-3" /> Keluar
+                          </Button>
+                        )}
                         <Button
-                          size="sm" variant="outline" className="gap-1 h-7 text-xs"
-                          onClick={() => handleCheckIn(row.scheduleId)}
-                          disabled={isActing}
+                          size="icon" variant="ghost" className="h-7 w-7"
+                          onClick={() => setManualRow(row)}
+                          title="Set manual"
                         >
-                          <LogIn className="h-3 w-3" /> Masuk
+                          <Pencil className="h-3 w-3" />
                         </Button>
-                      )}
-                      {canCheckOut && (
-                        <Button
-                          size="sm" variant="outline" className="gap-1 h-7 text-xs"
-                          onClick={() => handleCheckOut(row.scheduleId)}
-                          disabled={isActing}
-                        >
-                          <LogOut className="h-3 w-3" /> Keluar
-                        </Button>
-                      )}
-                      <Button
-                        size="icon" variant="ghost" className="h-7 w-7"
-                        onClick={() => setManualRow(row)}
-                        title="Set manual"
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                    </div>
+                      </div>
+                    )}
                   </td>
                 </tr>
               );
