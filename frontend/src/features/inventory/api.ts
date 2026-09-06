@@ -5,6 +5,7 @@ import type {
   StockTransfer, CreateTransferInput, TransferListParams, ItemCategory,
   CreateStockAdjustmentInput, StockAdjustmentResult, GlAccount,
   CreateBatchStockAdjustmentInput, BatchStockAdjustmentResult,
+  InventoryPeriod,
 } from "./types";
 
 interface InventoryListData {
@@ -113,5 +114,22 @@ export async function deleteStockTransfer(id: string): Promise<{ deleted?: boole
 
 export async function undoTransferReceive(id: string): Promise<StockTransfer> {
   const { data } = await api.patch<ApiResponse<StockTransfer>>(`/stock-transfers/${id}/undo-receive`);
+  return data.data;
+}
+
+// ── Inventory Period (Stock Opname) ───────────────────────────────────────────
+
+export async function fetchInventoryPeriods(): Promise<InventoryPeriod[]> {
+  const { data } = await api.get<ApiResponse<InventoryPeriod[]>>("/inventory/periods");
+  return data.data;
+}
+
+export async function closePeriod(year: number, month: number): Promise<InventoryPeriod> {
+  const { data } = await api.post<ApiResponse<InventoryPeriod>>("/inventory/periods/close", { year, month });
+  return data.data;
+}
+
+export async function reopenPeriod(year: number, month: number): Promise<InventoryPeriod> {
+  const { data } = await api.post<ApiResponse<InventoryPeriod>>("/inventory/periods/reopen", { year, month });
   return data.data;
 }

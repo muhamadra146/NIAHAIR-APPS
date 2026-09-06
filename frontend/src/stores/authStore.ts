@@ -3,35 +3,40 @@ import { persist } from "zustand/middleware";
 import type { AuthUser } from "@/types/auth";
 
 interface AuthStore {
-  user:     AuthUser | null;
-  token:    string | null;
-  branchId: string | null;
+  user:         AuthUser | null;
+  token:        string | null;
+  refreshToken: string | null;
+  branchId:     string | null;
 
-  login:     (token: string, user: AuthUser) => void;
-  logout:    () => void;
-  setBranch: (branchId: string) => void;
+  login:           (token: string, refreshToken: string, user: AuthUser) => void;
+  logout:          () => void;
+  setTokens:       (token: string, refreshToken: string) => void;
+  setBranch:       (branchId: string) => void;
 }
 
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set) => ({
-      user:     null,
-      token:    null,
-      branchId: null,
+      user:         null,
+      token:        null,
+      refreshToken: null,
+      branchId:     null,
 
-      login: (token, user) => set({ token, user }),
+      login: (token, refreshToken, user) => set({ token, refreshToken, user }),
 
-      logout: () => set({ token: null, user: null, branchId: null }),
+      logout: () => set({ token: null, refreshToken: null, user: null, branchId: null }),
+
+      setTokens: (token, refreshToken) => set({ token, refreshToken }),
 
       setBranch: (branchId) => set({ branchId }),
     }),
     {
       name: "niahair-auth",
-      // Only persist token + branchId; user is re-derived on refresh
       partialize: (state) => ({
-        token:    state.token,
-        user:     state.user,
-        branchId: state.branchId,
+        token:        state.token,
+        refreshToken: state.refreshToken,
+        user:         state.user,
+        branchId:     state.branchId,
       }),
     }
   )

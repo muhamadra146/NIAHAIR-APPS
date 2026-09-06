@@ -23,6 +23,12 @@ import {
   Sparkles,
   ShoppingCart,
   AlertCircle,
+  PenLine,
+  Truck,
+  Archive,
+  Crown,
+  Cog,
+  RotateCcw,
   type LucideIcon,
 } from "lucide-react";
 
@@ -140,6 +146,14 @@ export const sidebarNav: NavItem[] = [
 
   // ── Keuangan ──────────────────────────────────────────────────────────────
   {
+    label: "Finance Dashboard",
+    href:  "/finance",
+    icon:  BarChart3,
+    roles: [...ADMIN_ROLES, "MANAGER", "FINANCE"],
+    group: "Keuangan",
+  },
+
+  {
     label:         "Commissions",
     href:          "/commissions",
     icon:          BadgeDollarSign,
@@ -192,6 +206,14 @@ export const sidebarNav: NavItem[] = [
   },
 
   {
+    label: "Membership",
+    href:  "/memberships",
+    icon:  Crown,
+    roles: ALL_ROLES,
+    group: "Data",
+  },
+
+  {
     label:         "Employees",
     href:          "/employees",
     icon:          UserCog,
@@ -218,6 +240,39 @@ export const sidebarNav: NavItem[] = [
     group:         "Data",
   },
 
+  {
+    label:         "Supplier",
+    href:          "/suppliers",
+    icon:          Truck,
+    roles:         [...MANAGEMENT_ROLES, "INVENTORY", "FINANCE", "OFFICE"],
+    group:         "Data",
+  },
+
+  {
+    label:         "Retur Pembelian",
+    href:          "/purchase-returns",
+    icon:          RotateCcw,
+    roles:         [...MANAGEMENT_ROLES, "INVENTORY", "FINANCE", "OFFICE"],
+    viewOnlyRoles: ["OFFICE"],
+    group:         "Data",
+  },
+
+  {
+    label: "Stock Opname",
+    href:  "/stock-opname",
+    icon:  Archive,
+    roles: ADMIN_ROLES,
+    group: "Data",
+  },
+
+  {
+    label: "Production",
+    href:  "/production",
+    icon:  Cog,
+    roles: [...MANAGEMENT_ROLES, "INVENTORY"],
+    group: "Data",
+  },
+
   // ── Kehadiran ─────────────────────────────────────────────────────────────
   {
     label:         "Schedule",
@@ -235,6 +290,14 @@ export const sidebarNav: NavItem[] = [
     roles:         [...MANAGEMENT_ROLES, "OFFICE", "FINANCE"],
     viewOnlyRoles: ["FINANCE"],
     group:         "Kehadiran",
+  },
+
+  {
+    label: "Koreksi Kehadiran",
+    href:  "/attendance-corrections",
+    icon:  PenLine,
+    roles: ALL_ROLES,
+    group: "Kehadiran",
   },
 
   {

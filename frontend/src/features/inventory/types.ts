@@ -1,3 +1,20 @@
+// ── Inventory Period ──────────────────────────────────────────────────────────
+
+export type PeriodStatus = "OPEN" | "CLOSED";
+
+export interface InventoryPeriod {
+  id:                 string;
+  year:               number;
+  month:              number;
+  status:             PeriodStatus;
+  closedAt:           string | null;
+  closedByEmployeeId: string | null;
+  createdAt:          string;
+  updatedAt:          string;
+}
+
+// ── Inventory Movement ────────────────────────────────────────────────────────
+
 export type InventoryMovementType =
   | "PURCHASE" | "SALE" | "SERVICE_USAGE" | "PRODUCTION"
   | "TRANSFER_IN" | "TRANSFER_OUT" | "ADJUSTMENT"

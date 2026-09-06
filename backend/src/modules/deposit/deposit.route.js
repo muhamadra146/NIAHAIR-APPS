@@ -32,7 +32,7 @@ router.post(
   "/",
   authenticate,
   requireBranch,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER, ROLES.STAFF_OPERASIONAL),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER, ROLES.STAFF_OPERASIONAL, ROLES.OFFICE),
   validate(createDepositSchema),
   createController
 );

@@ -26,6 +26,7 @@ const {
 } = require("./invoice.controller");
 
 const MANAGER_ROLES        = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER];
+const POS_ROLES            = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER];
 const DAILY_ASSIGN_ROLES   = [...MANAGER_ROLES, ROLES.STAFF_OPERASIONAL];
 
 const router = Router();
@@ -36,7 +37,7 @@ router.get("/daily-assignment",        authenticate, authorize(...DAILY_ASSIGN_R
 router.get("/commission-generate",     authenticate, authorize(...MANAGER_ROLES), commissionGenerateListController);
 router.get("/job-assignments",         authenticate, authorize(...DAILY_ASSIGN_ROLES), jobAssignmentsController);
 router.get("/:id",              authenticate, getByIdController);
-router.post("/",   authenticate, requireBranch, validate(createInvoiceSchema), createController);
+router.post("/",   authenticate, requireBranch, authorize(...POS_ROLES), validate(createInvoiceSchema), createController);
 router.patch("/:id", authenticate, validate(updateInvoiceSchema), updateController);
 router.post("/:invoiceId/deposits", authenticate, validate(applyDepositSchema), applyDepositController);
 router.patch("/:id/cancel",             authenticate, cancelController);

@@ -13,16 +13,18 @@ const { updateBranchMappingSchema, updateAccurateMappingSchema } = require("./wa
 
 const router = Router();
 
+const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER];
+
 // Static routes before /:id to prevent "sync" being captured as id param
-router.post("/sync/accurate", authenticate, authorize(ROLES.SUPER_ADMIN), syncController);
+router.post("/sync/accurate", authenticate, authorize(...ADMIN_ROLES), syncController);
 
 router.get("/",    authenticate, getAllController);
 router.get("/:id", authenticate, getByIdController);
 
 // Admin mapping routes
-router.delete("/:id",               authenticate, authorize(ROLES.SUPER_ADMIN), deleteController);
-router.put("/:id/branch",           authenticate, authorize(ROLES.SUPER_ADMIN), validate(updateBranchMappingSchema),   updateBranchMappingController);
-router.delete("/:id/branch",        authenticate, authorize(ROLES.SUPER_ADMIN), removeBranchMappingController);
-router.put("/:id/accurate-mapping", authenticate, authorize(ROLES.SUPER_ADMIN), validate(updateAccurateMappingSchema), updateMappingController);
+router.delete("/:id",               authenticate, authorize(...ADMIN_ROLES), deleteController);
+router.put("/:id/branch",           authenticate, authorize(...ADMIN_ROLES), validate(updateBranchMappingSchema),   updateBranchMappingController);
+router.delete("/:id/branch",        authenticate, authorize(...ADMIN_ROLES), removeBranchMappingController);
+router.put("/:id/accurate-mapping", authenticate, authorize(...ADMIN_ROLES), validate(updateAccurateMappingSchema), updateMappingController);
 
 module.exports = router;

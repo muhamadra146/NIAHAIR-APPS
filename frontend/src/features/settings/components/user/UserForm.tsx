@@ -196,6 +196,7 @@ export function UserForm({ open, onOpenChange, onSubmit, isPending, defaultValue
                       type={showPassword ? "text" : "password"}
                       {...createForm.register("password")}
                       placeholder="Min 6 characters"
+                      autoComplete="new-password"
                       className="pr-10"
                     />
                     <button
@@ -285,7 +286,7 @@ export function ResetPasswordDialog({ open, onOpenChange, onSubmit, isPending, e
           )}
           <div className="space-y-1.5">
             <Label>New Password <span className="text-destructive">*</span></Label>
-            <Input type="password" {...register("password")} placeholder="Min 6 characters" />
+            <Input type="password" {...register("password")} placeholder="Min 6 characters" autoComplete="new-password" />
             {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
           </div>
           <DialogFooter>

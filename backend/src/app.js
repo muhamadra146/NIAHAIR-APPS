@@ -9,8 +9,9 @@ const prisma = require("./config/prisma");
 const {
     accurateRequest
 } = require("./modules/accurate/accurate.client");
-const errorHandler = require("./middlewares/error.middleware");
-const { success } = require("./common/responses/apiResponse");
+const errorHandler  = require("./middlewares/error.middleware");
+const authenticate  = require("./middlewares/auth.middleware");
+const { success }   = require("./common/responses/apiResponse");
 const authRouter = require("./modules/auth/auth.route");
 const customerRouter = require("./modules/customer/customer.route");
 const itemRouter = require("./modules/item/item.route");
@@ -64,13 +65,21 @@ const purchaseRouter                = require("./modules/purchase/purchase.route
 const complaintRouter               = require("./modules/complaint/complaint.route");
 const serviceJobSlotRouter          = require("./modules/serviceJobSlot/serviceJobSlot.route");
 const serviceJobRoleRouter          = require("./modules/serviceJobRole/serviceJobRole.route");
+const productionRouter              = require("./modules/production/production.route");
+const purchaseReturnRouter          = require("./modules/purchaseReturn/purchaseReturn.route");
+const dashboardRouter               = require("./modules/dashboard/dashboard.route");
 
 
 const app = express();
 
-app.use(cors());
+const isProd = process.env.NODE_ENV === "production";
+
+app.use(cors({
+  origin:      process.env.APP_URL || "http://localhost:5173",
+  credentials: true,
+}));
 app.use(helmet());
-app.use(morgan("dev"));
+app.use(morgan(isProd ? "combined" : "dev"));
 app.use(express.json());
 
 
@@ -78,7 +87,7 @@ app.get("/", (req, res) => {
     success(res, null, "Salon ERP API Running");
 });
 
-app.get("/health/db", async (req, res) => {
+app.get("/health/db", authenticate, async (req, res) => {
     try {
 
         const result = await prisma.$queryRaw`
@@ -160,6 +169,9 @@ v1.use("/gl-accounts",                          glAccountRouter);
 v1.use("/suppliers",                            supplierRouter);
 v1.use("/purchase-invoices",                    purchaseRouter);
 v1.use("/complaints",                           complaintRouter);
+v1.use("/production-orders",                    productionRouter);
+v1.use("/purchase-returns",                     purchaseReturnRouter);
+v1.use("/dashboard",                            dashboardRouter);
 
 app.use("/api/v1", v1);
 

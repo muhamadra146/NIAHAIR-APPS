@@ -6,6 +6,7 @@ import {
   fetchItemCategories, createStockAdjustment, fetchGlAccounts,
   createBatchStockAdjustment, syncGlAccounts,
   deleteStockTransfer, undoTransferReceive,
+  fetchInventoryPeriods, closePeriod, reopenPeriod,
 } from "./api";
 import type { InventoryListParams, MovementListParams, TransferListParams, CreateTransferInput, CreateStockAdjustmentInput, CreateBatchStockAdjustmentInput } from "./types";
 
@@ -155,6 +156,42 @@ export function useCreateStockAdjustment() {
       } else {
         toast.success("Penyesuaian stok berhasil disimpan");
       }
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+// ── Inventory Period (Stock Opname) ───────────────────────────────────────────
+
+export function useInventoryPeriods() {
+  return useQuery({
+    queryKey: ["inventory-periods"],
+    queryFn:  fetchInventoryPeriods,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useClosePeriod() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ year, month }: { year: number; month: number }) => closePeriod(year, month),
+    onSuccess: (_data, { year, month }) => {
+      qc.invalidateQueries({ queryKey: ["inventory-periods"] });
+      qc.invalidateQueries({ queryKey: ["inventories"] });
+      toast.success(`Periode ${String(month).padStart(2, "0")}/${year} berhasil ditutup`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useReopenPeriod() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ year, month }: { year: number; month: number }) => reopenPeriod(year, month),
+    onSuccess: (_data, { year, month }) => {
+      qc.invalidateQueries({ queryKey: ["inventory-periods"] });
+      qc.invalidateQueries({ queryKey: ["inventories"] });
+      toast.success(`Periode ${String(month).padStart(2, "0")}/${year} berhasil dibuka kembali`);
     },
     onError: (err: Error) => toast.error(err.message),
   });

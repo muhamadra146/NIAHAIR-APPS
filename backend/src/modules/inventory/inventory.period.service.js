@@ -1,6 +1,7 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
-const repo            = require("./inventory.period.repository");
+const repo  = require("./inventory.period.repository");
+const prisma = require("../../config/prisma");
 
 // Guard: throws 422 if the period for a given date is CLOSED.
 // Called before any movement creation to enforce the closing rule.
@@ -40,4 +41,11 @@ const reopenPeriod = async (year, month) => {
   return repo.reopenPeriod(year, month);
 };
 
-module.exports = { validatePeriodOpen, closePeriod, reopenPeriod };
+/**
+ * Returns the last 24 inventory periods from DB.
+ * If the current month hasn't been explicitly closed, it won't be in the DB —
+ * the frontend should treat "not found" months as OPEN.
+ */
+const listPeriods = () => repo.listPeriods({ take: 24 });
+
+module.exports = { validatePeriodOpen, closePeriod, reopenPeriod, listPeriods };

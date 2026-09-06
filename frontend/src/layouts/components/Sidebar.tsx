@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
+import { useLogout } from "@/features/auth/hooks/useLogout";
 import { useLayout } from "@/contexts/LayoutContext";
 import { sidebarNav, type NavItem } from "@/layouts/config/sidebarNav";
 import logoSrc from "@/assets/logo-niahair.png";
@@ -92,7 +93,8 @@ function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean 
 // ── UserFooter ────────────────────────────────────────────────────────────────
 
 function UserFooter({ collapsed }: { collapsed: boolean }) {
-  const { user, logout } = useAuthStore();
+  const { user }  = useAuthStore();
+  const logout    = useLogout();
   const displayName = user?.employee?.name ?? user?.email ?? "";
   const initial     = displayName.charAt(0).toUpperCase() || "?";
 

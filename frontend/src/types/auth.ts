@@ -47,6 +47,7 @@ export interface LoginCredentials {
 }
 
 export interface LoginResponse {
-  token: string;
-  user:  AuthUser;
+  token:        string;
+  refreshToken: string;
+  user:         AuthUser;
 }

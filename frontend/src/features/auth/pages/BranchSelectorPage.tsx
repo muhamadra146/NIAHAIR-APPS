@@ -1,13 +1,15 @@
 import { useNavigate } from "react-router-dom";
 import { Building2, ChevronRight, ShieldAlert } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
+import { useLogout } from "@/features/auth/hooks/useLogout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import logoSrc from "@/assets/logo-niahair.png";
 
 export function BranchSelectorPage() {
   const navigate                      = useNavigate();
-  const { user, branchId, setBranch, logout } = useAuthStore();
+  const { user, branchId, setBranch } = useAuthStore();
+  const logout                        = useLogout();
 
   const branches    = user?.branches ?? [];
   const isSwitching = !!branchId;

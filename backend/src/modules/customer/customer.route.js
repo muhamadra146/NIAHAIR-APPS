@@ -22,17 +22,22 @@ router.post("/sync/accurate",        authenticate, authorize(ROLES.SUPER_ADMIN),
 router.post("/repair/customer-no",   authenticate, authorize(ROLES.SUPER_ADMIN), repairCustomerNoController);
 router.post("/retry/accurate-sync",  authenticate, authorize(ROLES.SUPER_ADMIN), retryCustomerSyncController);
 
+// Read — POS_ROLES + OFFICE + FINANCE
+const READ_ROLES  = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER, ROLES.OFFICE, ROLES.FINANCE];
+// Write — POS_ROLES + OFFICE (FINANCE = view-only)
+const WRITE_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER, ROLES.OFFICE];
+
 // CRUD
-router.get("/",    authenticate, getAllController);
-router.get("/:id", authenticate, getByIdController);
-router.post("/",   authenticate, validate(createCustomerSchema), createController);
-router.put("/:id", authenticate, validate(updateCustomerSchema), updateController);
+router.get("/",    authenticate, authorize(...READ_ROLES),  getAllController);
+router.get("/:id", authenticate, authorize(...READ_ROLES),  getByIdController);
+router.post("/",   authenticate, authorize(...WRITE_ROLES), validate(createCustomerSchema), createController);
+router.put("/:id", authenticate, authorize(...WRITE_ROLES), validate(updateCustomerSchema), updateController);
 
 // Notes (CRM-008)
-router.get(   "/:id/notes",           authenticate, getNotesController);
-router.post(  "/:id/notes",           authenticate, validate(createNoteSchema), createNoteController);
-router.put(   "/:id/notes/:noteId",   authenticate, validate(updateNoteSchema), updateNoteController);
-router.delete("/:id/notes/:noteId",   authenticate, deleteNoteController);
+router.get(   "/:id/notes",           authenticate, authorize(...READ_ROLES),  getNotesController);
+router.post(  "/:id/notes",           authenticate, authorize(...WRITE_ROLES), validate(createNoteSchema), createNoteController);
+router.put(   "/:id/notes/:noteId",   authenticate, authorize(...WRITE_ROLES), validate(updateNoteSchema), updateNoteController);
+router.delete("/:id/notes/:noteId",   authenticate, authorize(...WRITE_ROLES), deleteNoteController);
 
 // Manual push sync retry
 router.post("/:id/sync/accurate", authenticate, syncToAccurateController);

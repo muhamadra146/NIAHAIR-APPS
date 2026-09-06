@@ -654,6 +654,7 @@ function ChangePasswordCard({
                 value={current}
                 onChange={(e) => setCurrent(e.target.value)}
                 placeholder="••••••••"
+                autoComplete="current-password"
                 required
                 className="pr-9"
               />
@@ -675,6 +676,7 @@ function ChangePasswordCard({
                 value={next}
                 onChange={(e) => setNext(e.target.value)}
                 placeholder="Min. 6 karakter"
+                autoComplete="new-password"
                 required
                 className="pr-9"
               />
@@ -695,6 +697,7 @@ function ChangePasswordCard({
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               placeholder="Ulangi password baru"
+              autoComplete="new-password"
               required
             />
           </div>

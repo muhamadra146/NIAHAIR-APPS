@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAuthStore } from "@/stores/authStore";
+import { useViewOnly } from "@/hooks/useViewOnly";
 import { fetchCustomers } from "@/features/customer/api/customer.api";
 import { fetchPaymentMethods } from "@/features/settings/api/paymentMethod.api";
 import { formatDate, formatCurrency } from "@/lib/utils";
@@ -28,6 +29,7 @@ const filterInputCls =
 
 export function DepositPaymentListPage() {
   const { branchId, user } = useAuthStore();
+  const isViewOnly = useViewOnly();
   const [page, setPage]               = useState(1);
   const [startDate, setStart]         = useState("");
   const [endDate, setEnd]             = useState("");
@@ -69,9 +71,11 @@ export function DepositPaymentListPage() {
       title="Pembayaran Deposit"
       subtitle={meta ? `${meta.total} pembayaran` : "Riwayat pembayaran deposit"}
       action={
-        <Button onClick={() => setDialogOpen(true)} size="sm">
-          <Plus className="mr-1.5 h-4 w-4" /> Tambah Pembayaran
-        </Button>
+        !isViewOnly ? (
+          <Button onClick={() => setDialogOpen(true)} size="sm">
+            <Plus className="mr-1.5 h-4 w-4" /> Tambah Pembayaran
+          </Button>
+        ) : undefined
       }
     >
       <div className="space-y-4 sm:space-y-5">

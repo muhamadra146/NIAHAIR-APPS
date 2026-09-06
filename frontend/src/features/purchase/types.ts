@@ -1,11 +1,16 @@
 export type PurchaseInvoiceStatus = "DRAFT" | "POSTED" | "CANCELLED";
 
 export interface Supplier {
-  id:           string;
-  name:         string;
-  code:         string | null;
-  paymentTerms: string | null;
+  id:               string;
+  name:             string;
+  code:             string | null;
+  email:            string | null;
+  phone:            string | null;
+  address:          string | null;
+  paymentTerms:     string | null;
   accurateVendorId: number | null;
+  isActive:         boolean;
+  lastSyncAt:       string | null;
 }
 
 export interface PurchaseItem {

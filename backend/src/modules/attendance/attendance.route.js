@@ -15,14 +15,14 @@ const router = Router();
 // GET /attendance/roster?branchId=&date=   — daily roster with attendance status
 router.get("/roster",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE, ROLES.FINANCE),
   getDailyRosterController,
 );
 
 // GET /attendance/report?branchId=&startDate=&endDate=&employeeId=
 router.get("/report",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE, ROLES.FINANCE),
   getReportController,
 );
 

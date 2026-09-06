@@ -19,8 +19,8 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: loginRequest,
-    onSuccess: ({ token, user }) => {
-      login(token, user);
+    onSuccess: ({ token, refreshToken, user }) => {
+      login(token, refreshToken, user);
       if (user.branches.length === 1) {
         setBranch(user.branches[0].id);
         navigate("/dashboard", { replace: true });

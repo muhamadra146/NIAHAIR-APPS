@@ -2,8 +2,10 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AuthLayout } from "@/layouts/AuthLayout";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { LoginPage } from "@/features/auth/pages/LoginPage";
-import { BranchSelectorPage } from "@/features/auth/pages/BranchSelectorPage";
+import { LoginPage }           from "@/features/auth/pages/LoginPage";
+import { ForgotPasswordPage }  from "@/features/auth/pages/ForgotPasswordPage";
+import { ResetPasswordPage }   from "@/features/auth/pages/ResetPasswordPage";
+import { BranchSelectorPage }  from "@/features/auth/pages/BranchSelectorPage";
 import { DashboardPage } from "@/features/dashboard/pages/DashboardPage";
 import { CustomerListPage } from "@/features/customer/pages/CustomerListPage";
 import { CustomerDetailPage } from "@/features/customer/pages/CustomerDetailPage";
@@ -44,6 +46,16 @@ import { GenerateKomisiPage }           from "@/features/invoice/pages/GenerateK
 import CommissionCalculatorPage        from "@/features/invoice/pages/CommissionCalculatorPage";
 import { PurchasePage }              from "@/features/purchase/pages/PurchasePage";
 import { PurchaseDetailPage }        from "@/features/purchase/pages/PurchaseDetailPage";
+import { SupplierPage }              from "@/features/purchase/pages/SupplierPage";
+import { StockOpnamePage }           from "@/features/inventory/pages/StockOpnamePage";
+import { MembershipPage }            from "@/features/membership/pages/MembershipPage";
+import { ProductionListPage }        from "@/features/production/pages/ProductionListPage";
+import { ProductionDetailPage }      from "@/features/production/pages/ProductionDetailPage";
+import { ProductionFormPage }        from "@/features/production/pages/ProductionFormPage";
+import { PurchaseReturnListPage }    from "@/features/purchaseReturn/pages/PurchaseReturnListPage";
+import { PurchaseReturnDetailPage }  from "@/features/purchaseReturn/pages/PurchaseReturnDetailPage";
+import { PurchaseReturnFormPage }    from "@/features/purchaseReturn/pages/PurchaseReturnFormPage";
+import { FinanceDashboardPage }      from "@/features/dashboard/pages/FinanceDashboardPage";
 
 // ── Role Groups (mirrors sidebarNav.ts) ─────────────────────────────────────
 const ADMIN_ROLES        = ["SUPER_ADMIN", "OWNER"]                                     as const;
@@ -55,7 +67,9 @@ export const router = createBrowserRouter([
   {
     element: <AuthLayout />,
     children: [
-      { path: "/login", element: <LoginPage /> },
+      { path: "/login",           element: <LoginPage /> },
+      { path: "/forgot-password", element: <ForgotPasswordPage /> },
+      { path: "/reset-password",  element: <ResetPasswordPage /> },
     ],
   },
 
@@ -139,9 +153,39 @@ export const router = createBrowserRouter([
           {
             element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","INVENTORY","FINANCE","OFFICE"]} />,
             children: [
-              { path: "/inventory",     element: <InventoryPage /> },
-              { path: "/purchases",     element: <PurchasePage /> },
-              { path: "/purchases/:id", element: <PurchaseDetailPage /> },
+              { path: "/inventory",          element: <InventoryPage /> },
+              { path: "/purchases",          element: <PurchasePage /> },
+              { path: "/purchases/:id",      element: <PurchaseDetailPage /> },
+              { path: "/suppliers",          element: <SupplierPage /> },
+              { path: "/purchase-returns",     element: <PurchaseReturnListPage /> },
+              { path: "/purchase-returns/new", element: <PurchaseReturnFormPage /> },
+              { path: "/purchase-returns/:id", element: <PurchaseReturnDetailPage /> },
+            ],
+          },
+
+          // ── Data: Stock Opname — ADMIN only
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER"]} />,
+            children: [
+              { path: "/stock-opname", element: <StockOpnamePage /> },
+            ],
+          },
+
+          // ── Production — MANAGEMENT + INVENTORY
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","INVENTORY"]} />,
+            children: [
+              { path: "/production",      element: <ProductionListPage /> },
+              { path: "/production/new",  element: <ProductionFormPage /> },
+              { path: "/production/:id",  element: <ProductionDetailPage /> },
+            ],
+          },
+
+          // ── Data: Membership — semua role bisa lihat, write dibatasi di page
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","CASHIER","STAFF_OPERASIONAL","INVENTORY","OFFICE","FINANCE"]} />,
+            children: [
+              { path: "/memberships", element: <MembershipPage /> },
             ],
           },
 
@@ -171,6 +215,14 @@ export const router = createBrowserRouter([
             element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","INVENTORY","OFFICE","FINANCE"]} />,
             children: [
               { path: "/reports", element: <ReportsPage /> },
+            ],
+          },
+
+          // ── Finance Dashboard — ADMIN + FINANCE + MANAGER
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","FINANCE"]} />,
+            children: [
+              { path: "/finance", element: <FinanceDashboardPage /> },
             ],
           },
 

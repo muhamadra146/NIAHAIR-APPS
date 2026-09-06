@@ -13,6 +13,7 @@ const {
   createBatchAdjustmentController,
   closePeriodController,
   reopenPeriodController,
+  getPeriodsController,
 } = require("./inventory.controller");
 
 const router = Router();
@@ -21,8 +22,9 @@ const router = Router();
 router.post("/sync/accurate", authenticate, authorize(ROLES.SUPER_ADMIN), syncController);
 
 // Period management — SUPER_ADMIN only
-router.post("/periods/close",  authenticate, authorize(ROLES.SUPER_ADMIN), validate(closePeriodSchema),  closePeriodController);
-router.post("/periods/reopen", authenticate, authorize(ROLES.SUPER_ADMIN), validate(reopenPeriodSchema), reopenPeriodController);
+router.get("/periods",          authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), getPeriodsController);
+router.post("/periods/close",   authenticate, authorize(ROLES.SUPER_ADMIN), validate(closePeriodSchema),  closePeriodController);
+router.post("/periods/reopen",  authenticate, authorize(ROLES.SUPER_ADMIN), validate(reopenPeriodSchema), reopenPeriodController);
 
 router.get("/movements", authenticate, getMovementsController);
 router.get("/",          authenticate, getInventoriesController);

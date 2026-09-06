@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { TrendingUp, Receipt, Wallet, CalendarDays, Users, BadgeDollarSign, ClipboardList, ShoppingCart } from "lucide-react";
+import { TrendingUp, Receipt, Wallet, CalendarDays, Users, BadgeDollarSign, ClipboardList, ShoppingCart, AlertCircle, RefreshCw, Package, Cog, Crown, Download } from "lucide-react";
+import { exportCSV, fmtExportCurrency, fmtExportDate } from "@/lib/export";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ResponsiveContainer, Legend,
@@ -12,17 +13,21 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
-import { useSummaryReport, useRevenueReport, useCommissionReport, useSalesByItem } from "../hooks";
+import { useSummaryReport, useRevenueReport, useCommissionReport, useSalesByItem, useInventoryReport, useProductionReport, useCustomerAnalytics } from "../hooks";
+import type { ReportParams } from "../types";
 import { useAttendanceReport } from "@/features/team/hooks";
 import { useBpjsReport } from "@/features/payroll/hooks";
 
 const TABS = [
-  { key: "summary",       label: "Ringkasan" },
-  { key: "revenue",       label: "Pendapatan" },
-  { key: "commissions",   label: "Komisi" },
-  { key: "sales-by-item", label: "Penjualan" },
-  { key: "attendance",    label: "Kehadiran" },
-  { key: "bpjs",          label: "BPJS" },
+  { key: "summary",            label: "Ringkasan" },
+  { key: "revenue",            label: "Pendapatan" },
+  { key: "commissions",        label: "Komisi" },
+  { key: "sales-by-item",      label: "Penjualan" },
+  { key: "inventory",          label: "Inventory" },
+  { key: "production",         label: "Produksi" },
+  { key: "customer-analytics", label: "Customer" },
+  { key: "attendance",         label: "Kehadiran" },
+  { key: "bpjs",               label: "BPJS" },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
 
@@ -84,12 +89,15 @@ export function ReportsPage() {
           ))}
         </div>
 
-        {activeTab === "summary"       && <SummaryTab params={params} />}
-        {activeTab === "revenue"       && <RevenueTab params={params} />}
-        {activeTab === "commissions"   && <CommissionsTab params={applied} />}
-        {activeTab === "sales-by-item" && <SalesByItemTab params={params} />}
-        {activeTab === "attendance"    && <AttendanceTab branchId={branchId ?? undefined} startDate={applied.startDate} endDate={applied.endDate} />}
-        {activeTab === "bpjs"          && <BpjsTab branchId={branchId ?? undefined} />}
+        {activeTab === "summary"            && <SummaryTab params={params} />}
+        {activeTab === "revenue"            && <RevenueTab params={params} />}
+        {activeTab === "commissions"        && <CommissionsTab params={applied} />}
+        {activeTab === "sales-by-item"      && <SalesByItemTab params={params} />}
+        {activeTab === "inventory"          && <InventoryTab branchId={branchId ?? undefined} />}
+        {activeTab === "production"         && <ProductionTab params={applied} />}
+        {activeTab === "customer-analytics" && <CustomerAnalyticsTab params={params} />}
+        {activeTab === "attendance"         && <AttendanceTab branchId={branchId ?? undefined} startDate={applied.startDate} endDate={applied.endDate} />}
+        {activeTab === "bpjs"               && <BpjsTab branchId={branchId ?? undefined} />}
       </div>
     </PageContainer>
   );
@@ -98,11 +106,13 @@ export function ReportsPage() {
 // ── Summary tab ───────────────────────────────────────────────────────────────
 
 function SummaryTab({ params }: { params: Parameters<typeof useSummaryReport>[0] }) {
-  const { data, isLoading } = useSummaryReport(params);
+  const { data, isLoading, isError, error, refetch } = useSummaryReport(params);
 
   if (isLoading) {
     return <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28" />)}</div>;
   }
+
+  if (isError) return <ErrorBanner error={error} onRetry={() => refetch()} />;
 
   if (!data) return null;
 
@@ -185,6 +195,30 @@ function SummaryTab({ params }: { params: Parameters<typeof useSummaryReport>[0]
   );
 }
 
+// ── Shared error banner ───────────────────────────────────────────────────────
+
+function ErrorBanner({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+  const msg = error instanceof Error ? error.message : "Terjadi kesalahan pada server";
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-4">
+      <AlertCircle className="h-4 w-4 shrink-0 text-destructive mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-destructive">Gagal memuat data</p>
+        <p className="mt-0.5 text-xs text-muted-foreground truncate">{msg}</p>
+      </div>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="flex items-center gap-1 text-xs text-destructive hover:underline shrink-0"
+        >
+          <RefreshCw className="h-3 w-3" /> Coba lagi
+        </button>
+      )}
+    </div>
+  );
+}
+
 function StatCard({ icon, label, value, sub, color }: { icon: React.ReactNode; label: string; value: string; sub: string; color: string }) {
   return (
     <Card>
@@ -200,14 +234,23 @@ function StatCard({ icon, label, value, sub, color }: { icon: React.ReactNode; l
 // ── Revenue tab ───────────────────────────────────────────────────────────────
 
 function RevenueTab({ params }: { params: Parameters<typeof useRevenueReport>[0] }) {
-  const { data = [], isLoading } = useRevenueReport(params);
+  const { data = [], isLoading, isError, error, refetch } = useRevenueReport(params);
 
   const maxRevenue = data.length > 0 ? Math.max(...data.map((d) => Number(d.revenue))) : 1;
   const totalRevenue = data.reduce((sum, d) => sum + Number(d.revenue), 0);
 
+  function handleExport() {
+    exportCSV(
+      data.map((d) => ({ Tanggal: fmtExportDate(d.date), Invoice: d.invoiceCount, Pendapatan: fmtExportCurrency(d.revenue) })),
+      `laporan-pendapatan-${params.startDate ?? "all"}-${params.endDate ?? "all"}`,
+    );
+  }
+
   if (isLoading) {
     return <div className="space-y-2">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
   }
+
+  if (isError) return <ErrorBanner error={error} onRetry={() => refetch()} />;
 
   if (data.length === 0) {
     return <p className="py-12 text-center text-sm text-muted-foreground">Tidak ada data pendapatan untuk periode ini.</p>;
@@ -219,7 +262,12 @@ function RevenueTab({ params }: { params: Parameters<typeof useRevenueReport>[0]
       <Card>
         <CardContent className="pt-4 pb-4 flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Total Pendapatan ({data.length} hari)</span>
-          <span className="text-2xl font-bold text-green-600">{formatCurrency(totalRevenue)}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl font-bold text-green-600">{formatCurrency(totalRevenue)}</span>
+            <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={handleExport}>
+              <Download className="h-3.5 w-3.5" /> CSV
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -303,7 +351,7 @@ const fmtRp = (n: number) =>
 function AttendanceTab({
   branchId, startDate, endDate,
 }: { branchId?: string; startDate: string; endDate: string }) {
-  const { data, isLoading } = useAttendanceReport({
+  const { data, isLoading, isError, error, refetch } = useAttendanceReport({
     branchId,
     startDate,
     endDate,
@@ -321,6 +369,8 @@ function AttendanceTab({
   if (isLoading) {
     return <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
   }
+
+  if (isError) return <ErrorBanner error={error} onRetry={() => refetch()} />;
 
   const rows = data?.data ?? [];
 
@@ -438,13 +488,29 @@ function AttendanceTab({
 // ── Commissions tab ───────────────────────────────────────────────────────────
 
 function CommissionsTab({ params }: { params: Parameters<typeof useCommissionReport>[0] }) {
-  const { data = [], isLoading } = useCommissionReport(params);
+  const { data = [], isLoading, isError, error, refetch } = useCommissionReport(params);
 
   const grand = data.reduce((s, r) => s + Number(r.totalAmount), 0);
+
+  function handleExport() {
+    exportCSV(
+      data.map((r) => ({
+        Karyawan: r.employee?.name ?? "—",
+        Kode:     r.employee?.employeeCode ?? "",
+        Pending:  fmtExportCurrency(r.pending),
+        Disetujui: fmtExportCurrency(r.approved),
+        Dibayar:  fmtExportCurrency(r.paid),
+        Total:    fmtExportCurrency(r.totalAmount),
+      })),
+      `laporan-komisi-${params.startDate ?? "all"}-${params.endDate ?? "all"}`,
+    );
+  }
 
   if (isLoading) {
     return <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>;
   }
+
+  if (isError) return <ErrorBanner error={error} onRetry={() => refetch()} />;
 
   if (data.length === 0) {
     return <p className="py-12 text-center text-sm text-muted-foreground">Tidak ada data komisi untuk periode ini.</p>;
@@ -455,7 +521,12 @@ function CommissionsTab({ params }: { params: Parameters<typeof useCommissionRep
       <Card>
         <CardContent className="pt-4 pb-4 flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Total Komisi ({data.length} karyawan)</span>
-          <span className="text-2xl font-bold text-yellow-600">{formatCurrency(grand)}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl font-bold text-yellow-600">{formatCurrency(grand)}</span>
+            <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={handleExport}>
+              <Download className="h-3.5 w-3.5" /> CSV
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -507,6 +578,22 @@ function SalesByItemTab({ params }: { params: Parameters<typeof useSalesByItem>[
   const { data = [], isLoading, isError, error } = useSalesByItem(params);
   const [selectedParent,   setSelectedParent]   = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
+
+  function handleExport(filtered: typeof data) {
+    exportCSV(
+      filtered.map((r, i) => ({
+        No:        i + 1,
+        Kode:      r.itemCode,
+        Nama:      r.name,
+        Kategori:  r.categoryName ?? "",
+        Qty:       r.totalQty,
+        Revenue:   fmtExportCurrency(r.totalRevenue),
+        "Inv Count": r.invoiceCount,
+        "Kumulatif %": r.cumPct,
+      })),
+      `laporan-penjualan-item-${params.startDate ?? "all"}-${params.endDate ?? "all"}`,
+    );
+  }
 
   // Build unique parent categories from data
   const parentCats = Array.from(
@@ -752,9 +839,14 @@ function SalesByItemTab({ params }: { params: Parameters<typeof useSalesByItem>[
       {/* Ranking table */}
       <Card>
         <CardHeader className="pb-2 pt-4">
-          <CardTitle className="text-sm font-semibold text-muted-foreground">
-            Ranking Penjualan {selectedCategory ? `— ${data.find((r) => r.categoryId === selectedCategory)?.categoryName ?? ""}` : "(Semua Kategori)"}
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold text-muted-foreground">
+              Ranking Penjualan {selectedCategory ? `— ${data.find((r) => r.categoryId === selectedCategory)?.categoryName ?? ""}` : "(Semua Kategori)"}
+            </CardTitle>
+            <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => handleExport(filtered)}>
+              <Download className="h-3 w-3" /> CSV
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -808,6 +900,418 @@ function SalesByItemTab({ params }: { params: Parameters<typeof useSalesByItem>[
   );
 }
 
+// ── Inventory tab ─────────────────────────────────────────────────────────────
+
+function InventoryTab({ branchId }: { branchId?: string }) {
+  const { data, isLoading, isError, error, refetch } = useInventoryReport({ branchId });
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
+  const [showLowOnly, setShowLowOnly] = useState(false);
+
+  function handleExport(filtered: Array<{ itemCode: string; name: string; categoryName: string | null; warehouseName: string; qtyOnHand: number; qtyReserved: number; qtyAvailable: number; isLowStock: boolean }>) {
+    exportCSV(
+      filtered.map((item) => ({
+        Kode:        item.itemCode,
+        Nama:        item.name,
+        Kategori:    item.categoryName ?? "",
+        Gudang:      item.warehouseName,
+        "Qty On Hand": item.qtyOnHand,
+        "Qty Reserved": item.qtyReserved,
+        "Qty Tersedia": item.qtyAvailable,
+        Status:      item.isLowStock ? "Menipis" : "Aman",
+      })),
+      `laporan-inventory-${new Date().toISOString().slice(0, 10)}`,
+    );
+  }
+
+  if (isLoading) {
+    return <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
+  }
+  if (isError) return <ErrorBanner error={error} onRetry={() => refetch()} />;
+  if (!data)   return null;
+
+  const { summary, byWarehouse } = data;
+  const allItems = byWarehouse.flatMap((g) => g.items.map((item) => ({ ...item, warehouseName: g.warehouse.name })));
+  const filtered = (selectedWarehouse === "all" ? allItems : byWarehouse.find((g) => g.warehouse.id === selectedWarehouse)?.items.map((i) => ({ ...i, warehouseName: byWarehouse.find((g) => g.warehouse.id === selectedWarehouse)?.warehouse.name ?? "" })) ?? [])
+    .filter((item) => !showLowOnly || item.isLowStock);
+
+  return (
+    <div className="space-y-4">
+      {/* KPI */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "Total SKU",        value: String(summary.totalSKU),    sub: "item terdaftar",  color: "text-blue-600",   icon: <Package className="h-4 w-4" /> },
+          { label: "Stok Menipis",     value: String(summary.lowStockSKU), sub: `≤ ${summary.lowStockThreshold} unit`, color: "text-red-500", icon: <AlertCircle className="h-4 w-4" /> },
+          { label: "Gudang",           value: String(summary.warehouseCount), sub: "lokasi aktif",  color: "text-purple-600", icon: <Package className="h-4 w-4" /> },
+          { label: "% Stok Aman",      value: summary.totalSKU > 0 ? `${Math.round(((summary.totalSKU - summary.lowStockSKU) / summary.totalSKU) * 100)}%` : "0%", sub: "di atas threshold", color: "text-emerald-600", icon: <TrendingUp className="h-4 w-4" /> },
+        ].map(({ label, value, sub, color, icon }) => (
+          <Card key={label}>
+            <CardContent className="pt-4 pb-4">
+              <div className={`flex items-center gap-1.5 mb-2 ${color}`}>{icon}<span className="text-xs font-medium">{label}</span></div>
+              <p className="text-xl font-bold leading-tight">{value}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex gap-1">
+          <button onClick={() => setSelectedWarehouse("all")}
+            className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${selectedWarehouse === "all" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+          >Semua Gudang</button>
+          {byWarehouse.map((g) => (
+            <button key={g.warehouse.id} onClick={() => setSelectedWarehouse(g.warehouse.id)}
+              className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${selectedWarehouse === g.warehouse.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+            >{g.warehouse.name}</button>
+          ))}
+        </div>
+        <button onClick={() => setShowLowOnly((v) => !v)}
+          className={`flex items-center gap-1 px-3 py-1 text-xs rounded-full border font-medium transition-colors ${showLowOnly ? "bg-red-500 text-white border-red-500" : "border-border text-muted-foreground hover:text-foreground"}`}
+        >
+          <AlertCircle className="h-3 w-3" /> Stok Menipis Saja
+        </button>
+        <div className="flex items-center gap-2 ml-auto">
+          <span className="text-xs text-muted-foreground">{filtered.length} item ditampilkan</span>
+          <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => handleExport(filtered)}>
+            <Download className="h-3 w-3" /> CSV
+          </Button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Item</th>
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">Gudang</th>
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">Kategori</th>
+                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">Qty Tersedia</th>
+                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">Qty Reserved</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-muted-foreground">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filtered.length === 0
+                  ? <tr><td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">Tidak ada item yang cocok.</td></tr>
+                  : filtered.map((item) => (
+                    <tr key={`${item.itemId}-${item.warehouseName}`} className={`hover:bg-muted/30 transition-colors ${item.isLowStock ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
+                      <td className="px-4 py-2.5">
+                        <p className="font-medium text-sm">{item.name}</p>
+                        <p className="text-xs text-muted-foreground">{item.itemCode}</p>
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-muted-foreground">{item.warehouseName}</td>
+                      <td className="px-3 py-2.5 text-xs text-muted-foreground">{item.categoryName ?? "—"}</td>
+                      <td className={`px-3 py-2.5 text-right font-bold tabular-nums ${item.isLowStock ? "text-red-500" : "text-emerald-600"}`}>
+                        {item.qtyAvailable.toLocaleString("id-ID", { maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-xs tabular-nums text-muted-foreground">
+                        {item.qtyReserved.toLocaleString("id-ID", { maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {item.isLowStock
+                          ? <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700"><AlertCircle className="h-3 w-3" />Menipis</span>
+                          : <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Aman</span>
+                        }
+                      </td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ── Production tab ────────────────────────────────────────────────────────────
+
+const PRODUCTION_STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  DRAFT:       { label: "Draft",      color: "text-slate-500" },
+  IN_PROGRESS: { label: "Proses",     color: "text-blue-600"  },
+  COMPLETED:   { label: "Selesai",    color: "text-emerald-600" },
+  CANCELLED:   { label: "Dibatalkan", color: "text-red-500"   },
+};
+
+function ProductionTab({ params }: { params: Pick<ReportParams, "startDate" | "endDate"> }) {
+  const { data, isLoading, isError, error, refetch } = useProductionReport(params);
+
+  function handleExport() {
+    if (!data) return;
+    exportCSV(
+      data.recentOrders.map((o) => ({
+        "No. Order":          o.productionNo,
+        Tanggal:              fmtExportDate(o.productionDate),
+        Status:               o.status,
+        "Total Diproduksi":   o.totalProduced,
+        "Material Digunakan": o.totalMaterialUsed,
+      })),
+      `laporan-produksi-${params.startDate ?? "all"}-${params.endDate ?? "all"}`,
+    );
+  }
+
+  if (isLoading) return <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
+  if (isError)   return <ErrorBanner error={error} onRetry={() => refetch()} />;
+  if (!data)     return null;
+
+  const { summary, topOutputItems, topMaterials, recentOrders } = data;
+
+  return (
+    <div className="space-y-4">
+      {/* KPI */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Card><CardContent className="pt-4 pb-4">
+          <div className="flex items-center gap-1.5 mb-2 text-blue-600"><Cog className="h-4 w-4" /><span className="text-xs font-medium">Total Order</span></div>
+          <p className="text-xl font-bold">{summary.totalOrders}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">production order</p>
+        </CardContent></Card>
+        {Object.entries(summary.byStatus).map(([status, count]) => {
+          const info = PRODUCTION_STATUS_LABEL[status] ?? { label: status, color: "text-muted-foreground" };
+          return (
+            <Card key={status}><CardContent className="pt-4 pb-4">
+              <div className={`flex items-center gap-1.5 mb-2 ${info.color}`}><Cog className="h-4 w-4" /><span className="text-xs font-medium">{info.label}</span></div>
+              <p className="text-xl font-bold">{count}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">order</p>
+            </CardContent></Card>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {/* Top output items */}
+        <Card>
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="text-sm font-semibold text-muted-foreground">Item Produksi Terbanyak</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">Item</th>
+                  <th className="px-4 py-2 text-right text-xs text-muted-foreground font-semibold">Diproduksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {topOutputItems.length === 0
+                  ? <tr><td colSpan={2} className="px-4 py-6 text-center text-xs text-muted-foreground">Tidak ada data</td></tr>
+                  : topOutputItems.map((item) => (
+                    <tr key={item.id} className="hover:bg-muted/30">
+                      <td className="px-4 py-2.5">
+                        <p className="text-sm font-medium">{item.name}</p>
+                        <p className="text-xs text-muted-foreground">{item.itemCode}</p>
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-bold tabular-nums text-emerald-600">
+                        {item.totalProduced.toLocaleString("id-ID", { maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+
+        {/* Top materials */}
+        <Card>
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="text-sm font-semibold text-muted-foreground">Material Terbanyak Digunakan</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">Material</th>
+                  <th className="px-4 py-2 text-right text-xs text-muted-foreground font-semibold">Terpakai</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {topMaterials.length === 0
+                  ? <tr><td colSpan={2} className="px-4 py-6 text-center text-xs text-muted-foreground">Tidak ada data</td></tr>
+                  : topMaterials.map((mat) => (
+                    <tr key={mat.id} className="hover:bg-muted/30">
+                      <td className="px-4 py-2.5">
+                        <p className="text-sm font-medium">{mat.name}</p>
+                        <p className="text-xs text-muted-foreground">{mat.itemCode}</p>
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-bold tabular-nums text-amber-600">
+                        {mat.totalUsed.toLocaleString("id-ID", { maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent orders */}
+      <Card>
+        <CardHeader className="pb-2 pt-4">
+          <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+            Order Terbaru
+            <Button size="sm" variant="outline" className="h-7 gap-1 text-xs ml-auto" onClick={handleExport}>
+              <Download className="h-3 w-3" /> CSV
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">No. Order</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Tanggal</th>
+                  <th className="px-4 py-2.5 text-center text-xs font-semibold text-muted-foreground">Status</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Diproduksi</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Material</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {recentOrders.length === 0
+                  ? <tr><td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">Tidak ada data produksi.</td></tr>
+                  : recentOrders.map((o) => {
+                    const info = PRODUCTION_STATUS_LABEL[o.status] ?? { label: o.status, color: "text-muted-foreground" };
+                    return (
+                      <tr key={o.id} className="hover:bg-muted/30">
+                        <td className="px-4 py-2.5 font-medium">{o.productionNo}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground text-xs">
+                          {new Date(o.productionDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <span className={`text-xs font-semibold ${info.color}`}>{info.label}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-emerald-600 font-medium">
+                          {o.totalProduced.toLocaleString("id-ID", { maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-amber-600 font-medium">
+                          {o.totalMaterialUsed.toLocaleString("id-ID", { maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    );
+                  })
+                }
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ── Customer Analytics tab ────────────────────────────────────────────────────
+
+function CustomerAnalyticsTab({ params }: { params: ReportParams }) {
+  const { data, isLoading, isError, error, refetch } = useCustomerAnalytics(params);
+
+  function handleExport() {
+    if (!data) return;
+    exportCSV(
+      data.topCustomers.map((c, i) => ({
+        No:              i + 1,
+        "No. Customer":  c.customer?.customerNo ?? "",
+        Nama:            c.customer?.name ?? "—",
+        Telepon:         c.customer?.phone ?? "",
+        Kunjungan:       c.visitCount,
+        "Total Belanja": fmtExportCurrency(c.totalSpent),
+        "Avg/Kunjungan": fmtExportCurrency(c.avgSpentPerVisit),
+        "Pertama":       fmtExportDate(c.firstVisit),
+        "Terakhir":      fmtExportDate(c.lastVisit),
+      })),
+      `laporan-customer-analytics-${params.startDate ?? "all"}-${params.endDate ?? "all"}`,
+    );
+  }
+
+  if (isLoading) return <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
+  if (isError)   return <ErrorBanner error={error} onRetry={() => refetch()} />;
+  if (!data)     return null;
+
+  const { summary, topCustomers } = data;
+
+  return (
+    <div className="space-y-4">
+      {/* KPI */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "Total Customer",   value: String(summary.totalCustomers), sub: "memiliki transaksi",   color: "text-purple-600",  icon: <Crown className="h-4 w-4" /> },
+          { label: "Total Revenue",    value: formatCurrency(summary.totalRevenue), sub: "dari invoice lunas", color: "text-emerald-600", icon: <TrendingUp className="h-4 w-4" /> },
+          { label: "Rata-rata / Cust", value: formatCurrency(summary.avgPerCustomer), sub: "per customer", color: "text-blue-600",    icon: <Users className="h-4 w-4" /> },
+          { label: "Total Transaksi",  value: String(summary.totalInvoices), sub: "invoice lunas", color: "text-amber-600",  icon: <Receipt className="h-4 w-4" /> },
+        ].map(({ label, value, sub, color, icon }) => (
+          <Card key={label}>
+            <CardContent className="pt-4 pb-4">
+              <div className={`flex items-center gap-1.5 mb-2 ${color}`}>{icon}<span className="text-xs font-medium">{label}</span></div>
+              <p className="text-xl font-bold leading-tight">{value}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Ranking table */}
+      <Card>
+        <CardHeader className="pb-2 pt-4">
+          <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+            <Crown className="h-4 w-4 text-amber-500" />
+            Top Customer ({topCustomers.length})
+            <Button size="sm" variant="outline" className="h-7 gap-1 text-xs ml-auto" onClick={handleExport}>
+              <Download className="h-3 w-3" /> CSV
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="px-4 py-2.5 text-center text-xs font-semibold text-muted-foreground w-10">#</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Customer</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Kunjungan</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-green-700">Total Belanja</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-blue-700">Avg / Kunjungan</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Terakhir</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {topCustomers.length === 0
+                  ? <tr><td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">Tidak ada data customer.</td></tr>
+                  : topCustomers.map((c, i) => (
+                    <tr key={c.customerId} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-2.5 text-center">
+                        {i < 3
+                          ? <span className="text-base">{["🥇","🥈","🥉"][i]}</span>
+                          : <span className="text-xs text-muted-foreground">{i + 1}</span>
+                        }
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <p className="font-medium text-sm">{c.customer?.name ?? "—"}</p>
+                        {c.customer?.customerNo && <p className="text-xs text-muted-foreground">{c.customer.customerNo}</p>}
+                        {c.customer?.phone && <p className="text-xs text-muted-foreground">{c.customer.phone}</p>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-medium tabular-nums">{c.visitCount}</td>
+                      <td className="px-4 py-2.5 text-right font-bold tabular-nums text-green-700">{formatCurrency(c.totalSpent)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">{formatCurrency(c.avgSpentPerVisit)}</td>
+                      <td className="px-4 py-2.5 text-right text-xs text-muted-foreground">
+                        {new Date(c.lastVisit).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "2-digit" })}
+                      </td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ── BPJS tab ──────────────────────────────────────────────────────────────────
 
 function BpjsTab({ branchId }: { branchId?: string }) {
@@ -815,7 +1319,7 @@ function BpjsTab({ branchId }: { branchId?: string }) {
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const [yearMonth, setYearMonth] = useState(thisMonth);
 
-  const { data, isLoading } = useBpjsReport({ branchId, yearMonth });
+  const { data, isLoading, isError, error, refetch } = useBpjsReport({ branchId, yearMonth });
 
   if (!branchId) {
     return (
@@ -844,7 +1348,9 @@ function BpjsTab({ branchId }: { branchId?: string }) {
         </p>
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <ErrorBanner error={error} onRetry={() => refetch()} />
+      ) : isLoading ? (
         <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
       ) : rows.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">Tidak ada data payroll untuk bulan ini.</p>

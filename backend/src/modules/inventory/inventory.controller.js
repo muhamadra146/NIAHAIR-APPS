@@ -11,6 +11,7 @@ const { syncInventoryFromAccurate } = require("./inventory.sync.service");
 const {
   closePeriod,
   reopenPeriod,
+  listPeriods,
 } = require("./inventory.period.service");
 
 const getMovementsController = async (req, res, next) => {
@@ -91,6 +92,15 @@ const reopenPeriodController = async (req, res, next) => {
   }
 };
 
+const getPeriodsController = async (req, res, next) => {
+  try {
+    const result = await listPeriods();
+    return success(res, result, "Inventory periods fetched");
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getMovementsController,
   getInventoriesController,
@@ -100,4 +110,5 @@ module.exports = {
   createBatchAdjustmentController,
   closePeriodController,
   reopenPeriodController,
+  getPeriodsController,
 };

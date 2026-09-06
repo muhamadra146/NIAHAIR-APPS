@@ -73,4 +73,13 @@ const reopenPeriod = async (year, month) => {
   });
 };
 
-module.exports = { findPeriod, upsertOpenPeriod, closePeriod, reopenPeriod };
+/**
+ * List all periods stored in the DB, ordered newest first.
+ */
+const listPeriods = ({ take = 24 } = {}) =>
+  prisma.inventoryPeriod.findMany({
+    orderBy: [{ year: "desc" }, { month: "desc" }],
+    take,
+  });
+
+module.exports = { findPeriod, upsertOpenPeriod, closePeriod, reopenPeriod, listPeriods };
