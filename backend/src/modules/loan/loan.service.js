@@ -2,6 +2,7 @@ const { StatusCodes }    = require("http-status-codes");
 const AppError           = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo               = require("./loan.repository");
+const { createSyncJob }  = require("../syncQueue/syncQueue.service");
 
 const getAll = async ({ employeeId, branchId, status, page, limit } = {}) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -36,7 +37,16 @@ const createLoan = async (body) => {
     endDate:          body.endDate ? new Date(body.endDate) : null,
     notes:            body.notes ?? null,
   };
-  return repo.create(data);
+  const loan = await repo.create(data);
+
+  // Enqueue Accurate sync — loan is created with ACTIVE status by default
+  await createSyncJob({
+    entityType: "LOAN",
+    entityId:   loan.id,
+    direction:  "APP_TO_ACCURATE",
+  });
+
+  return loan;
 };
 
 const updateLoan = async (id, body) => {

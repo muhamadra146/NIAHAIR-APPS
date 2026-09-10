@@ -24,7 +24,7 @@ const buildWhere = ({ supplierId, status, synced, startDate, endDate, search }) 
   if (startDate || endDate) {
     where.invoiceDate = {};
     if (startDate) where.invoiceDate.gte = new Date(startDate);
-    if (endDate)   where.invoiceDate.lte = new Date(endDate);
+    if (endDate)   where.invoiceDate.lte = new Date(endDate + "T23:59:59.999Z");
   }
   if (search) {
     where.OR = [

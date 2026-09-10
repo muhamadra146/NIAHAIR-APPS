@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, ChevronRight, Trash2 } from "lucide-react";
+import { Plus, Search, ChevronRight, Trash2, CheckCircle2, Clock } from "lucide-react";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Pagination } from "@/components/common/Pagination";
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -113,6 +113,7 @@ export function LoanListPage() {
                         <th className="px-4 py-3 text-right font-medium text-muted-foreground">Cicilan/Bln</th>
                         <th className="px-4 py-3 text-left font-medium text-muted-foreground">Mulai</th>
                         <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
+                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Accurate</th>
                         <th className="px-4 py-3"></th>
                       </tr>
                     </thead>
@@ -135,6 +136,9 @@ export function LoanListPage() {
                             <Badge variant="outline" className={`text-xs ${STATUS_COLOR[loan.status] ?? ""}`}>
                               {STATUS_LABEL[loan.status] ?? loan.status}
                             </Badge>
+                          </td>
+                          <td className="px-4 py-3">
+                            <AccurateSyncBadge synced={!!loan.accurateLoanId} number={loan.accurateLoanNumber} />
                           </td>
                           <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
@@ -245,6 +249,7 @@ function LoanCard({ loan, onClick, onDelete }: { loan: Loan; onClick: () => void
           <Badge variant="outline" className={`text-xs ${STATUS_COLOR[loan.status] ?? ""}`}>
             {STATUS_LABEL[loan.status] ?? loan.status}
           </Badge>
+          <AccurateSyncBadge synced={!!loan.accurateLoanId} number={loan.accurateLoanNumber} />
           {onDelete && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -264,6 +269,31 @@ function LoanCard({ loan, onClick, onDelete }: { loan: Loan; onClick: () => void
       </div>
       <p className="text-xs text-muted-foreground mt-1">{pct}% terlunasi · Cicilan {formatCurrency(loan.monthlyDeduction)}/bln</p>
     </div>
+  );
+}
+
+// ── Accurate Sync Status Badge ────────────────────────────────────────
+
+function AccurateSyncBadge({ synced, number }: { synced: boolean; number: string | null | undefined }) {
+  if (synced) {
+    return (
+      <span
+        title={number ? `Accurate: ${number}` : "Sudah tersinkronisasi ke Accurate"}
+        className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800"
+      >
+        <CheckCircle2 className="h-2.5 w-2.5" />
+        {number ?? "Synced"}
+      </span>
+    );
+  }
+  return (
+    <span
+      title="Menunggu sinkronisasi ke Accurate"
+      className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800"
+    >
+      <Clock className="h-2.5 w-2.5" />
+      Pending
+    </span>
   );
 }
 

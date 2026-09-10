@@ -52,6 +52,8 @@ import { MembershipPage }            from "@/features/membership/pages/Membershi
 import { ProductionListPage }        from "@/features/production/pages/ProductionListPage";
 import { ProductionDetailPage }      from "@/features/production/pages/ProductionDetailPage";
 import { ProductionFormPage }        from "@/features/production/pages/ProductionFormPage";
+import { StockTransferPage }         from "@/features/inventory/pages/StockTransferPage";
+import { StockTransferDetailPage }  from "@/features/inventory/pages/StockTransferDetailPage";
 import { PurchaseReturnListPage }    from "@/features/purchaseReturn/pages/PurchaseReturnListPage";
 import { PurchaseReturnDetailPage }  from "@/features/purchaseReturn/pages/PurchaseReturnDetailPage";
 import { PurchaseReturnFormPage }    from "@/features/purchaseReturn/pages/PurchaseReturnFormPage";
@@ -91,6 +93,8 @@ export const router = createBrowserRouter([
           { path: "/my-payslip",  element: <MyPayslipPage /> },
           { path: "/my-kasbon",      element: <MyLoanPage /> },
           { path: "/my-kasbon/:id",  element: <MyLoanDetailPage /> },
+          // Koreksi Kehadiran: self-service untuk semua role (sidebar: ALL_ROLES)
+          { path: "/attendance-corrections", element: <CorrectionPage /> },
 
           // ── STAFF_OPERASIONAL + CASHIER (self-service komisi) ─────
           {
@@ -145,7 +149,6 @@ export const router = createBrowserRouter([
               { path: "/employees/:id", element: <EmployeeDetailPage /> },
               { path: "/schedule",      element: <SchedulePage /> },
               { path: "/attendance",    element: <TeamPage /> },
-              { path: "/attendance-corrections", element: <CorrectionPage /> },
             ],
           },
 
@@ -163,21 +166,23 @@ export const router = createBrowserRouter([
             ],
           },
 
-          // ── Data: Stock Opname — ADMIN only
+          // ── Data: Stock Opname — MANAGEMENT + INVENTORY + FINANCE
           {
-            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER"]} />,
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","INVENTORY","FINANCE"]} />,
             children: [
               { path: "/stock-opname", element: <StockOpnamePage /> },
             ],
           },
 
-          // ── Production — MANAGEMENT + INVENTORY
+          // ── Production & Transfer Stok — MANAGEMENT + INVENTORY
           {
             element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","INVENTORY"]} />,
             children: [
-              { path: "/production",      element: <ProductionListPage /> },
-              { path: "/production/new",  element: <ProductionFormPage /> },
-              { path: "/production/:id",  element: <ProductionDetailPage /> },
+              { path: "/production",            element: <ProductionListPage /> },
+              { path: "/production/new",        element: <ProductionFormPage /> },
+              { path: "/production/:id",        element: <ProductionDetailPage /> },
+              { path: "/stock-transfers",       element: <StockTransferPage /> },
+              { path: "/stock-transfers/:id",   element: <StockTransferDetailPage /> },
             ],
           },
 

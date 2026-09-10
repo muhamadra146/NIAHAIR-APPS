@@ -57,6 +57,31 @@ function StatusBadge({ status }: { status: PayrollStatus }) {
   );
 }
 
+function AccurateJournalBadge({
+  synced, number,
+}: { synced: boolean; number?: string | null }) {
+  if (synced) {
+    return (
+      <span
+        title={number ? `Accurate: ${number}` : "Jurnal Umum sudah tersinkronisasi ke Accurate"}
+        className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800"
+      >
+        <CheckCircle2 className="h-2.5 w-2.5" />
+        {number ?? "Jurnal"}
+      </span>
+    );
+  }
+  return (
+    <span
+      title="Menunggu sinkronisasi Jurnal Umum ke Accurate"
+      className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800"
+    >
+      <Clock className="h-2.5 w-2.5" />
+      Pending
+    </span>
+  );
+}
+
 const CAN_DELETE: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
 
 // filterInputCls imported from @/lib/ui-utils
@@ -473,6 +498,47 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
         </Card>
       )}
 
+      {/* Accurate Online Sync — Jurnal Umum (PAID only) */}
+      {payroll.status === "PAID" && (
+        <Card className="rounded-2xl border-slate-100/80 bg-white shadow-sm">
+          <CardContent className="p-4">
+            <h4 className="text-sm font-semibold mb-3 text-slate-600">Sinkronisasi Accurate Online</h4>
+            {payroll.accurateJournalId ? (
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+                <div className="space-y-2 flex-1">
+                  <p className="text-sm font-medium text-green-700">Tersinkronisasi sebagai Jurnal Umum</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    {payroll.accurateJournalNumber && (
+                      <div>
+                        <p className="text-xs text-slate-400 mb-0.5">No. Jurnal Accurate</p>
+                        <p className="text-sm font-medium font-mono">{payroll.accurateJournalNumber}</p>
+                      </div>
+                    )}
+                    {payroll.lastSyncAt && (
+                      <div>
+                        <p className="text-xs text-slate-400 mb-0.5">Terakhir Sync</p>
+                        <p className="text-sm font-medium">{fmtDate(payroll.lastSyncAt)}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <Clock className="h-5 w-5 text-amber-500 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-600">Menunggu sinkronisasi</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Jurnal penggajian akan otomatis dikirim ke Accurate Online melalui antrian sync.
+                  </p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Delete confirm dialog */}
       <Dialog open={deleteOpen} onOpenChange={(v) => { if (!v) setDeleteOpen(false); }}>
         <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-xl sm:rounded-lg">
@@ -623,6 +689,12 @@ export function PayrollPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-sm text-slate-800 truncate">{p.employee.name}</span>
                       <StatusBadge status={p.status} />
+                      {p.status === "PAID" && (
+                        <AccurateJournalBadge
+                          synced={!!p.accurateJournalId}
+                          number={p.accurateJournalNumber}
+                        />
+                      )}
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">
                       {p.employee.role.name} · {p.branch.name} · {fmtPeriod(p.periodStart)}

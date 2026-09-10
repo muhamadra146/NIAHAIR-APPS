@@ -2,7 +2,8 @@ export type SyncStatus    = "PENDING" | "PROCESSING" | "SUCCESS" | "FAILED";
 export type SyncDirection = "APP_TO_ACCURATE" | "ACCURATE_TO_APP";
 export type SyncEntityType =
   | "CUSTOMER" | "WAREHOUSE" | "ITEM" | "UNIT" | "ITEM_UNIT"
-  | "ITEM_PRICE" | "INVENTORY" | "DEPOSIT" | "INVOICE" | "PAYMENT";
+  | "ITEM_PRICE" | "INVENTORY" | "DEPOSIT" | "INVOICE" | "PAYMENT"
+  | "LOAN" | "PAYROLL";
 
 export interface SyncQueue {
   id:           string;

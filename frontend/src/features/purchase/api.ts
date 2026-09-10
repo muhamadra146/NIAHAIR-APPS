@@ -12,7 +12,7 @@ interface PurchaseListData {
 
 export async function fetchSuppliers(): Promise<Supplier[]> {
   const { data } = await api.get<ApiResponse<{ data: Supplier[]; meta: unknown }>>("/suppliers", {
-    params: { limit: 100 },
+    params: { limit: 500 },
   });
   return data.data.data;
 }

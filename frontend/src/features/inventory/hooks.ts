@@ -2,13 +2,23 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/lib/toast";
 import {
   fetchInventories, fetchStockMovements,
-  fetchStockTransfers, createStockTransfer, updateTransferStatus,
+  fetchStockTransfers, fetchStockTransfer, createStockTransfer, updateTransferStatus,
   fetchItemCategories, createStockAdjustment, fetchGlAccounts,
   createBatchStockAdjustment, syncGlAccounts,
-  deleteStockTransfer, undoTransferReceive,
+  deleteStockTransfer, undoTransferReceive, syncStockTransferToAccurate,
   fetchInventoryPeriods, closePeriod, reopenPeriod,
+  fetchStockOpnames, fetchStockOpname, createStockOpname, updateOpnameItems, postStockOpname, cancelStockOpname,
+  createOpeningBalance,
+  fetchLowStock, updateMinStock,
+  fetchValuation,
+  fetchItems,
 } from "./api";
-import type { InventoryListParams, MovementListParams, TransferListParams, CreateTransferInput, CreateStockAdjustmentInput, CreateBatchStockAdjustmentInput } from "./types";
+import type {
+  InventoryListParams, MovementListParams, TransferListParams, CreateTransferInput,
+  CreateStockAdjustmentInput, CreateBatchStockAdjustmentInput,
+  StockOpnameListParams, CreateOpnameInput, UpdateOpnameItemInput,
+  CreateOpeningBalanceInput,
+} from "./types";
 
 export function useInventories(params: InventoryListParams = {}) {
   return useQuery({
@@ -45,6 +55,15 @@ export function useStockTransfers(params: TransferListParams = {}) {
   });
 }
 
+export function useStockTransfer(id: string | null | undefined) {
+  return useQuery({
+    queryKey:  ["stock-transfer", id],
+    queryFn:   () => fetchStockTransfer(id!),
+    enabled:   !!id,
+    staleTime: 0,
+  });
+}
+
 export function useCreateStockTransfer() {
   const qc = useQueryClient();
   return useMutation({
@@ -64,8 +83,9 @@ export function useUpdateTransferStatus() {
       branchId?: string | null;
       receivedItems?: { itemId: string; receivedQty: number }[];
     }) => updateTransferStatus(id, status, branchId, receivedItems),
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["stock-transfers"] });
+      qc.invalidateQueries({ queryKey: ["stock-transfer", data.id] });
       qc.invalidateQueries({ queryKey: ["inventories"] });
       qc.invalidateQueries({ queryKey: ["stock-movements"] });
     },
@@ -132,10 +152,22 @@ export function useUndoTransferReceive() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => undoTransferReceive(id),
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["stock-transfers"] });
+      qc.invalidateQueries({ queryKey: ["stock-transfer", data.id] });
       qc.invalidateQueries({ queryKey: ["inventories"] });
       qc.invalidateQueries({ queryKey: ["stock-movements"] });
+    },
+  });
+}
+
+export function useSyncStockTransferToAccurate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => syncStockTransferToAccurate(id),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["stock-transfers"] });
+      qc.invalidateQueries({ queryKey: ["stock-transfer", data.id] });
     },
   });
 }
@@ -194,5 +226,139 @@ export function useReopenPeriod() {
       toast.success(`Periode ${String(month).padStart(2, "0")}/${year} berhasil dibuka kembali`);
     },
     onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+// ── GAP 1: Stock Opname ───────────────────────────────────────────────────────
+
+export function useStockOpnames(params: StockOpnameListParams = {}) {
+  return useQuery({
+    queryKey:       ["stock-opnames", params],
+    queryFn:        () => fetchStockOpnames(params),
+    staleTime:      0,
+    refetchOnMount: true,
+  });
+}
+
+export function useStockOpname(id: string | null) {
+  return useQuery({
+    queryKey:  ["stock-opname", id],
+    queryFn:   () => fetchStockOpname(id!),
+    enabled:   !!id,
+    staleTime: 0,
+  });
+}
+
+export function useCreateStockOpname() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateOpnameInput) => createStockOpname(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["stock-opnames"] });
+      toast.success("Opname berhasil dibuat");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useUpdateOpnameItems(opnameId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (items: UpdateOpnameItemInput[]) => updateOpnameItems(opnameId, items),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["stock-opname", opnameId] });
+      qc.invalidateQueries({ queryKey: ["stock-opnames"] });
+      toast.success("Item opname berhasil disimpan");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function usePostStockOpname() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (opnameId: string) => postStockOpname(opnameId),
+    onSuccess: (opname) => {
+      qc.invalidateQueries({ queryKey: ["stock-opnames"] });
+      qc.invalidateQueries({ queryKey: ["stock-opname", opname.id] });
+      qc.invalidateQueries({ queryKey: ["inventories"] });
+      qc.invalidateQueries({ queryKey: ["stock-movements"] });
+      toast.success(`Opname ${opname.opnameNo} berhasil diposting`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useCancelStockOpname() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (opnameId: string) => cancelStockOpname(opnameId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["stock-opnames"] });
+      toast.success("Opname berhasil dibatalkan");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+// ── GAP 2: Opening Balance ────────────────────────────────────────────────────
+
+export function useCreateOpeningBalance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateOpeningBalanceInput) => createOpeningBalance(input),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ["inventories"] });
+      qc.invalidateQueries({ queryKey: ["stock-movements"] });
+      toast.success(`Saldo awal dibuat: ${result.created} item (${result.skipped} dilewati karena sudah ada)`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+// ── GAP 3: Low Stock & Min Stock ─────────────────────────────────────────────
+
+export function useLowStock(params?: { warehouseId?: string; branchId?: string }) {
+  return useQuery({
+    queryKey:       ["low-stock", params],
+    queryFn:        () => fetchLowStock(params),
+    staleTime:      60 * 1000,
+    refetchOnMount: true,
+  });
+}
+
+export function useUpdateMinStock() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ inventoryId, minStock }: { inventoryId: string; minStock: number | null }) =>
+      updateMinStock(inventoryId, minStock),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventories"] });
+      qc.invalidateQueries({ queryKey: ["low-stock"] });
+      toast.success("Min stok berhasil disimpan");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+// ── GAP 6: Inventory Valuation ────────────────────────────────────────────────
+
+export function useValuation(params?: { warehouseId?: string; branchId?: string }) {
+  return useQuery({
+    queryKey:       ["inventory-valuation", params],
+    queryFn:        () => fetchValuation(params),
+    staleTime:      5 * 60 * 1000,
+    refetchOnMount: true,
+  });
+}
+
+// ── Item master search ────────────────────────────────────────────────────────
+
+export function useItems(params: { search?: string; itemType?: string; limit?: number } = {}) {
+  return useQuery({
+    queryKey:  ["items", params],
+    queryFn:   () => fetchItems(params),
+    enabled:   (params.search?.length ?? 0) >= 1,
+    staleTime: 30 * 1000,
   });
 }

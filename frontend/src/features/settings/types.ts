@@ -389,3 +389,30 @@ export interface CustomerMembershipRecord {
   status:      "ACTIVE" | "EXPIRED" | "CANCELLED";
   membership:  Membership;
 }
+
+// ── Payroll GL Account Mapping ─────────────────────────────────────────
+export type PayrollGlCategory =
+  | "gaji"
+  | "tunjangan_makan"
+  | "tunjangan_transport"
+  | "tunjangan_lain"
+  | "bpjs_perusahaan"
+  | "hutang_bpjs"
+  | "kasbon"
+  | "kas_bank";
+
+export interface PayrollGlAccount {
+  id:          string;
+  category:    PayrollGlCategory;
+  label:       string;
+  type:        "DEBIT" | "CREDIT";
+  glAccountId: string | null;
+  glAccount:   { id: string; number: string | null; name: string; category: string | null } | null;
+}
+
+export interface SavePayrollGlAccountsInput {
+  mappings: Array<{
+    category:    PayrollGlCategory;
+    glAccountId: string | null;
+  }>;
+}

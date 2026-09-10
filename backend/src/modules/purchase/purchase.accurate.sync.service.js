@@ -13,7 +13,8 @@ const pushPurchaseInvoiceToAccurate = async (purchaseInvoiceId) => {
   const invoice = await prisma.purchaseInvoice.findUnique({
     where:   { id: purchaseInvoiceId },
     include: {
-      supplier: { select: { id: true, name: true, accurateVendorId: true } },
+      supplier:  { select: { id: true, name: true, accurateVendorId: true } },
+      warehouse: { select: { id: true, name: true, branchId: true } },
       items: {
         include: {
           item: {
@@ -30,6 +31,11 @@ const pushPurchaseInvoiceToAccurate = async (purchaseInvoiceId) => {
   });
 
   if (!invoice) throw new AppError("Purchase invoice not found", StatusCodes.NOT_FOUND);
+
+  // Jangan push invoice yang sudah dibatalkan — sync job mungkin dibuat sebelum cancel
+  if (invoice.status === "CANCELLED") {
+    return { skipped: true, reason: "Invoice is cancelled" };
+  }
 
   // Idempotency
   if (invoice.accuratePurchaseInvoiceId) {
@@ -60,8 +66,17 @@ const pushPurchaseInvoiceToAccurate = async (purchaseInvoiceId) => {
     );
   }
 
-  // Look up Accurate branch ID for this purchase invoice
-  const accurateBranchId = await getAccurateBranchId(invoice.branchId);
+  // Cari Accurate branch ID dari warehouse — graceful jika tidak ada
+  const warehouseBranchId = invoice.warehouse?.branchId ?? null;
+  let accurateBranchId = null;
+  if (warehouseBranchId) {
+    try {
+      accurateBranchId = await getAccurateBranchId(warehouseBranchId);
+    } catch {
+      // Branch belum di-mapping ke Accurate — lanjutkan tanpa branchId
+      accurateBranchId = null;
+    }
+  }
 
   // Try with supplierInvoiceNo first; if Accurate rejects as duplicate, retry with internal invoiceNo
   const primaryBillNo = invoice.supplierInvoiceNo || invoice.invoiceNo;
@@ -103,11 +118,12 @@ const pushPurchaseInvoiceToAccurate = async (purchaseInvoiceId) => {
     },
   });
 
+  // details[i] maps 1:1 to syncableItems[i] (filtered list, not full invoice.items)
   const details = response.r.detailItem ?? [];
   for (let i = 0; i < details.length; i++) {
-    if (!details[i]?.id || !invoice.items[i]) continue;
+    if (!details[i]?.id || !syncableItems[i]) continue;
     await prisma.purchaseInvoiceItem.update({
-      where: { id: invoice.items[i].id },
+      where: { id: syncableItems[i].id },
       data:  { accurateDetailId: details[i].id },
     }).catch(() => {});
   }

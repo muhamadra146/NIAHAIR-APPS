@@ -248,11 +248,10 @@ export function ConsultationListPage() {
   });
 
   // ── Tab "Semua Catatan" ───────────────────────────────────────────────────
-  const { data: listData, isLoading: loadingList } = useConsultationNotes({
-    page: listPage, limit: 20,
-    branchId: isManager ? undefined : (branchId || undefined),
-    enabled: tab === "list",
-  } as any);
+  const { data: listData, isLoading: loadingList } = useConsultationNotes(
+    { page: listPage, limit: 20, branchId: isManager ? undefined : (branchId || undefined) },
+    { enabled: tab === "list" },
+  );
 
   const notes      = listData?.data ?? [];
   const meta       = listData?.meta;

@@ -41,6 +41,7 @@ export function CreatePurchaseInvoiceDialog({ open, onClose }: Props) {
   const createMutation = useCreatePurchaseInvoice();
 
   const [supplierId,        setSupplier]   = useState("");
+  const [supplierDiscount,  setSupplierDiscount] = useState<number>(0); // diskon default dari supplier
   const [warehouseId,       setWarehouse]  = useState("");
   const [invoiceDate,       setDate]       = useState(new Date().toISOString().slice(0, 10));
   const [supplierInvoiceNo, setSupplierNo] = useState("");
@@ -48,7 +49,7 @@ export function CreatePurchaseInvoiceDialog({ open, onClose }: Props) {
   const [notes,             setNotes]      = useState("");
   const [taxable,           setTaxable]    = useState(false);
   const [inclusiveTax,      setInclusive]  = useState(false);
-  const [taxInvoiceDate,    setTaxDate]    = useState(new Date().toISOString().slice(0, 10));
+  const [taxInvoiceDate,    setTaxDate]    = useState(""); // U2: default kosong, user pilih sendiri
   const [taxInvoiceNo,      setTaxNo]      = useState("");
   const [search,            setSearch]     = useState("");
   const [dSearch,           setDSearch]    = useState("");
@@ -56,10 +57,22 @@ export function CreatePurchaseInvoiceDialog({ open, onClose }: Props) {
   const [lines,             setLines]      = useState<LineItem[]>([]);
 
   function resetForm() {
-    setSupplier(""); setWarehouse(""); setDate(new Date().toISOString().slice(0, 10));
+    setSupplier(""); setSupplierDiscount(0); setWarehouse("");
+    setDate(new Date().toISOString().slice(0, 10));
     setSupplierNo(""); setPayTerms(""); setNotes(""); setLines([]);
     setTaxable(false); setInclusive(false);
-    setTaxDate(new Date().toISOString().slice(0, 10)); setTaxNo("");
+    setTaxDate(""); setTaxNo(""); // U2: reset ke kosong
+  }
+
+  // Auto-fill diskon default supplier ke semua line saat supplier berubah
+  function handleSupplierChange(id: string) {
+    setSupplier(id);
+    const supplier = suppliers.find((s) => s.id === id);
+    const disc = supplier?.purchaseDiscount != null ? Number(supplier.purchaseDiscount) : 0;
+    setSupplierDiscount(disc);
+    if (disc > 0 && lines.length > 0) {
+      setLines((prev) => prev.map((l) => ({ ...l, discount: disc })));
+    }
   }
 
   const debounce = useCallback((val: string) => {
@@ -102,7 +115,8 @@ export function CreatePurchaseInvoiceDialog({ open, onClose }: Props) {
     }
     setLines((prev) => [...prev, {
       _key: `${item.id}-${Date.now()}`,
-      itemId: item.id, unitId: defUnit.unit.id, qty: 1, price: resolvedPrice, discount: 0,
+      itemId: item.id, unitId: defUnit.unit.id, qty: 1, price: resolvedPrice,
+      discount: supplierDiscount, // auto-fill diskon default supplier
       itemName: item.name, itemCode: item.itemCode, unitName: defUnit.unit.name,
       availableUnits: item.itemUnits.map((u) => ({ unitId: u.unit.id, unitName: u.unit.name })),
       itemPrices: prices,
@@ -174,11 +188,12 @@ export function CreatePurchaseInvoiceDialog({ open, onClose }: Props) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-sm">Pemasok <span className="text-destructive">*</span></Label>
-              <select value={supplierId} onChange={(e) => setSupplier(e.target.value)}
+              <select value={supplierId} onChange={(e) => handleSupplierChange(e.target.value)}
                 className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
                 <option value="">— Pilih pemasok —</option>
-                {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.code ? `[${s.code}] ` : ""}{s.name}</option>
+                {/* B5 fix: hanya tampilkan supplier aktif di dropdown */}
+                {suppliers.filter((s) => s.isActive !== false).map((s) => (
+                  <option key={s.id} value={s.id}>{s.code ? `[${s.code}] ` : ""}{s.name}{s.purchaseDiscount && Number(s.purchaseDiscount) > 0 ? ` (${Number(s.purchaseDiscount)}%)` : ""}</option>
                 ))}
               </select>
             </div>
@@ -219,9 +234,16 @@ export function CreatePurchaseInvoiceDialog({ open, onClose }: Props) {
               </select>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 sm:col-span-2">
               <Label className="text-sm">Catatan</Label>
-              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Keterangan..." className="h-9" />
+              {/* U3: textarea agar bisa multi-baris */}
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Keterangan tambahan..."
+                rows={2}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
             </div>
           </div>
 

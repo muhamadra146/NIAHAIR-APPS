@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ChevronLeft, Plus } from "lucide-react";
+import { ChevronLeft, Plus, CheckCircle2, Clock } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -128,6 +128,47 @@ export function LoanDetailPage() {
             {loan.notes && (
               <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
                 {loan.notes}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Accurate Online Sync */}
+        <Card>
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="text-sm font-semibold text-muted-foreground">Sinkronisasi Accurate Online</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-4">
+            {loan.accurateLoanId ? (
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+                <div className="space-y-2 flex-1">
+                  <p className="text-sm font-medium text-green-700">Tersinkronisasi ke Accurate Online</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    {loan.accurateLoanNumber && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-0.5">No. Pinjaman Accurate</p>
+                        <p className="text-sm font-medium font-mono">{loan.accurateLoanNumber}</p>
+                      </div>
+                    )}
+                    {loan.lastSyncAt && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-0.5">Terakhir Sync</p>
+                        <p className="text-sm font-medium">{formatDate(loan.lastSyncAt)}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <Clock className="h-5 w-5 text-amber-500 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-600">Menunggu sinkronisasi</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Kasbon akan otomatis dikirim ke Accurate Online melalui antrian sync.
+                  </p>
+                </div>
               </div>
             )}
           </CardContent>

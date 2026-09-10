@@ -11,15 +11,32 @@ const createFromAccurate = (data) =>
 const updateByAccurateId = (accurateVendorId, data) =>
   prisma.supplier.update({ where: { accurateVendorId }, data: { ...data, lastSyncAt: new Date() } });
 
-const findAllActive = ({ skip = 0, take = 10 } = {}) =>
+// B1 fix: field select lengkap (email, phone, address, isActive, lastSyncAt)
+// B2 fix: tidak filter isActive agar SupplierPage bisa lihat semua (aktif & non-aktif)
+const findAll = ({ skip = 0, take = 200, where = {} } = {}) =>
   prisma.supplier.findMany({
-    where:   { isActive: true },
-    select:  { id: true, name: true, code: true, paymentTerms: true, accurateVendorId: true },
+    where,
+    select: {
+      id:               true,
+      name:             true,
+      code:             true,
+      email:            true,
+      phone:            true,
+      businessPhone:    true,
+      whatsapp:         true,
+      website:          true,
+      address:          true,
+      paymentTerms:     true,
+      purchaseDiscount: true,
+      accurateVendorId: true,
+      isActive:         true,
+      lastSyncAt:       true,
+    },
     orderBy: { name: "asc" },
     skip,
     take,
   });
 
-const countActive = () => prisma.supplier.count({ where: { isActive: true } });
+const count = (where = {}) => prisma.supplier.count({ where });
 
-module.exports = { findByAccurateId, createFromAccurate, updateByAccurateId, findAllActive, countActive };
+module.exports = { findByAccurateId, createFromAccurate, updateByAccurateId, findAll, count };

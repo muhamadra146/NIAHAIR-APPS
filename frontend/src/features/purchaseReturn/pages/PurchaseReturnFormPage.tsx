@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
-import { ArrowLeft, Plus, Trash2, Loader2 } from "lucide-react";
+import { ArrowLeft, Trash2, Loader2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ interface FormItem {
   unitName: string;
   qty:      number;
   price:    number;
+  discount: number;
   subtotal: number;
   notes:    string;
 }
@@ -83,6 +84,7 @@ export function PurchaseReturnFormPage() {
           unitName: item.unit.name,
           qty:      Number(item.qty),
           price:    Number(item.price),
+          discount: Number(item.discount ?? 0),
           subtotal: Number(item.qty) * Number(item.price),
           notes:    "",
         })),
@@ -101,17 +103,22 @@ export function PurchaseReturnFormPage() {
       unitId:   item.unitId,
       qty:      Number(item.qty),
       price:    Number(item.price),
+      discount: Number(item.discount ?? 0) || undefined,
       subtotal: Number(item.qty) * Number(item.price),
       notes:    item.notes || undefined,
     }));
 
-    const ret = await createMutation.mutateAsync({
-      purchaseInvoiceId: values.purchaseInvoiceId,
-      returnDate:        values.returnDate,
-      notes:             values.notes || undefined,
-      items,
-    });
-    navigate(`/purchase-returns/${ret.id}`);
+    try {
+      const ret = await createMutation.mutateAsync({
+        purchaseInvoiceId: values.purchaseInvoiceId,
+        returnDate:        values.returnDate,
+        notes:             values.notes || undefined,
+        items,
+      });
+      navigate(`/purchase-returns/${ret.id}`);
+    } catch {
+      // error sudah ditangani oleh onError di hook (toast)
+    }
   };
 
   return (
@@ -193,25 +200,7 @@ export function PurchaseReturnFormPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">3. Item yang Diretur</CardTitle>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => append({
-                    itemId:   "",
-                    unitId:   "",
-                    itemName: "Item manual",
-                    unitName: "-",
-                    qty:      1,
-                    price:    0,
-                    subtotal: 0,
-                    notes:    "",
-                  })}
-                >
-                  <Plus className="h-4 w-4" />
-                  Tambah Baris
-                </Button>
+                <p className="text-xs text-muted-foreground">Edit qty/harga sesuai kebutuhan retur</p>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -223,6 +212,7 @@ export function PurchaseReturnFormPage() {
                       <th className="text-left px-3 py-2 font-medium">Satuan</th>
                       <th className="text-right px-3 py-2 font-medium w-24">Qty</th>
                       <th className="text-right px-3 py-2 font-medium w-32">Harga</th>
+                      <th className="text-right px-3 py-2 font-medium w-24">Diskon %</th>
                       <th className="text-right px-3 py-2 font-medium w-32">Subtotal</th>
                       <th className="px-3 py-2 w-8"></th>
                     </tr>
@@ -260,6 +250,16 @@ export function PurchaseReturnFormPage() {
                               className="text-right h-8"
                             />
                           </td>
+                          <td className="px-3 py-2">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              {...register(`items.${idx}.discount`, { valueAsNumber: true, min: 0, max: 100 })}
+                              className="text-right h-8 w-20 ml-auto"
+                            />
+                          </td>
                           <td className="px-3 py-2 text-right font-mono">{fmt(sub)}</td>
                           <td className="px-3 py-2">
                             <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => remove(idx)}>
@@ -272,7 +272,7 @@ export function PurchaseReturnFormPage() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t bg-muted/20">
-                      <td colSpan={4} className="px-3 py-3 text-right font-semibold">Total Retur</td>
+                      <td colSpan={5} className="px-3 py-3 text-right font-semibold">Total Retur</td>
                       <td className="px-3 py-3 text-right font-mono font-bold text-primary">{fmt(grandTotal)}</td>
                       <td></td>
                     </tr>

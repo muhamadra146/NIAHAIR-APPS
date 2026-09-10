@@ -34,7 +34,8 @@ import { WarehouseForm }      from "../components/warehouse/WarehouseForm";
 import type { WarehouseFormValues } from "../components/warehouse/WarehouseForm";
 import { ShiftTable }         from "../components/shift/ShiftTable";
 import { ShiftForm }          from "../components/shift/ShiftForm";
-import { AccuratePanel }      from "../accurate/AccuratePanel";
+import { AccuratePanel }           from "../accurate/AccuratePanel";
+import { PayrollGlAccountTab }     from "../components/payrollGlAccount/PayrollGlAccountTab";
 import { LeaveSettingsTab }      from "../components/leave/LeaveSettingsTab";
 import { MembershipTab }         from "../components/membership/MembershipTab";
 import { AttendanceSettingsTab } from "../components/attendance/AttendanceSettingsTab";
@@ -1051,6 +1052,7 @@ const TABS = [
   { value: "memberships",     label: "Membership" },
   { value: "holidays",        label: "Hari Libur" },
   { value: "attendance",      label: "Absensi" },
+  { value: "payroll-gl",      label: "Akun Gaji" },
   { value: "accurate",        label: "Accurate" },
 ] as const;
 
@@ -1099,6 +1101,7 @@ export function SettingsPage() {
             <TabsContent value="memberships"     className="mt-0 p-6"><MembershipTab /></TabsContent>
             <TabsContent value="holidays"        className="mt-0 p-6"><HolidayTab /></TabsContent>
             <TabsContent value="attendance"      className="mt-0 p-6"><AttendanceSettingsTab /></TabsContent>
+            <TabsContent value="payroll-gl"      className="mt-0 p-6"><PayrollGlAccountTab /></TabsContent>
             <TabsContent value="accurate"        className="mt-0 p-6"><AccuratePanel /></TabsContent>
           </div>
         </div>

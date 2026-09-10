@@ -15,10 +15,14 @@ import type {
   UpdateConsultationNoteInput,
 } from "./types";
 
-export function useConsultationNotes(params: ConsultationNoteListParams = {}) {
+export function useConsultationNotes(
+  params: ConsultationNoteListParams = {},
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: ["consultation-notes", params],
     queryFn:  () => fetchConsultationNotes(params),
+    enabled:  options?.enabled ?? true,
   });
 }
 

@@ -1,6 +1,6 @@
 'use strict';
 
-const { object, string, number, array, pipe, integer, minLength, minValue, maxValue, optional, minSize } = require('valibot');
+const { object, string, number, array, pipe, integer, minLength, minValue, maxValue, optional, minSize, nullable } = require('valibot');
 
 const closePeriodSchema = object({
   year:  pipe(number(), integer(), minValue(2020)),
@@ -32,4 +32,30 @@ const batchStockAdjustmentSchema = object({
   ),
 });
 
-module.exports = { closePeriodSchema, reopenPeriodSchema, stockAdjustmentSchema, batchStockAdjustmentSchema };
+// GAP 2 — Opening Balance
+const openingBalanceSchema = object({
+  warehouseId: pipe(string(), minLength(1, "warehouseId wajib diisi")),
+  notes:       optional(nullable(string())),
+  items: pipe(
+    array(object({
+      itemId:   pipe(string(), minLength(1, "itemId wajib diisi")),
+      qty:      pipe(number(), minValue(0, "Qty tidak boleh negatif")),
+      unitCost: optional(nullable(pipe(number(), minValue(0)))),
+    })),
+    minSize(1, "Minimal 1 item harus diisi")
+  ),
+});
+
+// GAP 3 — Update minStock
+const updateMinStockSchema = object({
+  minStock: nullable(pipe(number(), minValue(0, "Min stok tidak boleh negatif"))),
+});
+
+module.exports = {
+  closePeriodSchema,
+  reopenPeriodSchema,
+  stockAdjustmentSchema,
+  batchStockAdjustmentSchema,
+  openingBalanceSchema,
+  updateMinStockSchema,
+};

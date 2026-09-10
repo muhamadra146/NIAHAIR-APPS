@@ -168,7 +168,7 @@ export function DashboardPage() {
             <h1 className="text-2xl font-semibold tracking-tight">
               {greeting},{" "}
               <span className="bg-gradient-to-r from-primary to-fuchsia-500 bg-clip-text text-transparent">
-                {user?.name?.split(" ")[0]}
+                {(user?.employee?.name ?? user?.email)?.split(" ")[0]}
               </span>
             </h1>
           </div>

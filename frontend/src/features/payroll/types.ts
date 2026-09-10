@@ -35,6 +35,10 @@ export interface Payroll {
   approvedAt:     string | null;
   paidAt:         string | null;
   notes:          string | null;
+  // Accurate Online sync (Jurnal Umum)
+  accurateJournalId:     string | null;
+  accurateJournalNumber: string | null;
+  lastSyncAt:            string | null;
   createdAt:      string;
   updatedAt:      string;
   employee: {

@@ -15,7 +15,8 @@ const pushPurchaseReturnToAccurate = async (returnId) => {
     include: {
       purchaseInvoice: {
         include: {
-          supplier: { select: { id: true, name: true, accurateVendorId: true } },
+          supplier:  { select: { id: true, name: true, accurateVendorId: true } },
+          warehouse: { select: { id: true, branchId: true } },
         },
       },
       items: {
@@ -74,7 +75,17 @@ const pushPurchaseReturnToAccurate = async (returnId) => {
     );
   }
 
-  const accurateBranchId = await getAccurateBranchId(ret.purchaseInvoice.branchId);
+  // Cari Accurate branch ID dari warehouse — graceful jika tidak ada
+  const warehouseBranchId = ret.purchaseInvoice.warehouse?.branchId ?? null;
+  let accurateBranchId = null;
+  if (warehouseBranchId) {
+    try {
+      accurateBranchId = await getAccurateBranchId(warehouseBranchId);
+    } catch {
+      // Branch belum di-mapping ke Accurate — lanjutkan tanpa branchId
+      accurateBranchId = null;
+    }
+  }
 
   const payload  = mapPurchaseReturnToAccurate(ret, accurateBranchId);
   const response = await accurateRequest(ACCURATE_PURCHASE_RETURN_SAVE, {
@@ -96,8 +107,6 @@ const pushPurchaseReturnToAccurate = async (returnId) => {
     where: { id: returnId },
     data:  { accuratePurchaseReturnId, accurateReturnNo, lastSyncAt: new Date() },
   });
-
-  console.log(`[return sync] success returnId=${returnId} accurateId=${accuratePurchaseReturnId}`);
 
   return { synced: true, accuratePurchaseReturnId, accurateReturnNo };
 };

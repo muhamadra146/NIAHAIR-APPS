@@ -28,7 +28,7 @@ export function PurchaseReturnListPage() {
   const [status, setStatus]   = useState<PurchaseReturnStatus | "">("");
   const [page,   setPage]     = useState(1);
 
-  const { data, isLoading, refetch } = usePurchaseReturns({
+  const { data, isLoading, isError, refetch } = usePurchaseReturns({
     status: status || undefined,
     page,
     limit: 20,
@@ -74,6 +74,13 @@ export function PurchaseReturnListPage() {
           {isLoading ? (
             <div className="py-16 flex items-center justify-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Memuat...
+            </div>
+          ) : isError ? (
+            <div className="py-16 text-center space-y-2">
+              <p className="text-sm text-destructive font-medium">Gagal memuat data retur pembelian</p>
+              <Button variant="ghost" size="sm" onClick={() => refetch()}>
+                <RefreshCw className="h-4 w-4 mr-1" /> Coba lagi
+              </Button>
             </div>
           ) : !data?.data?.length ? (
             <div className="py-16 text-center text-sm text-muted-foreground">

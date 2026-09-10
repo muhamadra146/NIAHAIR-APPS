@@ -286,7 +286,7 @@ const updatePurchaseInvoice = async (id, body) => {
 
 // ── Cancel ────────────────────────────────────────────────────────────────────
 // DRAFT  → cancel langsung (tidak ada inventory movement)
-// POSTED → balik inventory movements dulu, lalu cancel
+// POSTED → (1) void di Accurate jika sudah sync, (2) balik inventory, (3) cancel status
 const cancelPurchaseInvoice = async (id) => {
   const invoice = await findPurchaseInvoiceById(id);
   if (!invoice) throw new AppError("Faktur pembelian tidak ditemukan", StatusCodes.NOT_FOUND);
@@ -296,6 +296,23 @@ const cancelPurchaseInvoice = async (id) => {
 
   if (invoice.status === "POSTED") {
     await validatePeriodOpen(invoice.invoiceDate);
+
+    // Void di Accurate sebelum menyentuh data lokal
+    if (invoice.accuratePurchaseInvoiceId) {
+      let resp;
+      try {
+        resp = await accurateRequest("/purchase-invoice/delete.do", {
+          method: "POST",
+          body:   { id: invoice.accuratePurchaseInvoiceId },
+        });
+      } catch (err) {
+        throw new AppError(`Gagal menghubungi Accurate: ${err.message}`, StatusCodes.BAD_GATEWAY);
+      }
+      if (!resp.s) {
+        const reason = resp.d ?? resp.e ?? JSON.stringify(resp);
+        throw new AppError(`Tidak bisa void di Accurate: ${reason}`, StatusCodes.UNPROCESSABLE_ENTITY);
+      }
+    }
 
     await prisma.$transaction(async (tx) => {
       // Balik setiap inventory movement yang dibuat saat posting
@@ -313,19 +330,20 @@ const cancelPurchaseInvoice = async (id) => {
 
         await tx.inventoryMovement.create({
           data: {
-            inventoryId:   inventory.id,
-            movementType:  "RETURN",
+            inventoryId:           inventory.id,
+            movementType:          "RETURN",
             qtyBefore,
             qtyChange,
             qtyAfter,
-            referenceType: "PURCHASE_RETURN",
-            referenceId:   invoice.id,
-            referenceNo:   invoice.invoiceNo,
-            notes:         `Pembatalan faktur pembelian ${invoice.invoiceNo}`,
-            sourceModule:  "PURCHASE",
-            createdSource: "USER",
-            warehouseId:   invoice.warehouseId,
-            unitCost:      D(item.price),
+            referenceType:         "PURCHASE_RETURN",
+            referenceId:           invoice.id,
+            referenceNo:           invoice.invoiceNo,
+            notes:                 `Pembatalan faktur pembelian ${invoice.invoiceNo}`,
+            sourceModule:          "PURCHASE",
+            createdSource:         "USER",
+            warehouseId:           invoice.warehouseId,
+            unitCost:              D(item.price),
+            purchaseInvoiceItemId: item.id,
           },
         });
 
@@ -338,7 +356,15 @@ const cancelPurchaseInvoice = async (id) => {
         });
       }
 
-      await tx.purchaseInvoice.update({ where: { id }, data: { status: "CANCELLED" } });
+      await tx.purchaseInvoice.update({
+        where: { id },
+        data:  {
+          status:                      "CANCELLED",
+          // Hapus referensi Accurate karena sudah di-void
+          accuratePurchaseInvoiceId:     null,
+          accuratePurchaseInvoiceNumber: null,
+        },
+      });
     });
 
     return { invoiceId: id, cancelled: true };
@@ -382,6 +408,7 @@ const deletePurchaseInvoice = async (id) => {
   if (invoice.status === "POSTED") {
     await validatePeriodOpen(invoice.invoiceDate);
 
+    // Reversal stok + hapus invoice dalam satu transaksi agar atomic
     await prisma.$transaction(async (tx) => {
       for (const item of invoice.items) {
         if (item.item.itemType !== "INVENTORY") continue;
@@ -397,19 +424,20 @@ const deletePurchaseInvoice = async (id) => {
 
         await tx.inventoryMovement.create({
           data: {
-            inventoryId:   inventory.id,
-            movementType:  "RETURN",
+            inventoryId:           inventory.id,
+            movementType:          "RETURN",
             qtyBefore,
             qtyChange,
             qtyAfter,
-            referenceType: "PURCHASE_RETURN",
-            referenceId:   invoice.id,
-            referenceNo:   invoice.invoiceNo,
-            notes:         `Hapus faktur pembelian ${invoice.invoiceNo}`,
-            sourceModule:  "PURCHASE",
-            createdSource: "USER",
-            warehouseId:   invoice.warehouseId,
-            unitCost:      D(item.price),
+            referenceType:         "PURCHASE_RETURN",
+            referenceId:           invoice.id,
+            referenceNo:           invoice.invoiceNo,
+            notes:                 `Hapus faktur pembelian ${invoice.invoiceNo}`,
+            sourceModule:          "PURCHASE",
+            createdSource:         "USER",
+            warehouseId:           invoice.warehouseId,
+            unitCost:              D(item.price),
+            purchaseInvoiceItemId: item.id,
           },
         });
 
@@ -421,10 +449,15 @@ const deletePurchaseInvoice = async (id) => {
           },
         });
       }
+
+      // Hapus invoice di dalam transaksi yang sama → atomic
+      await tx.purchaseInvoice.delete({ where: { id } });
     });
+  } else {
+    // DRAFT atau CANCELLED — tidak ada reversal, hapus langsung
+    await prisma.purchaseInvoice.delete({ where: { id } });
   }
 
-  await prisma.purchaseInvoice.delete({ where: { id } });
   return { invoiceId: id, deleted: true };
 };
 

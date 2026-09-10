@@ -71,8 +71,11 @@ export function useCancelPurchaseInvoice() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => cancelPurchaseInvoice(id),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ["purchase-invoices"] });
+      qc.invalidateQueries({ queryKey: ["purchase-invoice", id] }); // B8: update status badge di detail page
+      qc.invalidateQueries({ queryKey: ["inventories"] });
+      qc.invalidateQueries({ queryKey: ["stock-movements"] });
       toast.success("Faktur pembelian berhasil dibatalkan");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -85,6 +88,8 @@ export function useDeletePurchaseInvoice() {
     mutationFn: (id: string) => deletePurchaseInvoice(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["purchase-invoices"] });
+      qc.invalidateQueries({ queryKey: ["inventories"] });    // B9: stok berubah saat delete POSTED
+      qc.invalidateQueries({ queryKey: ["stock-movements"] }); // B9: mutasi berubah
       toast.success("Faktur pembelian berhasil dihapus");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -97,7 +102,12 @@ export function useSyncSuppliers() {
     mutationFn: syncSuppliers,
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["suppliers"] });
-      toast.success(`Supplier sync: ${result.created} baru, ${result.updated} diperbarui`);
+      const msg = `Supplier sync: ${result.created} baru, ${result.updated} diperbarui`;
+      if (result.failed > 0) {
+        toast.error(`${msg}, ${result.failed} gagal`);
+      } else {
+        toast.success(msg);
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });

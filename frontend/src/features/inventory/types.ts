@@ -36,9 +36,16 @@ export interface InventoryItemRef {
   itemUnits:   InventoryItemUnit[];
 }
 
-export interface InventoryWarehouseRef {
+export interface BranchRef {
   id:   string;
   name: string;
+  code: string;
+}
+
+export interface InventoryWarehouseRef {
+  id:     string;
+  name:   string;
+  branch: BranchRef | null;
 }
 
 export interface InventoryBalance {
@@ -48,6 +55,7 @@ export interface InventoryBalance {
   qtyOnHand:    number | string;
   qtyReserved:  number | string;
   qtyAvailable: number | string;
+  minStock:     number | string | null;
   updatedAt:    string;
   item:         InventoryItemRef;
   warehouse:    InventoryWarehouseRef;
@@ -132,6 +140,13 @@ export interface StockTransfer {
   createdBy:             string | null;
   createdAt:             string;
   updatedAt:             string;
+  // Accurate sync fields
+  accurateTransferId:     number | null;
+  accurateTransferNumber: string | null;
+  lastSyncAt:             string | null;
+  accurateReceiveId:      number | null;
+  accurateReceiveNumber:  string | null;
+  lastReceiveSyncAt:      string | null;
   sourceWarehouse:       StockTransferWarehouse;
   destinationWarehouse:  StockTransferWarehouse;
   items:                 StockTransferItem[];
@@ -152,6 +167,118 @@ export interface TransferListParams {
   destinationWarehouseId?: string;
   status?:                StockTransferStatus | "" | undefined;
   branchId?:              string;
+  startDate?:             string;
+  endDate?:               string;
+  search?:                string;
+}
+
+// ── GAP 1: Stock Opname (Physical Count) ─────────────────────────────
+export type StockOpnameStatus = "DRAFT" | "IN_PROGRESS" | "POSTED" | "CANCELLED";
+
+export interface StockOpnameItemRow {
+  id:            string;
+  inventoryId:   string;
+  qtySystem:     string | number;
+  qtyActual:     string | number | null;
+  qtyDifference: string | number | null;
+  notes:         string | null;
+  inventory: {
+    id:   string;
+    item: { id: string; name: string; itemCode: string | null; defaultUnit: { id: string; name: string } | null };
+  };
+}
+
+export interface StockOpname {
+  id:          string;
+  opnameNo:    string;
+  warehouseId: string;
+  status:      StockOpnameStatus;
+  notes:       string | null;
+  postedAt:    string | null;
+  createdAt:   string;
+  updatedAt:   string;
+  warehouse:   { id: string; name: string };
+  createdBy:   { id: string; name: string } | null;
+  postedBy:    { id: string; name: string } | null;
+  items?:      StockOpnameItemRow[];
+  _count?:     { items: number };
+}
+
+export interface CreateOpnameInput {
+  warehouseId: string;
+  notes?:      string | null;
+}
+
+export interface UpdateOpnameItemInput {
+  id:        string;
+  qtyActual: number | null;
+  notes?:    string | null;
+}
+
+export interface StockOpnameListParams {
+  page?:        number;
+  limit?:       number;
+  warehouseId?: string;
+  status?:      StockOpnameStatus | "";
+}
+
+// ── GAP 2: Opening Balance ────────────────────────────────────────────
+export interface OpeningBalanceItemInput {
+  itemId:    string;
+  qty:       number;
+  unitCost?: number | null;
+}
+
+export interface CreateOpeningBalanceInput {
+  warehouseId: string;
+  notes?:      string | null;
+  items:       OpeningBalanceItemInput[];
+}
+
+export interface OpeningBalanceResult {
+  created: number;
+  skipped: number;
+}
+
+// ── GAP 3: Low Stock ──────────────────────────────────────────────────
+export interface LowStockItem {
+  id:           string;
+  warehouseId:  string;
+  warehouseName: string;
+  qtyOnHand:    string | number;
+  qtyAvailable: string | number;
+  minStock:     string | number;
+  warehouse: { id: string; name: string; branch: BranchRef | null };
+  item: {
+    id:       string;
+    itemCode: string | null;
+    name:     string;
+    defaultUnit: { id: string; name: string } | null;
+    category:    { id: string; name: string } | null;
+  };
+}
+
+// ── GAP 6: Inventory Valuation ────────────────────────────────────────
+export interface ValuationItem {
+  inventoryId:   string;
+  warehouseId:   string;
+  warehouseName: string;
+  branch:        BranchRef | null;
+  itemId:        string;
+  itemCode:      string | null;
+  itemName:      string;
+  category:      { id: string; name: string } | null;
+  unit:          { id: string; name: string } | null;
+  qtyOnHand:     string;
+  qtyAvailable:  string;
+  costPrice:     string;
+  totalValue:    string;
+}
+
+export interface ValuationReport {
+  data:       ValuationItem[];
+  totalValue: string;
+  itemCount:  number;
 }
 
 // ── GL Accounts ───────────────────────────────────────────────────────

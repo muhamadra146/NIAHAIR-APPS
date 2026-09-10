@@ -74,6 +74,7 @@ const createPurchaseReturn = async (body, createdByEmployeeId) => {
       unitId:   item.unitId,
       qty:      D(item.qty),
       price:    D(item.price),
+      discount: D(item.discount ?? 0),
       subtotal: lineSubtotal,
       notes:    item.notes || undefined,
     };
@@ -95,7 +96,7 @@ const createPurchaseReturn = async (body, createdByEmployeeId) => {
       },
       include: {
         purchaseInvoice: { select: { id: true, invoiceNo: true } },
-        createdBy:       { select: { id: true, fullName: true } },
+        createdBy:       { select: { id: true, name: true } },
         items: {
           include: {
             item: { select: { id: true, name: true, sku: true } },
@@ -138,6 +139,16 @@ const postPurchaseReturn = async (id, employeeId) => {
       const qtyBefore = D(inventory.qtyOnHand);
       const qtyChange = D(item.qty).negated(); // retur = keluar dari gudang
       const qtyAfter  = qtyBefore.add(qtyChange);
+
+      // Stok tidak boleh negatif setelah retur
+      if (qtyAfter.lt(D(0))) {
+        throw new AppError(
+          `Stok ${item.item.name} tidak cukup untuk diretur. ` +
+          `Stok saat ini: ${Number(qtyBefore).toLocaleString("id-ID")}, ` +
+          `qty retur: ${Number(item.qty).toLocaleString("id-ID")}`,
+          StatusCodes.UNPROCESSABLE_ENTITY
+        );
+      }
 
       const movement = await tx.inventoryMovement.create({
         data: {

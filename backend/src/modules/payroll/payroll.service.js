@@ -4,6 +4,7 @@ const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { resolveOrderBy } = require("../../utils/sort");
 const repo            = require("./payroll.repository");
+const { createSyncJob } = require("../syncQueue/syncQueue.service");
 
 const ORDER_MAP = {
   periodStart:    { periodStart: "asc" },
@@ -350,6 +351,13 @@ const markAsPaid = async (id, paidBy) => {
         await tx.loan.update({ where: { id: loan.id }, data: { remainingAmount: newRemaining, status: newStatus } });
       }
     }
+  });
+
+  // Enqueue Accurate sync — Jurnal Umum when payroll is PAID
+  await createSyncJob({
+    entityType: "PAYROLL",
+    entityId:   id,
+    direction:  "APP_TO_ACCURATE",
   });
 
   return repo.findById(id);

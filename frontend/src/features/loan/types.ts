@@ -35,6 +35,10 @@ export interface Loan {
   endDate:          string | null;
   status:           LoanStatus;
   notes:            string | null;
+  // Accurate Online sync
+  accurateLoanId:     string | null;
+  accurateLoanNumber: string | null;
+  lastSyncAt:         string | null;
   createdAt:        string;
   updatedAt:        string;
   employee:         LoanEmployee | null;

@@ -62,14 +62,19 @@ function InvoiceRow({ invoice }: { invoice: PurchaseInvoice }) {
   );
 }
 
+const WRITE_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "INVENTORY", "FINANCE"];
+
 export function PurchasePage() {
   const { user } = useAuthStore();
   const isSuperUser = user?.roleCode === "SUPER_ADMIN" || user?.roleCode === "OWNER";
+  const canWrite    = WRITE_ROLES.includes(user?.roleCode ?? ""); // B6: OFFICE tidak bisa buat faktur
 
   const [showCreate,   setShowCreate]  = useState(false);
   const [search,       setSearch]      = useState("");
   const [dSearch,      setDSearch]     = useState("");
   const [syncFilter,   setSyncFilter]  = useState<SyncFilter>("");
+  const [startDate,    setStartDate]   = useState(""); // U1
+  const [endDate,      setEndDate]     = useState(""); // U1
   const [page,         setPage]        = useState(1);
 
   const syncMutation = useSyncSuppliers();
@@ -80,9 +85,11 @@ export function PurchasePage() {
                      : {};
 
   const { data, isLoading } = usePurchaseInvoices({
-    search: dSearch || undefined,
+    search:    dSearch    || undefined,
+    startDate: startDate  || undefined, // U1
+    endDate:   endDate    || undefined, // U1
     page,
-    limit:  20,
+    limit: 20,
     ...filterParams,
   });
 
@@ -109,10 +116,12 @@ export function PurchasePage() {
               Sync Pemasok
             </Button>
           )}
-          <Button size="sm" onClick={() => setShowCreate(true)} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            Buat Faktur
-          </Button>
+          {canWrite && (
+            <Button size="sm" onClick={() => setShowCreate(true)} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              Buat Faktur
+            </Button>
+          )}
         </div>
       }
     >
@@ -132,6 +141,19 @@ export function PurchasePage() {
             <option value="UNSYNCED">Menunggu Sync</option>
             <option value="CANCELLED">Dibatalkan</option>
           </select>
+          {/* U1: filter tanggal */}
+          <Input type="date" value={startDate}
+            onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+            className="h-9 w-36" title="Dari tanggal" />
+          <Input type="date" value={endDate}
+            onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+            className="h-9 w-36" title="Sampai tanggal" />
+          {(startDate || endDate) && (
+            <Button size="sm" variant="ghost" className="h-9 px-2 text-muted-foreground"
+              onClick={() => { setStartDate(""); setEndDate(""); setPage(1); }}>
+              ✕
+            </Button>
+          )}
         </div>
 
         {/* Table */}

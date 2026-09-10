@@ -56,7 +56,7 @@ export function PurchaseReturnDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const { data: ret, isLoading, refetch } = usePurchaseReturn(id!);
+  const { data: ret, isLoading, isError, refetch } = usePurchaseReturn(id!);
   const postMutation   = usePostPurchaseReturn();
   const cancelMutation = useCancelPurchaseReturn();
   const deleteMutation = useDeletePurchaseReturn();
@@ -71,6 +71,18 @@ export function PurchaseReturnDetailPage() {
       <PageContainer>
         <div className="py-16 flex items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Memuat data...
+        </div>
+      </PageContainer>
+    );
+  }
+  if (isError) {
+    return (
+      <PageContainer>
+        <div className="py-16 text-center space-y-2">
+          <p className="text-sm text-destructive font-medium">Gagal memuat data retur</p>
+          <Button variant="ghost" size="sm" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4 mr-1" /> Coba lagi
+          </Button>
         </div>
       </PageContainer>
     );
@@ -158,7 +170,7 @@ export function PurchaseReturnDetailPage() {
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Dibuat Oleh</dt>
-                  <dd>{ret.createdBy?.fullName ?? "—"}</dd>
+                  <dd>{ret.createdBy?.name ?? "—"}</dd>
                 </div>
                 {ret.notes && (
                   <div className="col-span-2">
@@ -184,6 +196,7 @@ export function PurchaseReturnDetailPage() {
                       <th className="text-left px-4 py-3 font-medium">Satuan</th>
                       <th className="text-right px-4 py-3 font-medium">Qty</th>
                       <th className="text-right px-4 py-3 font-medium">Harga</th>
+                      <th className="text-right px-4 py-3 font-medium">Diskon</th>
                       <th className="text-right px-4 py-3 font-medium">Subtotal</th>
                       <th className="text-center px-4 py-3 font-medium">Stok</th>
                     </tr>
@@ -200,6 +213,9 @@ export function PurchaseReturnDetailPage() {
                         <td className="px-4 py-3 text-muted-foreground">{item.unit.name}</td>
                         <td className="px-4 py-3 text-right font-mono">{Number(item.qty).toLocaleString("id-ID")}</td>
                         <td className="px-4 py-3 text-right font-mono">{fmt(item.price)}</td>
+                        <td className="px-4 py-3 text-right font-mono text-muted-foreground">
+                          {Number(item.discount) > 0 ? `${Number(item.discount).toFixed(2)}%` : "—"}
+                        </td>
                         <td className="px-4 py-3 text-right font-mono font-semibold">{fmt(item.subtotal)}</td>
                         <td className="px-4 py-3 text-center">
                           {item.inventoryMovement ? (

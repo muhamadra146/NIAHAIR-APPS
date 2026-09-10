@@ -7,13 +7,13 @@ const RETURN_INCLUDE = {
     select: { id: true, invoiceNo: true, invoiceDate: true, warehouseId: true },
   },
   createdBy: {
-    select: { id: true, fullName: true },
+    select: { id: true, name: true },
   },
   items: {
     include: {
       item: { select: { id: true, name: true, sku: true, itemType: true } },
       unit: { select: { id: true, name: true } },
-      inventoryMovement: { select: { id: true, movementType: true, qty: true } },
+      inventoryMovement: { select: { id: true, movementType: true, qtyChange: true } },
     },
   },
 };
@@ -29,7 +29,7 @@ async function findAll({ purchaseInvoiceId, status, page = 1, limit = 20 } = {})
       where,
       include: {
         purchaseInvoice: { select: { id: true, invoiceNo: true } },
-        createdBy:       { select: { id: true, fullName: true } },
+        createdBy:       { select: { id: true, name: true } },
         _count:          { select: { items: true } },
       },
       orderBy: { createdAt: "desc" },

@@ -9,7 +9,7 @@ const { createTransferSchema } = require("./stockTransfer.validation");
 const {
   getAllController, getByIdController,
   createController, updateStatusController,
-  deleteController, undoReceiveController,
+  deleteController, undoReceiveController, syncController,
 } = require("./stockTransfer.controller");
 
 const router = Router();
@@ -31,5 +31,6 @@ router.post("/",    authenticate, authorize(...MANAGER_ROLES), validate(createTr
 router.patch("/:id/status",       authenticate, authorize(...MANAGER_ROLES), requireBranch, validate(updateStatusSchema), updateStatusController);
 router.delete("/:id",             authenticate, authorize(...MANAGER_ROLES), requireBranch, deleteController);
 router.patch("/:id/undo-receive", authenticate, authorize(...MANAGER_ROLES), requireBranch, undoReceiveController);
+router.post("/:id/sync",          authenticate, authorize(...MANAGER_ROLES), syncController);
 
 module.exports = router;

@@ -29,6 +29,7 @@ import {
   Crown,
   Cog,
   RotateCcw,
+  ArrowLeftRight,
   type LucideIcon,
 } from "lucide-react";
 
@@ -258,10 +259,18 @@ export const sidebarNav: NavItem[] = [
   },
 
   {
+    label: "Transfer Stok",
+    href:  "/stock-transfers",
+    icon:  ArrowLeftRight,
+    roles: [...MANAGEMENT_ROLES, "INVENTORY"],
+    group: "Data",
+  },
+
+  {
     label: "Stock Opname",
     href:  "/stock-opname",
     icon:  Archive,
-    roles: ADMIN_ROLES,
+    roles: [...MANAGEMENT_ROLES, "INVENTORY", "FINANCE"],
     group: "Data",
   },
 

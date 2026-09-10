@@ -68,6 +68,8 @@ const serviceJobRoleRouter          = require("./modules/serviceJobRole/serviceJ
 const productionRouter              = require("./modules/production/production.route");
 const purchaseReturnRouter          = require("./modules/purchaseReturn/purchaseReturn.route");
 const dashboardRouter               = require("./modules/dashboard/dashboard.route");
+const payrollGlAccountRouter        = require("./modules/payrollGlAccount/payrollGlAccount.route");
+const stockOpnameRouter             = require("./modules/stockOpname/stockOpname.route");
 
 
 const app = express();
@@ -151,6 +153,7 @@ v1.use("/attendance",                           attendanceRouter);
 v1.use("/salary-settings",                      salaryRouter);
 v1.use("/loans",                                loanRouter);
 v1.use("/payroll",                              payrollRouter);
+v1.use("/payroll-gl-accounts",                  payrollGlAccountRouter);
 v1.use("/holidays",                             holidayRouter);
 v1.use("/reports",                              reportRouter);
 v1.use("/consultation-notes",                   consultationRouter);
@@ -172,6 +175,7 @@ v1.use("/complaints",                           complaintRouter);
 v1.use("/production-orders",                    productionRouter);
 v1.use("/purchase-returns",                     purchaseReturnRouter);
 v1.use("/dashboard",                            dashboardRouter);
+v1.use("/stock-opnames",                        stockOpnameRouter);
 
 app.use("/api/v1", v1);
 

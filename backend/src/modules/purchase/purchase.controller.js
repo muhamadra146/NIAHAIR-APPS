@@ -28,7 +28,7 @@ const getController = async (req, res, next) => {
 
 const createController = async (req, res, next) => {
   try {
-    const invoice = await createPurchaseInvoice(req.body, req.employee?.id);
+    const invoice = await createPurchaseInvoice(req.body, req.user?.employeeId);
     success(res, invoice, "Faktur pembelian berhasil dibuat", StatusCodes.CREATED);
   } catch (err) { next(err); }
 };

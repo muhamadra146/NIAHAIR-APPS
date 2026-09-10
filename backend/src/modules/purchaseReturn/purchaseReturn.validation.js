@@ -2,7 +2,7 @@
 
 const {
   object, string, number, array,
-  pipe, minLength, minValue, maxLength, optional, minSize,
+  pipe, minLength, minValue, maxValue, maxLength, optional, minSize,
   picklist,
 } = require('valibot');
 
@@ -12,6 +12,7 @@ const purchaseReturnItemSchema = object({
   unitId:   pipe(string(), minLength(1, "Satuan wajib dipilih")),
   qty:      pipe(number(), minValue(0.001, "Qty harus lebih dari 0")),
   price:    pipe(number(), minValue(0, "Harga tidak boleh negatif")),
+  discount: optional(pipe(number(), minValue(0, "Diskon tidak boleh negatif"), maxValue(100, "Diskon maksimal 100%"))),
   subtotal: pipe(number(), minValue(0, "Subtotal tidak boleh negatif")),
   notes:    optional(pipe(string(), maxLength(500))),
 });

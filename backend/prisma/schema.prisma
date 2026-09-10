@@ -288,6 +288,9 @@ model Employee {
   productionTimelines ProductionTimeline[] @relation("ProductionTimelineCreatedBy")
   purchaseReturns     PurchaseReturn[]     @relation("PurchaseReturnCreator")
 
+  stockOpnamesCreated StockOpname[] @relation("StockOpnameCreatedBy")
+  stockOpnamesPosted  StockOpname[] @relation("StockOpnamePostedBy")
+
   @@index([roleId])
   @@index([homeBranchId])
   @@map("employees")
@@ -838,6 +841,13 @@ enum InventoryPeriodStatus {
   CLOSED
 }
 
+enum StockOpnameStatus {
+  DRAFT
+  IN_PROGRESS
+  POSTED
+  CANCELLED
+}
+
 // =====================================================
 // WAREHOUSES
 // =====================================================
@@ -871,6 +881,8 @@ model Warehouse {
   productionOrders    ProductionOrder[]
   productionMaterials ProductionMaterial[]
 
+  stockOpnames StockOpname[]
+
   @@index([branchId])
   @@map("warehouses")
 }
@@ -897,11 +909,14 @@ model Inventory {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  minStock Decimal? @db.Decimal(18, 6)
+
   warehouse Warehouse @relation(fields: [warehouseId], references: [id])
 
   item Item @relation(fields: [itemId], references: [id])
 
-  movements InventoryMovement[]
+  movements        InventoryMovement[]
+  stockOpnameItems StockOpnameItem[]
 
   @@unique([warehouseId, itemId])
   @@index([warehouseId])
@@ -968,6 +983,7 @@ model InventoryMovement {
   productionItem      ProductionItem?
   productionMaterial  ProductionMaterial?
   purchaseReturnItem  PurchaseReturnItem?
+  stockOpnameItem     StockOpnameItem?    @relation("OpnameMovement")
 
   @@index([inventoryId])
   @@index([referenceType, referenceId])
@@ -1078,6 +1094,60 @@ model StockTransferItem {
   @@index([transferId])
   @@index([itemId])
   @@map("stock_transfer_items")
+}
+
+// =====================================================
+// STOCK OPNAME
+// =====================================================
+
+model StockOpname {
+  id          String            @id @default(uuid())
+  opnameNo    String            @unique
+  warehouseId String
+  status      StockOpnameStatus @default(DRAFT)
+  notes       String?
+
+  createdByEmployeeId String?
+  postedByEmployeeId  String?
+  postedAt            DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  createdBy Employee? @relation("StockOpnameCreatedBy", fields: [createdByEmployeeId], references: [id])
+  postedBy  Employee? @relation("StockOpnamePostedBy",  fields: [postedByEmployeeId],  references: [id])
+
+  items StockOpnameItem[]
+
+  @@index([warehouseId])
+  @@index([status])
+  @@map("stock_opnames")
+}
+
+model StockOpnameItem {
+  id            String @id @default(uuid())
+  stockOpnameId String
+  inventoryId   String
+
+  qtySystem     Decimal  @db.Decimal(18, 6)
+  qtyActual     Decimal? @db.Decimal(18, 6)
+  qtyDifference Decimal? @db.Decimal(18, 6)
+
+  notes               String?
+  inventoryMovementId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stockOpname       StockOpname        @relation(fields: [stockOpnameId], references: [id], onDelete: Cascade)
+  inventory         Inventory          @relation(fields: [inventoryId], references: [id])
+  inventoryMovement InventoryMovement? @relation("OpnameMovement", fields: [inventoryMovementId], references: [id])
+
+  @@unique([stockOpnameId, inventoryId])
+  @@index([stockOpnameId])
+  @@index([inventoryId])
+  @@map("stock_opname_items")
 }
 
 // =====================================================
@@ -2778,6 +2848,11 @@ model Loan {
 
   notes String?
 
+  // Accurate Online sync
+  accurateLoanId     String?
+  accurateLoanNumber String?
+  lastSyncAt         DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2859,6 +2934,11 @@ model Payroll {
   lastRecalculatedAt DateTime?
 
   notes String?
+
+  // Accurate Online sync (Jurnal Umum)
+  accurateJournalId     String?
+  accurateJournalNumber String?
+  lastSyncAt            DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3010,12 +3090,39 @@ model GlAccount {
   updatedAt DateTime @updatedAt
 
   inventoryMovements InventoryMovement[]
+  payrollGlAccounts  PayrollGlAccount[]
 
   @@index([number])
   @@index([name])
   @@index([category])
   @@index([usage])
   @@map("gl_accounts")
+}
+
+// =====================================================
+// PAYROLL GL ACCOUNT MAPPING
+// Maps payroll item categories → Accurate GL accounts
+// =====================================================
+
+model PayrollGlAccount {
+  id       String @id @default(uuid())
+
+  // e.g. "gaji", "tunjangan_makan", "tunjangan_transport",
+  //      "tunjangan_lain", "bpjs_perusahaan",
+  //      "hutang_bpjs", "kasbon", "kas_bank"
+  category String @unique
+
+  label       String  // human-readable, e.g. "Beban Gaji Pokok"
+  type        String  // "DEBIT" | "CREDIT"
+  glAccountId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  glAccount GlAccount? @relation(fields: [glAccountId], references: [id])
+
+  @@index([glAccountId])
+  @@map("payroll_gl_accounts")
 }
 
 // =====================================================
@@ -3030,9 +3137,13 @@ model Supplier {
   name         String
   code         String?
   email        String?
-  phone        String?
+  phone        String?       // mobilePhone dari Accurate
+  businessPhone String?      // businessNo / telephoneNo dari Accurate
+  whatsapp     String?       // whatsappNo dari Accurate
+  website      String?       // website dari Accurate
   address      String?
   paymentTerms String?
+  purchaseDiscount Decimal?  @db.Decimal(5, 2) // defaultDiscount dari Accurate (auto-fill faktur)
 
   isActive   Boolean   @default(true)
   lastSyncAt DateTime?
@@ -3177,6 +3288,7 @@ model PurchaseReturnItem {
   unitId           String
   qty              Decimal @db.Decimal(18, 4)
   price            Decimal @db.Decimal(18, 4)
+  discount         Decimal @default(0) @db.Decimal(5, 2)
   subtotal         Decimal @db.Decimal(18, 4)
   notes            String?
 

@@ -3,10 +3,11 @@ const svc = require("./stockTransfer.service");
 
 const getAllController = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, sourceWarehouseId, destinationWarehouseId, status, branchId } = req.query;
+    const { page = 1, limit = 20, sourceWarehouseId, destinationWarehouseId, status, branchId, startDate, endDate, search } = req.query;
     const result = await svc.getAll({
       page: Number(page), limit: Number(limit),
       sourceWarehouseId, destinationWarehouseId, status, branchId,
+      startDate, endDate, search,
     });
     return success(res, result, "Stock transfers fetched");
   } catch (err) { next(err); }
@@ -62,4 +63,11 @@ const undoReceiveController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getAllController, getByIdController, createController, updateStatusController, deleteController, undoReceiveController };
+const syncController = async (req, res, next) => {
+  try {
+    const result = await svc.syncToAccurate(req.params.id);
+    return success(res, result, "Transfer berhasil disinkronkan ke Accurate");
+  } catch (err) { next(err); }
+};
+
+module.exports = { getAllController, getByIdController, createController, updateStatusController, deleteController, undoReceiveController, syncController };

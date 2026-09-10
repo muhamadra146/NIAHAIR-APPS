@@ -28,6 +28,7 @@ import {
   fetchCustomerMembership, assignMembership, cancelCustomerMembership,
 } from "../api/membership.api";
 import { fetchHolidays, createHoliday, updateHoliday, deleteHoliday } from "../api/holiday.api";
+import { fetchPayrollGlAccounts, savePayrollGlAccounts } from "../api/payrollGlAccount.api";
 import type {
   EmployeeListParams, EmployeeRoleListParams, UserListParams, BranchListParams,
   PaymentMethodListParams, CashAccountListParams, WarehouseListParams,
@@ -45,6 +46,7 @@ import type {
   AssignQuotaInput, LeaveQuotaParams,
   CreateMembershipInput, UpdateMembershipInput, MembershipListParams,
   CreateHolidayInput, UpdateHolidayInput,
+  SavePayrollGlAccountsInput,
 } from "../types";
 
 // ── Employees ─────────────────────────────────────────────────────────
@@ -608,5 +610,25 @@ export const useDeleteHoliday = () => {
   return useMutation({
     mutationFn: (id: string) => deleteHoliday(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["holidays"] }); },
+  });
+};
+
+// ── Payroll GL Account Mapping ────────────────────────────────────────
+export const usePayrollGlAccounts = () =>
+  useQuery({
+    queryKey: ["payroll-gl-accounts"],
+    queryFn:  fetchPayrollGlAccounts,
+    staleTime: 5 * 60 * 1000,
+  });
+
+export const useSavePayrollGlAccounts = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SavePayrollGlAccountsInput) => savePayrollGlAccounts(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["payroll-gl-accounts"] });
+      toast.success("Mapping akun gaji berhasil disimpan");
+    },
+    onError: (err: Error) => toast.error(err.message ?? "Gagal menyimpan mapping"),
   });
 };

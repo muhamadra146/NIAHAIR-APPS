@@ -324,49 +324,52 @@ const reverseInvoiceSaleMovements = async (invoiceNo) => {
 
   let reversed = 0;
 
-  for (const movement of movements) {
-    // Idempotency: keyed on the specific SALE movement ID so the same SALE
-    // is never reversed twice, even when the same item appears across multiple edits.
-    const alreadyReversed = await prisma.inventoryMovement.count({
-      where: {
-        movementType:  "RETURN",
-        referenceType: "INVOICE",
-        referenceNo:   invoiceNo,
-        referenceId:   movement.id,
-      },
-    });
-    if (alreadyReversed > 0) continue;
+  // Semua operasi dalam satu transaction agar tidak ada partial-reverse
+  await prisma.$transaction(async (tx) => {
+    for (const movement of movements) {
+      // Idempotency: keyed on the specific SALE movement ID so the same SALE
+      // is never reversed twice, even when the same item appears across multiple edits.
+      const alreadyReversed = await tx.inventoryMovement.count({
+        where: {
+          movementType:  "RETURN",
+          referenceType: "INVOICE",
+          referenceNo:   invoiceNo,
+          referenceId:   movement.id,
+        },
+      });
+      if (alreadyReversed > 0) continue;
 
-    const returnQty    = D(movement.qtyChange).abs();
-    const qtyBefore    = D(movement.inventory.qtyOnHand);
-    const qtyAfter     = qtyBefore.add(returnQty);
-    const newAvailable = computeAvailable(qtyAfter, movement.inventory.qtyReserved);
+      const returnQty    = D(movement.qtyChange).abs();
+      const qtyBefore    = D(movement.inventory.qtyOnHand);
+      const qtyAfter     = qtyBefore.add(returnQty);
+      const newAvailable = computeAvailable(qtyAfter, movement.inventory.qtyReserved);
 
-    await prisma.inventoryMovement.create({
-      data: {
-        inventoryId:   movement.inventoryId,
-        movementType:  "RETURN",
-        sourceModule:  "SALE",
-        createdSource: "SYSTEM",
-        warehouseId:   movement.warehouseId,
-        qtyBefore,
-        qtyChange:     returnQty,
-        qtyAfter,
-        unitCost:      movement.unitCost ?? null,
-        referenceType: "INVOICE",
-        referenceId:   movement.id,
-        referenceNo:   invoiceNo,
-        notes:         `Void invoice: ${invoiceNo}`,
-      },
-    });
+      await tx.inventoryMovement.create({
+        data: {
+          inventoryId:   movement.inventoryId,
+          movementType:  "RETURN",
+          sourceModule:  "SALE",
+          createdSource: "SYSTEM",
+          warehouseId:   movement.warehouseId,
+          qtyBefore,
+          qtyChange:     returnQty,
+          qtyAfter,
+          unitCost:      movement.unitCost ?? null,
+          referenceType: "INVOICE",
+          referenceId:   movement.id,
+          referenceNo:   invoiceNo,
+          notes:         `Void invoice: ${invoiceNo}`,
+        },
+      });
 
-    await prisma.inventory.update({
-      where: { id: movement.inventoryId },
-      data:  { qtyOnHand: qtyAfter, qtyAvailable: newAvailable },
-    });
+      await tx.inventory.update({
+        where: { id: movement.inventoryId },
+        data:  { qtyOnHand: qtyAfter, qtyAvailable: newAvailable },
+      });
 
-    reversed++;
-  }
+      reversed++;
+    }
+  });
 
   return { reversed };
 };
@@ -402,45 +405,48 @@ const reverseInvoiceServiceMovements = async (invoiceId) => {
 
   let reversed = 0;
 
-  for (const movement of movements) {
-    const alreadyReversed = await prisma.inventoryMovement.count({
-      where: {
-        movementType:  "RETURN",
-        referenceType: "TREATMENT",
-        referenceId:   movement.id,
-      },
-    });
-    if (alreadyReversed > 0) continue;
+  // Semua operasi dalam satu transaction agar tidak ada partial-reverse
+  await prisma.$transaction(async (tx) => {
+    for (const movement of movements) {
+      const alreadyReversed = await tx.inventoryMovement.count({
+        where: {
+          movementType:  "RETURN",
+          referenceType: "TREATMENT",
+          referenceId:   movement.id,
+        },
+      });
+      if (alreadyReversed > 0) continue;
 
-    const returnQty    = D(movement.qtyChange).abs();
-    const qtyBefore    = D(movement.inventory.qtyOnHand);
-    const qtyAfter     = qtyBefore.add(returnQty);
-    const newAvailable = computeAvailable(qtyAfter, movement.inventory.qtyReserved);
+      const returnQty    = D(movement.qtyChange).abs();
+      const qtyBefore    = D(movement.inventory.qtyOnHand);
+      const qtyAfter     = qtyBefore.add(returnQty);
+      const newAvailable = computeAvailable(qtyAfter, movement.inventory.qtyReserved);
 
-    await prisma.inventoryMovement.create({
-      data: {
-        inventoryId:   movement.inventoryId,
-        movementType:  "RETURN",
-        sourceModule:  "SERVICE",
-        createdSource: "SYSTEM",
-        warehouseId:   movement.warehouseId,
-        qtyBefore,
-        qtyChange:     returnQty,
-        qtyAfter,
-        referenceType: "TREATMENT",
-        referenceId:   movement.id,
-        referenceNo:   movement.referenceNo,
-        notes:         `Void invoice service usage: ${movement.referenceNo ?? ""}`,
-      },
-    });
+      await tx.inventoryMovement.create({
+        data: {
+          inventoryId:   movement.inventoryId,
+          movementType:  "RETURN",
+          sourceModule:  "SERVICE",
+          createdSource: "SYSTEM",
+          warehouseId:   movement.warehouseId,
+          qtyBefore,
+          qtyChange:     returnQty,
+          qtyAfter,
+          referenceType: "TREATMENT",
+          referenceId:   movement.id,
+          referenceNo:   movement.referenceNo,
+          notes:         `Void invoice service usage: ${movement.referenceNo ?? ""}`,
+        },
+      });
 
-    await prisma.inventory.update({
-      where: { id: movement.inventoryId },
-      data:  { qtyOnHand: qtyAfter, qtyAvailable: newAvailable },
-    });
+      await tx.inventory.update({
+        where: { id: movement.inventoryId },
+        data:  { qtyOnHand: qtyAfter, qtyAvailable: newAvailable },
+      });
 
-    reversed++;
-  }
+      reversed++;
+    }
+  });
 
   return { reversed };
 };
@@ -691,6 +697,212 @@ const releaseReservation = async (inventoryId, qty, tx) => {
   return { inventoryId, qtyReserved: newReserved, qtyAvailable: newAvailable };
 };
 
+// ── GAP 2: Opening Balance ─────────────────────────────────────────────────────
+//
+// Membuat OPENING_BALANCE movement untuk setiap item yang belum pernah ada
+// movement di warehouse tersebut. Idempotent: skip item yang sudah ada movement.
+// Permission: SUPER_ADMIN + OWNER only (enforced at route level).
+
+const createOpeningBalance = async ({ warehouseId, notes, items, createdByEmployeeId }) => {
+  await validatePeriodOpen(new Date());
+
+  const warehouse = await prisma.warehouse.findUnique({ where: { id: warehouseId } });
+  if (!warehouse) throw new AppError("Gudang tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  const created = [];
+  const skipped = [];
+
+  await prisma.$transaction(async (tx) => {
+    for (const { itemId, qty, unitCost } of items) {
+      // Upsert inventory record
+      const inventory = await tx.inventory.upsert({
+        where:  { warehouseId_itemId: { warehouseId, itemId } },
+        create: { warehouseId, itemId, qtyOnHand: D("0"), qtyReserved: D("0"), qtyAvailable: D("0") },
+        update: {},
+        select: { id: true, qtyOnHand: true, qtyReserved: true },
+      });
+
+      // Idempotency: skip jika sudah ada movement OPENING_BALANCE untuk inventory ini
+      const existing = await tx.inventoryMovement.count({
+        where: { inventoryId: inventory.id, movementType: "OPENING_BALANCE" },
+      });
+      if (existing > 0) {
+        skipped.push(itemId);
+        continue;
+      }
+
+      const qtyBefore    = D(inventory.qtyOnHand);
+      const qtyAfter     = D(String(qty));
+      const qtyChange    = qtyAfter.sub(qtyBefore);
+      const newAvailable = computeAvailable(qtyAfter, inventory.qtyReserved);
+
+      await tx.inventoryMovement.create({
+        data: {
+          inventoryId:         inventory.id,
+          movementType:        "OPENING_BALANCE",
+          sourceModule:        "OPENING_BALANCE",
+          createdSource:       "USER",
+          warehouseId,
+          qtyBefore,
+          qtyChange,
+          qtyAfter,
+          unitCost:            unitCost ? D(String(unitCost)) : null,
+          referenceType:       "OPENING_BALANCE",
+          notes:               notes ?? "Saldo awal inventori",
+          createdByEmployeeId: createdByEmployeeId ?? null,
+        },
+      });
+
+      await tx.inventory.update({
+        where: { id: inventory.id },
+        data:  { qtyOnHand: qtyAfter, qtyAvailable: newAvailable },
+      });
+
+      created.push(itemId);
+    }
+  });
+
+  return { created: created.length, skipped: skipped.length };
+};
+
+// ── GAP 3: Update minStock ────────────────────────────────────────────────────
+const updateMinStock = async (inventoryId, minStock) => {
+  const inventory = await prisma.inventory.findUnique({ where: { id: inventoryId } });
+  if (!inventory) throw new AppError("Inventory tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  const updated = await prisma.inventory.update({
+    where: { id: inventoryId },
+    data:  { minStock: minStock !== null ? D(String(minStock)) : null },
+    select: { id: true, itemId: true, warehouseId: true, minStock: true, qtyOnHand: true, qtyAvailable: true },
+  });
+
+  return updated;
+};
+
+// ── GAP 3: Low stock list ─────────────────────────────────────────────────────
+// Returns inventory records where qtyOnHand < minStock (and minStock is set).
+const listLowStock = async ({ branchId, warehouseId }) => {
+  const where = {
+    minStock: { not: null },
+  };
+  if (warehouseId) where.warehouseId = warehouseId;
+  if (branchId)    where.warehouse   = { branchId };
+
+  const rows = await prisma.inventory.findMany({
+    where,
+    select: {
+      id:           true,
+      qtyOnHand:    true,
+      qtyAvailable: true,
+      minStock:     true,
+      warehouseId:  true,
+      warehouse: { select: { id: true, name: true, branch: { select: { id: true, name: true, code: true } } } },
+      item: {
+        select: {
+          id:       true,
+          itemCode: true,
+          name:     true,
+          defaultUnit: { select: { id: true, name: true } },
+          category:    { select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: [{ warehouse: { name: "asc" } }, { item: { name: "asc" } }],
+  });
+
+  // Filter: hanya yang qtyOnHand < minStock
+  return rows.filter(
+    (r) => r.minStock !== null && D(r.qtyOnHand).lt(D(r.minStock))
+  );
+};
+
+// ── GAP 6: Inventory Valuation ────────────────────────────────────────────────
+// Menghitung total nilai stok: nilai = qtyOnHand (per defaultUnit) × harga pokok per defaultUnit.
+// Harga pokok diambil dari itemPrices.costPrice dibagi conversionFactor satuan beli ke satuan default.
+// Contoh: costPrice = Rp 137.000/TUBE, conversionFactor TUBE = 95 GRAM → Rp 1.442,1/GRAM.
+const getValuation = async ({ branchId, warehouseId }) => {
+  const where = {};
+  if (warehouseId) where.warehouseId = warehouseId;
+  if (branchId)    where.warehouse   = { branchId };
+
+  const rows = await prisma.inventory.findMany({
+    where: { ...where, item: { itemType: "INVENTORY" } },
+    select: {
+      id:           true,
+      qtyOnHand:    true,
+      qtyAvailable: true,
+      warehouseId:  true,
+      warehouse: { select: { id: true, name: true, branch: { select: { id: true, name: true, code: true } } } },
+      item: {
+        select: {
+          id:       true,
+          itemCode: true,
+          name:     true,
+          category: { select: { id: true, name: true } },
+          defaultUnit: { select: { id: true, name: true } },
+          itemPrices: {
+            where:   { isActive: true },
+            orderBy: { effectiveDate: "desc" },
+            take:    1,
+            // sertakan unitId agar bisa cari conversionFactor yang sesuai
+            select:  { costPrice: true, unitId: true },
+          },
+          // semua satuan item beserta faktor konversinya ke satuan default
+          itemUnits: {
+            select: { unitId: true, conversionFactor: true },
+          },
+        },
+      },
+    },
+    orderBy: [{ warehouse: { name: "asc" } }, { item: { name: "asc" } }],
+  });
+
+  let totalValue = D("0");
+
+  const data = rows.map((r) => {
+    const qty        = D(r.qtyOnHand);
+    const priceEntry = r.item.itemPrices[0];
+    const rawCost    = priceEntry?.costPrice ? D(priceEntry.costPrice) : D("0");
+
+    // Konversi harga ke per-satuan-default:
+    // itemPrices.costPrice adalah harga per unitId (misal TUBE).
+    // qtyOnHand tersimpan dalam satuan default (misal GRAM).
+    // → bagi rawCost dengan conversionFactor satuan beli (misal 95)
+    //   agar diperoleh harga per GRAM.
+    let costPerDefaultUnit = rawCost;
+    if (priceEntry?.unitId) {
+      const priceUnitRow = r.item.itemUnits.find((u) => u.unitId === priceEntry.unitId);
+      const factor       = priceUnitRow ? D(String(priceUnitRow.conversionFactor)) : D("1");
+      if (factor.gt(D("0"))) costPerDefaultUnit = rawCost.div(factor);
+    }
+
+    const value = qty.mul(costPerDefaultUnit);
+    totalValue  = totalValue.add(value);
+
+    return {
+      inventoryId:  r.id,
+      warehouseId:  r.warehouseId,
+      warehouseName: r.warehouse.name,
+      branch:        r.warehouse.branch ?? null,
+      itemId:        r.item.id,
+      itemCode:      r.item.itemCode,
+      itemName:      r.item.name,
+      category:      r.item.category,
+      unit:          r.item.defaultUnit,
+      qtyOnHand:     qty.toFixed(4),
+      qtyAvailable:  D(r.qtyAvailable).toFixed(4),
+      costPrice:     costPerDefaultUnit.toFixed(2),
+      totalValue:    value.toFixed(2),
+    };
+  });
+
+  return {
+    data,
+    totalValue: totalValue.toFixed(2),
+    itemCount:  data.length,
+  };
+};
+
 module.exports = {
   listMovements,
   listInventories,
@@ -703,4 +915,8 @@ module.exports = {
   createBatchStockAdjustment,
   reserveInventory,
   releaseReservation,
+  createOpeningBalance,
+  updateMinStock,
+  listLowStock,
+  getValuation,
 };

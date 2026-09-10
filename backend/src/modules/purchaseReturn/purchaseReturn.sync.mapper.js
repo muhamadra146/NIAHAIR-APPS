@@ -11,6 +11,9 @@ const formatDate = (d) => {
 /**
  * Maps a fully-included PurchaseReturn to an Accurate purchase-return payload.
  * Accurate endpoint: POST /purchase-return/save.do
+ *
+ * taxable + inclusiveTax diwarisi dari invoice induk (tidak disimpan di return secara terpisah).
+ * itemDiscPercent diambil dari field discount di PurchaseReturnItem.
  */
 const mapPurchaseReturnToAccurate = (ret, accurateBranchId = null) => {
   const syncableItems = ret.items.filter((i) => i.item.accurateItemId);
@@ -26,15 +29,24 @@ const mapPurchaseReturnToAccurate = (ret, accurateBranchId = null) => {
     } else {
       entry.unitName = i.unit.name;
     }
+    // Kirim diskon per item jika ada
+    if (i.discount != null && Number(i.discount) > 0) {
+      entry.itemDiscPercent = Number(i.discount);
+    }
     return entry;
   });
 
+  // Warisi pengaturan pajak dari invoice induk
+  const invoice = ret.purchaseInvoice;
+
   const payload = {
-    vendorId:          ret.purchaseInvoice.supplier.accurateVendorId,
-    purchaseInvoiceId: ret.purchaseInvoice.accuratePurchaseInvoiceId,
+    vendorId:          invoice.supplier.accurateVendorId,
+    purchaseInvoiceId: invoice.accuratePurchaseInvoiceId,
     transDate:         formatDate(ret.returnDate),
     number:            ret.returnNo,
     description:       ret.notes ?? "",
+    taxable:           invoice.taxable      ?? false,
+    inclusiveTax:      invoice.inclusiveTax ?? false,
     ...(accurateBranchId ? { branchId: accurateBranchId } : {}),
     detailItem,
   };

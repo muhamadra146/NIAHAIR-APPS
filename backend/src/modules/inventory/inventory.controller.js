@@ -6,6 +6,10 @@ const {
   generateServiceMovement,
   createStockAdjustment,
   createBatchStockAdjustment,
+  createOpeningBalance,
+  updateMinStock,
+  listLowStock,
+  getValuation,
 } = require("./inventory.service");
 const { syncInventoryFromAccurate } = require("./inventory.sync.service");
 const {
@@ -101,6 +105,47 @@ const getPeriodsController = async (req, res, next) => {
   }
 };
 
+// ── GAP 2: Opening Balance ────────────────────────────────────────────────────
+const createOpeningBalanceController = async (req, res, next) => {
+  try {
+    const { warehouseId, notes, items } = req.body;
+    const result = await createOpeningBalance({
+      warehouseId,
+      notes,
+      items,
+      createdByEmployeeId: req.user?.employeeId ?? null,
+    });
+    return success(res, result, `Saldo awal dibuat: ${result.created} item (${result.skipped} dilewati)`, StatusCodes.CREATED);
+  } catch (err) { next(err); }
+};
+
+// ── GAP 3: Min Stock ──────────────────────────────────────────────────────────
+const updateMinStockController = async (req, res, next) => {
+  try {
+    const { id }     = req.params;
+    const { minStock } = req.body;
+    const result = await updateMinStock(id, minStock);
+    return success(res, result, "Min stok berhasil diperbarui");
+  } catch (err) { next(err); }
+};
+
+const getLowStockController = async (req, res, next) => {
+  try {
+    const { warehouseId, branchId } = req.query;
+    const result = await listLowStock({ warehouseId, branchId });
+    return success(res, result, `${result.length} item mendekati/di bawah min stok`);
+  } catch (err) { next(err); }
+};
+
+// ── GAP 6: Valuation ──────────────────────────────────────────────────────────
+const getValuationController = async (req, res, next) => {
+  try {
+    const { warehouseId, branchId } = req.query;
+    const result = await getValuation({ warehouseId, branchId });
+    return success(res, result, "Valuasi inventori berhasil dihitung");
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   getMovementsController,
   getInventoriesController,
@@ -111,4 +156,8 @@ module.exports = {
   closePeriodController,
   reopenPeriodController,
   getPeriodsController,
+  createOpeningBalanceController,
+  updateMinStockController,
+  getLowStockController,
+  getValuationController,
 };

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Truck, Search, RefreshCw, Loader2, Phone, Mail, MapPin } from "lucide-react";
+import { Truck, Search, RefreshCw, Loader2, Phone, Mail, MapPin, Globe, MessageCircle } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +11,8 @@ import type { Supplier } from "../types";
 
 export function SupplierPage() {
   const roleCode = useAuthStore((s) => s.user?.roleCode);
-  const isSuperAdmin = roleCode === "SUPER_ADMIN";
+  // B3 fix: OWNER punya akses yang sama dengan SUPER_ADMIN
+  const isSuperAdmin = roleCode === "SUPER_ADMIN" || roleCode === "OWNER";
 
   const [search, setSearch] = useState("");
   const { data: all = [], isLoading, isError, refetch } = useSuppliers();
@@ -70,12 +71,10 @@ export function SupplierPage() {
         </div>
 
         {/* Stats */}
+        {/* B4 fix: hapus teks noisy "hanya SUPER_ADMIN yang bisa sync" */}
         {!isLoading && !isError && (
           <p className="text-sm text-muted-foreground">
             Menampilkan <strong>{filtered.length}</strong> dari <strong>{all.length}</strong> supplier
-            {!isSuperAdmin && (
-              <span className="ml-2 text-xs">(hanya SUPER_ADMIN yang bisa sync)</span>
-            )}
           </p>
         )}
 
@@ -109,6 +108,7 @@ export function SupplierPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Supplier</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Kontak</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Term Bayar</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Diskon</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Terakhir Sync</th>
                     </tr>
@@ -137,7 +137,16 @@ export function SupplierPage() {
 
 // ── Row ───────────────────────────────────────────────────────────────────────
 
+// Format nomor WA: hilangkan karakter non-digit, ganti 0 prefix → 62
+function formatWaNumber(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("0")) return "62" + digits.slice(1);
+  if (digits.startsWith("62")) return digits;
+  return "62" + digits;
+}
+
 function SupplierRow({ supplier: s }: { supplier: Supplier }) {
+  const hasContact = s.phone || s.businessPhone || s.whatsapp || s.email || s.address || s.website;
   return (
     <tr className="hover:bg-muted/20 transition-colors">
       <td className="px-4 py-3">
@@ -150,12 +159,36 @@ function SupplierRow({ supplier: s }: { supplier: Supplier }) {
       <td className="px-4 py-3 space-y-0.5">
         {s.phone && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Phone className="h-3 w-3 shrink-0" />{s.phone}
+            <Phone className="h-3 w-3 shrink-0" />
+            <a href={`tel:${s.phone}`} className="hover:underline">{s.phone}</a>
+          </div>
+        )}
+        {s.businessPhone && s.businessPhone !== s.phone && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Phone className="h-3 w-3 shrink-0 opacity-50" />
+            <a href={`tel:${s.businessPhone}`} className="hover:underline">{s.businessPhone}</a>
+          </div>
+        )}
+        {s.whatsapp && (
+          <div className="flex items-center gap-1 text-xs text-green-600">
+            <MessageCircle className="h-3 w-3 shrink-0" />
+            <a href={`https://wa.me/${formatWaNumber(s.whatsapp)}`} target="_blank" rel="noreferrer"
+              className="hover:underline font-medium">WA {s.whatsapp}</a>
           </div>
         )}
         {s.email && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Mail className="h-3 w-3 shrink-0" />{s.email}
+            <Mail className="h-3 w-3 shrink-0" />
+            <a href={`mailto:${s.email}`} className="hover:underline truncate max-w-[180px]">{s.email}</a>
+          </div>
+        )}
+        {s.website && (
+          <div className="flex items-center gap-1 text-xs text-blue-600">
+            <Globe className="h-3 w-3 shrink-0" />
+            <a href={s.website.startsWith("http") ? s.website : `https://${s.website}`}
+              target="_blank" rel="noreferrer" className="hover:underline truncate max-w-[180px]">
+              {s.website}
+            </a>
           </div>
         )}
         {s.address && (
@@ -164,11 +197,14 @@ function SupplierRow({ supplier: s }: { supplier: Supplier }) {
             <span className="truncate max-w-[200px]">{s.address}</span>
           </div>
         )}
-        {!s.phone && !s.email && !s.address && (
-          <span className="text-xs text-muted-foreground/50">—</span>
-        )}
+        {!hasContact && <span className="text-xs text-muted-foreground/50">—</span>}
       </td>
       <td className="px-4 py-3 text-sm text-muted-foreground">{s.paymentTerms ?? "—"}</td>
+      <td className="px-4 py-3 text-sm text-muted-foreground">
+        {s.purchaseDiscount != null && Number(s.purchaseDiscount) > 0
+          ? <span className="font-mono">{Number(s.purchaseDiscount).toFixed(2)}%</span>
+          : "—"}
+      </td>
       <td className="px-4 py-3">
         <Badge variant={s.isActive ? "default" : "secondary"}>
           {s.isActive ? "Aktif" : "Non-aktif"}
@@ -201,16 +237,37 @@ function SupplierCard({ supplier: s }: { supplier: Supplier }) {
         <div className="space-y-1">
           {s.phone && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Phone className="h-3 w-3" />{s.phone}
+              <Phone className="h-3 w-3" />
+              <a href={`tel:${s.phone}`} className="hover:underline">{s.phone}</a>
+            </div>
+          )}
+          {s.whatsapp && (
+            <div className="flex items-center gap-1.5 text-xs text-green-600">
+              <MessageCircle className="h-3 w-3" />
+              <a href={`https://wa.me/${formatWaNumber(s.whatsapp)}`} target="_blank" rel="noreferrer"
+                className="hover:underline font-medium">WA {s.whatsapp}</a>
             </div>
           )}
           {s.email && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Mail className="h-3 w-3" />{s.email}
+              <Mail className="h-3 w-3" />
+              <a href={`mailto:${s.email}`} className="hover:underline">{s.email}</a>
+            </div>
+          )}
+          {s.website && (
+            <div className="flex items-center gap-1.5 text-xs text-blue-600">
+              <Globe className="h-3 w-3" />
+              <a href={s.website.startsWith("http") ? s.website : `https://${s.website}`}
+                target="_blank" rel="noreferrer" className="hover:underline">{s.website}</a>
             </div>
           )}
           {s.paymentTerms && (
             <p className="text-xs text-muted-foreground">Term: {s.paymentTerms}</p>
+          )}
+          {s.purchaseDiscount != null && Number(s.purchaseDiscount) > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Diskon: <span className="font-mono">{Number(s.purchaseDiscount).toFixed(2)}%</span>
+            </p>
           )}
           {s.lastSyncAt && (
             <p className="text-xs text-muted-foreground">

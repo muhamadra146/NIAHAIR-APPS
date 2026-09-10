@@ -2,7 +2,7 @@
 
 const {
   object, string, number, array, pipe, boolean,
-  minLength, minValue, maxLength, optional, minSize, isoDate,
+  minLength, minValue, maxValue, maxLength, optional, minSize, isoDate,
 } = require('valibot');
 
 const purchaseInvoiceItemSchema = object({
@@ -10,7 +10,7 @@ const purchaseInvoiceItemSchema = object({
   unitId:   pipe(string(), minLength(1, "Satuan wajib dipilih")),
   qty:      pipe(number(), minValue(0.001, "Qty harus lebih dari 0")),
   price:    pipe(number(), minValue(0, "Harga tidak boleh negatif")),
-  discount: optional(pipe(number(), minValue(0))),
+  discount: optional(pipe(number(), minValue(0), maxValue(100, "Diskon tidak boleh melebihi 100%"))),
   notes:    optional(string()),
 });
 

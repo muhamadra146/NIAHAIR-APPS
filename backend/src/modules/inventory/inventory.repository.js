@@ -5,7 +5,7 @@ const MOVEMENT_INCLUDE = {
     select: {
       id:        true,
       item:      { select: { id: true, name: true, itemCode: true, itemType: true } },
-      warehouse: { select: { id: true, name: true } },
+      warehouse: { select: { id: true, name: true, branch: { select: { id: true, name: true, code: true } } } },
     },
   },
   createdByEmployee: { select: { id: true, name: true, employeeCode: true } },
@@ -27,7 +27,19 @@ const INVENTORY_INCLUDE = {
       },
     },
   },
-  warehouse: { select: { id: true, name: true } },
+  warehouse: { select: { id: true, name: true, branch: { select: { id: true, name: true, code: true } } } },
+};
+
+// Fields exposed in inventory balance list (select object used when not using INVENTORY_INCLUDE)
+const INVENTORY_BALANCE_SELECT = {
+  id:           true,
+  warehouseId:  true,
+  itemId:       true,
+  qtyOnHand:    true,
+  qtyReserved:  true,
+  qtyAvailable: true,
+  minStock:     true,
+  updatedAt:    true,
 };
 
 const MOVEMENT_GL_INCLUDE = {

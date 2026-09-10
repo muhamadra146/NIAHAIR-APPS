@@ -21,10 +21,14 @@ export function useViewOnly(): boolean {
 
   const roleCode = user.roleCode as UserRole;
 
-  // Find matching nav item (check parent href or children hrefs)
+  // Find matching nav item (check parent href or children hrefs).
+  // Use exact-match or "/<path>/" prefix to avoid /payroll matching /payroll/bpjs, etc.
+  const matchesHref = (href: string) =>
+    pathname === href || pathname.startsWith(href + "/");
+
   const navItem = sidebarNav.find((item) => {
-    if (pathname.startsWith(item.href) && item.href !== "/") return true;
-    return item.children?.some((child) => pathname.startsWith(child.href));
+    if (item.href !== "/" && matchesHref(item.href)) return true;
+    return item.children?.some((child) => matchesHref(child.href));
   });
 
   if (!navItem) return false;
@@ -33,7 +37,7 @@ export function useViewOnly(): boolean {
   if (navItem.viewOnlyRoles?.includes(roleCode)) return true;
 
   // Check children viewOnlyRoles (for sub-paths like /deposits/:id)
-  const child = navItem.children?.find((c) => pathname.startsWith(c.href));
+  const child = navItem.children?.find((c) => matchesHref(c.href));
   if (child?.viewOnlyRoles?.includes(roleCode)) return true;
 
   return false;

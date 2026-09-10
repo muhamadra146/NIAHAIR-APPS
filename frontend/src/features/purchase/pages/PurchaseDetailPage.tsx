@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, ExternalLink } from "lucide-react";
+import { useAuthStore } from "@/stores/authStore";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,10 @@ function SummaryCard({ label, value, highlight }: { label: string; value: string
 export function PurchaseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+
+  const { user } = useAuthStore();
+  // B7: cancel & delete hanya SUPER_ADMIN / OWNER
+  const canCancelDelete = user?.roleCode === "SUPER_ADMIN" || user?.roleCode === "OWNER";
 
   const { data: invoice, isLoading } = usePurchaseInvoice(id!);
   const cancelMutation = useCancelPurchaseInvoice();
@@ -148,24 +153,26 @@ export function PurchaseDetailPage() {
                 )}
               </div>
 
-              {/* Action buttons */}
-              <div className="flex flex-wrap gap-2 shrink-0">
-                {invoice.status === "POSTED" && (
+              {/* Action buttons — hanya SUPER_ADMIN / OWNER */}
+              {canCancelDelete && (
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  {invoice.status === "POSTED" && (
+                    <Button size="sm" variant="outline"
+                      onClick={() => setConfirmCancel(true)}
+                      disabled={cancelMutation.isPending}
+                      className="h-8 text-xs text-destructive hover:text-destructive border-destructive/40 hover:border-destructive hover:bg-destructive/5 gap-1">
+                      {cancelMutation.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                      Batalkan
+                    </Button>
+                  )}
                   <Button size="sm" variant="outline"
-                    onClick={() => setConfirmCancel(true)}
-                    disabled={cancelMutation.isPending}
-                    className="h-8 text-xs text-destructive hover:text-destructive border-destructive/40 hover:border-destructive hover:bg-destructive/5 gap-1">
-                    {cancelMutation.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-                    Batalkan
+                    onClick={() => setConfirmDelete(true)}
+                    disabled={deleteMutation.isPending}
+                    className="h-8 text-xs text-destructive hover:text-destructive border-destructive/40 hover:border-destructive hover:bg-destructive/5">
+                    Hapus
                   </Button>
-                )}
-                <Button size="sm" variant="outline"
-                  onClick={() => setConfirmDelete(true)}
-                  disabled={deleteMutation.isPending}
-                  className="h-8 text-xs text-destructive hover:text-destructive border-destructive/40 hover:border-destructive hover:bg-destructive/5">
-                  Hapus
-                </Button>
-              </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

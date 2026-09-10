@@ -22,12 +22,18 @@ const buildTransferNo = async (tx) => {
 };
 
 // ── List ──────────────────────────────────────────────────────────────
-const getAll = async ({ page = 1, limit = 20, sourceWarehouseId, destinationWarehouseId, status, branchId }) => {
+const getAll = async ({ page = 1, limit = 20, sourceWarehouseId, destinationWarehouseId, status, branchId, startDate, endDate, search }) => {
   const { skip, take } = paginate(page, limit);
   const where = {};
   if (sourceWarehouseId)      where.sourceWarehouseId      = sourceWarehouseId;
   if (destinationWarehouseId) where.destinationWarehouseId = destinationWarehouseId;
   if (status)                 where.status                 = status;
+  if (search)                 where.transferNo             = { contains: search, mode: "insensitive" };
+  if (startDate || endDate) {
+    where.transferDate = {};
+    if (startDate) where.transferDate.gte = new Date(startDate);
+    if (endDate)   where.transferDate.lte = new Date(endDate + "T23:59:59.999Z");
+  }
   if (branchId) {
     where.OR = [
       { sourceWarehouse:      { branchId } },
@@ -452,6 +458,14 @@ const undoReceive = async (id, userRole, actingBranchId) => {
       const qtyBefore = D(inventory.qtyOnHand);
       const qtyAfter  = qtyBefore.sub(qty);
 
+      if (qtyAfter.lessThan(0)) {
+        throw new AppError(
+          `Stok "${item.item.name}" di gudang tujuan tidak mencukupi untuk dibatalkan. ` +
+          `Tersedia: ${Number(qtyBefore).toLocaleString("id-ID")}, dibutuhkan: ${Number(qty).toLocaleString("id-ID")}`,
+          StatusCodes.BAD_REQUEST,
+        );
+      }
+
       await tx.inventoryMovement.create({
         data: {
           inventoryId:   inventory.id,
@@ -481,4 +495,31 @@ const undoReceive = async (id, userRole, actingBranchId) => {
   return repo.findById(id);
 };
 
-module.exports = { getAll, getById, create, updateStatus, deleteTransfer, undoReceive };
+// ── Manual Accurate Sync ───────────────────────────────────────────────
+const syncToAccurate = async (id) => {
+  const transfer = await repo.findById(id);
+  if (!transfer) throw new AppError("Transfer tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  if (transfer.status === "PENDING" || transfer.status === "CANCELLED") {
+    throw new AppError(
+      "Hanya transfer IN_TRANSIT atau RECEIVED yang dapat disinkronkan ke Accurate",
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
+
+  const syncSvc = require("./stockTransfer.sync.service");
+
+  // Sync TRANSFER_OUT jika belum ada accurateTransferId
+  if (!transfer.accurateTransferId) {
+    await syncSvc.syncTransferToAccurate(id);
+  }
+
+  // Sync TRANSFER_IN jika status RECEIVED dan belum ada accurateReceiveId
+  if (transfer.status === "RECEIVED" && !transfer.accurateReceiveId) {
+    await syncSvc.syncTransferReceiveToAccurate(id);
+  }
+
+  return repo.findById(id);
+};
+
+module.exports = { getAll, getById, create, updateStatus, deleteTransfer, undoReceive, syncToAccurate };

@@ -6,8 +6,12 @@ export interface Supplier {
   code:             string | null;
   email:            string | null;
   phone:            string | null;
+  businessPhone:    string | null;
+  whatsapp:         string | null;
+  website:          string | null;
   address:          string | null;
   paymentTerms:     string | null;
+  purchaseDiscount: string | number | null;
   accurateVendorId: number | null;
   isActive:         boolean;
   lastSyncAt:       string | null;

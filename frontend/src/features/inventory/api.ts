@@ -6,6 +6,9 @@ import type {
   CreateStockAdjustmentInput, StockAdjustmentResult, GlAccount,
   CreateBatchStockAdjustmentInput, BatchStockAdjustmentResult,
   InventoryPeriod,
+  StockOpname, CreateOpnameInput, UpdateOpnameItemInput, StockOpnameListParams,
+  CreateOpeningBalanceInput, OpeningBalanceResult,
+  LowStockItem, ValuationReport,
 } from "./types";
 
 interface InventoryListData {
@@ -117,6 +120,11 @@ export async function undoTransferReceive(id: string): Promise<StockTransfer> {
   return data.data;
 }
 
+export async function syncStockTransferToAccurate(id: string): Promise<StockTransfer> {
+  const { data } = await api.post<ApiResponse<StockTransfer>>(`/stock-transfers/${id}/sync`);
+  return data.data;
+}
+
 // ── Inventory Period (Stock Opname) ───────────────────────────────────────────
 
 export async function fetchInventoryPeriods(): Promise<InventoryPeriod[]> {
@@ -132,4 +140,85 @@ export async function closePeriod(year: number, month: number): Promise<Inventor
 export async function reopenPeriod(year: number, month: number): Promise<InventoryPeriod> {
   const { data } = await api.post<ApiResponse<InventoryPeriod>>("/inventory/periods/reopen", { year, month });
   return data.data;
+}
+
+// ── GAP 1: Stock Opname ───────────────────────────────────────────────────────
+
+interface StockOpnameListData {
+  data: StockOpname[];
+  meta: PaginatedResponse<StockOpname>["meta"];
+}
+
+export async function fetchStockOpnames(params: StockOpnameListParams = {}): Promise<StockOpnameListData> {
+  const { data } = await api.get<ApiResponse<StockOpnameListData>>("/stock-opnames", { params });
+  return data.data;
+}
+
+export async function fetchStockOpname(id: string): Promise<StockOpname> {
+  const { data } = await api.get<ApiResponse<StockOpname>>(`/stock-opnames/${id}`);
+  return data.data;
+}
+
+export async function createStockOpname(input: CreateOpnameInput): Promise<StockOpname> {
+  const { data } = await api.post<ApiResponse<StockOpname>>("/stock-opnames", input);
+  return data.data;
+}
+
+export async function updateOpnameItems(
+  opnameId: string,
+  items: UpdateOpnameItemInput[],
+): Promise<StockOpname> {
+  const { data } = await api.patch<ApiResponse<StockOpname>>(`/stock-opnames/${opnameId}/items`, { items });
+  return data.data;
+}
+
+export async function postStockOpname(opnameId: string): Promise<StockOpname> {
+  const { data } = await api.post<ApiResponse<StockOpname>>(`/stock-opnames/${opnameId}/post`);
+  return data.data;
+}
+
+export async function cancelStockOpname(opnameId: string): Promise<StockOpname> {
+  const { data } = await api.post<ApiResponse<StockOpname>>(`/stock-opnames/${opnameId}/cancel`);
+  return data.data;
+}
+
+// ── GAP 2: Opening Balance ────────────────────────────────────────────────────
+
+export async function createOpeningBalance(input: CreateOpeningBalanceInput): Promise<OpeningBalanceResult> {
+  const { data } = await api.post<ApiResponse<OpeningBalanceResult>>("/inventory/opening-balance", input);
+  return data.data;
+}
+
+// ── GAP 3: Low Stock & Min Stock ─────────────────────────────────────────────
+
+export async function fetchLowStock(params?: { warehouseId?: string; branchId?: string }): Promise<LowStockItem[]> {
+  const { data } = await api.get<ApiResponse<LowStockItem[]>>("/inventory/low-stock", { params });
+  return data.data;
+}
+
+export async function updateMinStock(inventoryId: string, minStock: number | null): Promise<InventoryBalance> {
+  const { data } = await api.put<ApiResponse<InventoryBalance>>(`/inventory/${inventoryId}/min-stock`, { minStock });
+  return data.data;
+}
+
+// ── GAP 6: Inventory Valuation ────────────────────────────────────────────────
+
+export async function fetchValuation(params?: { warehouseId?: string; branchId?: string }): Promise<ValuationReport> {
+  const { data } = await api.get<ApiResponse<ValuationReport>>("/inventory/valuation", { params });
+  return data.data;
+}
+
+// ── Item master search (untuk Opening Balance — cari dari master, bukan inventory) ──
+
+export interface ItemMaster {
+  id:          string;
+  name:        string;
+  itemCode:    string | null;
+  itemType:    string;
+  defaultUnit: { id: string; name: string } | null;
+}
+
+export async function fetchItems(params: { search?: string; itemType?: string; limit?: number } = {}): Promise<ItemMaster[]> {
+  const { data } = await api.get<ApiResponse<{ data: ItemMaster[] }>>("/items", { params });
+  return data.data.data ?? [];
 }
