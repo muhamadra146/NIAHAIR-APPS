@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Loader2, ChevronRight, Lock, Unlock, FlaskConical,
   Package, Wrench, Users, Clock, CheckCircle2, XCircle, AlertTriangle,
+  RefreshCw, Link2,
 } from "lucide-react";
 import { PageContainer }     from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,7 +44,7 @@ function ConfirmDialog({
     </Dialog>
   );
 }
-import { useProductionOrder, useUpdateProductionStatus, useSubmitProductionQC, useDeleteProductionOrder } from "../hooks";
+import { useProductionOrder, useUpdateProductionStatus, useSubmitProductionQC, useDeleteProductionOrder, useSyncProductionToAccurate } from "../hooks";
 import type { ProductionStatus, ProductionQCStatus } from "../types";
 
 // ── Status colours ────────────────────────────────────────────────────────────
@@ -62,13 +63,18 @@ const STATUS_CLASS: Record<ProductionStatus, string> = {
   CANCELLED:   "bg-destructive/10 text-destructive",
 };
 
+// QC tidak punya next-status di sini — transisi ke COMPLETED dilakukan
+// otomatis via QC dialog (Submit QC → PASS). Tombol "Selesaikan" dihapus
+// karena selalu gagal tanpa QC PASS terlebih dahulu.
 const NEXT_STATUS: Partial<Record<ProductionStatus, { label: string; status: ProductionStatus; variant?: "destructive" | "default" | "outline" }[]>> = {
   DRAFT:       [{ label: "Release",         status: "RELEASED",    variant: "default"     },
                 { label: "Batalkan",        status: "CANCELLED",   variant: "destructive" }],
   RELEASED:    [{ label: "Mulai Produksi",  status: "IN_PROGRESS", variant: "default"     },
                 { label: "Batalkan",        status: "CANCELLED",   variant: "destructive" }],
-  IN_PROGRESS: [{ label: "Kirim ke QC",    status: "QC",          variant: "default"     }],
-  QC:          [{ label: "Selesaikan",      status: "COMPLETED",   variant: "default"     }],
+  IN_PROGRESS: [{ label: "Kirim ke QC",    status: "QC",          variant: "default"     },
+                { label: "Batalkan",        status: "CANCELLED",   variant: "destructive" }],
+  // QC: lihat render khusus di bawah — tombol "Submit QC" + "Batalkan" tanpa "Selesaikan"
+  // Transisi QC → COMPLETED ditangani otomatis saat Submit QC dengan hasil PASS.
 };
 
 // ── QC Dialog ─────────────────────────────────────────────────────────────────
@@ -138,6 +144,7 @@ export function ProductionDetailPage() {
   const { data: order, isLoading, isError } = useProductionOrder(id);
   const updateStatus = useUpdateProductionStatus();
   const deleteMut    = useDeleteProductionOrder();
+  const syncMut      = useSyncProductionToAccurate();
 
   const [qcOpen, setQcOpen]         = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -211,14 +218,26 @@ export function ProductionDetailPage() {
               <div className="flex flex-wrap gap-2">
                 {/* QC submit button — shown when status = QC */}
                 {order.status === "QC" && (
-                  <Button
-                    size="sm"
-                    variant="default"
-                    className="gap-1.5 bg-purple-600 hover:bg-purple-700"
-                    onClick={() => setQcOpen(true)}
-                  >
-                    <FlaskConical className="h-4 w-4" /> Submit QC
-                  </Button>
+                  <>
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="gap-1.5 bg-purple-600 hover:bg-purple-700"
+                      onClick={() => setQcOpen(true)}
+                    >
+                      <FlaskConical className="h-4 w-4" /> Submit QC
+                    </Button>
+                    {/* Operator bisa batalkan dari QC jika diperlukan */}
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleTransition("CANCELLED")}
+                      disabled={updateStatus.isPending}
+                    >
+                      {transitioning === "CANCELLED" && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+                      Batalkan
+                    </Button>
+                  </>
                 )}
                 {nextStatuses.map((ns) => (
                   <Button
@@ -283,6 +302,63 @@ export function ProductionDetailPage() {
             </Card>
           )}
         </div>
+
+        {/* Accurate sync card — hanya tampil saat COMPLETED */}
+        {order.status === "COMPLETED" && (
+          <Card>
+            <CardHeader className="pb-2 pt-4">
+              <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                <Link2 className="h-4 w-4" /> Accurate Online
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-3 text-sm">
+              {/* Pekerjaan Pesanan */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Pekerjaan Pesanan</span>
+                {order.accuratePekerjaanNumber ? (
+                  <span className="font-mono text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
+                    {order.accuratePekerjaanNumber}
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground italic">Belum tersync</span>
+                )}
+              </div>
+              {/* Penyelesaian Pesanan */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Penyelesaian Pesanan</span>
+                {order.accuratePenyelesaianNumber ? (
+                  <span className="font-mono text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
+                    {order.accuratePenyelesaianNumber}
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground italic">Belum tersync</span>
+                )}
+              </div>
+              {/* Last sync time */}
+              {order.lastSyncAt && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Terakhir Sync</span>
+                  <span className="text-xs text-muted-foreground">{fmtDt(order.lastSyncAt)}</span>
+                </div>
+              )}
+              {/* Manual sync button */}
+              <div className="pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 w-full"
+                  onClick={() => syncMut.mutate(id)}
+                  disabled={syncMut.isPending}
+                >
+                  {syncMut.isPending
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <RefreshCw className="h-4 w-4" />}
+                  {order.accuratePekerjaanId ? "Sync Ulang ke Accurate" : "Sync ke Accurate"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Finished goods items */}
         <Card>

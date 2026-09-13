@@ -11,6 +11,8 @@ const {
   updateItemsController,
   postController,
   cancelController,
+  deleteController,
+  syncController,
 } = require("./stockOpname.controller");
 
 const router = Router();
@@ -55,6 +57,22 @@ router.post(
   authenticate,
   authorize(...WRITE_ROLES),
   cancelController,
+);
+
+// Hapus — hanya CANCELLED, hanya WRITE_ROLES
+router.delete(
+  "/:id",
+  authenticate,
+  authorize(...WRITE_ROLES),
+  deleteController,
+);
+
+// Sync ke Accurate — WRITE_ROLES saja (SUPER_ADMIN, OWNER, MANAGER)
+router.post(
+  "/:id/sync",
+  authenticate,
+  authorize(...WRITE_ROLES),
+  syncController,
 );
 
 module.exports = router;

@@ -134,13 +134,6 @@ export function StockTransferPage() {
     setExpandedId((prev) => (prev === id ? null : id));
   }
 
-  function handleAction(id: string, status: string) {
-    updateStatusMut.mutate({ id, status, branchId }, {
-      onSuccess: () => toast.success("Status transfer berhasil diperbarui"),
-      onError:   (e: Error) => toast.error(e.message),
-    });
-  }
-
   return (
     <PageContainer title="Transfer Stok" subtitle="Pemindahan stok antar gudang dan cabang">
       <Card>

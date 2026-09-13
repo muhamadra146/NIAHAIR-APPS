@@ -58,6 +58,20 @@ const cancelController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const deleteController = async (req, res, next) => {
+  try {
+    const result = await svc.deleteOpname(req.params.id);
+    success(res, result, `Opname ${result.opnameNo} berhasil dihapus`);
+  } catch (err) { next(err); }
+};
+
+const syncController = async (req, res, next) => {
+  try {
+    const result = await svc.syncToAccurate(req.params.id);
+    success(res, result, "Opname berhasil disinkronkan ke Accurate");
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   getAllController,
   getByIdController,
@@ -65,4 +79,6 @@ module.exports = {
   updateItemsController,
   postController,
   cancelController,
+  deleteController,
+  syncController,
 };

@@ -1,5 +1,6 @@
 const { success, created } = require("../../common/responses/apiResponse");
-const svc = require("./production.service");
+const svc     = require("./production.service");
+const syncSvc = require("./production.sync.service");
 
 const getAllController = async (req, res, next) => {
   try {
@@ -56,7 +57,17 @@ const deleteController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const syncController = async (req, res, next) => {
+  try {
+    await syncSvc.syncProductionToAccurate(req.params.id);
+    // Kembalikan data terkini termasuk field Accurate yang baru
+    const order = await svc.getById(req.params.id);
+    return success(res, order, "Production order berhasil disinkronkan ke Accurate");
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   getAllController, getByIdController, getStatsController,
   createController, updateStatusController, submitQCController, deleteController,
+  syncController,
 };

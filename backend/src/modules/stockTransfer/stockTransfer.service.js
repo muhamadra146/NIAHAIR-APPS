@@ -232,14 +232,16 @@ const generateTransferInMovements = async (transfer, receivedItems = null) => {
       // Use receivedQty if provided, otherwise fall back to original qty
       const qty = receivedMap.has(item.itemId) ? receivedMap.get(item.itemId) : D(item.qty);
 
-      if (qty.lessThanOrEqualTo(0)) continue;
-
-      // Save receivedQty on the item record using raw query (new field)
+      // Save receivedQty BEFORE the skip-if-zero guard so that items explicitly
+      // received with qty=0 (partial receive) store 0 instead of staying NULL.
+      // NULL would cause syncTransferReceiveToAccurate to fall back to sentQty (wrong).
       await tx.$executeRawUnsafe(
         `UPDATE "stock_transfer_items" SET "receivedQty" = $1 WHERE id = $2`,
         qty.toFixed(6),
         item.id,
       );
+
+      if (qty.lessThanOrEqualTo(0)) continue;
 
       const inventory = await tx.inventory.upsert({
         where:  { warehouseId_itemId: { warehouseId: transfer.destinationWarehouseId, itemId: item.itemId } },

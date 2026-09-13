@@ -3,6 +3,7 @@ import { toast } from "@/lib/toast";
 import {
   fetchProductionOrders, fetchProductionOrder, fetchProductionStats,
   createProductionOrder, updateProductionStatus, submitProductionQC, deleteProductionOrder,
+  syncProductionToAccurate,
 } from "./api";
 import type { CreateProductionInput, UpdateStatusInput, SubmitQCInput, ProductionListParams } from "./types";
 
@@ -66,10 +67,24 @@ export function useSubmitProductionQC() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: SubmitQCInput }) =>
       submitProductionQC(id, input),
-    onSuccess: (_data, { input }) => {
+    onSuccess: (data, { id, input }) => {
       qc.invalidateQueries({ queryKey: ["production-orders"] });
+      qc.invalidateQueries({ queryKey: ["production-order", id] });  // ← fix: refresh detail
       qc.invalidateQueries({ queryKey: ["production-stats"] });
       toast.success(`QC ${input.status} berhasil disubmit`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useSyncProductionToAccurate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => syncProductionToAccurate(id),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["production-orders"] });
+      qc.invalidateQueries({ queryKey: ["production-order", data.id] });
+      toast.success("Production order berhasil disinkronkan ke Accurate");
     },
     onError: (err: Error) => toast.error(err.message),
   });

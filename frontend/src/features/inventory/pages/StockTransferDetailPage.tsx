@@ -462,8 +462,8 @@ export function StockTransferDetailPage() {
 
   return (
     <PageContainer>
-      {/* ── Hidden print area ──────────────────────────────────────────── */}
-      <div id="transfer-print-area" style={{ display: "none" }}>
+      {/* ── Hidden print area (visibility:hidden so @media print can reveal it) */}
+      <div id="transfer-print-area" style={{ position: "fixed", top: 0, left: 0, width: "100%", visibility: "hidden", pointerEvents: "none", zIndex: -1 }}>
         <PrintSuratJalan transfer={transfer} />
       </div>
 

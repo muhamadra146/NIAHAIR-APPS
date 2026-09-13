@@ -5,6 +5,7 @@ const prisma          = require("../../config/prisma");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo            = require("./stockOpname.repository");
 const { validatePeriodOpen } = require("../inventory/inventory.period.service");
+const { syncOpnameToAccurate } = require("./stockOpname.sync.service");
 
 const D = (v) => new Prisma.Decimal(String(v));
 
@@ -158,7 +159,11 @@ const updateItems = async (opnameId, items) => {
 //
 // Item yang qtyActual null dianggap sama dengan qtySystem (tidak ada selisih).
 // Hanya item yang berbeda dari qtySystem yang menghasilkan movement.
-// Setiap movement bertipe ADJUSTMENT + sourceModule OPNAME + referenceType STOCK_OPNAME.
+// qtyChange = selisih vs snapshot (bukan vs balance terkini) supaya mutasi sah
+// yang terjadi SELAMA opname berlangsung tidak ikut terhapus.
+// Contoh: snapshot=100, masuk pembelian 20 (sehingga qtyOnHand=120), hitung fisik=95
+//   → selisih = 95-100 = -5; qtyAfter = 120+(-5) = 115  ← BENAR
+//   (bukan: qtyAfter = qtyActual = 95; karena itu menghapus 20 unit pembelian sah)
 const post = async (opnameId, postedByEmployeeId) => {
   await validatePeriodOpen(new Date());
 
@@ -172,7 +177,7 @@ const post = async (opnameId, postedByEmployeeId) => {
   }
 
   return prisma.$transaction(async (tx) => {
-    let adjustedCount = 0;
+    let adjustedCount = 0; // hanya item yang benar-benar ada selisih
 
     for (const item of opname.items) {
       // qtyActual null → anggap sama dengan system (tidak ada koreksi)
@@ -180,9 +185,19 @@ const post = async (opnameId, postedByEmployeeId) => {
         ? D(String(item.qtyActual))
         : D(String(item.qtySystem));
 
+      // Selisih vs snapshot saat opname dibuat (bukan vs balance terkini)
       const qtyDifference = qtyActual.sub(D(String(item.qtySystem)));
 
-      // Ambil balance terkini untuk qtyBefore/After yang akurat
+      // Jika tidak ada selisih: catat qtyActual & qtyDifference tanpa movement
+      if (qtyDifference.equals(D("0"))) {
+        await tx.stockOpnameItem.update({
+          where: { id: item.id },
+          data:  { qtyActual, qtyDifference: D("0") },
+        });
+        continue; // lewati pembuatan movement dan perubahan inventory
+      }
+
+      // Ada selisih → ambil balance terkini, lalu terapkan delta
       const inv = await tx.inventory.findUnique({
         where:  { id: item.inventoryId },
         select: { qtyOnHand: true, qtyReserved: true },
@@ -190,11 +205,11 @@ const post = async (opnameId, postedByEmployeeId) => {
       if (!inv) continue;
 
       const qtyBefore    = D(String(inv.qtyOnHand));
-      const qtyChange    = qtyActual.sub(qtyBefore);
-      const qtyAfter     = qtyActual;
+      const qtyChange    = qtyDifference;               // delta vs snapshot
+      const qtyAfter     = qtyBefore.add(qtyChange);    // terapkan delta ke balance terkini
       const newAvailable = qtyAfter.sub(D(String(inv.qtyReserved)));
 
-      // Buat movement hanya jika ada perubahan
+      // Buat movement hanya untuk item yang ada selisih
       const movement = await tx.inventoryMovement.create({
         data: {
           inventoryId:         item.inventoryId,
@@ -225,8 +240,8 @@ const post = async (opnameId, postedByEmployeeId) => {
       await tx.stockOpnameItem.update({
         where: { id: item.id },
         data: {
-          qtyActual:           qtyActual,
-          qtyDifference:       qtyDifference,
+          qtyActual,
+          qtyDifference,
           inventoryMovementId: movement.id,
         },
       });
@@ -267,4 +282,37 @@ const cancel = async (opnameId) => {
   return { cancelled: true };
 };
 
-module.exports = { getAll, getById, create, updateItems, post, cancel };
+// ── Delete — hanya opname CANCELLED yang boleh dihapus ───────────────────────
+const deleteOpname = async (id) => {
+  const opname = await repo.findById(id);
+  if (!opname) throw new AppError("Opname tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (opname.status !== "CANCELLED") {
+    throw new AppError(
+      "Hanya opname berstatus Dibatalkan yang dapat dihapus",
+      StatusCodes.CONFLICT
+    );
+  }
+  await prisma.$transaction([
+    prisma.stockOpnameItem.deleteMany({ where: { stockOpnameId: id } }),
+    prisma.stockOpname.delete({ where: { id } }),
+  ]);
+  return { deleted: true, opnameNo: opname.opnameNo };
+};
+
+// ── Sync ke Accurate — 2 dokumen (Perintah → Hasil) ──────────────────────────
+const syncToAccurate = async (id) => {
+  const opname = await repo.findById(id);
+  if (!opname) throw new AppError("Opname tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  if (opname.status !== "POSTED") {
+    throw new AppError(
+      "Hanya opname berstatus POSTED yang bisa disinkronkan ke Accurate",
+      StatusCodes.CONFLICT
+    );
+  }
+
+  await syncOpnameToAccurate(id);
+  return repo.findById(id); // kembalikan data terkini termasuk ID Accurate
+};
+
+module.exports = { getAll, getById, create, updateItems, post, cancel, deleteOpname, syncToAccurate };

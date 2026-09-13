@@ -182,6 +182,16 @@ export async function cancelStockOpname(opnameId: string): Promise<StockOpname> 
   return data.data;
 }
 
+export async function deleteStockOpname(opnameId: string): Promise<{ deleted: boolean; opnameNo: string }> {
+  const { data } = await api.delete<ApiResponse<{ deleted: boolean; opnameNo: string }>>(`/stock-opnames/${opnameId}`);
+  return data.data;
+}
+
+export async function syncStockOpnameToAccurate(opnameId: string): Promise<StockOpname> {
+  const { data } = await api.post<ApiResponse<StockOpname>>(`/stock-opnames/${opnameId}/sync`);
+  return data.data;
+}
+
 // ── GAP 2: Opening Balance ────────────────────────────────────────────────────
 
 export async function createOpeningBalance(input: CreateOpeningBalanceInput): Promise<OpeningBalanceResult> {

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import {
   Archive, Lock, Unlock, ChevronDown, AlertTriangle, Loader2,
-  Plus, ClipboardList, Eye, Send, XCircle, Check, RefreshCw,
+  Plus, ClipboardList, Eye, Send, XCircle, Check, RefreshCw, Link2, Trash2, Search, Filter,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import {
   useInventoryPeriods, useClosePeriod, useReopenPeriod,
   useStockOpnames, useStockOpname, useCreateStockOpname,
   useUpdateOpnameItems, usePostStockOpname, useCancelStockOpname,
+  useDeleteStockOpname, useSyncStockOpnameToAccurate,
 } from "../hooks";
 import { useWarehouses } from "@/features/settings/hooks";
 import type { InventoryPeriod, StockOpname, StockOpnameStatus, UpdateOpnameItemInput } from "../types";
@@ -98,8 +99,11 @@ function OpnameTab() {
   const canManage = ["SUPER_ADMIN","OWNER","MANAGER"].includes(user?.roleCode ?? "");
   const [page, setPage]           = useState(1);
   const [filterStatus, setFilter] = useState<StockOpnameStatus | "">("");
-  const [showCreate, setShowCreate] = useState(false);
-  const [detailId, setDetailId]     = useState<string | null>(null);
+  const [showCreate, setShowCreate]       = useState(false);
+  const [detailId, setDetailId]           = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const deleteMutList = useDeleteStockOpname();
 
   const { data, isLoading, refetch } = useStockOpnames({
     page, limit: 20,
@@ -170,6 +174,7 @@ function OpnameTab() {
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Item</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Dibuat</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Diposting</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Accurate</th>
                     <th className="px-4 py-3 w-10" />
                   </tr>
                 </thead>
@@ -194,16 +199,45 @@ function OpnameTab() {
                           ? new Date(opname.postedAt).toLocaleDateString("id-ID")
                           : "—"}
                       </td>
+                      <td className="px-4 py-3">
+                        {opname.status === "POSTED" ? (
+                          opname.accurateResultId ? (
+                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 gap-1">
+                              <Link2 className="h-3 w-3" /> Tersinkron
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs text-muted-foreground gap-1">
+                              Belum Sync
+                            </Badge>
+                          )
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0"
-                          onClick={() => setDetailId(opname.id)}
-                          title="Lihat detail"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={() => setDetailId(opname.id)}
+                            title="Lihat detail"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                          {opname.status === "CANCELLED" && canManage && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => setConfirmDeleteId(opname.id)}
+                              title="Hapus opname"
+                              disabled={deleteMutList.isPending}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -227,6 +261,36 @@ function OpnameTab() {
           opnameId={detailId}
           onClose={() => setDetailId(null)}
         />
+      )}
+
+      {/* Confirm Delete */}
+      {confirmDeleteId && (
+        <Dialog open onOpenChange={(o) => { if (!o) setConfirmDeleteId(null); }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <Trash2 className="h-5 w-5" /> Hapus Opname
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm py-2">
+              Yakin ingin menghapus opname ini? Data akan dihapus permanen dan tidak bisa dikembalikan.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setConfirmDeleteId(null)} disabled={deleteMutList.isPending}>Batal</Button>
+              <Button variant="destructive" size="sm"
+                disabled={deleteMutList.isPending}
+                onClick={() => {
+                  deleteMutList.mutate(confirmDeleteId, {
+                    onSuccess: () => setConfirmDeleteId(null),
+                  });
+                }}
+              >
+                {deleteMutList.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+                Ya, Hapus
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
@@ -299,10 +363,14 @@ function OpnameDetailDialog({ opnameId, onClose }: { opnameId: string; onClose: 
   const [editedItems, setEditedItems] = useState<Record<string, { qtyActual: string; notes: string }>>({});
   const [showConfirmPost, setShowConfirmPost]     = useState(false);
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
+  const [filterCategory, setFilterCategory]       = useState<string>("");
+  const [searchItem, setSearchItem]               = useState<string>("");
 
   const updateMut  = useUpdateOpnameItems(opnameId);
   const postMut    = usePostStockOpname();
   const cancelMut  = useCancelStockOpname();
+  const deleteMut  = useDeleteStockOpname();
+  const syncMut    = useSyncStockOpnameToAccurate();
 
   function setItemEdit(id: string, field: "qtyActual" | "notes", val: string) {
     setEditedItems((prev) => ({
@@ -325,17 +393,20 @@ function OpnameDetailDialog({ opnameId, onClose }: { opnameId: string; onClose: 
 
   function handleSaveItems() {
     if (!opname) return;
-    const items: UpdateOpnameItemInput[] = opname.items!.map((item) => {
-      const edited = editedItems[item.id];
-      return {
-        id:        item.id,
-        qtyActual: edited?.qtyActual !== "" && edited?.qtyActual != null
-          ? parseFloat(edited.qtyActual)
-          : null,
-        notes:     edited?.notes ?? item.notes ?? null,
-      };
+    // Hanya kirim item yang benar-benar diedit pada sesi ini.
+    // Mengirim semua item (termasuk yang tidak diedit) akan me-reset qtyActual
+    // yang sudah tersimpan di DB menjadi null untuk item yang tidak ada di editedItems.
+    const items: UpdateOpnameItemInput[] = Object.entries(editedItems).map(([id, edited]) => ({
+      id,
+      qtyActual: edited.qtyActual !== "" && edited.qtyActual != null
+        ? parseFloat(edited.qtyActual)
+        : null,
+      notes: edited.notes || null,
+    }));
+    if (items.length === 0) return;
+    updateMut.mutate(items, {
+      onSuccess: () => setEditedItems({}),  // reset dirty state setelah berhasil simpan
     });
-    updateMut.mutate(items);
   }
 
   const isDirty   = Object.keys(editedItems).length > 0;
@@ -344,9 +415,30 @@ function OpnameDetailDialog({ opnameId, onClose }: { opnameId: string; onClose: 
   const canPost   = isActive && canManage;   // hanya MANAGEMENT yang bisa posting
   const canCancel = isActive && canManage;   // hanya MANAGEMENT yang bisa cancel
 
+  // ── Derive kategori unik dari items ─────────────────────────────────────────
+  const allCategories = opname
+    ? Array.from(
+        new Map(
+          opname.items
+            ?.filter((it) => it.inventory.item.category)
+            .map((it) => [it.inventory.item.category!.id, it.inventory.item.category!]) ?? []
+        ).values()
+      ).sort((a, b) => a.name.localeCompare(b.name))
+    : [];
+
+  // ── Filter items berdasarkan kategori dan search ──────────────────────────
+  const filteredItems = (opname?.items ?? []).filter((item) => {
+    const matchCat    = !filterCategory || item.inventory.item.category?.id === filterCategory;
+    const needle      = searchItem.toLowerCase();
+    const matchSearch = !needle
+      || item.inventory.item.name.toLowerCase().includes(needle)
+      || (item.inventory.item.itemCode ?? "").toLowerCase().includes(needle);
+    return matchCat && matchSearch;
+  });
+
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ClipboardList className="h-5 w-5" />
@@ -363,10 +455,10 @@ function OpnameDetailDialog({ opnameId, onClose }: { opnameId: string; onClose: 
         ) : (
           <>
             {/* Info row */}
-            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground border-b border-border pb-3">
+            <div className="flex flex-wrap gap-3 sm:gap-4 text-sm text-muted-foreground border-b border-border pb-3">
               <div>
                 <span className="text-xs font-medium uppercase tracking-wide">Gudang</span>
-                <p className="text-foreground font-medium">{opname.warehouse.name}</p>
+                <p className="text-foreground font-medium text-sm">{opname.warehouse.name}</p>
               </div>
               <div>
                 <span className="text-xs font-medium uppercase tracking-wide">Status</span>
@@ -379,25 +471,88 @@ function OpnameDetailDialog({ opnameId, onClose }: { opnameId: string; onClose: 
               {opname.notes && (
                 <div>
                   <span className="text-xs font-medium uppercase tracking-wide">Catatan</span>
-                  <p>{opname.notes}</p>
+                  <p className="text-sm">{opname.notes}</p>
+                </div>
+              )}
+              {opname.status === "POSTED" && (
+                <div>
+                  <span className="text-xs font-medium uppercase tracking-wide">Accurate</span>
+                  <p>
+                    {opname.accurateResultId ? (
+                      <span className="text-xs text-blue-700 font-medium flex items-center gap-1">
+                        <Link2 className="h-3 w-3" />
+                        Tersinkron · {opname.accurateOrderNumber ?? "—"} / {opname.accurateResultNumber ?? "—"}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Belum disinkronkan</span>
+                    )}
+                  </p>
                 </div>
               )}
             </div>
 
-            {/* Items table */}
-            <div className="flex-1 overflow-y-auto">
+            {/* Filter bar — search + dropdown kategori */}
+            <div className="flex flex-wrap items-center gap-2 py-2 border-b border-border">
+              {/* Search */}
+              <div className="relative flex-1 min-w-[140px]">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchItem}
+                  onChange={(e) => setSearchItem(e.target.value)}
+                  placeholder="Cari barang..."
+                  className="w-full pl-8 pr-3 h-8 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+              {/* Dropdown kategori + counter dalam satu baris */}
+              <div className="flex items-center gap-2">
+                {allCategories.length > 0 && (
+                  <div className="relative">
+                    <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <select
+                      value={filterCategory}
+                      onChange={(e) => setFilterCategory(e.target.value)}
+                      className={`pl-8 pr-7 h-8 rounded-md border text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring appearance-none cursor-pointer w-[150px] ${
+                        filterCategory
+                          ? "border-primary bg-primary/5 text-primary font-medium"
+                          : "border-input bg-background text-muted-foreground"
+                      }`}
+                    >
+                      <option value="">Semua Kategori</option>
+                      {allCategories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  </div>
+                )}
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {filteredItems.length}/{opname.items?.length ?? 0}
+                </span>
+              </div>
+            </div>
+
+            {/* Items table — max ~10 baris visible, scroll internal */}
+            <div className="overflow-y-auto max-h-[300px] sm:max-h-[420px] rounded-md border border-border">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-background z-10">
-                  <tr className="border-b border-border bg-muted/50">
-                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Barang</th>
-                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">Qty Sistem</th>
-                    <th className="px-3 py-2 text-right font-medium text-muted-foreground w-32">Qty Aktual</th>
-                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">Selisih</th>
-                    {canEdit && <th className="px-3 py-2 text-left font-medium text-muted-foreground">Catatan</th>}
+                <thead className="sticky top-0 bg-background z-10 shadow-[0_1px_0_0_hsl(var(--border))]">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground text-xs">Barang</th>
+                    <th className="px-3 py-2 text-right font-medium text-muted-foreground text-xs">Qty Sistem</th>
+                    <th className="px-3 py-2 text-right font-medium text-muted-foreground text-xs w-28">Qty Aktual</th>
+                    <th className="px-3 py-2 text-right font-medium text-muted-foreground text-xs">Selisih</th>
+                    {canEdit && <th className="hidden sm:table-cell px-3 py-2 text-left font-medium text-muted-foreground text-xs">Catatan</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {(opname.items ?? []).map((item) => {
+                  {filteredItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={canEdit ? 5 : 4} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                        {searchItem || filterCategory ? "Tidak ada item yang cocok dengan filter" : "Tidak ada item"}
+                      </td>
+                    </tr>
+                  ) : null}
+                  {filteredItems.map((item) => {
                     const edited    = editedItems[item.id];
                     const qtySystem = Number(item.qtySystem);
                     const qtyActualRaw = edited?.qtyActual ?? (item.qtyActual != null ? String(Number(item.qtyActual)) : "");
@@ -408,9 +563,16 @@ function OpnameDetailDialog({ opnameId, onClose }: { opnameId: string; onClose: 
                       <tr key={item.id} className={`border-b border-border hover:bg-muted/10 transition-colors ${diff !== null && diff !== 0 ? "bg-amber-50/30 dark:bg-amber-950/10" : ""}`}>
                         <td className="px-3 py-2">
                           <p className="font-medium text-sm">{item.inventory.item.name}</p>
-                          {item.inventory.item.itemCode && (
-                            <p className="text-xs text-muted-foreground font-mono">{item.inventory.item.itemCode}</p>
-                          )}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {item.inventory.item.itemCode && (
+                              <span className="text-xs text-muted-foreground font-mono">{item.inventory.item.itemCode}</span>
+                            )}
+                            {item.inventory.item.category && (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border/60">
+                                {item.inventory.item.category.name}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2 text-right font-mono text-sm">
                           {qtySystem.toLocaleString("id-ID")}
@@ -441,7 +603,7 @@ function OpnameDetailDialog({ opnameId, onClose }: { opnameId: string; onClose: 
                           </span>
                         </td>
                         {canEdit && (
-                          <td className="px-3 py-2">
+                          <td className="hidden sm:table-cell px-3 py-2">
                             <Input
                               value={edited?.notes ?? item.notes ?? ""}
                               onChange={(e) => { initEdit(item); setItemEdit(item.id, "notes", e.target.value); }}
@@ -459,19 +621,25 @@ function OpnameDetailDialog({ opnameId, onClose }: { opnameId: string; onClose: 
           </>
         )}
 
-        <DialogFooter className="border-t border-border pt-3 flex flex-wrap gap-2">
+        <DialogFooter className="border-t border-border pt-3 flex flex-wrap gap-2 items-center justify-start sm:justify-end">
           {opname && (
             <>
-              {canEdit && isDirty && (
+              {canEdit && (
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant={isDirty ? "default" : "outline"}
                   onClick={handleSaveItems}
-                  disabled={updateMut.isPending}
+                  disabled={!isDirty || updateMut.isPending}
                   className="gap-1.5"
+                  title={isDirty ? "Simpan perubahan qty aktual" : "Belum ada perubahan"}
                 >
                   {updateMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  Simpan Item
+                  Simpan
+                  {isDirty && (
+                    <span className="ml-1 bg-primary-foreground/20 rounded-full px-1.5 text-xs">
+                      {Object.keys(editedItems).length}
+                    </span>
+                  )}
                 </Button>
               )}
 
@@ -497,7 +665,36 @@ function OpnameDetailDialog({ opnameId, onClose }: { opnameId: string; onClose: 
                   <Send className="h-3.5 w-3.5" /> Posting Opname
                 </Button>
               )}
+
+              {/* Tombol Sync ke Accurate — hanya saat POSTED dan user adalah MANAGEMENT */}
+              {opname.status === "POSTED" && canManage && (
+                <Button
+                  size="sm"
+                  variant={opname.accurateResultId ? "outline" : "default"}
+                  className="gap-1.5"
+                  onClick={() => syncMut.mutate(opname.id)}
+                  disabled={syncMut.isPending}
+                  title={opname.accurateResultId ? "Sudah tersinkron — klik untuk sync ulang" : "Sinkronkan ke Accurate Online"}
+                >
+                  {syncMut.isPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Link2 className="h-3.5 w-3.5" />}
+                  {opname.accurateResultId ? "Sync Ulang" : "Sync ke Accurate"}
+                </Button>
+              )}
             </>
+          )}
+          {opname?.status === "CANCELLED" && canManage && (
+            <Button
+              size="sm"
+              variant="destructive"
+              className="gap-1.5"
+              onClick={() => deleteMut.mutate(opname.id, { onSuccess: () => onClose() })}
+              disabled={deleteMut.isPending}
+            >
+              {deleteMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Hapus
+            </Button>
           )}
           <Button variant="outline" size="sm" onClick={onClose} className="ml-auto">Tutup</Button>
         </DialogFooter>

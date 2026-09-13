@@ -4,28 +4,32 @@ const AppError                     = require("../../common/errors/AppError");
 const prisma                       = require("../../config/prisma");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo                         = require("./production.repository");
+const { syncProductionToAccurate } = require("./production.sync.service");
 
 // ── Decimal helper ────────────────────────────────────────────────────────────
 const D = (v) => new Prisma.Decimal(String(v));
 
 // ── Production number generator ───────────────────────────────────────────────
 // Format: PROD-YYYYMMDD-0001
+// Gunakan WIB (UTC+7) agar nomor urut tidak salah tanggal saat tengah malam UTC.
 const buildProductionNo = async (tx) => {
-  const now    = new Date();
-  const y      = now.getFullYear();
-  const m      = String(now.getMonth() + 1).padStart(2, "0");
-  const d      = String(now.getDate()).padStart(2, "0");
+  const now    = new Date(Date.now() + 7 * 60 * 60 * 1000); // UTC → WIB
+  const y      = now.getUTCFullYear();
+  const m      = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const d      = String(now.getUTCDate()).padStart(2, "0");
   const prefix = `PROD-${y}${m}${d}-`;
   const seq    = await repo.findMaxSeqToday(prefix, tx);
   return `${prefix}${String(seq + 1).padStart(4, "0")}`;
 };
 
 // ── Status transition table ───────────────────────────────────────────────────
+// QC → COMPLETED: hanya bisa via submitQC (PASS auto-complete).
+// QC → CANCELLED: operator bisa batalkan langsung dari UI saat di QC.
 const ALLOWED_TRANSITIONS = {
   DRAFT:       ["RELEASED", "CANCELLED"],
   RELEASED:    ["IN_PROGRESS", "CANCELLED"],
-  IN_PROGRESS: ["QC"],
-  QC:          ["COMPLETED"],
+  IN_PROGRESS: ["QC", "CANCELLED"],
+  QC:          ["COMPLETED", "CANCELLED"],
   COMPLETED:   [],
   CANCELLED:   [],
 };
@@ -130,7 +134,7 @@ const updateStatus = async (id, newStatus, employeeId) => {
     );
   }
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const updateData = { status: newStatus };
 
     // ── IN_PROGRESS: set actualStartAt + consume materials ─────────────────
@@ -188,6 +192,17 @@ const updateStatus = async (id, newStatus, employeeId) => {
 
     return updated;
   });
+
+  // ── Auto-sync ke Accurate saat COMPLETED ─────────────────────────────────
+  // Dilakukan DI LUAR transaksi agar rollback inventory tidak rollback sync.
+  // Non-blocking: error dicatat di log, tidak di-throw ke client.
+  if (newStatus === "COMPLETED") {
+    syncProductionToAccurate(id).catch((err) => {
+      console.error(`[production] Auto-sync Accurate gagal untuk ${id}:`, err?.message ?? err);
+    });
+  }
+
+  return result;
 };
 
 // ── consumeMaterials ──────────────────────────────────────────────────────────
@@ -311,38 +326,80 @@ const addFinishedGoods = async (order, employeeId, tx) => {
 };
 
 // ── submitQC ──────────────────────────────────────────────────────────────────
+//
+// State transitions setelah QC:
+//   PASS   → COMPLETED (auto, langsung — addFinishedGoods dipanggil di sini)
+//   REWORK → IN_PROGRESS (produksi ulang)
+//   REJECT → IN_PROGRESS (operator bisa lanjut batalkan atau produksi ulang)
+//
 const submitQC = async (id, { status, notes, inspectionDate }, qcEmployeeId) => {
+  // Fetch order sebelum transaction agar bisa dipakai oleh addFinishedGoods
   const order = await getById(id);
 
   if (order.status !== "QC") {
     throw new AppError("QC hanya bisa dilakukan saat status = QC", StatusCodes.BAD_REQUEST);
   }
 
-  const qcRecord = await prisma.productionQC.create({
-    data: {
-      productionOrderId: id,
-      qcEmployeeId:      qcEmployeeId ?? null,
-      inspectionDate:    inspectionDate ? new Date(inspectionDate) : new Date(),
-      status,
-      notes:             notes ?? null,
-    },
-  });
+  // Semua write dalam satu transaction agar konsisten
+  const { qcRecord } = await prisma.$transaction(async (tx) => {
+    // 1. Buat record QC
+    const rec = await tx.productionQC.create({
+      data: {
+        productionOrderId: id,
+        qcEmployeeId:      qcEmployeeId ?? null,
+        inspectionDate:    inspectionDate ? new Date(inspectionDate) : new Date(),
+        status,
+        notes:             notes ?? null,
+      },
+    });
 
-  await repo.addTimeline({
-    productionOrderId:   id,
-    timelineType:        "QC_SUBMITTED",
-    description:         `QC result: ${status}${notes ? ` — ${notes}` : ""}`,
-    createdByEmployeeId: qcEmployeeId ?? null,
-  });
-
-  // If REWORK → push back to IN_PROGRESS automatically
-  if (status === "REWORK") {
-    await repo.update(id, { status: "IN_PROGRESS" });
+    // 2. Timeline: QC submitted
     await repo.addTimeline({
       productionOrderId:   id,
-      timelineType:        "STARTED",
-      description:         "Dikembalikan ke IN_PROGRESS untuk rework",
+      timelineType:        "QC_SUBMITTED",
+      description:         `QC result: ${status}${notes ? ` — ${notes}` : ""}`,
       createdByEmployeeId: qcEmployeeId ?? null,
+    }, tx);
+
+    if (status === "PASS") {
+      // Auto-complete: masukkan finished goods ke inventory → ubah status COMPLETED
+      await addFinishedGoods(order, qcEmployeeId, tx);
+      await repo.update(id, { status: "COMPLETED", actualFinishAt: new Date() }, tx);
+      await repo.addTimeline({
+        productionOrderId:   id,
+        timelineType:        "COMPLETED",
+        description:         "Produksi selesai — QC PASS",
+        createdByEmployeeId: qcEmployeeId ?? null,
+      }, tx);
+
+    } else if (status === "REWORK") {
+      // Kembali ke IN_PROGRESS untuk rework
+      await repo.update(id, { status: "IN_PROGRESS" }, tx);
+      await repo.addTimeline({
+        productionOrderId:   id,
+        timelineType:        "STARTED",
+        description:         "Dikembalikan ke IN_PROGRESS untuk rework",
+        createdByEmployeeId: qcEmployeeId ?? null,
+      }, tx);
+
+    } else if (status === "REJECT") {
+      // Kembali ke IN_PROGRESS — operator memutuskan: batalkan atau produksi ulang
+      await repo.update(id, { status: "IN_PROGRESS" }, tx);
+      await repo.addTimeline({
+        productionOrderId:   id,
+        timelineType:        "STARTED",
+        description:         "QC REJECT — dikembalikan ke IN_PROGRESS. Batalkan atau produksi ulang.",
+        createdByEmployeeId: qcEmployeeId ?? null,
+      }, tx);
+    }
+
+    return { qcRecord: rec };
+  });
+
+  // Trigger Accurate sync setelah PASS (non-blocking, di luar transaksi)
+  if (status === "PASS") {
+    syncProductionToAccurate(id).catch((err) => {
+      console.error(`[production] Auto-sync Accurate gagal untuk ${id}:`, err?.message ?? err);
     });
   }
 

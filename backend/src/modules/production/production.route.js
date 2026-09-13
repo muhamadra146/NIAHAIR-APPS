@@ -9,6 +9,7 @@ const {
 const {
   getAllController, getByIdController, getStatsController,
   createController, updateStatusController, submitQCController, deleteController,
+  syncController,
 } = require("./production.controller");
 
 const router = Router();
@@ -37,5 +38,8 @@ router.patch("/:id/status", authenticate, authorize(...PRODUCTION_WRITE_ROLES), 
 
 // QC submission
 router.post("/:id/qc", authenticate, authorize(...PRODUCTION_WRITE_ROLES), validate(submitQCSchema), submitQCController);
+
+// Manual sync ke Accurate — fallback jika auto-sync gagal
+router.post("/:id/sync", authenticate, authorize(...PRODUCTION_WRITE_ROLES), syncController);
 
 module.exports = router;

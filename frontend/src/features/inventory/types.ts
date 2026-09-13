@@ -184,7 +184,13 @@ export interface StockOpnameItemRow {
   notes:         string | null;
   inventory: {
     id:   string;
-    item: { id: string; name: string; itemCode: string | null; defaultUnit: { id: string; name: string } | null };
+    item: {
+      id:          string;
+      name:        string;
+      itemCode:    string | null;
+      defaultUnit: { id: string; name: string } | null;
+      category:    { id: string; name: string } | null;
+    };
   };
 }
 
@@ -202,6 +208,12 @@ export interface StockOpname {
   postedBy:    { id: string; name: string } | null;
   items?:      StockOpnameItemRow[];
   _count?:     { items: number };
+  // ── Accurate Sync ──────────────────────────────────────────────────────────
+  accurateOrderId?:      number | null;
+  accurateOrderNumber?:  string | null;
+  accurateResultId?:     number | null;
+  accurateResultNumber?: string | null;
+  lastSyncAt?:           string | null;
 }
 
 export interface CreateOpnameInput {

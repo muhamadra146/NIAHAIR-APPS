@@ -109,6 +109,12 @@ export interface ProductionOrder {
   qcRecords:           ProductionQC[];
   timelines:           ProductionTimeline[];
   _count?:             { items: number; materials: number };
+  // ── Accurate Online sync fields ─────────────────────────────────────────────
+  accuratePekerjaanId?:        number | null;
+  accuratePekerjaanNumber?:    string | null;
+  accuratePenyelesaianId?:     number | null;
+  accuratePenyelesaianNumber?: string | null;
+  lastSyncAt?:                 string | null;
 }
 
 // ── Input types ───────────────────────────────────────────────────────────────

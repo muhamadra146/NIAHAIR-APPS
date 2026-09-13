@@ -1111,6 +1111,13 @@ model StockOpname {
   postedByEmployeeId  String?
   postedAt            DateTime?
 
+  // ── Accurate Sync ─────────────────────────────────────────────────────
+  accurateOrderId      Int?      // Perintah Stok Opname ID di Accurate
+  accurateOrderNumber  String?   // Nomor Perintah SO di Accurate
+  accurateResultId     Int?      // Hasil Stok Opname ID di Accurate
+  accurateResultNumber String?   // Nomor Hasil SO di Accurate
+  lastSyncAt           DateTime? // Waktu terakhir sync berhasil
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -3427,6 +3434,13 @@ model ProductionOrder {
   employees  ProductionEmployee[]
   qcRecords  ProductionQC[]
   timelines  ProductionTimeline[]
+
+  // ── Accurate Online sync fields ───────────────────────────────────────────────
+  accuratePekerjaanId        Int?     @map("accurate_pekerjaan_id")
+  accuratePekerjaanNumber    String?  @map("accurate_pekerjaan_number")
+  accuratePenyelesaianId     Int?     @map("accurate_penyelesaian_id")
+  accuratePenyelesaianNumber String?  @map("accurate_penyelesaian_number")
+  lastSyncAt                 DateTime? @map("last_sync_at")
 
   @@index([branchId])
   @@index([warehouseId])

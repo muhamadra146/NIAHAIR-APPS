@@ -7,7 +7,7 @@ import {
   createBatchStockAdjustment, syncGlAccounts,
   deleteStockTransfer, undoTransferReceive, syncStockTransferToAccurate,
   fetchInventoryPeriods, closePeriod, reopenPeriod,
-  fetchStockOpnames, fetchStockOpname, createStockOpname, updateOpnameItems, postStockOpname, cancelStockOpname,
+  fetchStockOpnames, fetchStockOpname, createStockOpname, updateOpnameItems, postStockOpname, cancelStockOpname, deleteStockOpname, syncStockOpnameToAccurate,
   createOpeningBalance,
   fetchLowStock, updateMinStock,
   fetchValuation,
@@ -296,6 +296,31 @@ export function useCancelStockOpname() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["stock-opnames"] });
       toast.success("Opname berhasil dibatalkan");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useDeleteStockOpname() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (opnameId: string) => deleteStockOpname(opnameId),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["stock-opnames"] });
+      toast.success(`Opname ${data.opnameNo} berhasil dihapus`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useSyncStockOpnameToAccurate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (opnameId: string) => syncStockOpnameToAccurate(opnameId),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["stock-opnames"] });
+      qc.invalidateQueries({ queryKey: ["stock-opname", data.id] });
+      toast.success("Opname berhasil disinkronkan ke Accurate");
     },
     onError: (err: Error) => toast.error(err.message),
   });

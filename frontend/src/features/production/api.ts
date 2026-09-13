@@ -45,3 +45,8 @@ export async function deleteProductionOrder(id: string): Promise<{ deleted: bool
   const { data } = await api.delete<ApiResponse<{ deleted: boolean }>>(`/production-orders/${id}`);
   return data.data;
 }
+
+export async function syncProductionToAccurate(id: string): Promise<ProductionOrder> {
+  const { data } = await api.post<ApiResponse<ProductionOrder>>(`/production-orders/${id}/sync`);
+  return data.data;
+}
