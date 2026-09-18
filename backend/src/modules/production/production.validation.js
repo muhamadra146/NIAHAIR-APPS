@@ -1,12 +1,15 @@
 const {
-  object, string, number, array, optional, pipe, minLength, minValue,
+  object, string, number, array, optional, pipe, minLength, minValue, maxValue,
   picklist,
 } = require("valibot");
 
 const productionItemSchema = object({
-  itemId:          pipe(string(), minLength(1, "itemId wajib diisi")),
-  unitId:          pipe(string(), minLength(1, "unitId wajib diisi")),
-  plannedQuantity: pipe(number(), minValue(0.001, "Quantity minimal 0.001")),
+  itemId:                   pipe(string(), minLength(1, "itemId wajib diisi")),
+  unitId:                   pipe(string(), minLength(1, "unitId wajib diisi")),
+  plannedQuantity:          pipe(number(), minValue(0.001, "Quantity minimal 0.001")),
+  // Porsi alokasi biaya untuk Penyelesaian Pesanan Accurate.
+  // Frontend mengirim nilai yang sudah terdistribusi. Default 100 (single-item).
+  costAllocationPercentage: optional(pipe(number(), minValue(0.01, "Minimal 0.01%"), maxValue(100, "Maksimal 100%"))),
 });
 
 const productionMaterialSchema = object({

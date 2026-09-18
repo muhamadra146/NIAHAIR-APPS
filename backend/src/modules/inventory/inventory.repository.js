@@ -15,6 +15,7 @@ const INVENTORY_INCLUDE = {
   item: {
     select: {
       id: true, name: true, itemCode: true, itemType: true,
+      accurateItemId: true,   // dipakai production form: filter hanya item yg sudah terhubung ke Accurate
       category:    { select: { id: true, name: true } },
       defaultUnit: { select: { id: true, name: true } },
       itemUnits: {

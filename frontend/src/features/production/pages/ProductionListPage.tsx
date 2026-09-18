@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus, Factory, Loader2, RefreshCw, CheckCircle2, Clock,
-  Wrench, FlaskConical, XCircle, ChevronRight,
+  Wrench, FlaskConical, XCircle, ChevronRight, X,
 } from "lucide-react";
 import { PageContainer }     from "@/components/layout/PageContainer";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button }            from "@/components/ui/button";
 import { Badge }             from "@/components/ui/badge";
-import { SimpleSelect } from "@/components/ui/simple-select";
+import { Input }             from "@/components/ui/input";
+import { SimpleSelect }      from "@/components/ui/simple-select";
 import { useProductionOrders, useProductionStats } from "../hooks";
 import type { ProductionOrder, ProductionStatus } from "../types";
 
@@ -56,14 +57,27 @@ function StatCard({ label, value, color }: { label: string; value: number; color
 export function ProductionListPage() {
   const navigate = useNavigate();
 
-  const [filterStatus, setFilterStatus] = useState<ProductionStatus | "">("");
+  const [filterStatus,    setFilterStatus]    = useState<ProductionStatus | "">("");
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate,   setFilterEndDate]   = useState("");
+
+  const hasFilter = filterStatus || filterStartDate || filterEndDate;
+
   const { data, isLoading, isError, refetch } = useProductionOrders({
-    limit: 50,
-    status: filterStatus || undefined,
+    limit:     50,
+    status:    filterStatus   || undefined,
+    startDate: filterStartDate || undefined,
+    endDate:   filterEndDate   || undefined,
   });
   const { data: stats } = useProductionStats();
 
   const orders = data?.data ?? [];
+
+  const clearFilters = () => {
+    setFilterStatus("");
+    setFilterStartDate("");
+    setFilterEndDate("");
+  };
 
   return (
     <PageContainer
@@ -87,23 +101,48 @@ export function ProductionListPage() {
           </div>
         )}
 
-        {/* Filter + count */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* Filter + Tambah */}
+        <div className="flex flex-wrap items-center gap-2">
           <SimpleSelect
             value={filterStatus}
             onChange={(v) => setFilterStatus(v as ProductionStatus | "")}
             placeholder="Semua status"
-            className="w-40 h-8 text-sm"
+            className="w-36 h-9 text-sm"
             options={(Object.keys(STATUS_CONFIG) as ProductionStatus[]).map((s) => ({
               value: s,
               label: STATUS_CONFIG[s].label,
             }))}
           />
-          {!isLoading && (
-            <p className="text-sm text-muted-foreground ml-auto">
-              {orders.length} production order
-            </p>
+          <Input
+            type="date"
+            value={filterStartDate}
+            onChange={(e) => setFilterStartDate(e.target.value)}
+            className="w-36 h-9 text-sm"
+            placeholder="Dari tanggal"
+          />
+          <Input
+            type="date"
+            value={filterEndDate}
+            onChange={(e) => setFilterEndDate(e.target.value)}
+            className="w-36 h-9 text-sm"
+            placeholder="Sampai tanggal"
+          />
+          {hasFilter && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-muted-foreground">
+              <X className="h-4 w-4" />
+            </Button>
           )}
+
+          <div className="flex items-center gap-2 ml-auto">
+            {!isLoading && (
+              <p className="text-sm text-muted-foreground">
+                {orders.length} order
+              </p>
+            )}
+            <Button size="sm" className="gap-1.5 h-9" onClick={() => navigate("/production/new")}>
+              <Plus className="h-4 w-4" /> Tambah
+            </Button>
+          </div>
         </div>
 
         {/* Content */}
@@ -122,11 +161,17 @@ export function ProductionListPage() {
           <div className="flex flex-col items-center py-16 gap-2 text-muted-foreground">
             <Factory className="h-10 w-10 opacity-20" />
             <p className="text-sm">
-              {filterStatus ? "Tidak ada production order dengan status ini." : "Belum ada production order."}
+              {hasFilter ? "Tidak ada data dengan filter ini." : "Belum ada production order."}
             </p>
-            <Button variant="outline" size="sm" className="mt-2 gap-2" onClick={() => navigate("/production/new")}>
-              <Plus className="h-4 w-4" /> Buat Sekarang
-            </Button>
+            {hasFilter ? (
+              <Button variant="ghost" size="sm" className="mt-1 gap-1" onClick={clearFilters}>
+                <X className="h-3.5 w-3.5" /> Hapus filter
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" className="mt-2 gap-2" onClick={() => navigate("/production/new")}>
+                <Plus className="h-4 w-4" /> Buat Sekarang
+              </Button>
+            )}
           </div>
         ) : (
           <Card>

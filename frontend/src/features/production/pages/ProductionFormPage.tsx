@@ -22,9 +22,10 @@ import type {
 // ── Local form types ──────────────────────────────────────────────────────────
 
 interface ItemRow {
-  itemId:          string;
-  unitId:          string;
-  plannedQuantity: string;
+  itemId:                   string;
+  unitId:                   string;
+  plannedQuantity:          string;
+  costAllocationPercentage: string;  // angka 0.01–100, total semua baris = 100
 }
 
 interface MaterialRow {
@@ -47,7 +48,7 @@ interface FormValues {
 
 const today = new Date().toISOString().slice(0, 10);
 
-const EMPTY_ITEM: ItemRow     = { itemId: "", unitId: "", plannedQuantity: "" };
+const EMPTY_ITEM: ItemRow     = { itemId: "", unitId: "", plannedQuantity: "", costAllocationPercentage: "" };
 const EMPTY_MAT:  MaterialRow = { itemId: "", warehouseId: "", unitId: "", plannedQuantity: "" };
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
@@ -71,7 +72,7 @@ export function ProductionFormPage() {
       plannedStartAt:  "",
       plannedFinishAt: "",
       notes:           "",
-      items:           [{ ...EMPTY_ITEM }],
+      items:           [{ ...EMPTY_ITEM, costAllocationPercentage: "100" }],
       materials:       [{ ...EMPTY_MAT }],
     },
   });
@@ -83,8 +84,9 @@ export function ProductionFormPage() {
   const warehouses = whData?.data ?? [];
 
   // Inventories for item selection — refreshed when warehouse changes
+  // limit 2000: NIAHAIR GUDANG punya 982+ records, perlu semua tampil di dropdown
   const { data: invData } = useInventories({
-    limit: 500,
+    limit: 2000,
     warehouseId: watchedWarehouse || undefined,
   });
   const inventories = invData?.data ?? [];
@@ -107,13 +109,16 @@ export function ProductionFormPage() {
     }
   }, [watchedWarehouse]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Build item options from inventory
-  const itemOptions = inventories.map((inv) => ({
-    value:   inv.itemId,
-    label:   `${inv.item.name} (${inv.item.itemCode ?? inv.item.itemType})`,
-    units:   inv.item.itemUnits ?? [],
-    defUnit: inv.item.defaultUnit,
-  }));
+  // Build item options dari inventory — hanya item yang sudah terhubung ke Accurate
+  // (accurateItemId != null), agar production sync tidak gagal karena item belum di-sync
+  const itemOptions = inventories
+    .filter((inv) => inv.item.accurateItemId != null)
+    .map((inv) => ({
+      value:   inv.itemId,
+      label:   `${inv.item.name} (${inv.item.itemCode ?? inv.item.itemType})`,
+      units:   inv.item.itemUnits ?? [],
+      defUnit: inv.item.defaultUnit,
+    }));
 
   function getUnitsForItem(itemId: string) {
     const inv = inventories.find((i) => i.itemId === itemId);
@@ -124,15 +129,27 @@ export function ProductionFormPage() {
     }));
   }
 
+  // Live total alokasi biaya — untuk indikator visual di bawah tabel Finished Goods.
+  // Setiap item HARUS > 0 (bukan kosong/nol) DAN total harus = 100%.
+  const watchedItems   = watch("items");
+  const liveTotal      = watchedItems.reduce((s, i) => s + (parseFloat(i.costAllocationPercentage) || 0), 0);
+  const hasZeroAlloc   = watchedItems.some((i) => !i.costAllocationPercentage || parseFloat(i.costAllocationPercentage) <= 0);
+  const allocOk        = !hasZeroAlloc && Math.abs(liveTotal - 100) <= 0.01;
+
   const onSubmit = async (values: FormValues) => {
     if (!values.items.length || values.items.some((i) => !i.itemId || !i.unitId || !i.plannedQuantity)) {
       return;
     }
 
+    // Guard: total alokasi harus = 100 (seharusnya sudah ok via auto-redistribute)
+    const totalAlloc = values.items.reduce((s, i) => s + Number(i.costAllocationPercentage || 0), 0);
+    if (Math.abs(totalAlloc - 100) > 0.01) return; // indikator merah sudah terlihat di UI
+
     const items: CreateProductionItemInput[] = values.items.map((i) => ({
-      itemId:          i.itemId,
-      unitId:          i.unitId,
-      plannedQuantity: Number(i.plannedQuantity),
+      itemId:                   i.itemId,
+      unitId:                   i.unitId,
+      plannedQuantity:          Number(i.plannedQuantity),
+      costAllocationPercentage: Number(i.costAllocationPercentage) || 100,
     }));
 
     const materials: CreateProductionMaterialInput[] = values.materials
@@ -274,7 +291,7 @@ export function ProductionFormPage() {
               const watchedItemId = watch(`items.${idx}.itemId`);
               const units = getUnitsForItem(watchedItemId);
               return (
-                <div key={field.id} className="grid gap-2 sm:grid-cols-[1fr_140px_100px_36px] items-end">
+                <div key={field.id} className="grid gap-2 sm:grid-cols-[1fr_130px_90px_70px_36px] items-end">
                   {/* Item */}
                   <div className="space-y-1">
                     {idx === 0 && <Label className="text-xs text-muted-foreground">Item</Label>}
@@ -334,6 +351,28 @@ export function ProductionFormPage() {
                     />
                   </div>
 
+                  {/* Alokasi biaya % */}
+                  <div className="space-y-1">
+                    {idx === 0 && (
+                      <Label className="text-xs text-muted-foreground" title="Porsi alokasi biaya untuk Accurate. Total semua item harus = 100%">
+                        Alokasi %
+                      </Label>
+                    )}
+                    <Input
+                      type="number"
+                      min="0.01"
+                      max="100"
+                      step="0.01"
+                      placeholder="%"
+                      className="text-sm text-right"
+                      {...register(`items.${idx}.costAllocationPercentage`, {
+                        required: true,
+                        min: 0.01,
+                        max: 100,
+                      })}
+                    />
+                  </div>
+
                   {/* Delete */}
                   <Button
                     type="button"
@@ -348,6 +387,18 @@ export function ProductionFormPage() {
                 </div>
               );
             })}
+
+            {/* Total alokasi biaya indicator — hanya muncul jika ada >1 item */}
+            {itemFields.length > 1 && (
+              <div className={`text-xs px-3 py-2 rounded flex items-center justify-between font-medium ${
+                allocOk
+                  ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400"
+                  : "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400"
+              }`}>
+                <span>Total Alokasi Biaya</span>
+                <span>{liveTotal.toFixed(2)}% {allocOk ? "✓" : "— harus = 100%"}</span>
+              </div>
+            )}
 
             {itemOptions.length === 0 && watchedWarehouse && (
               <p className="text-xs text-amber-600 bg-amber-50 rounded px-3 py-2">
@@ -465,7 +516,12 @@ export function ProductionFormPage() {
           <Button type="button" variant="outline" onClick={() => navigate("/production")}>
             Batal
           </Button>
-          <Button type="submit" disabled={isSubmitting || createOrder.isPending} className="gap-2 min-w-[140px]">
+          <Button
+            type="submit"
+            disabled={isSubmitting || createOrder.isPending || !allocOk}
+            className="gap-2 min-w-[140px]"
+            title={!allocOk ? `Total alokasi biaya ${liveTotal.toFixed(2)}% — harus = 100%` : undefined}
+          >
             {(isSubmitting || createOrder.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
             Buat Production Order
           </Button>

@@ -12,13 +12,15 @@ const mapItemType = (accurateType) => {
 
 // defaultUnitId: resolved local UUID, passed in after resolveUnit() runs before item upsert.
 const mapAccurateToItem = (item, defaultUnitId = null) => {
+  const accurateIsActive = !item.suspended;  // suspended=true → non-aktif di Accurate
   const mapped = {
-    accurateItemId: parseInt(item.id, 10),
-    itemCode:       item.no || `ACC-${item.id}`,
-    name:           item.name || "Unknown",
-    itemType:       mapItemType(item.itemType),
-    isActive:       !item.suspended,
-    lastSyncAt:     new Date(),
+    accurateItemId:   parseInt(item.id, 10),
+    itemCode:         item.no || `ACC-${item.id}`,
+    name:             item.name || "Unknown",
+    itemType:         mapItemType(item.itemType),
+    isActive:         accurateIsActive,  // ikuti status Accurate saat sync
+    accurateIsActive: accurateIsActive,  // status aktif khusus dari Accurate (untuk filter)
+    lastSyncAt:       new Date(),
   };
   if (defaultUnitId) mapped.defaultUnitId = defaultUnitId;
   return mapped;

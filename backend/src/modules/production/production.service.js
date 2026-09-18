@@ -68,6 +68,30 @@ const create = async ({ branchId, warehouseId, productionDate, plannedStartAt, p
   if (!items?.length)     throw new AppError("Minimal 1 finished goods item wajib diisi", StatusCodes.BAD_REQUEST);
   if (!materials?.length) throw new AppError("Minimal 1 material wajib diisi", StatusCodes.BAD_REQUEST);
 
+  // Validasi alokasi biaya per-item > 0 dan total = 100 (wajib untuk sync ke Accurate)
+  // Gunakan parseFloat(String()) agar aman untuk string, number, dan Prisma.Decimal.
+  // ??(nullish) sengaja TIDAK dipakai — "" ?? 100 = "" (bukan 100), pakai || sebagai fallback.
+  for (const it of items) {
+    const alloc = parseFloat(String(it.costAllocationPercentage ?? "")) || 0;
+    if (alloc <= 0) {
+      throw new AppError(
+        `Alokasi biaya setiap barang jadi harus lebih dari 0%. ` +
+        `Isi porsi alokasi untuk semua item.`,
+        StatusCodes.BAD_REQUEST,
+      );
+    }
+  }
+  const totalAlloc = items.reduce(
+    (s, it) => s + (parseFloat(String(it.costAllocationPercentage ?? "")) || 0), 0,
+  );
+  if (Math.abs(totalAlloc - 100) > 0.01) {
+    throw new AppError(
+      `Total alokasi biaya harus 100%. Saat ini: ${totalAlloc.toFixed(2)}%. ` +
+      `Pastikan total porsi alokasi seluruh barang jadi = 100%.`,
+      StatusCodes.BAD_REQUEST,
+    );
+  }
+
   return prisma.$transaction(async (tx) => {
     const productionNo = await buildProductionNo(tx);
 
@@ -83,10 +107,11 @@ const create = async ({ branchId, warehouseId, productionDate, plannedStartAt, p
       createdByEmployeeId: employeeId ?? null,
       items: {
         create: items.map((it) => ({
-          itemId:          it.itemId,
-          unitId:          it.unitId,
-          plannedQuantity: D(it.plannedQuantity),
-          producedQuantity: D("0"),
+          itemId:                   it.itemId,
+          unitId:                   it.unitId,
+          plannedQuantity:          D(it.plannedQuantity),
+          producedQuantity:         D("0"),
+          costAllocationPercentage: D(parseFloat(String(it.costAllocationPercentage ?? "")) || 100),
         })),
       },
       materials: {

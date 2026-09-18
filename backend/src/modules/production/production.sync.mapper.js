@@ -6,45 +6,63 @@ const formatDate = (date) => {
   return `${dd}/${mm}/${d.getFullYear()}`;
 };
 
-// ── Pekerjaan Pesanan ─────────────────────────────────────────────────────────
+// ── Pekerjaan Pesanan / Job Order ─────────────────────────────────────────────
 //
-// Endpoint: /job-order/save.do
-// Dibuat saat produksi di-COMPLETED di NIAHAIR.
-// Merepresentasikan raw material yang dikonsumsi (PRODUCTION OUT).
-// detailItem → setiap material dengan accurateItemId.
+// Endpoint: /job-order/save.do → prefix JC
+//
+// Merepresentasikan ORDER PRODUKSI yang menyebutkan bahan baku yang akan diproses.
+//   detailItem = MATERIALS / BAHAN BAKU (BUKAN barang jadi!)
+//   itemUnitId = field satuan di JC endpoint (beda dengan IA yang pakai unitId)
+//
+// Alur Accurate production module:
+//   JC (bahan baku masuk) → RO (barang jadi keluar)
+//   Item di JC dan RO HARUS berbeda — Accurate menolak jika sama.
+//
+// Dikonfirmasi dari test PROD-0002:
+//   JC: ZOA 6-11 (bahan baku) → RO: ALMOST HITAM 25CM NEW (barang jadi)
 const mapPekerjaanToAccurate = (order, accurateBranchId = null) => ({
   transDate:   formatDate(order.actualStartAt ?? order.productionDate),
-  description: `Produksi ${order.productionNo}`,
+  description: `Pekerjaan Pesanan ${order.productionNo}`,
   ...(accurateBranchId ? { branchId: accurateBranchId } : {}),
   detailItem: order.materials.map((mat) => ({
     itemId:      mat.item.accurateItemId,
     quantity:    Number(mat.actualQuantity ?? mat.plannedQuantity),
-    unitId:      mat.unit.accurateUnitId,
-    warehouseId: mat.warehouse.accurateWarehouseId,
+    itemUnitId:  mat.unit.accurateUnitId,   // itemUnitId — field di JC endpoint
+    warehouseId: mat.warehouse?.accurateWarehouseId ?? order.warehouse.accurateWarehouseId,
   })),
 });
 
-// ── Penyesuaian Persediaan / Item Adjustment (pengganti Penyelesaian Pesanan) ──
+// ── Penyelesaian Pesanan / Roll Over ──────────────────────────────────────────
 //
-// Endpoint: /item-adjustment/save.do
-// Dibuat setelah Pekerjaan Pesanan berhasil disync.
-// Merepresentasikan barang jadi yang dihasilkan masuk ke stok (PRODUCTION IN).
-// adjustType: QTY_INCREASE → tambah stok barang jadi.
+// Endpoint: /roll-over/save.do → prefix RO
 //
-// Catatan: /finished-good-slip/save.do tidak berhasil di akun Accurate ini
-// ("Perintah Kerja tidak ditemukan atau sudah dihapus" walaupun ID valid).
-// /item-adjustment/save.do terbukti berhasil dan menghasilkan response.r.id
-// yang bisa disimpan sebagai accuratePenyelesaianId.
-const mapPenyelesaianToAccurate = (order, _accuratePekerjaanId, accurateBranchId = null) => ({
+// Merepresentasikan hasil produksi — barang jadi yang diselesaikan dari JC.
+// Muncul di menu Produksi → Penyelesaian Pesanan di Accurate Online.
+//
+// Field kritis:
+//   jobOrderId  = ID dari JC yang sudah dibuat (wajib, RO selalu link ke JC)
+//   detailItem  = BARANG JADI (bukan bahan baku!)
+//   unitId      = field satuan di RO endpoint (beda dengan JC yang pakai itemUnitId)
+//   percentage  = porsi alokasi biaya (100 = full)
+//
+// Constraint Accurate:
+//   Item di RO.detailItem HARUS BERBEDA dari item di JC.detailItem.
+//   Jika sama, Accurate akan error: "Barang ini merupakan bahan baku JC"
+const mapPenyelesaianToAccurate = (order, accuratePekerjaanId, accurateBranchId = null) => ({
   transDate:   formatDate(order.actualFinishAt ?? order.productionDate),
-  description: `Penyelesaian ${order.productionNo}`,
+  description: `Penyelesaian Pesanan ${order.productionNo}`,
+  jobOrderId:  accuratePekerjaanId,
   ...(accurateBranchId ? { branchId: accurateBranchId } : {}),
   detailItem: order.items.map((pItem) => ({
     itemId:      pItem.item.accurateItemId,
     quantity:    Number(pItem.producedQuantity ?? pItem.plannedQuantity),
-    unitId:      pItem.unit.accurateUnitId,
+    unitId:      pItem.unit.accurateUnitId,   // unitId — field di RO endpoint
     warehouseId: order.warehouse.accurateWarehouseId,
-    adjustType:  "QTY_INCREASE",
+    // Gunakan porsi yang disimpan di DB — total harus = 100 (divalidasi di sync service).
+    // Prisma.Decimal: pakai toNumber() jika tersedia, fallback ke parseFloat(toString()).
+    percentage: pItem.costAllocationPercentage && typeof pItem.costAllocationPercentage.toNumber === "function"
+      ? pItem.costAllocationPercentage.toNumber()
+      : parseFloat(String(pItem.costAllocationPercentage ?? "100")) || 100,
   })),
 });
 

@@ -312,7 +312,7 @@ export function ProductionDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0 space-y-3 text-sm">
-              {/* Pekerjaan Pesanan */}
+              {/* Pekerjaan Pesanan (Job Order / JC) */}
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Pekerjaan Pesanan</span>
                 {order.accuratePekerjaanNumber ? (
@@ -323,7 +323,7 @@ export function ProductionDetailPage() {
                   <span className="text-xs text-muted-foreground italic">Belum tersync</span>
                 )}
               </div>
-              {/* Penyelesaian Pesanan */}
+              {/* Penyelesaian Pesanan (Item Adjustment IN) */}
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Penyelesaian Pesanan</span>
                 {order.accuratePenyelesaianNumber ? (

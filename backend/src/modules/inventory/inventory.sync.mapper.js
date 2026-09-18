@@ -7,12 +7,9 @@
  */
 
 const mapItemDetailToWarehouseStocks = (detail) => {
-  const rows =
-    detail.detailWarehouseData ??   // confirmed field name
-    detail.detailWarehouseItem ??   // fallback
-    detail.warehouseDetail     ??
-    detail.detailWarehouse     ??
-    [];
+  // Accurate mengembalikan stok per gudang di field "detailWarehouseData".
+  // Setiap entry: { id: <accurateWarehouseId>, balance: <qty>, warehouseName, ... }
+  const rows = detail.detailWarehouseData ?? [];
 
   return rows.map((row) => ({
     accurateWarehouseId: row.id,

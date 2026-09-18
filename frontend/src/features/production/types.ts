@@ -21,17 +21,18 @@ export interface RefWarehouse { id: string; name: string }
 // ── Sub-models ────────────────────────────────────────────────────────────────
 
 export interface ProductionItem {
-  id:                 string;
-  productionOrderId:  string;
-  itemId:             string;
-  unitId:             string;
-  plannedQuantity:    string;
-  producedQuantity:   string;
-  inventoryMovementId: string | null;
-  item:               RefItem;
-  unit:               RefUnit;
-  createdAt:          string;
-  updatedAt:          string;
+  id:                       string;
+  productionOrderId:        string;
+  itemId:                   string;
+  unitId:                   string;
+  plannedQuantity:          string;
+  producedQuantity:         string;
+  costAllocationPercentage: string;   // porsi alokasi biaya, total per order = 100
+  inventoryMovementId:      string | null;
+  item:                     RefItem;
+  unit:                     RefUnit;
+  createdAt:                string;
+  updatedAt:                string;
 }
 
 export interface ProductionMaterial {
@@ -120,9 +121,10 @@ export interface ProductionOrder {
 // ── Input types ───────────────────────────────────────────────────────────────
 
 export interface CreateProductionItemInput {
-  itemId:          string;
-  unitId:          string;
-  plannedQuantity: number;
+  itemId:                   string;
+  unitId:                   string;
+  plannedQuantity:          number;
+  costAllocationPercentage: number;   // 0.01–100, total semua item = 100
 }
 
 export interface CreateProductionMaterialInput {

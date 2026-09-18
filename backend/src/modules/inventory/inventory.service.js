@@ -82,9 +82,11 @@ const listInventories = async ({ page, limit, warehouseId, branchId, itemId, sea
   if (branchId)    where.warehouse   = { branchId };
   if (itemId)      where.itemId      = itemId;
 
+  // Selalu filter item yang aktif di Accurate — non-aktif tidak boleh tampil
+  where.item = { accurateIsActive: true, isActive: true };
+
   if (search || categoryId || parentCategoryId) {
-    where.item = {};
-    if (search)           where.item.OR         = [
+    if (search)           where.item.OR       = [
       { name:     { contains: search, mode: "insensitive" } },
       { itemCode: { contains: search, mode: "insensitive" } },
     ];

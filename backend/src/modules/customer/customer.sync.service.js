@@ -4,10 +4,12 @@ const { accurateRequest } = require("../accurate/accurate.client");
 const { mapAccurateToCustomer } = require("./customer.sync.mapper");
 const { findByAccurateId, createFromAccurate, updateByAccurateId, deactivateMissingFromAccurate } = require("./customer.sync.repository");
 
-const ACCURATE_CUSTOMER_LIST   = "/customer/list.do";
-const ACCURATE_CUSTOMER_DETAIL = (id) => `/customer/detail.do?id=${id}`;
-// list.do only provides IDs for pagination — detail.do is the authoritative source.
-const ACCURATE_FIELDS = "id";
+const ACCURATE_CUSTOMER_LIST = "/customer/list.do";
+
+// Semua field yang dibutuhkan mapper tersedia di list.do.
+// address (billStreet/City/Province) tidak ada di list.do — akan null.
+// "no" tidak ada di list.do tapi mapper sudah punya fallback ke customerNo.
+const ACCURATE_FIELDS = "id,name,customerNo,email,mobilePhone,notes,suspended";
 
 const syncCustomersFromAccurate = async ({ accurateBranchId } = {}) => {
   let page = 1;
@@ -71,16 +73,9 @@ const syncCustomersFromAccurate = async ({ accurateBranchId } = {}) => {
       processedIds.add(accurateId);
 
       try {
-        // list.do does not return full customer detail (customerNo, address, etc.).
-        // Fetch the authoritative record from detail.do before mapping.
-        const detailRes = await accurateRequest(ACCURATE_CUSTOMER_DETAIL(accurateId));
-        if (!detailRes.s || !detailRes.d) {
-          console.error(`[accurate customer sync] detail.do failed id=${accurateId}`, detailRes);
-          failed++;
-          continue;
-        }
-
-        const mapped = mapAccurateToCustomer(detailRes.d);
+        // Semua field yang diperlukan sudah ada di list.do — tidak perlu detail.do per customer.
+        // Address (billStreet/City/Province) tidak tersedia di list.do → akan null.
+        const mapped = mapAccurateToCustomer(item);
 
         // Track active/inactive before any DB write so counts are honest
         // even if the write fails.

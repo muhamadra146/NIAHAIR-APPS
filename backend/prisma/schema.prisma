@@ -587,7 +587,8 @@ model Item {
   purchaseUnitId       String?
   commissionCategoryId String?
 
-  accurateItemId Int? @unique
+  accurateItemId   Int?     @unique
+  accurateIsActive Boolean  @default(true)  // false jika item suspended/non-aktif di Accurate
 
   itemCode String @unique
 
@@ -3458,6 +3459,11 @@ model ProductionItem {
 
   plannedQuantity  Decimal @db.Decimal(18, 6)
   producedQuantity Decimal @db.Decimal(18, 6) @default(0)
+
+  // Porsi alokasi biaya untuk Penyelesaian Pesanan di Accurate Online.
+  // Total semua item dalam satu production order HARUS = 100.
+  // Default 100 untuk single-item orders.
+  costAllocationPercentage Decimal @default(100) @db.Decimal(5, 2) @map("cost_allocation_percentage")
 
   inventoryMovementId String? @unique
 

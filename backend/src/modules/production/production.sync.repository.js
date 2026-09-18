@@ -30,9 +30,10 @@ const findProductionForSync = async (id) => {
       },
       items: {
         select: {
-          id:               true,
-          plannedQuantity:  true,
-          producedQuantity: true,
+          id:                       true,
+          plannedQuantity:          true,
+          producedQuantity:         true,
+          costAllocationPercentage: true,
           item: {
             select: {
               id:             true,

@@ -27,13 +27,14 @@ export interface InventoryItemUnit {
 }
 
 export interface InventoryItemRef {
-  id:          string;
-  name:        string;
-  itemCode:    string | null;
-  itemType:    string;
-  category:    { id: string; name: string } | null;
-  defaultUnit: { id: string; name: string } | null;
-  itemUnits:   InventoryItemUnit[];
+  id:             string;
+  name:           string;
+  itemCode:       string | null;
+  itemType:       string;
+  accurateItemId: number | null;  // null = belum terhubung ke Accurate
+  category:       { id: string; name: string } | null;
+  defaultUnit:    { id: string; name: string } | null;
+  itemUnits:      InventoryItemUnit[];
 }
 
 export interface BranchRef {
