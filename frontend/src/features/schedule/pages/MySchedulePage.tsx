@@ -6,6 +6,7 @@ import {
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Badge }         from "@/components/ui/badge";
 import { Button }        from "@/components/ui/button";
+import { useAuthStore }  from "@/stores/authStore";
 import { useMySchedules } from "../hooks";
 import type { MyScheduleItem } from "../types";
 
@@ -240,6 +241,8 @@ function WeekSummary({ items }: { items: MyScheduleItem[] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function MySchedulePage() {
+  const { user } = useAuthStore();
+
   const [startDate, setStartDate] = useState<string>(() =>
     toISODate(getMonday(new Date())),
   );
@@ -249,8 +252,12 @@ export function MySchedulePage() {
     [startDate],
   );
 
+  // Hanya fetch jika user punya employeeId (karyawan operasional)
+  const hasEmployee = !!user?.employeeId;
+
   const { data = [], isLoading, isError, refetch } = useMySchedules(
     { startDate, endDate },
+    hasEmployee,
   );
 
   // Build date→item lookup
@@ -287,6 +294,22 @@ export function MySchedulePage() {
 
   const isCurrentWeek =
     startDate === toISODate(getMonday(new Date()));
+
+  // Guard: user tanpa employeeId (SUPER_ADMIN, OWNER system) bukan karyawan terjadwal
+  if (!hasEmployee) {
+    return (
+      <PageContainer title="Jadwal Saya" subtitle="Jadwal kerja mingguan kamu">
+        <div className="flex flex-col items-center justify-center py-24 text-center max-w-sm mx-auto">
+          <CalendarDays className="h-14 w-14 text-muted-foreground/30 mb-4" />
+          <p className="text-base font-semibold text-foreground">Akun ini tidak memiliki jadwal karyawan</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Jadwal Saya hanya tersedia untuk karyawan yang terdaftar di cabang.
+            Gunakan menu <strong>Schedule</strong> untuk mengelola jadwal tim.
+          </p>
+        </div>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer

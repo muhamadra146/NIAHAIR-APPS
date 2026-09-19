@@ -175,7 +175,8 @@ const getAvailableStaff = async ({ date, branchId, startTime, endTime, excludeAp
 };
 
 const getMySchedules = async (employeeId, { startDate, endDate } = {}) => {
-  if (!employeeId) throw new AppError("Employee not found", StatusCodes.BAD_REQUEST);
+  // SUPER_ADMIN / OWNER mungkin tidak punya employeeId — return empty, bukan error
+  if (!employeeId) return [];
 
   const now   = new Date();
   const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
