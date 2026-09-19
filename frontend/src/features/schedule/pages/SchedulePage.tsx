@@ -29,7 +29,10 @@ function getMonday(date: Date): Date {
 }
 
 function getFirstOfMonth(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+  // Use LOCAL year/month to avoid the off-by-one bug for WIB users midnight-07:00
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  return new Date(`${y}-${m}-01T00:00:00.000Z`);
 }
 
 function toISODate(d: Date): string {
