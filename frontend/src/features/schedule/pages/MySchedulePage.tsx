@@ -13,12 +13,17 @@ import type { MyScheduleItem } from "../types";
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
 function getMonday(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getUTCDay();
+  // Use LOCAL weekday — getUTCDay() returns the wrong day for WIB users
+  // between midnight and 07:00 (UTC is still the previous day)
+  const day = date.getDay(); // 0 = Sun, 1 = Mon, ...
   const diff = day === 0 ? -6 : 1 - day;
-  d.setUTCDate(d.getUTCDate() + diff);
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
+  const monday = new Date(date);
+  monday.setDate(monday.getDate() + diff); // local date arithmetic
+  // Convert back to UTC midnight so toISODate() (.toISOString()) gives correct YYYY-MM-DD
+  const y = monday.getFullYear();
+  const m = String(monday.getMonth() + 1).padStart(2, "0");
+  const d = String(monday.getDate()).padStart(2, "0");
+  return new Date(`${y}-${m}-${d}T00:00:00.000Z`);
 }
 
 function toISODate(d: Date): string {
