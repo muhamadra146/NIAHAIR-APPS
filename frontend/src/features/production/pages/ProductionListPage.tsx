@@ -166,9 +166,9 @@ export function ProductionListPage() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm">Hapus Production Order?</h3>
+                  <p className="font-mono font-semibold text-sm mt-1">{deleteTarget.productionNo}</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    <span className="font-mono font-medium text-foreground">{deleteTarget.productionNo}</span> akan
-                    dihapus permanen — termasuk dokumen JC &amp; RO di Accurate jika sudah di-sync.
+                    Akan dihapus permanen — termasuk dokumen JC &amp; RO di Accurate jika sudah di-sync.
                     Stok inventory akan dikembalikan otomatis.
                   </p>
                 </div>
