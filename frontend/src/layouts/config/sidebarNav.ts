@@ -30,6 +30,7 @@ import {
   Cog,
   RotateCcw,
   ArrowLeftRight,
+  LineChart,
   type LucideIcon,
 } from "lucide-react";
 
@@ -304,6 +305,15 @@ export const sidebarNav: NavItem[] = [
     label:         "Attendance",
     href:          "/attendance",
     icon:          ClipboardList,
+    roles:         [...MANAGEMENT_ROLES, "OFFICE", "FINANCE"],
+    viewOnlyRoles: ["FINANCE"],
+    group:         "Kehadiran",
+  },
+
+  {
+    label:         "Laporan Kehadiran",
+    href:          "/attendance-report",
+    icon:          LineChart,
     roles:         [...MANAGEMENT_ROLES, "OFFICE", "FINANCE"],
     viewOnlyRoles: ["FINANCE"],
     group:         "Kehadiran",

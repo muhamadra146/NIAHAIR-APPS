@@ -50,11 +50,20 @@ const parseTime = (timeStr) => {
   return h * 60 + m;
 };
 
+// BUG 2 FIX: Convert a UTC Date to WIB (UTC+7) minutes-since-midnight.
+// Using .getHours() was returning UTC hours — a 09:30 WIB check-in (02:30 UTC)
+// would give checkInMinutes=150, which is never > shiftStart+15=495, so nobody
+// was ever marked LATE.
+const toWIBMinutes = (dt) => {
+  const wib = new Date(dt.getTime() + 7 * 3600 * 1000);
+  return wib.getUTCHours() * 60 + wib.getUTCMinutes();
+};
+
 const computeStatus = (checkInAt, checkOutAt, shift) => {
   if (!checkInAt) return "ABSENT";
 
   const GRACE_MINUTES = 15;
-  const checkInMinutes  = checkInAt.getHours() * 60 + checkInAt.getMinutes();
+  const checkInMinutes  = toWIBMinutes(checkInAt);
   const shiftStart      = parseTime(shift?.startTime);
   const shiftEnd        = parseTime(shift?.endTime);
 
@@ -67,7 +76,7 @@ const computeStatus = (checkInAt, checkOutAt, shift) => {
   }
 
   if (checkOutAt && shiftEnd !== null) {
-    const checkOutMinutes = checkOutAt.getHours() * 60 + checkOutAt.getMinutes();
+    const checkOutMinutes = toWIBMinutes(checkOutAt);
     if (checkOutMinutes < shiftEnd) {
       earlyLeaveMinutes = shiftEnd - checkOutMinutes;
     } else if (checkOutMinutes > shiftEnd) {
@@ -267,8 +276,11 @@ const manualSet = async ({ staffScheduleId, status, checkInAt, checkOutAt, notes
 // ── My today (self check-in view) ────────────────────────────────────────────
 
 const getMyToday = async (employeeId) => {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  // BUG 3 FIX: setUTCHours(0,0,0,0) gives UTC midnight, which is 07:00 WIB.
+  // Between WIB midnight and 07:00 the query would look at yesterday's schedule.
+  // Solution: derive the WIB date (UTC+7) then build UTC midnight from those components.
+  const wibNow = new Date(Date.now() + 7 * 3600 * 1000);
+  const today  = new Date(Date.UTC(wibNow.getUTCFullYear(), wibNow.getUTCMonth(), wibNow.getUTCDate()));
 
   const schedule = await prisma.staffSchedule.findFirst({
     where:   { employeeId, workDate: today },

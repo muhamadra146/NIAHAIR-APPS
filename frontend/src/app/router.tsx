@@ -59,6 +59,7 @@ import { PurchaseReturnListPage }    from "@/features/purchaseReturn/pages/Purch
 import { PurchaseReturnDetailPage }  from "@/features/purchaseReturn/pages/PurchaseReturnDetailPage";
 import { PurchaseReturnFormPage }    from "@/features/purchaseReturn/pages/PurchaseReturnFormPage";
 import { FinanceDashboardPage }      from "@/features/dashboard/pages/FinanceDashboardPage";
+import { AttendanceReportPage }     from "@/features/team/pages/AttendanceReportPage";
 
 // ── Role Groups (mirrors sidebarNav.ts) ─────────────────────────────────────
 const ADMIN_ROLES        = ["SUPER_ADMIN", "OWNER"]                                     as const;
@@ -148,10 +149,11 @@ export const router = createBrowserRouter([
           {
             element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","OFFICE","FINANCE"]} />,
             children: [
-              { path: "/employees",     element: <EmployeeListPage /> },
-              { path: "/employees/:id", element: <EmployeeDetailPage /> },
-              { path: "/schedule",      element: <SchedulePage /> },
-              { path: "/attendance",    element: <TeamPage /> },
+              { path: "/employees",          element: <EmployeeListPage /> },
+              { path: "/employees/:id",      element: <EmployeeDetailPage /> },
+              { path: "/schedule",           element: <SchedulePage /> },
+              { path: "/attendance",         element: <TeamPage /> },
+              { path: "/attendance-report",  element: <AttendanceReportPage /> },
             ],
           },
 

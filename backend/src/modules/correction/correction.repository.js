@@ -2,14 +2,42 @@ const prisma = require("../../config/prisma");
 
 const INCLUDE = {
   employee:      { select: { id: true, name: true, employeeCode: true } },
-  staffSchedule: { select: { id: true, workDate: true, shiftStart: true, shiftEnd: true } },
-  attendance:    { select: { id: true, checkIn: true, checkOut: true } },
+  // staffSchedule: include shift relation to get startTime/endTime (model has no shiftStart/shiftEnd)
+  staffSchedule: {
+    select: {
+      id: true, workDate: true,
+      shift: { select: { startTime: true, endTime: true } },
+    },
+  },
+  // attendance: Prisma field names are checkInAt/checkOutAt; normalize maps to checkIn/checkOut
+  attendance:    { select: { id: true, checkInAt: true, checkOutAt: true } },
   reviewer:      { select: { id: true, employee: { select: { name: true } } } },
 };
 
 const normalize = (row) => {
-  if (!row?.reviewer) return row;
-  return { ...row, reviewer: { id: row.reviewer.id, name: row.reviewer.employee?.name ?? null } };
+  if (!row) return row;
+  const r = { ...row };
+  if (r.reviewer) {
+    r.reviewer = { id: r.reviewer.id, name: r.reviewer.employee?.name ?? null };
+  }
+  // Flatten shift times onto staffSchedule for frontend compatibility
+  if (r.staffSchedule) {
+    r.staffSchedule = {
+      id:        r.staffSchedule.id,
+      workDate:  r.staffSchedule.workDate,
+      shiftStart: r.staffSchedule.shift?.startTime ?? null,
+      shiftEnd:   r.staffSchedule.shift?.endTime   ?? null,
+    };
+  }
+  // Map DB names to API shape expected by frontend (checkIn / checkOut)
+  if (r.attendance) {
+    r.attendance = {
+      id:       r.attendance.id,
+      checkIn:  r.attendance.checkInAt  ?? null,
+      checkOut: r.attendance.checkOutAt ?? null,
+    };
+  }
+  return r;
 };
 
 const findAll = async ({ skip, take, where }) => {

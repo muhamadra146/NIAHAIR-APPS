@@ -2,6 +2,7 @@ const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo = require("./correction.repository");
+const attendanceSvc = require("../attendance/attendance.service");
 
 const getAll = async ({ page, limit, branchId, status, employeeId }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -56,7 +57,24 @@ const review = async (id, reviewerId, { status, reviewNote }) => {
   if (!["APPROVED", "REJECTED"].includes(status))
     throw new AppError("status must be APPROVED or REJECTED", StatusCodes.BAD_REQUEST);
 
-  return repo.update(id, { status, reviewedBy: reviewerId, reviewedAt: new Date(), reviewNote: reviewNote ?? null });
+  const updated = await repo.update(id, {
+    status,
+    reviewedBy: reviewerId,
+    reviewedAt: new Date(),
+    reviewNote: reviewNote ?? null,
+  });
+
+  // BUG 1 FIX: When APPROVED, apply the corrected times to the actual Attendance record.
+  // Previously this was a no-op — the correction was marked APPROVED but attendance was never updated.
+  if (status === "APPROVED" && cr.staffScheduleId) {
+    await attendanceSvc.manualSet({
+      staffScheduleId: cr.staffScheduleId,
+      checkInAt:  cr.requestedCheckIn  ? new Date(cr.requestedCheckIn).toISOString()  : undefined,
+      checkOutAt: cr.requestedCheckOut ? new Date(cr.requestedCheckOut).toISOString() : undefined,
+    });
+  }
+
+  return updated;
 };
 
 module.exports = { getAll, getMy, getById, create, review };

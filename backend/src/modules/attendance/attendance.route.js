@@ -30,8 +30,18 @@ router.get("/report",
 router.get("/my/today", authenticate, getMyTodayController);
 router.get("/my",       authenticate, getMyController);
 
-router.get("/",    authenticate, getAllController);
-router.get("/:id", authenticate, getByIdController);
+// BUG 6 FIX: Added authorize() — without it any authenticated user (including STAFF)
+// could list all attendance records across the branch.
+router.get("/",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE, ROLES.FINANCE),
+  getAllController,
+);
+router.get("/:id",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE, ROLES.FINANCE),
+  getByIdController,
+);
 
 // Employee self check-in / check-out
 router.post("/check-in",

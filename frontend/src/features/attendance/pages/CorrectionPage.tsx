@@ -404,14 +404,51 @@ function ReviewDialog({ item, onClose }: { item: CorrectionRequest | null; onClo
   );
 }
 
+// ── Pagination controls ───────────────────────────────────────────────────────
+
+function Pagination({
+  page, totalPages, onPrev, onNext,
+}: { page: number; totalPages: number; onPrev: () => void; onNext: () => void }) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-center gap-3 pt-2 text-sm text-slate-500">
+      <Button
+        size="sm" variant="outline"
+        onClick={onPrev} disabled={page <= 1}
+        className="h-7 px-3"
+      >
+        ← Sebelumnya
+      </Button>
+      <span className="tabular-nums">Hal {page} / {totalPages}</span>
+      <Button
+        size="sm" variant="outline"
+        onClick={onNext} disabled={page >= totalPages}
+        className="h-7 px-3"
+      >
+        Berikutnya →
+      </Button>
+    </div>
+  );
+}
+
 // ── Admin view ────────────────────────────────────────────────────────────────
+
+const PAGE_LIMIT = 20;
 
 function AdminView() {
   const [reviewItem, setReviewItem]     = useState<CorrectionRequest | null>(null);
   const [filterStatus, setFilterStatus] = useState<CorrectionStatus | "">("");
-  const { data, isLoading }             = useCorrections({ status: filterStatus || undefined, limit: 50 });
-  const items   = data?.data ?? [];
-  const pending = items.filter((i) => i.status === "PENDING").length;
+  const [page, setPage]                 = useState(1);
+  const { data, isLoading }             = useCorrections({ status: filterStatus || undefined, limit: PAGE_LIMIT, page });
+  const items      = data?.data ?? [];
+  const totalPages = data?.meta?.totalPages ?? 1;
+  const pending    = items.filter((i) => i.status === "PENDING").length;
+
+  // Reset to page 1 when filter changes
+  const handleFilterChange = (val: CorrectionStatus | "") => {
+    setFilterStatus(val);
+    setPage(1);
+  };
 
   return (
     <div className="space-y-4">
@@ -421,7 +458,7 @@ function AdminView() {
           <span><strong>{pending}</strong> koreksi kehadiran menunggu review</span>
         </div>
       )}
-      <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as CorrectionStatus | "")}
+      <select value={filterStatus} onChange={(e) => handleFilterChange(e.target.value as CorrectionStatus | "")}
         className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 focus:outline-none">
         <option value="">Semua Status</option>
         <option value="PENDING">Menunggu</option>
@@ -475,6 +512,12 @@ function AdminView() {
           </div>
         )}
       </div>
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPrev={() => setPage((p) => Math.max(1, p - 1))}
+        onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+      />
       <ReviewDialog item={reviewItem} onClose={() => setReviewItem(null)} />
     </div>
   );
@@ -484,7 +527,9 @@ function AdminView() {
 
 function MyView() {
   const [open, setOpen]     = useState(false);
-  const { data, isLoading } = useMyCorrections({ limit: 50 });
+  const [page, setPage]     = useState(1);
+  const { data, isLoading } = useMyCorrections({ limit: PAGE_LIMIT, page });
+  const totalPages          = data?.meta?.totalPages ?? 1;
   const items               = data?.data ?? [];
 
   return (
@@ -532,6 +577,12 @@ function MyView() {
         </div>
       )}
 
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPrev={() => setPage((p) => Math.max(1, p - 1))}
+        onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+      />
       <CreateDialog open={open} onClose={() => setOpen(false)} />
     </div>
   );

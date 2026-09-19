@@ -58,6 +58,7 @@ function ShiftBadge({ shift, scheduleStatus }: {
 interface ManualDialogProps {
   open:       boolean;
   row:        RosterAttendanceRow | null;
+  date:       string;   // roster date — used as workDate fallback when attendance is null
   isPending:  boolean;
   onSave:     (input: ManualSetInput) => void;
   onClose:    () => void;
@@ -69,7 +70,7 @@ const toTimeInput = (iso: string | null | undefined): string => {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
-function ManualDialog({ open, row, isPending, onSave, onClose }: ManualDialogProps) {
+function ManualDialog({ open, row, date, isPending, onSave, onClose }: ManualDialogProps) {
   const now = new Date().toTimeString().slice(0, 5);
   const [status,    setStatus]    = useState<AttendanceStatus>("PRESENT");
   const [checkInAt,  setCheckIn]  = useState(now);
@@ -89,7 +90,12 @@ function ManualDialog({ open, row, isPending, onSave, onClose }: ManualDialogPro
   if (!row) return null;
 
   const handleSave = () => {
-    const workDate = new Date(row.attendance?.workDate ?? new Date()).toISOString().split("T")[0];
+    // BUG 4 FIX: When attendance is null (employee never checked in), row.attendance?.workDate
+    // is undefined and new Date() would record today, not the roster date the admin is viewing.
+    // Use the roster `date` prop as the authoritative workDate fallback.
+    const workDate = row.attendance?.workDate
+      ? new Date(row.attendance.workDate).toISOString().split("T")[0]
+      : date;
     onSave({
       staffScheduleId: row.scheduleId,
       status,
@@ -180,7 +186,7 @@ export function AttendanceTab({ readOnly = false }: { readOnly?: boolean } = {})
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [manualRow, setManualRow] = useState<RosterAttendanceRow | null>(null);
 
-  const { data: rows = [], isLoading } = useDailyRoster(branchId ?? "", date);
+  const { data: rows = [], isLoading, isError, refetch } = useDailyRoster(branchId ?? "", date);
   const checkInMut  = useCheckIn();
   const checkOutMut = useCheckOut();
   const manualMut   = useManualSetAttendance();
@@ -230,6 +236,21 @@ export function AttendanceTab({ readOnly = false }: { readOnly?: boolean } = {})
           className="w-auto"
         />
       </div>
+
+      {/* Error state (MISSING 3 FIX) */}
+      {isError && (
+        <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>Gagal memuat data absensi.</span>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="ml-auto underline underline-offset-2 hover:no-underline"
+          >
+            Coba lagi
+          </button>
+        </div>
+      )}
 
       {/* Stats */}
       {rows.length > 0 && <StatsBar rows={rows} />}
@@ -333,6 +354,7 @@ export function AttendanceTab({ readOnly = false }: { readOnly?: boolean } = {})
       <ManualDialog
         open={!!manualRow}
         row={manualRow}
+        date={date}
         isPending={manualMut.isPending}
         onSave={handleManualSave}
         onClose={() => setManualRow(null)}

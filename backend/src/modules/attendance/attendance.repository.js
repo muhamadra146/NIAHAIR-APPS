@@ -51,10 +51,13 @@ const upsertBySchedule = (staffScheduleId, createData, updateData) =>
   });
 
 const getReportData = ({ branchId, startDate, endDate, employeeId }) => {
+  // BUG 5 FIX: Removed status: "WORKING" filter.
+  // Previously this excluded OFF-day schedules, making isHolidayWork always 0 in the report
+  // because employees who work on their day off have schedule.status === "OFF".
+  // Now all schedule statuses (WORKING, OFF, LEAVE) are included for an accurate report.
   const where = {
     branchId,
     workDate: { gte: startDate, lte: endDate },
-    status: "WORKING",
   };
   if (employeeId) where.employeeId = employeeId;
 
