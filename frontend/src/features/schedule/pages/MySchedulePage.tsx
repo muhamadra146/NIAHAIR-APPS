@@ -52,12 +52,15 @@ function formatWeekRange(startDate: string): string {
 }
 
 function isToday(dateStr: string): boolean {
+  // Use local date components so "today" matches the device's timezone (WIB, etc.)
+  // dateStr is "YYYY-MM-DD"; today is constructed from local Date to match
   const today = new Date();
-  return (
-    today.getUTCFullYear() === new Date(dateStr).getUTCFullYear() &&
-    today.getUTCMonth()    === new Date(dateStr).getUTCMonth()    &&
-    today.getUTCDate()     === new Date(dateStr).getUTCDate()
-  );
+  const todayStr = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0"),
+  ].join("-");
+  return todayStr === dateStr;
 }
 
 // ── Status display helpers ─────────────────────────────────────────────────────
