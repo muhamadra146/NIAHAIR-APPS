@@ -98,6 +98,7 @@ export function SchedulePage() {
   const bulkMut = useBulkSchedule();
 
   const [isCopyPending, setIsCopyPending] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   // Exclude management/owner roles from the schedule grid
   const EXCLUDED_ROLES = new Set(["OWNER", "SUPER_ADMIN"]);
@@ -148,6 +149,13 @@ export function SchedulePage() {
   // ── Copy last week ────────────────────────────────────────────────────────
   const handleCopyLastWeek = useCallback(async () => {
     if (!branchId || viewMode !== "week") return;
+
+    const confirmed = window.confirm(
+      "Salin semua jadwal dari minggu lalu ke minggu ini?\nJadwal yang sudah ada di minggu ini akan diganti.",
+    );
+    if (!confirmed) return;
+
+    setCopyError(null);
     const prevStart = toISODate(addDays(new Date(startDate), -7));
 
     setIsCopyPending(true);
@@ -170,11 +178,14 @@ export function SchedulePage() {
         }
       }
 
-      if (schedules.length === 0) return;
+      if (schedules.length === 0) {
+        setCopyError("Minggu lalu tidak ada jadwal yang bisa disalin.");
+        return;
+      }
 
       await bulkMut.mutateAsync({ branchId, schedules });
     } catch {
-      // Errors surfaced by bulkMut itself via its own state
+      setCopyError("Gagal menyalin jadwal minggu lalu. Coba lagi.");
     } finally {
       setIsCopyPending(false);
     }
@@ -223,17 +234,31 @@ export function SchedulePage() {
         isCopyPending={isCopyPending || bulkMut.isPending}
       />
 
-      {/* ── Error banner ────────────────────────────────────── */}
+      {/* ── Error banners ───────────────────────────────────── */}
       {rosterError && (
         <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>Failed to load schedule data.</span>
+          <span>Gagal memuat data jadwal.</span>
           <button
             type="button"
             onClick={() => refetchRoster()}
             className="ml-auto underline underline-offset-2 hover:no-underline"
           >
-            Retry
+            Coba lagi
+          </button>
+        </div>
+      )}
+
+      {copyError && (
+        <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{copyError}</span>
+          <button
+            type="button"
+            onClick={() => setCopyError(null)}
+            className="ml-auto underline underline-offset-2 hover:no-underline"
+          >
+            Tutup
           </button>
         </div>
       )}
