@@ -184,14 +184,27 @@ const getMySchedules = async (employeeId, { startDate, endDate } = {}) => {
   start.setUTCHours(0, 0, 0, 0);
   end.setUTCHours(23, 59, 59, 999);
 
-  return prisma.staffSchedule.findMany({
+  const records = await prisma.staffSchedule.findMany({
     where:   { employeeId, workDate: { gte: start, lte: end } },
     include: {
       shift:      { select: { id: true, name: true, startTime: true, endTime: true } },
-      attendance: { select: { id: true, checkIn: true, checkOut: true, status: true } },
+      attendance: { select: { id: true, checkInAt: true, checkOutAt: true, status: true } },
     },
     orderBy: { workDate: "desc" },
   });
+
+  // Map DB field names (checkInAt/checkOutAt) → API response shape (checkIn/checkOut)
+  return records.map((r) => ({
+    ...r,
+    attendance: r.attendance
+      ? {
+          id:       r.attendance.id,
+          checkIn:  r.attendance.checkInAt  ? r.attendance.checkInAt.toISOString()  : null,
+          checkOut: r.attendance.checkOutAt ? r.attendance.checkOutAt.toISOString() : null,
+          status:   r.attendance.status,
+        }
+      : null,
+  }));
 };
 
 module.exports = { getRoster, bulkUpsert, getAvailableStaff, getMySchedules };
