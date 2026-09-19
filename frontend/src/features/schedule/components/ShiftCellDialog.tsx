@@ -148,10 +148,20 @@ export function ShiftCellDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isPending}>
             Tutup
           </Button>
+          {/* "Simpan" — only shown when there's an existing schedule to update notes on */}
+          {cell?.scheduleId && (
+            <Button
+              size="sm"
+              onClick={() => handleSave(cell.shift?.id ?? null, cell.status ?? null)}
+              disabled={isPending}
+            >
+              Simpan
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
