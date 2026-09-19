@@ -23,7 +23,9 @@ function avatarColor(name: string): string {
 function shiftHours(startTime: string, endTime: string): number {
   const [sh, sm] = startTime.split(":").map(Number);
   const [eh, em] = endTime.split(":").map(Number);
-  return (eh * 60 + em - sh * 60 - sm) / 60;
+  // Handle overnight shifts (e.g. 22:00 - 06:00) by adding 24h if negative
+  const mins = (eh * 60 + em - sh * 60 - sm + 1440) % 1440;
+  return mins / 60;
 }
 
 function formatDayHeader(dateStr: string): { day: string; num: string } {
@@ -166,6 +168,7 @@ interface Props {
     date:       string,
     shiftId:    string | null,
     status:     ScheduleStatus | null,
+    notes?:     string | null,
   ) => void;
 }
 
@@ -216,9 +219,9 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave }: Pr
   );
 
   const handleEditSave = useCallback(
-    (shiftId: string | null, status: ScheduleStatus | null) => {
+    (shiftId: string | null, status: ScheduleStatus | null, notes?: string | null) => {
       if (!editDialog) return;
-      onCellSave(editDialog.employee.id, editDialog.date, shiftId, status);
+      onCellSave(editDialog.employee.id, editDialog.date, shiftId, status, notes);
       setEditDialog(null);
     },
     [editDialog, onCellSave],

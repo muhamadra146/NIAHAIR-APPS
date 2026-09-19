@@ -293,6 +293,14 @@ export const sidebarNav: NavItem[] = [
   },
 
   {
+    label: "Jadwal Saya",
+    href:  "/my-schedule",
+    icon:  CalendarDays,
+    roles: ALL_ROLES,
+    group: "Kehadiran",
+  },
+
+  {
     label:         "Attendance",
     href:          "/attendance",
     icon:          ClipboardList,

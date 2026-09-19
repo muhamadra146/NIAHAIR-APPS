@@ -13,21 +13,21 @@ router.get("/:id", authenticate, getByIdController);
 
 router.post("/",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER),
   validate(createShiftSchema),
   createController,
 );
 
 router.put("/:id",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER),
   validate(updateShiftSchema),
   updateController,
 );
 
 router.delete("/:id",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER),
   deleteController,
 );
 

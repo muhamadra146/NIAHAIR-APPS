@@ -1,6 +1,6 @@
 import { api } from "@/lib/axios";
 import type { ApiResponse } from "@/types/api";
-import type { RosterData, BulkScheduleInput } from "../types";
+import type { RosterData, BulkScheduleInput, MyScheduleItem } from "../types";
 import type { AvailableStaff } from "@/features/appointment/types";
 
 export interface RosterParams {
@@ -33,6 +33,21 @@ export const fetchAvailableStaff = async (params: {
 }): Promise<AvailableStaff[]> => {
   const { data } = await api.get<ApiResponse<AvailableStaff[]>>(
     "/staff-schedules/available",
+    { params },
+  );
+  return data.data ?? [];
+};
+
+export interface MyScheduleParams {
+  startDate: string;
+  endDate:   string;
+}
+
+export const fetchMySchedules = async (
+  params: MyScheduleParams,
+): Promise<MyScheduleItem[]> => {
+  const { data } = await api.get<ApiResponse<MyScheduleItem[]>>(
+    "/staff-schedules/my",
     { params },
   );
   return data.data ?? [];

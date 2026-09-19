@@ -1,14 +1,16 @@
-import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, Copy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ViewMode } from "../types";
 
 interface Props {
-  startDate:     string;
-  viewMode:      ViewMode;
-  onViewMode:    (mode: ViewMode) => void;
-  onPrev:        () => void;
-  onNext:        () => void;
-  onToday:       () => void;
+  startDate:        string;
+  viewMode:         ViewMode;
+  onViewMode:       (mode: ViewMode) => void;
+  onPrev:           () => void;
+  onNext:           () => void;
+  onToday:          () => void;
+  onCopyLastWeek?:  () => void;
+  isCopyPending?:   boolean;
 }
 
 function monthLabel(dateStr: string): string {
@@ -24,7 +26,11 @@ function weekLabel(startDate: string, days: number): string {
   return `${start.toLocaleDateString("en-US", opts)} – ${end.toLocaleDateString("en-US", { ...opts, year: "numeric" })}`;
 }
 
-export function RosterNav({ startDate, viewMode, onViewMode, onPrev, onNext, onToday }: Props) {
+export function RosterNav({
+  startDate, viewMode, onViewMode,
+  onPrev, onNext, onToday,
+  onCopyLastWeek, isCopyPending,
+}: Props) {
   const days = viewMode === "week" ? 7 : 30;
 
   return (
@@ -48,6 +54,26 @@ export function RosterNav({ startDate, viewMode, onViewMode, onPrev, onNext, onT
         <Button variant="outline" size="sm" onClick={onToday} className="ml-1 h-8">
           {viewMode === "week" ? "This Week" : "This Month"}
         </Button>
+
+        {/* Copy Last Week — only in week view */}
+        {viewMode === "week" && onCopyLastWeek && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCopyLastWeek}
+            disabled={isCopyPending}
+            className="ml-1 h-8 gap-1.5"
+            title="Salin jadwal minggu lalu ke minggu ini"
+          >
+            {isCopyPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
+            <span className="hidden sm:inline">Salin Minggu Lalu</span>
+            <span className="sm:hidden">Salin</span>
+          </Button>
+        )}
       </div>
 
       {/* Right: view toggle + month label */}

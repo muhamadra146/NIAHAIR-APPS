@@ -1,9 +1,11 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Trash2 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Button }   from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Label }    from "@/components/ui/label";
 import type { Shift, ScheduleCell, RosterEmployee, ScheduleStatus } from "../types";
 
 interface Props {
@@ -14,7 +16,7 @@ interface Props {
   cell:          ScheduleCell | null;
   shifts:        Shift[];
   isPending:     boolean;
-  onSave:        (shiftId: string | null, status: ScheduleStatus | null) => void;
+  onSave:        (shiftId: string | null, status: ScheduleStatus | null, notes?: string | null) => void;
 }
 
 function shiftColorStyle(hex: string | null): React.CSSProperties {
@@ -28,15 +30,26 @@ function shiftColorStyle(hex: string | null): React.CSSProperties {
 
 function formatDateHeader(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString("id-ID", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 }
 
 export function ShiftCellDialog({
   open, onOpenChange, employee, date, cell, shifts, isPending, onSave,
 }: Props) {
+  const [notes, setNotes] = useState<string>("");
+
+  // Sync notes from existing cell when dialog opens
+  useEffect(() => {
+    if (open) setNotes(cell?.notes ?? "");
+  }, [open, cell]);
+
   if (!employee || !date) return null;
 
   const workingShifts = shifts.filter((s) => s.isWorking && s.isActive);
+
+  const handleSave = (shiftId: string | null, status: ScheduleStatus | null) => {
+    onSave(shiftId, status, notes.trim() || null);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -56,9 +69,9 @@ export function ShiftCellDialog({
               <button
                 key={shift.id}
                 type="button"
-                onClick={() => onSave(shift.id, "WORKING")}
+                onClick={() => handleSave(shift.id, "WORKING")}
                 disabled={isPending}
-                style={shiftColorStyle(shift.color)}
+                style={shiftColorStyle(shift.color ?? null)}
                 className={[
                   "w-full rounded-lg border-2 px-4 py-3 text-left transition-all",
                   isSelected ? "ring-2 ring-offset-1 ring-primary" : "hover:opacity-80",
@@ -78,7 +91,7 @@ export function ShiftCellDialog({
           {/* OFF */}
           <button
             type="button"
-            onClick={() => onSave(null, "OFF")}
+            onClick={() => handleSave(null, "OFF")}
             disabled={isPending}
             className={[
               "w-full rounded-lg border-2 px-4 py-3 text-left transition-all",
@@ -93,7 +106,7 @@ export function ShiftCellDialog({
           {/* LEAVE */}
           <button
             type="button"
-            onClick={() => onSave(null, "LEAVE")}
+            onClick={() => handleSave(null, "LEAVE")}
             disabled={isPending}
             className={[
               "w-full rounded-lg border-2 px-4 py-3 text-left transition-all",
@@ -105,11 +118,27 @@ export function ShiftCellDialog({
             <p className="mt-0.5 text-xs opacity-75">Cuti / izin</p>
           </button>
 
+          {/* Notes */}
+          <div className="pt-1 space-y-1.5">
+            <Label htmlFor="schedule-notes" className="text-xs">
+              Catatan <span className="text-muted-foreground">(opsional)</span>
+            </Label>
+            <Textarea
+              id="schedule-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Mis: lembur, tukar shift, dll."
+              rows={2}
+              className="text-xs resize-none"
+              disabled={isPending}
+            />
+          </div>
+
           {/* Hard delete — only if there's an existing schedule */}
           {cell?.scheduleId && (
             <button
               type="button"
-              onClick={() => onSave(null, null)}
+              onClick={() => handleSave(null, null)}
               disabled={isPending}
               className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-destructive/40 px-4 py-2 text-sm text-destructive hover:bg-destructive/5 transition-colors"
             >
@@ -121,7 +150,7 @@ export function ShiftCellDialog({
 
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Close
+            Tutup
           </Button>
         </DialogFooter>
       </DialogContent>

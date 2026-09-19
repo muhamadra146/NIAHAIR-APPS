@@ -14,7 +14,8 @@ import { AppointmentDetailPage } from "@/features/appointment/pages/AppointmentD
 import { DailyBoardPage } from "@/features/appointment/pages/DailyBoardPage";
 import { SettingsPage } from "@/features/settings/pages/SettingsPage";
 import { TeamPage }     from "@/features/team/pages/TeamPage";
-import { SchedulePage } from "@/features/schedule/pages/SchedulePage";
+import { SchedulePage }   from "@/features/schedule/pages/SchedulePage";
+import { MySchedulePage } from "@/features/schedule/pages/MySchedulePage";
 import { PayrollPage }       from "@/features/payroll/pages/PayrollPage";
 import { EmployeeListPage }       from "@/features/employee/pages/EmployeeListPage";
 import { EmployeeDetailPage }     from "@/features/employee/pages/EmployeeDetailPage";
@@ -93,6 +94,8 @@ export const router = createBrowserRouter([
           { path: "/my-payslip",  element: <MyPayslipPage /> },
           { path: "/my-kasbon",      element: <MyLoanPage /> },
           { path: "/my-kasbon/:id",  element: <MyLoanDetailPage /> },
+          // Jadwal Saya: self-service untuk semua role
+          { path: "/my-schedule",    element: <MySchedulePage /> },
           // Koreksi Kehadiran: self-service untuk semua role (sidebar: ALL_ROLES)
           { path: "/attendance-corrections", element: <CorrectionPage /> },
 

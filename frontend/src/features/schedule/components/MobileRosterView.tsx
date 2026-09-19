@@ -1,82 +1,140 @@
-import type { RosterData, ScheduleStatus } from "../types";
+import React from "react";
+import { Plus, X } from "lucide-react";
+import type { RosterData, ScheduleCell, RosterEmployee, ScheduleStatus } from "../types";
 
 interface Props {
-  data: RosterData;
+  data:         RosterData;
+  isViewOnly?:  boolean;
+  onCellClick?: (employee: RosterEmployee, date: string, cell: ScheduleCell | null) => void;
+  onUnassign?:  (employeeId: string, date: string) => void;
 }
 
-const SHIFT_PILL: Record<string, string> = {
-  blue:  "bg-blue-100  text-blue-700  border-blue-200",
-  green: "bg-green-100 text-green-700 border-green-200",
-};
-const OFF_PILL   = "bg-gray-100  text-gray-500  border-gray-200";
-const LEAVE_PILL = "bg-yellow-50 text-yellow-700 border-yellow-300";
-
-function dayLabel(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", { weekday: "short", day: "numeric" });
+function shiftColorStyle(hex: string | null): React.CSSProperties {
+  if (!hex) return { backgroundColor: "#dbeafe", borderColor: "#93c5fd", color: "#1e40af" };
+  return {
+    backgroundColor: `${hex}22`,
+    borderColor:     `${hex}88`,
+    color:           hex,
+  };
 }
 
-function CellPill({ status, shift }: { status: ScheduleStatus | null; shift: { code: string; startTime: string | null; endTime: string | null; color: string | null } | null }) {
-  if (!status) return <span className="text-xs text-gray-300 italic">—</span>;
+function CellPill({
+  cell,
+  onClick,
+  onUnassign,
+  isViewOnly,
+}: {
+  cell:        ScheduleCell;
+  onClick:     () => void;
+  onUnassign:  () => void;
+  isViewOnly?: boolean;
+}) {
+  const { status, shift } = cell;
+
+  if (!status) {
+    // Empty cell — tap to add
+    if (isViewOnly) {
+      return <span className="text-xs text-gray-300 italic">—</span>;
+    }
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="inline-flex items-center gap-1 rounded border border-dashed border-gray-300 px-2 py-0.5 text-[11px] text-gray-400 hover:border-primary/50 hover:text-primary transition-colors"
+      >
+        <Plus className="h-2.5 w-2.5" />
+        Tambah
+      </button>
+    );
+  }
+
+  const baseClass = "relative inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[11px] font-medium";
+
+  let content: React.ReactNode;
+  let pillClass = baseClass;
+  let pillStyle: React.CSSProperties = {};
 
   if (status === "OFF") {
-    return (
-      <span className={`inline-block rounded border px-1.5 py-0.5 text-[11px] font-medium ${OFF_PILL}`}>
-        OFF
-      </span>
-    );
+    pillClass += " bg-gray-100 text-gray-500 border-gray-200";
+    content = "OFF";
+  } else if (status === "LEAVE") {
+    pillClass += " bg-yellow-50 text-yellow-700 border-yellow-300";
+    content = "LEAVE";
+  } else {
+    // WORKING
+    pillStyle = shiftColorStyle(shift?.color ?? null);
+    content = shift
+      ? `${shift.code} ${shift.startTime}–${shift.endTime}`
+      : "WORKING";
   }
 
-  if (status === "LEAVE") {
-    return (
-      <span className={`inline-block rounded border px-1.5 py-0.5 text-[11px] font-medium ${LEAVE_PILL}`}>
-        LEAVE
-      </span>
-    );
-  }
-
-  if (shift) {
-    const cls = shift.color ? (SHIFT_PILL[shift.color] ?? SHIFT_PILL.blue) : SHIFT_PILL.blue;
-    return (
-      <span className={`inline-block rounded border px-1.5 py-0.5 text-[11px] font-medium ${cls}`}>
-        {shift.code} {shift.startTime}–{shift.endTime}
-      </span>
-    );
+  if (isViewOnly) {
+    return <span className={pillClass} style={pillStyle}>{content}</span>;
   }
 
   return (
-    <span className="inline-block rounded border px-1.5 py-0.5 text-[11px] font-medium bg-blue-100 text-blue-700 border-blue-200">
-      WORKING
+    <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={onClick}
+        className={pillClass}
+        style={pillStyle}
+      >
+        {content}
+      </button>
+      {cell.scheduleId && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onUnassign(); }}
+          className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white/90 text-gray-400 hover:border-red-300 hover:bg-red-50 hover:text-red-500 transition-colors shadow-sm"
+          title="Hapus jadwal"
+          aria-label="Hapus jadwal"
+        >
+          <X className="h-2.5 w-2.5" />
+        </button>
+      )}
     </span>
   );
 }
 
-export function MobileRosterView({ data }: Props) {
+function dayLabel(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("id-ID", { weekday: "short", day: "numeric" });
+}
+
+export function MobileRosterView({ data, isViewOnly = false, onCellClick, onUnassign }: Props) {
   const { dates, rows } = data;
 
   if (rows.length === 0) {
     return (
       <p className="py-10 text-center text-sm text-muted-foreground">
-        No employees in this branch.
+        Belum ada karyawan di cabang ini.
       </p>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {rows.map((row) => (
-        <div key={row.employee.id} className="rounded-lg border border-border bg-card p-4">
-          <div className="mb-3">
-            <p className="font-semibold">{row.employee.name}</p>
-            <p className="text-xs text-muted-foreground">{row.employee.role.name}</p>
+        <div key={row.employee.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="font-semibold text-sm">{row.employee.name}</p>
+              <p className="text-xs text-muted-foreground">{row.employee.role.name}</p>
+            </div>
           </div>
 
-          <div className="space-y-1.5">
-            {row.schedules.map((cell, i) => (
+          <div className="space-y-2">
+            {row.schedules.map((cell) => (
               <div key={cell.date} className="flex items-center gap-2 text-xs">
-                <span className="w-16 text-muted-foreground shrink-0">
-                  {dayLabel(dates[i] ?? cell.date)}:
+                <span className="w-16 shrink-0 text-muted-foreground">
+                  {dayLabel(cell.date)}:
                 </span>
-                <CellPill status={cell.status} shift={cell.shift} />
+                <CellPill
+                  cell={cell}
+                  isViewOnly={isViewOnly}
+                  onClick={() => onCellClick?.(row.employee, cell.date, cell)}
+                  onUnassign={() => onUnassign?.(row.employee.id, cell.date)}
+                />
               </div>
             ))}
           </div>

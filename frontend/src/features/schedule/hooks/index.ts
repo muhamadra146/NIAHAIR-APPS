@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchShifts } from "../api/shift.api";
-import { fetchRoster, bulkUpsertSchedule } from "../api/staffSchedule.api";
-import type { RosterParams } from "../api/staffSchedule.api";
+import { fetchRoster, bulkUpsertSchedule, fetchMySchedules } from "../api/staffSchedule.api";
+import type { RosterParams, MyScheduleParams } from "../api/staffSchedule.api";
 import type { BulkScheduleInput } from "../types";
 
 export const useShifts = () =>
@@ -28,3 +28,11 @@ export const useBulkSchedule = () => {
     onSuccess:  () => qc.invalidateQueries({ queryKey: ["roster"] }),
   });
 };
+
+export const useMySchedules = (params: MyScheduleParams, enabled = true) =>
+  useQuery({
+    queryKey: ["my-schedules", params],
+    queryFn:  () => fetchMySchedules(params),
+    enabled:  enabled && !!params.startDate && !!params.endDate,
+    staleTime: 5 * 60 * 1000,
+  });

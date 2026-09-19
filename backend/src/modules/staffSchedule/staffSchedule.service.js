@@ -97,8 +97,9 @@ const bulkUpsert = async ({ branchId, schedules }) => {
       } else {
         const status  = item.status  ?? (item.shiftId ? "WORKING" : "OFF");
         const shiftId = item.shiftId ?? null;
+        const notes   = item.notes   ?? null;
 
-        await repo.upsertSchedule(item.employeeId, branchId, workDate, { shiftId, status });
+        await repo.upsertSchedule(item.employeeId, branchId, workDate, { shiftId, status, notes });
         updated++;
       }
     }

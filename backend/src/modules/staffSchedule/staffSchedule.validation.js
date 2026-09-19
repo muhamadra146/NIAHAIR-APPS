@@ -7,6 +7,7 @@ const scheduleItemSchema = object({
   date:       pipe(string(), minLength(1, "date is required")),
   shiftId:    optional(nullable(string())),
   status:     optional(nullable(picklist(["WORKING", "OFF", "LEAVE"]))),
+  notes:      optional(nullable(string())),
 });
 
 const bulkScheduleSchema = object({

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -16,11 +16,14 @@ interface Props {
   onSave:       (employeeId: string, shiftId: string | null, status: ScheduleStatus) => void;
 }
 
-const SHIFT_COLOR: Record<string, string> = {
-  blue:  "bg-blue-100  border-blue-200  text-blue-800",
-  green: "bg-green-100 border-green-200 text-green-800",
-  gray:  "bg-gray-100  border-gray-200  text-gray-600",
-};
+function shiftColorStyle(hex: string | null): React.CSSProperties {
+  if (!hex) return { backgroundColor: "#dbeafe", borderColor: "#93c5fd", color: "#1e40af" };
+  return {
+    backgroundColor: `${hex}22`,
+    borderColor:     `${hex}88`,
+    color:           hex,
+  };
+}
 
 function formatDateLabel(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -85,28 +88,24 @@ export function QuickAddDialog({
             <div className="space-y-2">
               <Label>Shift</Label>
 
-              {workingShifts.map((shift) => {
-                const cls = shift.color
-                  ? (SHIFT_COLOR[shift.color] ?? SHIFT_COLOR.blue)
-                  : SHIFT_COLOR.blue;
-                return (
-                  <button
-                    key={shift.id}
-                    type="button"
-                    onClick={() => save(shift.id, "WORKING")}
-                    disabled={isPending || !selectedId}
-                    className={`w-full rounded-lg border-2 px-4 py-3 text-left transition-all hover:opacity-80 disabled:opacity-40 ${cls}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">{shift.code}</span>
-                      <span className="text-xs font-medium">
-                        {shift.startTime} – {shift.endTime}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-xs opacity-70">{shift.name}</p>
-                  </button>
-                );
-              })}
+              {workingShifts.map((shift) => (
+                <button
+                  key={shift.id}
+                  type="button"
+                  onClick={() => save(shift.id, "WORKING")}
+                  disabled={isPending || !selectedId}
+                  style={shiftColorStyle(shift.color ?? null)}
+                  className="w-full rounded-lg border-2 px-4 py-3 text-left transition-all hover:opacity-80 disabled:opacity-40"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">{shift.code}</span>
+                    <span className="text-xs font-medium">
+                      {shift.startTime} – {shift.endTime}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs opacity-70">{shift.name}</p>
+                </button>
+              ))}
 
               <button
                 type="button"

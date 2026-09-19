@@ -4,11 +4,13 @@ import { useAuthStore } from "@/stores/authStore";
 import { useViewOnly } from "@/hooks/useViewOnly";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useShifts, useRoster, useBulkSchedule } from "../hooks";
+import { fetchRoster } from "../api/staffSchedule.api";
 import { RosterNav }        from "../components/RosterNav";
 import { RosterGrid }       from "../components/RosterGrid";
 import { RosterSummary }    from "../components/RosterSummary";
 import { MobileRosterView } from "../components/MobileRosterView";
-import type { RosterData, ScheduleStatus, ViewMode } from "../types";
+import { ShiftCellDialog }  from "../components/ShiftCellDialog";
+import type { RosterData, ScheduleStatus, ViewMode, ScheduleCell, RosterEmployee, BulkScheduleItem } from "../types";
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -58,6 +60,13 @@ export function SchedulePage() {
     toISODate(getMonday(new Date())),
   );
 
+  // Mobile edit dialog state
+  const [mobileEditDialog, setMobileEditDialog] = useState<{
+    employee: RosterEmployee;
+    date:     string;
+    cell:     ScheduleCell | null;
+  } | null>(null);
+
   const days = viewMode === "week" ? 7 : daysInMonth(startDate);
 
   // ── Local dates (used as fallback when API hasn't responded yet) ──────────
@@ -87,6 +96,8 @@ export function SchedulePage() {
   );
 
   const bulkMut = useBulkSchedule();
+
+  const [isCopyPending, setIsCopyPending] = useState(false);
 
   // Exclude management/owner roles from the schedule grid
   const EXCLUDED_ROLES = new Set(["OWNER", "SUPER_ADMIN"]);
@@ -134,6 +145,41 @@ export function SchedulePage() {
     }
   }, []);
 
+  // ── Copy last week ────────────────────────────────────────────────────────
+  const handleCopyLastWeek = useCallback(async () => {
+    if (!branchId || viewMode !== "week") return;
+    const prevStart = toISODate(addDays(new Date(startDate), -7));
+
+    setIsCopyPending(true);
+    try {
+      const prevRoster = await fetchRoster({ startDate: prevStart, days: 7, branchId });
+
+      // Build bulk items: shift each date forward by 7 days
+      const schedules: BulkScheduleItem[] = [];
+      for (const row of prevRoster.rows) {
+        for (const cell of row.schedules) {
+          if (!cell.status) continue;                    // skip unscheduled
+          const newDate = toISODate(addDays(new Date(cell.date), 7));
+          schedules.push({
+            employeeId: row.employee.id,
+            date:       newDate,
+            shiftId:    cell.shift?.id ?? null,
+            status:     cell.status,
+            notes:      cell.notes,
+          });
+        }
+      }
+
+      if (schedules.length === 0) return;
+
+      await bulkMut.mutateAsync({ branchId, schedules });
+    } catch {
+      // Errors surfaced by bulkMut itself via its own state
+    } finally {
+      setIsCopyPending(false);
+    }
+  }, [branchId, viewMode, startDate, bulkMut]);
+
   // ── Cell save ─────────────────────────────────────────────────────────────
   const handleCellSave = useCallback(
     async (
@@ -141,11 +187,12 @@ export function SchedulePage() {
       date: string,
       shiftId: string | null,
       status: ScheduleStatus | null,
+      notes?: string | null,
     ) => {
       if (!branchId) return;
       await bulkMut.mutateAsync({
         branchId,
-        schedules: [{ employeeId, date, shiftId, status }],
+        schedules: [{ employeeId, date, shiftId, status, notes }],
       });
     },
     [branchId, bulkMut],
@@ -172,6 +219,8 @@ export function SchedulePage() {
         onPrev={handlePrev}
         onNext={handleNext}
         onToday={handleToday}
+        onCopyLastWeek={isViewOnly ? undefined : handleCopyLastWeek}
+        isCopyPending={isCopyPending || bulkMut.isPending}
       />
 
       {/* ── Error banner ────────────────────────────────────── */}
@@ -214,8 +263,8 @@ export function SchedulePage() {
         </div>
       </div>
 
-      {/* ── Tablet: grid only ───────────────────────────────── */}
-      <div className="hidden md:block lg:hidden">
+      {/* ── Tablet: grid + summary (stacked) ────────────────── */}
+      <div className="hidden md:block lg:hidden space-y-4">
         <RosterGrid
           data={gridData}
           shifts={shifts}
@@ -224,28 +273,43 @@ export function SchedulePage() {
           isPending={rosterLoading || bulkMut.isPending}
           onCellSave={isViewOnly ? async () => {} : handleCellSave}
         />
+        <RosterSummary data={gridData} shifts={shifts} />
       </div>
 
       {/* ── Mobile: cards + summary ─────────────────────────── */}
       <div className="md:hidden">
-        {rosterData ? (
-          <>
-            <MobileRosterView data={rosterData} />
-            <div className="mt-4">
-              <RosterSummary data={rosterData} shifts={shifts} />
-            </div>
-          </>
-        ) : (
-          <RosterGrid
-            data={gridData}
-            shifts={shifts}
-            branchId={branchId}
-            viewMode={viewMode}
-            isPending={rosterLoading || bulkMut.isPending}
-            onCellSave={isViewOnly ? async () => {} : handleCellSave}
-          />
+        <MobileRosterView
+          data={gridData}
+          isViewOnly={isViewOnly}
+          onCellClick={(employee, date, cell) =>
+            setMobileEditDialog({ employee, date, cell })
+          }
+          onUnassign={(employeeId, date) =>
+            handleCellSave(employeeId, date, null, null)
+          }
+        />
+        {rosterData && (
+          <div className="mt-4">
+            <RosterSummary data={gridData} shifts={shifts} />
+          </div>
         )}
       </div>
+
+      {/* ── Mobile edit dialog ──────────────────────────────── */}
+      <ShiftCellDialog
+        open={!!mobileEditDialog}
+        onOpenChange={(open) => { if (!open) setMobileEditDialog(null); }}
+        employee={mobileEditDialog?.employee ?? null}
+        date={mobileEditDialog?.date ?? null}
+        cell={mobileEditDialog?.cell ?? null}
+        shifts={shifts}
+        isPending={rosterLoading || bulkMut.isPending}
+        onSave={(shiftId, status, notes) => {
+          if (!mobileEditDialog) return;
+          handleCellSave(mobileEditDialog.employee.id, mobileEditDialog.date, shiftId, status, notes);
+          setMobileEditDialog(null);
+        }}
+      />
     </div>
     </PageContainer>
   );
