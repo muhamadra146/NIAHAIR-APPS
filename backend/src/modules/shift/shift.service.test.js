@@ -18,17 +18,21 @@ describe('getAll', () => {
   test('returns shifts with isUsed flag', async () => {
     repo.findAll.mockResolvedValue([SHIFT]);
     repo.findUsedShiftIds.mockResolvedValue(new Set(['sh1']));
+    repo.count = jest.fn().mockResolvedValue(1);
 
     const result = await svc.getAll();
-    expect(result[0].isUsed).toBe(true);
+    // getAll returns { data, meta } (paginated)
+    expect(result.data[0].isUsed).toBe(true);
   });
 
   test('marks unused shifts with isUsed=false', async () => {
     repo.findAll.mockResolvedValue([SHIFT]);
     repo.findUsedShiftIds.mockResolvedValue(new Set()); // empty set
+    repo.count = jest.fn().mockResolvedValue(1);
 
     const result = await svc.getAll();
-    expect(result[0].isUsed).toBe(false);
+    // getAll returns { data, meta } (paginated)
+    expect(result.data[0].isUsed).toBe(false);
   });
 });
 
