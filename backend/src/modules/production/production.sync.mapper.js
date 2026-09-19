@@ -43,7 +43,9 @@ const mapPekerjaanToAccurate = (order, accurateBranchId = null) => ({
 //   jobOrderId  = ID dari JC yang sudah dibuat (wajib, RO selalu link ke JC)
 //   detailItem  = BARANG JADI (bukan bahan baku!)
 //   unitId      = field satuan di RO endpoint (beda dengan JC yang pakai itemUnitId)
-//   percentage  = porsi alokasi biaya (100 = full)
+//   portion     = porsi alokasi biaya (100 = full) — BUKAN "percentage"!
+//                 Dikonfirmasi dari GET /roll-over/detail.do: field-nya "portion", bukan "percentage".
+//                 Accurate menolak RO dengan error "porsi alokasi belum 100%" jika field salah nama.
 //
 // Constraint Accurate:
 //   Item di RO.detailItem HARUS BERBEDA dari item di JC.detailItem.
@@ -58,9 +60,10 @@ const mapPenyelesaianToAccurate = (order, accuratePekerjaanId, accurateBranchId 
     quantity:    Number(pItem.producedQuantity ?? pItem.plannedQuantity),
     unitId:      pItem.unit.accurateUnitId,   // unitId — field di RO endpoint
     warehouseId: order.warehouse.accurateWarehouseId,
-    // Gunakan porsi yang disimpan di DB — total harus = 100 (divalidasi di sync service).
+    // "portion" adalah nama field yang benar di Accurate untuk alokasi biaya RO.
+    // Dikonfirmasi via GET /roll-over/detail.do — bukan "percentage".
     // Prisma.Decimal: pakai toNumber() jika tersedia, fallback ke parseFloat(toString()).
-    percentage: pItem.costAllocationPercentage && typeof pItem.costAllocationPercentage.toNumber === "function"
+    portion: pItem.costAllocationPercentage && typeof pItem.costAllocationPercentage.toNumber === "function"
       ? pItem.costAllocationPercentage.toNumber()
       : parseFloat(String(pItem.costAllocationPercentage ?? "100")) || 100,
   })),
