@@ -109,8 +109,11 @@ describe('bulkUpsert', () => {
 // ── getMySchedules ─────────────────────────────────────────────────────
 
 describe('getMySchedules', () => {
-  test('throws 400 when employeeId is missing', async () => {
-    await expect(svc.getMySchedules(null)).rejects.toMatchObject({ statusCode: 400 });
+  test('returns empty array when employeeId is null (SUPER_ADMIN/OWNER without employee)', async () => {
+    // Changed from throwing 400: SUPER_ADMIN may not have employeeId — return [] instead
+    const result = await svc.getMySchedules(null);
+    expect(result).toEqual([]);
+    expect(prisma.staffSchedule.findMany).not.toHaveBeenCalled();
   });
 
   test('returns schedules for employee', async () => {
