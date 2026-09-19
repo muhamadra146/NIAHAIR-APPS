@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus, Factory, Loader2, RefreshCw, CheckCircle2, Clock,
-  Wrench, FlaskConical, XCircle, ChevronRight, X,
+  Wrench, FlaskConical, XCircle, ChevronRight, X, Trash2, AlertTriangle,
 } from "lucide-react";
 import { PageContainer }     from "@/components/layout/PageContainer";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Button }            from "@/components/ui/button";
 import { Badge }             from "@/components/ui/badge";
 import { Input }             from "@/components/ui/input";
 import { SimpleSelect }      from "@/components/ui/simple-select";
-import { useProductionOrders, useProductionStats } from "../hooks";
+import { useProductionOrders, useProductionStats, useDeleteProductionOrder } from "../hooks";
 import type { ProductionOrder, ProductionStatus } from "../types";
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -54,12 +54,15 @@ function StatCard({ label, value, color }: { label: string; value: number; color
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
+type DeleteTarget = { id: string; productionNo: string };
+
 export function ProductionListPage() {
   const navigate = useNavigate();
 
   const [filterStatus,    setFilterStatus]    = useState<ProductionStatus | "">("");
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate,   setFilterEndDate]   = useState("");
+  const [deleteTarget,    setDeleteTarget]    = useState<DeleteTarget | null>(null);
 
   const hasFilter = filterStatus || filterStartDate || filterEndDate;
 
@@ -70,6 +73,7 @@ export function ProductionListPage() {
     endDate:   filterEndDate   || undefined,
   });
   const { data: stats } = useProductionStats();
+  const deleteMutation = useDeleteProductionOrder();
 
   const orders = data?.data ?? [];
 
@@ -77,6 +81,13 @@ export function ProductionListPage() {
     setFilterStatus("");
     setFilterStartDate("");
     setFilterEndDate("");
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deleteTarget) return;
+    deleteMutation.mutate(deleteTarget.id, {
+      onSuccess: () => setDeleteTarget(null),
+    });
   };
 
   return (
@@ -145,6 +156,49 @@ export function ProductionListPage() {
           </div>
         </div>
 
+        {/* Delete Confirmation Dialog */}
+        {deleteTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-background border border-border rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 rounded-full bg-destructive/10 p-2">
+                  <AlertTriangle className="h-5 w-5 text-destructive" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm">Hapus Production Order?</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    <span className="font-mono font-medium text-foreground">{deleteTarget.productionNo}</span> akan
+                    dihapus permanen — termasuk dokumen JC &amp; RO di Accurate jika sudah di-sync.
+                    Stok inventory akan dikembalikan otomatis.
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deleteMutation.isPending}
+                >
+                  Batal
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteConfirm}
+                  disabled={deleteMutation.isPending}
+                >
+                  {deleteMutation.isPending ? (
+                    <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Menghapus…</>
+                  ) : (
+                    <><Trash2 className="h-3.5 w-3.5 mr-1.5" /> Hapus</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Content */}
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
@@ -189,7 +243,11 @@ export function ProductionListPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {orders.map((o) => (
-                    <ProductionRow key={o.id} order={o} />
+                    <ProductionRow
+                      key={o.id}
+                      order={o}
+                      onDelete={(id, productionNo) => setDeleteTarget({ id, productionNo })}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -201,7 +259,13 @@ export function ProductionListPage() {
   );
 }
 
-function ProductionRow({ order: o }: { order: ProductionOrder }) {
+function ProductionRow({
+  order: o,
+  onDelete,
+}: {
+  order: ProductionOrder;
+  onDelete: (id: string, productionNo: string) => void;
+}) {
   const navigate = useNavigate();
   return (
     <tr
@@ -223,7 +287,20 @@ function ProductionRow({ order: o }: { order: ProductionOrder }) {
         <StatusBadge status={o.status} />
       </td>
       <td className="px-4 py-3 text-right">
-        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            onClick={(e) => {
+              e.stopPropagation(); // jangan navigate ke detail
+              onDelete(o.id, o.productionNo);
+            }}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        </div>
       </td>
     </tr>
   );

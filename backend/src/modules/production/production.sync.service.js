@@ -42,6 +42,8 @@ const extractAccurateError = (response) => {
 
 const ACCURATE_PEKERJAAN_SAVE    = "/job-order/save.do";
 const ACCURATE_PENYELESAIAN_SAVE = "/roll-over/save.do";
+const ACCURATE_PEKERJAAN_DELETE    = "/job-order/delete.do";
+const ACCURATE_PENYELESAIAN_DELETE = "/roll-over/delete.do";
 
 // ── Langkah 1: Buat Pekerjaan Pesanan (Job Order / JC) ───────────────────────
 const syncPekerjaanToAccurate = async (order, accurateBranchId) => {
@@ -241,4 +243,50 @@ const syncProductionToAccurate = async (productionOrderId) => {
   return { pekerjaanId, penyelesaianResult };
 };
 
-module.exports = { syncProductionToAccurate };
+// ── Delete dari Accurate: RO dulu, baru JC ────────────────────────────────────
+//
+// Urutan: hapus RO (Penyelesaian Pesanan) DULU sebelum JC (Pekerjaan Pesanan).
+// Accurate menolak hapus JC jika masih ada RO yang terhubung.
+//
+// Best-effort: error dilog tapi tidak di-throw — caller memutuskan cara handle.
+const deleteFromAccurate = async ({ accuratePekerjaanId, accuratePenyelesaianId }) => {
+  // 1. Hapus Penyelesaian Pesanan (RO) terlebih dahulu
+  if (accuratePenyelesaianId) {
+    try {
+      const resp = await accurateRequest(
+        `${ACCURATE_PENYELESAIAN_DELETE}?id=${accuratePenyelesaianId}`,
+        { method: "DELETE" },
+      );
+      if (!resp.s) {
+        console.warn(
+          `[production sync] Gagal hapus RO id=${accuratePenyelesaianId}: ${extractAccurateError(resp)}`,
+        );
+      } else {
+        console.log(`[production sync] RO id=${accuratePenyelesaianId} dihapus dari Accurate`);
+      }
+    } catch (err) {
+      console.warn(`[production sync] Error hapus RO id=${accuratePenyelesaianId}:`, err?.message);
+    }
+  }
+
+  // 2. Hapus Pekerjaan Pesanan (JC)
+  if (accuratePekerjaanId) {
+    try {
+      const resp = await accurateRequest(
+        `${ACCURATE_PEKERJAAN_DELETE}?id=${accuratePekerjaanId}`,
+        { method: "DELETE" },
+      );
+      if (!resp.s) {
+        console.warn(
+          `[production sync] Gagal hapus JC id=${accuratePekerjaanId}: ${extractAccurateError(resp)}`,
+        );
+      } else {
+        console.log(`[production sync] JC id=${accuratePekerjaanId} dihapus dari Accurate`);
+      }
+    } catch (err) {
+      console.warn(`[production sync] Error hapus JC id=${accuratePekerjaanId}:`, err?.message);
+    }
+  }
+};
+
+module.exports = { syncProductionToAccurate, deleteFromAccurate };

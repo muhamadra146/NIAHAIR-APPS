@@ -4,7 +4,7 @@ const AppError                     = require("../../common/errors/AppError");
 const prisma                       = require("../../config/prisma");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo                         = require("./production.repository");
-const { syncProductionToAccurate } = require("./production.sync.service");
+const { syncProductionToAccurate, deleteFromAccurate } = require("./production.sync.service");
 
 // ── Decimal helper ────────────────────────────────────────────────────────────
 const D = (v) => new Prisma.Decimal(String(v));
@@ -432,12 +432,69 @@ const submitQC = async (id, { status, notes, inspectionDate }, qcEmployeeId) => 
 };
 
 // ── remove ────────────────────────────────────────────────────────────────────
+//
+// Urutan:
+//   1. Hapus dokumen di Accurate (RO → JC) jika sudah pernah di-sync — best effort
+//   2. Reverse inventory movements (kembalikan stok material, kurangi stok barang jadi)
+//   3. Hard delete production order dari DB (cascade items, materials, timelines, dst)
+//
 const remove = async (id) => {
   const order = await getById(id);
-  if (order.status !== "DRAFT") {
-    throw new AppError("Hanya production order berstatus DRAFT yang bisa dihapus", StatusCodes.BAD_REQUEST);
+
+  // Ambil Accurate IDs via raw SQL (belum ada di Prisma client)
+  const [syncRow] = await prisma.$queryRawUnsafe(
+    `SELECT "accurate_pekerjaan_id"    AS "accuratePekerjaanId",
+            "accurate_penyelesaian_id" AS "accuratePenyelesaianId"
+     FROM   "production_orders" WHERE id = $1`,
+    id,
+  );
+
+  // 1. Hapus dari Accurate (best-effort: jika gagal, log + lanjut delete DB)
+  if (syncRow?.accuratePekerjaanId || syncRow?.accuratePenyelesaianId) {
+    await deleteFromAccurate({
+      accuratePekerjaanId:    syncRow.accuratePekerjaanId,
+      accuratePenyelesaianId: syncRow.accuratePenyelesaianId,
+    }).catch((err) => {
+      console.error(`[production] Gagal hapus dari Accurate, lanjut hapus DB:`, err?.message ?? err);
+    });
   }
-  await repo.remove(id);
+
+  // 2. Reverse inventory + hapus order dalam satu transaksi
+  await prisma.$transaction(async (tx) => {
+    // Balik konsumsi material (qtyChange negatif → kembalikan ke stok)
+    for (const mat of order.materials) {
+      if (!mat.inventoryMovementId) continue;
+      const mv = await tx.inventoryMovement.findUnique({
+        where:  { id: mat.inventoryMovementId },
+        select: { inventoryId: true, qtyChange: true },
+      });
+      if (!mv) continue;
+      const reversal = D(mv.qtyChange).negated(); // OUT → balik jadi positif
+      await tx.inventory.update({
+        where: { id: mv.inventoryId },
+        data:  { qtyOnHand: { increment: reversal }, qtyAvailable: { increment: reversal } },
+      });
+    }
+
+    // Balik penambahan barang jadi (qtyChange positif → kurangi dari stok)
+    for (const item of order.items) {
+      if (!item.inventoryMovementId) continue;
+      const mv = await tx.inventoryMovement.findUnique({
+        where:  { id: item.inventoryMovementId },
+        select: { inventoryId: true, qtyChange: true },
+      });
+      if (!mv) continue;
+      const reversal = D(mv.qtyChange).negated(); // IN → balik jadi negatif
+      await tx.inventory.update({
+        where: { id: mv.inventoryId },
+        data:  { qtyOnHand: { increment: reversal }, qtyAvailable: { increment: reversal } },
+      });
+    }
+
+    // Hard delete — cascade: items, materials, employees, qcRecords, timelines
+    await repo.remove(id, tx);
+  });
+
   return { deleted: true, id };
 };
 
