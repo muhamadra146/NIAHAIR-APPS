@@ -1,5 +1,10 @@
 import { useState, useMemo } from "react";
-import { BarChart2, Download, Loader2, AlertCircle, User } from "lucide-react";
+import {
+  Download, Loader2, AlertCircle, User,
+  Search, UserCheck, UserX, CalendarCheck,
+  Clock, Timer, TrendingUp,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { PageContainer }  from "@/components/layout/PageContainer";
 import { Button }         from "@/components/ui/button";
 import { Input }          from "@/components/ui/input";
@@ -90,6 +95,32 @@ function exportCSV(rows: AttendanceReportRow[], startDate: string, endDate: stri
 
 // ── Summary cards ─────────────────────────────────────────────────────────────
 
+interface CardDef {
+  label:  string;
+  value:  string | number;
+  sub:    string;
+  icon:   LucideIcon;
+  /** tailwind classes: text, bg, icon, border */
+  color:  { text: string; bg: string; icon: string; border: string };
+}
+
+function SummaryCard({ label, value, sub, icon: Icon, color }: CardDef) {
+  return (
+    <div className={`rounded-xl border ${color.border} bg-card shadow-sm overflow-hidden`}>
+      {/* colored top accent bar */}
+      <div className={`h-0.5 w-full ${color.bg.replace("bg-", "bg-").replace("50", "400")}`} />
+      <div className="px-4 py-4">
+        <div className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${color.bg} mb-3`}>
+          <Icon className={`h-4 w-4 ${color.icon}`} />
+        </div>
+        <p className={`text-2xl font-bold tabular-nums leading-none ${color.text}`}>{value}</p>
+        <p className="text-xs font-medium text-foreground mt-1.5">{label}</p>
+        {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
 function SummaryCards({ rows }: { rows: AttendanceReportRow[] }) {
   const totalScheduled = rows.reduce((s, r) => s + r.scheduledDays,   0);
   const totalPresent   = rows.reduce((s, r) => s + r.presentDays,     0);
@@ -101,30 +132,88 @@ function SummaryCards({ rows }: { rows: AttendanceReportRow[] }) {
     ? rows.reduce((s, r) => s + r.attendanceRate, 0) / rows.length
     : 0;
 
-  const cards = [
-    { label: "Total Hadir",         value: `${totalPresent}/${totalScheduled}`, sub: "hari",           color: "text-emerald-600" },
-    { label: "Total Absen",         value: totalAbsent,                         sub: "tanpa keterangan", color: "text-red-600"   },
-    { label: "Izin Resmi",          value: totalIzinResmi,                      sub: "cuti/izin/sakit", color: "text-sky-600"    },
-    { label: "Total Terlambat",     value: totalLate,                           sub: "hari",           color: "text-amber-600"   },
-    { label: "Total Lembur",        value: fmtMinutes(totalOvertime),           sub: "",               color: "text-blue-600"    },
-    { label: "Rata-rata Kehadiran", value: `${avgRate.toFixed(1)}%`,            sub: "dari hari kerja",
-      color: avgRate >= 95 ? "text-emerald-600" : avgRate >= 80 ? "text-amber-600" : "text-red-600" },
+  const rateColor =
+    avgRate >= 95 ? { text: "text-emerald-700", bg: "bg-emerald-50", icon: "text-emerald-600", border: "border-emerald-100" } :
+    avgRate >= 80 ? { text: "text-amber-700",   bg: "bg-amber-50",   icon: "text-amber-600",   border: "border-amber-100"   } :
+                   { text: "text-red-700",      bg: "bg-red-50",     icon: "text-red-600",     border: "border-red-100"     };
+
+  const cards: CardDef[] = [
+    {
+      label: "Total Hadir",
+      value: `${totalPresent}/${totalScheduled}`,
+      sub:   "hari terjadwal",
+      icon:  UserCheck,
+      color: { text: "text-emerald-700", bg: "bg-emerald-50", icon: "text-emerald-600", border: "border-emerald-100" },
+    },
+    {
+      label: "Absen",
+      value: totalAbsent,
+      sub:   "tanpa keterangan",
+      icon:  UserX,
+      color: { text: "text-red-700", bg: "bg-red-50", icon: "text-red-600", border: "border-red-100" },
+    },
+    {
+      label: "Izin Resmi",
+      value: totalIzinResmi,
+      sub:   "cuti · izin · sakit",
+      icon:  CalendarCheck,
+      color: { text: "text-sky-700", bg: "bg-sky-50", icon: "text-sky-600", border: "border-sky-100" },
+    },
+    {
+      label: "Terlambat",
+      value: totalLate,
+      sub:   "hari",
+      icon:  Clock,
+      color: { text: "text-amber-700", bg: "bg-amber-50", icon: "text-amber-600", border: "border-amber-100" },
+    },
+    {
+      label: "Total Lembur",
+      value: fmtMinutes(totalOvertime),
+      sub:   "menit kerja ekstra",
+      icon:  Timer,
+      color: { text: "text-blue-700", bg: "bg-blue-50", icon: "text-blue-600", border: "border-blue-100" },
+    },
+    {
+      label: "Rata-rata Kehadiran",
+      value: `${avgRate.toFixed(1)}%`,
+      sub:   "dari hari kerja",
+      icon:  TrendingUp,
+      color: rateColor,
+    },
   ];
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-      {cards.map(({ label, value, sub, color }) => (
-        <div key={label} className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className={`mt-1 text-xl font-bold tabular-nums ${color}`}>{value}</p>
-          {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
-        </div>
-      ))}
+      {cards.map((card) => <SummaryCard key={card.label} {...card} />)}
     </div>
   );
 }
 
 // ── Report table ──────────────────────────────────────────────────────────────
+
+/** Column group descriptor — drives the two-row thead */
+const COL_GROUPS = [
+  { label: "",           span: 2, border: false },   // Karyawan, Jabatan
+  { label: "Kehadiran",  span: 3, border: true  },   // Terjadwal, Hadir, Absen
+  { label: "Izin Resmi", span: 3, border: true  },   // Cuti, Izin, Sakit
+  { label: "Pelanggaran",span: 3, border: true  },   // Terlambat, Plg Cepat, ½Hari
+  { label: "Durasi",     span: 3, border: true  },   // Mnt Terlambat, Mnt Plg Cepat, Mnt Lembur
+  { label: "Libur",      span: 1, border: true  },   // Hari Libur Kerja
+  { label: "Rate",       span: 1, border: true  },   // Tingkat Kehadiran
+] as const;
+
+const COL_HEADERS = [
+  "Karyawan", "Jabatan",
+  "Terjadwal", "Hadir", "Absen",
+  "Cuti", "Izin", "Sakit",
+  "Terlambat", "Plg Cepat", "½ Hari",
+  "Mnt Terlambat", "Mnt Plg Cepat", "Mnt Lembur",
+  "Hari Libur",
+  "Tingkat",
+];
+
+/** Which column index starts a new group (gets a left-border divider) */
+const GROUP_START_COLS = new Set([2, 5, 8, 11, 14, 15]);
 
 function ReportTable({ rows }: { rows: AttendanceReportRow[] }) {
   if (rows.length === 0) {
@@ -141,84 +230,116 @@ function ReportTable({ rows }: { rows: AttendanceReportRow[] }) {
     <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
       <table className="w-full text-sm">
         <thead>
+          {/* ── Row 1: column group labels ── */}
+          <tr className="border-b border-border/60 bg-muted/20">
+            {COL_GROUPS.map(({ label, span, border }) => (
+              <th
+                key={label || "id"}
+                colSpan={span}
+                className={`px-3 py-1.5 text-center text-[10px] font-semibold tracking-widest uppercase text-muted-foreground/70
+                  ${border ? "border-l border-border/40" : ""}
+                  ${label === "" ? "" : "bg-muted/30"}`}
+              >
+                {label}
+              </th>
+            ))}
+          </tr>
+          {/* ── Row 2: individual column headers ── */}
           <tr className="border-b border-border bg-muted/30">
-            {[
-              "Karyawan", "Jabatan", "Terjadwal", "Hadir", "Absen",
-              "Cuti", "Izin", "Sakit",
-              "Terlambat", "Plg Cepat", "½ Hari",
-              "Mnt Terlambat", "Mnt Plg Cepat", "Mnt Lembur",
-              "Hari Libur Kerja", "Tingkat",
-            ].map((h) => (
-              <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">
+            {COL_HEADERS.map((h, i) => (
+              <th
+                key={h}
+                className={`px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap
+                  ${GROUP_START_COLS.has(i) ? "border-l border-border/40" : ""}`}
+              >
                 {h}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-border">
-          {rows.map((row) => (
-            <tr key={row.employee.id} className="hover:bg-muted/20 transition-colors">
+        <tbody className="divide-y divide-border/50">
+          {rows.map((row, rowIdx) => (
+            <tr
+              key={row.employee.id}
+              className={`hover:bg-primary/5 transition-colors ${rowIdx % 2 === 1 ? "bg-muted/10" : ""}`}
+            >
+              {/* Karyawan */}
               <td className="px-3 py-3 whitespace-nowrap">
-                <p className="font-semibold">{row.employee.name}</p>
-                <p className="text-xs text-muted-foreground">{row.employee.employeeCode ?? "—"}</p>
+                <p className="font-semibold text-foreground">{row.employee.name}</p>
+                <p className="text-[11px] text-muted-foreground">{row.employee.employeeCode ?? "—"}</p>
               </td>
+              {/* Jabatan */}
               <td className="px-3 py-3 text-xs text-muted-foreground whitespace-nowrap">{row.employee.role.name}</td>
-              <td className="px-3 py-3 tabular-nums text-center">{row.scheduledDays}</td>
-              <td className="px-3 py-3 tabular-nums text-center text-emerald-600 font-medium">{row.presentDays}</td>
+
+              {/* ── Kehadiran ── */}
+              <td className="px-3 py-3 tabular-nums text-center border-l border-border/20">{row.scheduledDays}</td>
+              <td className="px-3 py-3 tabular-nums text-center text-emerald-600 font-semibold">{row.presentDays}</td>
               <td className="px-3 py-3 tabular-nums text-center">
                 {row.absentDays > 0
-                  ? <span className="text-red-600 font-medium">{row.absentDays}</span>
-                  : <span className="text-muted-foreground">0</span>}
+                  ? <span className="font-semibold text-red-600">{row.absentDays}</span>
+                  : <span className="text-muted-foreground/60">0</span>}
               </td>
-              {/* Approved-absence breakdown — Bug 1+2 fix */}
-              <td className="px-3 py-3 tabular-nums text-center">
+
+              {/* ── Izin Resmi ── */}
+              <td className="px-3 py-3 tabular-nums text-center border-l border-border/20">
                 {row.leaveDays > 0
-                  ? <span className="text-violet-600 font-medium">{row.leaveDays}</span>
-                  : <span className="text-muted-foreground">0</span>}
+                  ? <span className="font-semibold text-violet-600">{row.leaveDays}</span>
+                  : <span className="text-muted-foreground/60">0</span>}
               </td>
               <td className="px-3 py-3 tabular-nums text-center">
                 {row.izinDays > 0
-                  ? <span className="text-indigo-600 font-medium">{row.izinDays}</span>
-                  : <span className="text-muted-foreground">0</span>}
+                  ? <span className="font-semibold text-indigo-600">{row.izinDays}</span>
+                  : <span className="text-muted-foreground/60">0</span>}
               </td>
               <td className="px-3 py-3 tabular-nums text-center">
                 {row.sakitDays > 0
-                  ? <span className="text-rose-500 font-medium">{row.sakitDays}</span>
-                  : <span className="text-muted-foreground">0</span>}
+                  ? <span className="font-semibold text-rose-500">{row.sakitDays}</span>
+                  : <span className="text-muted-foreground/60">0</span>}
               </td>
-              <td className="px-3 py-3 tabular-nums text-center">
+
+              {/* ── Pelanggaran ── */}
+              <td className="px-3 py-3 tabular-nums text-center border-l border-border/20">
                 {row.lateDays > 0
-                  ? <span className="text-amber-600 font-medium">{row.lateDays}</span>
-                  : <span className="text-muted-foreground">0</span>}
+                  ? <span className="font-semibold text-amber-600">{row.lateDays}</span>
+                  : <span className="text-muted-foreground/60">0</span>}
               </td>
               <td className="px-3 py-3 tabular-nums text-center">
                 {row.earlyLeaveDays > 0
-                  ? <span className="text-sky-600 font-medium">{row.earlyLeaveDays}</span>
-                  : <span className="text-muted-foreground">0</span>}
+                  ? <span className="font-semibold text-sky-600">{row.earlyLeaveDays}</span>
+                  : <span className="text-muted-foreground/60">0</span>}
               </td>
               <td className="px-3 py-3 tabular-nums text-center">
                 {row.halfDays > 0
-                  ? <span className="text-orange-600 font-medium">{row.halfDays}</span>
-                  : <span className="text-muted-foreground">0</span>}
+                  ? <span className="font-semibold text-orange-600">{row.halfDays}</span>
+                  : <span className="text-muted-foreground/60">0</span>}
               </td>
-              <td className="px-3 py-3 tabular-nums text-center text-xs">{fmtMinutes(row.lateMinutes)}</td>
-              {/* Bug 3 fix: earlyLeaveMinutes now shown in table */}
+
+              {/* ── Durasi ── */}
+              <td className="px-3 py-3 tabular-nums text-center text-xs border-l border-border/20">
+                {row.lateMinutes > 0
+                  ? <span className="text-amber-600">{fmtMinutes(row.lateMinutes)}</span>
+                  : <span className="text-muted-foreground/50">—</span>}
+              </td>
               <td className="px-3 py-3 tabular-nums text-center text-xs">
                 {row.earlyLeaveMinutes > 0
                   ? <span className="text-sky-600">{fmtMinutes(row.earlyLeaveMinutes)}</span>
-                  : "—"}
+                  : <span className="text-muted-foreground/50">—</span>}
               </td>
               <td className="px-3 py-3 tabular-nums text-center text-xs">
                 {row.overtimeMinutes > 0
                   ? <span className="text-blue-600">{fmtMinutes(row.overtimeMinutes)}</span>
-                  : "—"}
+                  : <span className="text-muted-foreground/50">—</span>}
               </td>
-              <td className="px-3 py-3 tabular-nums text-center">
+
+              {/* Hari Libur */}
+              <td className="px-3 py-3 tabular-nums text-center border-l border-border/20">
                 {row.holidayWorkDays > 0
-                  ? <span className="text-purple-600 font-medium">{row.holidayWorkDays}</span>
-                  : <span className="text-muted-foreground">0</span>}
+                  ? <span className="font-semibold text-purple-600">{row.holidayWorkDays}</span>
+                  : <span className="text-muted-foreground/60">0</span>}
               </td>
-              <td className="px-3 py-3">
+
+              {/* Rate */}
+              <td className="px-3 py-3 border-l border-border/20">
                 <RateBadge rate={row.attendanceRate} />
               </td>
             </tr>
@@ -281,38 +402,40 @@ export function AttendanceReportPage() {
     >
       <div className="space-y-5">
 
-        {/* ── Filters ──────────────────────────────────────── */}
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">Dari</label>
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-auto"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">Sampai</label>
-            <Input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-auto"
-            />
-          </div>
+        {/* ── Filter panel ─────────────────────────────────── */}
+        <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">Dari</label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-auto"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">Sampai</label>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-auto"
+              />
+            </div>
 
-          {rows.length > 0 && !dateRangeError && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 ml-auto self-end"
-              onClick={() => exportCSV(filtered, startDate, endDate)}
-            >
-              <Download className="h-3.5 w-3.5" />
-              Export CSV
-            </Button>
-          )}
+            {rows.length > 0 && !dateRangeError && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 ml-auto self-end"
+                onClick={() => exportCSV(filtered, startDate, endDate)}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export CSV
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* ── Date range validation error (Bug 4 fix) ──────── */}
@@ -351,10 +474,11 @@ export function AttendanceReportPage() {
           <SummaryCards rows={rows} />
         )}
 
-        {/* ── Search ───────────────────────────────────────── */}
+        {/* ── Search bar ───────────────────────────────────── */}
         {!isLoading && rows.length > 0 && (
           <div className="flex items-center gap-2">
-            <BarChart2 className="h-4 w-4 text-muted-foreground shrink-0" />
+            {/* FINDING-002 fix: was BarChart2 (chart icon), now Search */}
+            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
             <Input
               placeholder="Cari karyawan…"
               value={search}
