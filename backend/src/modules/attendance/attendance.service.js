@@ -398,12 +398,17 @@ const getReport = async ({ branchId, startDate, endDate, employeeId }) => {
     }
   }
 
-  const rows = Object.values(byEmployee).map((r) => ({
-    ...r,
-    attendanceRate: r.scheduledDays > 0
-      ? Math.round((r.presentDays / r.scheduledDays) * 1000) / 10
-      : 0,
-  }));
+  // Exclude employees who were entirely on approved leave (LEAVE/IZIN/SAKIT)
+  // with no WORKING days and no holiday work in this period — their attendance
+  // rate would be a misleading 0% even though they were legitimately absent.
+  const rows = Object.values(byEmployee)
+    .filter((r) => r.scheduledDays > 0 || r.holidayWorkDays > 0)
+    .map((r) => ({
+      ...r,
+      attendanceRate: r.scheduledDays > 0
+        ? Math.round((r.presentDays / r.scheduledDays) * 1000) / 10
+        : 0,
+    }));
 
   rows.sort((a, b) => a.employee.name.localeCompare(b.employee.name, "id-ID"));
 
