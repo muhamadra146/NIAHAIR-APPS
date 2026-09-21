@@ -343,23 +343,47 @@ const getReport = async ({ branchId, startDate, endDate, employeeId }) => {
     const eid = sc.employeeId;
     if (!byEmployee[eid]) {
       byEmployee[eid] = {
-        employee:        sc.employee,
-        scheduledDays:   0,
-        presentDays:     0,
-        absentDays:      0,
-        lateDays:        0,
-        earlyLeaveDays:  0,
-        halfDays:        0,
-        lateMinutes:     0,
+        employee:          sc.employee,
+        scheduledDays:     0,
+        presentDays:       0,
+        absentDays:        0,
+        lateDays:          0,
+        earlyLeaveDays:    0,
+        halfDays:          0,
+        lateMinutes:       0,
         earlyLeaveMinutes: 0,
-        overtimeMinutes: 0,
-        holidayWorkDays: 0,
+        overtimeMinutes:   0,
+        holidayWorkDays:   0,
+        // BUG 1+2 FIX: approved-absence breakdown (LEAVE/IZIN/SAKIT)
+        leaveDays:  0,
+        izinDays:   0,
+        sakitDays:  0,
       };
     }
-    const r = byEmployee[eid];
-    r.scheduledDays++;
-
+    const r   = byEmployee[eid];
     const att = sc.attendance;
+
+    // BUG 1 FIX: Approved absences — count separately, NOT as scheduledDays or absentDays.
+    // Previously all statuses (LEAVE, IZIN, SAKIT, OFF) fell through to scheduledDays++
+    // and — when no attendance record — to absentDays++. That inflated both counters.
+    if (sc.status === "LEAVE") { r.leaveDays++;  continue; }
+    if (sc.status === "IZIN")  { r.izinDays++;   continue; }
+    if (sc.status === "SAKIT") { r.sakitDays++;  continue; }
+
+    // BUG 2 FIX: OFF (rest day) — not a scheduled work day.
+    // Count holiday work minutes/days but do NOT add to scheduledDays.
+    if (sc.status === "OFF") {
+      if (att && att.isHolidayWork) {
+        r.holidayWorkDays++;
+        r.lateMinutes       += att.lateMinutes       ?? 0;
+        r.earlyLeaveMinutes += att.earlyLeaveMinutes ?? 0;
+        r.overtimeMinutes   += att.overtimeMinutes   ?? 0;
+      }
+      continue;
+    }
+
+    // WORKING day — normal scheduled day
+    r.scheduledDays++;
     if (!att || att.status === "ABSENT") {
       r.absentDays++;
     } else {

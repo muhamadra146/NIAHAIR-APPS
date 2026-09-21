@@ -138,17 +138,21 @@ export interface AttendanceReportRow {
     employeeCode: string | null;
     role:         { id: string; code: string; name: string };
   };
-  scheduledDays:    number;
-  presentDays:      number;
-  absentDays:       number;
-  lateDays:         number;
-  earlyLeaveDays:   number;
-  halfDays:         number;
-  lateMinutes:      number;
+  scheduledDays:     number;
+  presentDays:       number;
+  absentDays:        number;
+  lateDays:          number;
+  earlyLeaveDays:    number;
+  halfDays:          number;
+  lateMinutes:       number;
   earlyLeaveMinutes: number;
-  overtimeMinutes:  number;
-  holidayWorkDays:  number;
-  attendanceRate:   number;
+  overtimeMinutes:   number;
+  holidayWorkDays:   number;
+  /** Approved-absence breakdown (Bug 1+2 fix) */
+  leaveDays:         number;
+  izinDays:          number;
+  sakitDays:         number;
+  attendanceRate:    number;
 }
 
 export interface AttendanceReportResult {

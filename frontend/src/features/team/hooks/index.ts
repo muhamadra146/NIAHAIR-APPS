@@ -119,5 +119,7 @@ export const useAttendanceReport = (params: AttendanceReportParams) =>
   useQuery({
     queryKey: ["attendanceReport", params],
     queryFn:  () => fetchAttendanceReport(params),
-    enabled:  !!params.branchId && !!params.startDate && !!params.endDate,
+    // Bug 4 fix: also guard against invalid date ranges (endDate < startDate)
+    enabled:  !!params.branchId && !!params.startDate && !!params.endDate
+              && params.endDate >= params.startDate,
   });

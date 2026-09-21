@@ -50,10 +50,10 @@ function RateBadge({ rate }: { rate: number }) {
 function exportCSV(rows: AttendanceReportRow[], startDate: string, endDate: string) {
   const header = [
     "Kode Karyawan", "Nama", "Jabatan",
-    "Hari Terjadwal", "Hadir", "Absen", "Terlambat",
-    "Pulang Cepat", "Setengah Hari", "Menit Terlambat",
-    "Menit Pulang Cepat", "Menit Lembur", "Kerja Hari Libur",
-    "Tingkat Kehadiran (%)",
+    "Hari Terjadwal", "Hadir", "Absen", "Cuti", "Izin", "Sakit",
+    "Terlambat", "Pulang Cepat", "Setengah Hari",
+    "Menit Terlambat", "Menit Pulang Cepat", "Menit Lembur",
+    "Kerja Hari Libur", "Tingkat Kehadiran (%)",
   ].join(",");
 
   const csvRows = rows.map((r) =>
@@ -64,6 +64,9 @@ function exportCSV(rows: AttendanceReportRow[], startDate: string, endDate: stri
       r.scheduledDays,
       r.presentDays,
       r.absentDays,
+      r.leaveDays,
+      r.izinDays,
+      r.sakitDays,
       r.lateDays,
       r.earlyLeaveDays,
       r.halfDays,
@@ -88,25 +91,28 @@ function exportCSV(rows: AttendanceReportRow[], startDate: string, endDate: stri
 // ── Summary cards ─────────────────────────────────────────────────────────────
 
 function SummaryCards({ rows }: { rows: AttendanceReportRow[] }) {
-  const totalScheduled = rows.reduce((s, r) => s + r.scheduledDays, 0);
-  const totalPresent   = rows.reduce((s, r) => s + r.presentDays,   0);
-  const totalAbsent    = rows.reduce((s, r) => s + r.absentDays,    0);
-  const totalLate      = rows.reduce((s, r) => s + r.lateDays,      0);
+  const totalScheduled = rows.reduce((s, r) => s + r.scheduledDays,   0);
+  const totalPresent   = rows.reduce((s, r) => s + r.presentDays,     0);
+  const totalAbsent    = rows.reduce((s, r) => s + r.absentDays,      0);
+  const totalLate      = rows.reduce((s, r) => s + r.lateDays,        0);
   const totalOvertime  = rows.reduce((s, r) => s + r.overtimeMinutes, 0);
+  const totalIzinResmi = rows.reduce((s, r) => s + r.leaveDays + r.izinDays + r.sakitDays, 0);
   const avgRate        = rows.length
     ? rows.reduce((s, r) => s + r.attendanceRate, 0) / rows.length
     : 0;
 
   const cards = [
-    { label: "Total Hadir",          value: `${totalPresent}/${totalScheduled}`, sub: "hari",       color: "text-emerald-600" },
-    { label: "Total Absen",          value: totalAbsent,                         sub: "hari",       color: "text-red-600"     },
-    { label: "Total Terlambat",      value: totalLate,                           sub: "hari",       color: "text-amber-600"   },
-    { label: "Total Lembur",         value: fmtMinutes(totalOvertime),           sub: "",           color: "text-blue-600"    },
-    { label: "Rata-rata Kehadiran",  value: `${avgRate.toFixed(1)}%`,            sub: "dari target", color: avgRate >= 95 ? "text-emerald-600" : avgRate >= 80 ? "text-amber-600" : "text-red-600" },
+    { label: "Total Hadir",         value: `${totalPresent}/${totalScheduled}`, sub: "hari",           color: "text-emerald-600" },
+    { label: "Total Absen",         value: totalAbsent,                         sub: "tanpa keterangan", color: "text-red-600"   },
+    { label: "Izin Resmi",          value: totalIzinResmi,                      sub: "cuti/izin/sakit", color: "text-sky-600"    },
+    { label: "Total Terlambat",     value: totalLate,                           sub: "hari",           color: "text-amber-600"   },
+    { label: "Total Lembur",        value: fmtMinutes(totalOvertime),           sub: "",               color: "text-blue-600"    },
+    { label: "Rata-rata Kehadiran", value: `${avgRate.toFixed(1)}%`,            sub: "dari hari kerja",
+      color: avgRate >= 95 ? "text-emerald-600" : avgRate >= 80 ? "text-amber-600" : "text-red-600" },
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       {cards.map(({ label, value, sub, color }) => (
         <div key={label} className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
           <p className="text-xs text-muted-foreground">{label}</p>
@@ -138,8 +144,10 @@ function ReportTable({ rows }: { rows: AttendanceReportRow[] }) {
           <tr className="border-b border-border bg-muted/30">
             {[
               "Karyawan", "Jabatan", "Terjadwal", "Hadir", "Absen",
-              "Terlambat", "Pulang Cepat", "Setengah Hari",
-              "Mnt Terlambat", "Mnt Lembur", "Hari Libur Kerja", "Tingkat",
+              "Cuti", "Izin", "Sakit",
+              "Terlambat", "Plg Cepat", "½ Hari",
+              "Mnt Terlambat", "Mnt Plg Cepat", "Mnt Lembur",
+              "Hari Libur Kerja", "Tingkat",
             ].map((h) => (
               <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">
                 {h}
@@ -162,6 +170,22 @@ function ReportTable({ rows }: { rows: AttendanceReportRow[] }) {
                   ? <span className="text-red-600 font-medium">{row.absentDays}</span>
                   : <span className="text-muted-foreground">0</span>}
               </td>
+              {/* Approved-absence breakdown — Bug 1+2 fix */}
+              <td className="px-3 py-3 tabular-nums text-center">
+                {row.leaveDays > 0
+                  ? <span className="text-violet-600 font-medium">{row.leaveDays}</span>
+                  : <span className="text-muted-foreground">0</span>}
+              </td>
+              <td className="px-3 py-3 tabular-nums text-center">
+                {row.izinDays > 0
+                  ? <span className="text-indigo-600 font-medium">{row.izinDays}</span>
+                  : <span className="text-muted-foreground">0</span>}
+              </td>
+              <td className="px-3 py-3 tabular-nums text-center">
+                {row.sakitDays > 0
+                  ? <span className="text-rose-500 font-medium">{row.sakitDays}</span>
+                  : <span className="text-muted-foreground">0</span>}
+              </td>
               <td className="px-3 py-3 tabular-nums text-center">
                 {row.lateDays > 0
                   ? <span className="text-amber-600 font-medium">{row.lateDays}</span>
@@ -178,6 +202,12 @@ function ReportTable({ rows }: { rows: AttendanceReportRow[] }) {
                   : <span className="text-muted-foreground">0</span>}
               </td>
               <td className="px-3 py-3 tabular-nums text-center text-xs">{fmtMinutes(row.lateMinutes)}</td>
+              {/* Bug 3 fix: earlyLeaveMinutes now shown in table */}
+              <td className="px-3 py-3 tabular-nums text-center text-xs">
+                {row.earlyLeaveMinutes > 0
+                  ? <span className="text-sky-600">{fmtMinutes(row.earlyLeaveMinutes)}</span>
+                  : "—"}
+              </td>
               <td className="px-3 py-3 tabular-nums text-center text-xs">
                 {row.overtimeMinutes > 0
                   ? <span className="text-blue-600">{fmtMinutes(row.overtimeMinutes)}</span>
@@ -208,6 +238,11 @@ export function AttendanceReportPage() {
   const [startDate, setStartDate] = useState<string>(() => getFirstOfMonth(now));
   const [endDate,   setEndDate]   = useState<string>(() => getLastOfMonth(now));
   const [search,    setSearch]    = useState("");
+
+  // Bug 4 fix: client-side date validation before hitting the API
+  const dateRangeError = startDate && endDate && endDate < startDate
+    ? "Tanggal akhir tidak boleh sebelum tanggal mulai"
+    : null;
 
   const { data, isLoading, isError, refetch } = useAttendanceReport(
     { branchId: branchId ?? "", startDate, endDate },
@@ -267,7 +302,7 @@ export function AttendanceReportPage() {
             />
           </div>
 
-          {rows.length > 0 && (
+          {rows.length > 0 && !dateRangeError && (
             <Button
               variant="outline"
               size="sm"
@@ -280,8 +315,16 @@ export function AttendanceReportPage() {
           )}
         </div>
 
+        {/* ── Date range validation error (Bug 4 fix) ──────── */}
+        {dateRangeError && (
+          <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{dateRangeError}</span>
+          </div>
+        )}
+
         {/* ── Error ────────────────────────────────────────── */}
-        {isError && (
+        {isError && !dateRangeError && (
           <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>Gagal memuat laporan.</span>
