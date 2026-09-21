@@ -190,8 +190,19 @@ function SummaryCards({ rows }: { rows: AttendanceReportRow[] }) {
 }
 
 // ── Report table ──────────────────────────────────────────────────────────────
-// Simplified: 8 columns, no horizontal scroll.
-// Detail menit (terlambat/pulang-cepat/lembur) tetap ter-export di CSV.
+// 8 kolom — header dan sel sejajar per-kolom (left untuk teks, center untuk angka).
+
+/** Definisi kolom: label + alignment untuk header & sel */
+const TABLE_COLS = [
+  { label: "Karyawan",   align: "left"   },
+  { label: "Jabatan",    align: "left"   },
+  { label: "Jadwal",     align: "center" },
+  { label: "Hadir",      align: "center" },
+  { label: "Absen",      align: "center" },
+  { label: "Izin Resmi", align: "center" },
+  { label: "Terlambat",  align: "center" },
+  { label: "Rate",       align: "center" },
+] as const;
 
 function ReportTable({ rows }: { rows: AttendanceReportRow[] }) {
   if (rows.length === 0) {
@@ -209,9 +220,12 @@ function ReportTable({ rows }: { rows: AttendanceReportRow[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border bg-muted/30">
-            {(["Karyawan", "Jabatan", "Jadwal", "Hadir", "Absen", "Izin Resmi", "Terlambat", "Rate"] as const).map((h) => (
-              <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                {h}
+            {TABLE_COLS.map(({ label, align }) => (
+              <th
+                key={label}
+                className={`px-4 py-3 text-${align} text-xs font-semibold text-muted-foreground uppercase tracking-wide`}
+              >
+                {label}
               </th>
             ))}
           </tr>
@@ -219,7 +233,6 @@ function ReportTable({ rows }: { rows: AttendanceReportRow[] }) {
         <tbody className="divide-y divide-border/50">
           {rows.map((row, i) => {
             const totalIzin = row.leaveDays + row.izinDays + row.sakitDays;
-            // Pelanggaran sub-text: pulang cepat dan ½ hari (jika ada)
             const pelanggaranSub = [
               row.earlyLeaveDays > 0 ? `Plg cepat ${row.earlyLeaveDays}` : null,
               row.halfDays        > 0 ? `½ hari ${row.halfDays}`         : null,
@@ -230,31 +243,31 @@ function ReportTable({ rows }: { rows: AttendanceReportRow[] }) {
                 key={row.employee.id}
                 className={`hover:bg-primary/5 transition-colors ${i % 2 === 1 ? "bg-muted/10" : ""}`}
               >
-                {/* Karyawan */}
-                <td className="px-4 py-3">
+                {/* Karyawan — left */}
+                <td className="px-4 py-3 text-left">
                   <p className="font-semibold text-foreground">{row.employee.name}</p>
                   <p className="text-[11px] text-muted-foreground">{row.employee.employeeCode ?? "—"}</p>
                 </td>
 
-                {/* Jabatan */}
-                <td className="px-4 py-3 text-xs text-muted-foreground">{row.employee.role.name}</td>
+                {/* Jabatan — left */}
+                <td className="px-4 py-3 text-left text-xs text-muted-foreground">{row.employee.role.name}</td>
 
-                {/* Jadwal */}
+                {/* Jadwal — center */}
                 <td className="px-4 py-3 tabular-nums text-center">{row.scheduledDays}</td>
 
-                {/* Hadir */}
+                {/* Hadir — center */}
                 <td className="px-4 py-3 tabular-nums text-center font-semibold text-emerald-600">
                   {row.presentDays}
                 </td>
 
-                {/* Absen */}
+                {/* Absen — center */}
                 <td className="px-4 py-3 tabular-nums text-center">
                   {row.absentDays > 0
                     ? <span className="font-semibold text-red-600">{row.absentDays}</span>
                     : <span className="text-muted-foreground/50">0</span>}
                 </td>
 
-                {/* Izin Resmi — total cuti+izin+sakit, breakdown di bawah */}
+                {/* Izin Resmi — center, dengan breakdown kecil di bawah */}
                 <td className="px-4 py-3 tabular-nums text-center">
                   <p className={totalIzin > 0 ? "font-semibold text-sky-600" : "text-muted-foreground/50"}>
                     {totalIzin}
@@ -266,7 +279,7 @@ function ReportTable({ rows }: { rows: AttendanceReportRow[] }) {
                   )}
                 </td>
 
-                {/* Terlambat — hari lambat, sub: plg-cepat / ½hari jika ada */}
+                {/* Terlambat — center, dengan sub-text plg-cepat/½hari */}
                 <td className="px-4 py-3 tabular-nums text-center">
                   <p className={row.lateDays > 0 ? "font-semibold text-amber-600" : "text-muted-foreground/50"}>
                     {row.lateDays}
@@ -276,8 +289,8 @@ function ReportTable({ rows }: { rows: AttendanceReportRow[] }) {
                   )}
                 </td>
 
-                {/* Rate */}
-                <td className="px-4 py-3">
+                {/* Rate — center */}
+                <td className="px-4 py-3 text-center">
                   <RateBadge rate={row.attendanceRate} />
                 </td>
               </tr>
