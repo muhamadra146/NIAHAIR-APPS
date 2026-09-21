@@ -368,7 +368,7 @@ export function AttendanceReportPage() {
         )}
 
         {/* ── Table ────────────────────────────────────────── */}
-        {!isLoading && !isError && (
+        {!isLoading && !isError && !dateRangeError && (
           <ReportTable rows={filtered} />
         )}
 
