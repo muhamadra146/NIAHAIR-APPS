@@ -190,30 +190,8 @@ function SummaryCards({ rows }: { rows: AttendanceReportRow[] }) {
 }
 
 // ── Report table ──────────────────────────────────────────────────────────────
-
-/** Column group descriptor — drives the two-row thead */
-const COL_GROUPS = [
-  { label: "",           span: 2, border: false },   // Karyawan, Jabatan
-  { label: "Kehadiran",  span: 3, border: true  },   // Terjadwal, Hadir, Absen
-  { label: "Izin Resmi", span: 3, border: true  },   // Cuti, Izin, Sakit
-  { label: "Pelanggaran",span: 3, border: true  },   // Terlambat, Plg Cepat, ½Hari
-  { label: "Durasi",     span: 3, border: true  },   // Mnt Terlambat, Mnt Plg Cepat, Mnt Lembur
-  { label: "Libur",      span: 1, border: true  },   // Hari Libur Kerja
-  { label: "Rate",       span: 1, border: true  },   // Tingkat Kehadiran
-] as const;
-
-const COL_HEADERS = [
-  "Karyawan", "Jabatan",
-  "Terjadwal", "Hadir", "Absen",
-  "Cuti", "Izin", "Sakit",
-  "Terlambat", "Plg Cepat", "½ Hari",
-  "Mnt Terlambat", "Mnt Plg Cepat", "Mnt Lembur",
-  "Hari Libur",
-  "Tingkat",
-];
-
-/** Which column index starts a new group (gets a left-border divider) */
-const GROUP_START_COLS = new Set([2, 5, 8, 11, 14, 15]);
+// Simplified: 8 columns, no horizontal scroll.
+// Detail menit (terlambat/pulang-cepat/lembur) tetap ter-export di CSV.
 
 function ReportTable({ rows }: { rows: AttendanceReportRow[] }) {
   if (rows.length === 0) {
@@ -227,123 +205,84 @@ function ReportTable({ rows }: { rows: AttendanceReportRow[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
+    <div className="rounded-xl border border-border bg-card shadow-sm">
       <table className="w-full text-sm">
         <thead>
-          {/* ── Row 1: column group labels ── */}
-          <tr className="border-b border-border/60 bg-muted/20">
-            {COL_GROUPS.map(({ label, span, border }) => (
-              <th
-                key={label || "id"}
-                colSpan={span}
-                className={`px-3 py-1.5 text-center text-[10px] font-semibold tracking-widest uppercase text-muted-foreground/70
-                  ${border ? "border-l border-border/40" : ""}
-                  ${label === "" ? "" : "bg-muted/30"}`}
-              >
-                {label}
-              </th>
-            ))}
-          </tr>
-          {/* ── Row 2: individual column headers ── */}
           <tr className="border-b border-border bg-muted/30">
-            {COL_HEADERS.map((h, i) => (
-              <th
-                key={h}
-                className={`px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap
-                  ${GROUP_START_COLS.has(i) ? "border-l border-border/40" : ""}`}
-              >
+            {(["Karyawan", "Jabatan", "Jadwal", "Hadir", "Absen", "Izin Resmi", "Terlambat", "Rate"] as const).map((h) => (
+              <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 {h}
               </th>
             ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-border/50">
-          {rows.map((row, rowIdx) => (
-            <tr
-              key={row.employee.id}
-              className={`hover:bg-primary/5 transition-colors ${rowIdx % 2 === 1 ? "bg-muted/10" : ""}`}
-            >
-              {/* Karyawan */}
-              <td className="px-3 py-3 whitespace-nowrap">
-                <p className="font-semibold text-foreground">{row.employee.name}</p>
-                <p className="text-[11px] text-muted-foreground">{row.employee.employeeCode ?? "—"}</p>
-              </td>
-              {/* Jabatan */}
-              <td className="px-3 py-3 text-xs text-muted-foreground whitespace-nowrap">{row.employee.role.name}</td>
+          {rows.map((row, i) => {
+            const totalIzin = row.leaveDays + row.izinDays + row.sakitDays;
+            // Pelanggaran sub-text: pulang cepat dan ½ hari (jika ada)
+            const pelanggaranSub = [
+              row.earlyLeaveDays > 0 ? `Plg cepat ${row.earlyLeaveDays}` : null,
+              row.halfDays        > 0 ? `½ hari ${row.halfDays}`         : null,
+            ].filter(Boolean).join(" · ");
 
-              {/* ── Kehadiran ── */}
-              <td className="px-3 py-3 tabular-nums text-center border-l border-border/20">{row.scheduledDays}</td>
-              <td className="px-3 py-3 tabular-nums text-center text-emerald-600 font-semibold">{row.presentDays}</td>
-              <td className="px-3 py-3 tabular-nums text-center">
-                {row.absentDays > 0
-                  ? <span className="font-semibold text-red-600">{row.absentDays}</span>
-                  : <span className="text-muted-foreground/60">0</span>}
-              </td>
+            return (
+              <tr
+                key={row.employee.id}
+                className={`hover:bg-primary/5 transition-colors ${i % 2 === 1 ? "bg-muted/10" : ""}`}
+              >
+                {/* Karyawan */}
+                <td className="px-4 py-3">
+                  <p className="font-semibold text-foreground">{row.employee.name}</p>
+                  <p className="text-[11px] text-muted-foreground">{row.employee.employeeCode ?? "—"}</p>
+                </td>
 
-              {/* ── Izin Resmi ── */}
-              <td className="px-3 py-3 tabular-nums text-center border-l border-border/20">
-                {row.leaveDays > 0
-                  ? <span className="font-semibold text-violet-600">{row.leaveDays}</span>
-                  : <span className="text-muted-foreground/60">0</span>}
-              </td>
-              <td className="px-3 py-3 tabular-nums text-center">
-                {row.izinDays > 0
-                  ? <span className="font-semibold text-indigo-600">{row.izinDays}</span>
-                  : <span className="text-muted-foreground/60">0</span>}
-              </td>
-              <td className="px-3 py-3 tabular-nums text-center">
-                {row.sakitDays > 0
-                  ? <span className="font-semibold text-rose-500">{row.sakitDays}</span>
-                  : <span className="text-muted-foreground/60">0</span>}
-              </td>
+                {/* Jabatan */}
+                <td className="px-4 py-3 text-xs text-muted-foreground">{row.employee.role.name}</td>
 
-              {/* ── Pelanggaran ── */}
-              <td className="px-3 py-3 tabular-nums text-center border-l border-border/20">
-                {row.lateDays > 0
-                  ? <span className="font-semibold text-amber-600">{row.lateDays}</span>
-                  : <span className="text-muted-foreground/60">0</span>}
-              </td>
-              <td className="px-3 py-3 tabular-nums text-center">
-                {row.earlyLeaveDays > 0
-                  ? <span className="font-semibold text-sky-600">{row.earlyLeaveDays}</span>
-                  : <span className="text-muted-foreground/60">0</span>}
-              </td>
-              <td className="px-3 py-3 tabular-nums text-center">
-                {row.halfDays > 0
-                  ? <span className="font-semibold text-orange-600">{row.halfDays}</span>
-                  : <span className="text-muted-foreground/60">0</span>}
-              </td>
+                {/* Jadwal */}
+                <td className="px-4 py-3 tabular-nums text-center">{row.scheduledDays}</td>
 
-              {/* ── Durasi ── */}
-              <td className="px-3 py-3 tabular-nums text-center text-xs border-l border-border/20">
-                {row.lateMinutes > 0
-                  ? <span className="text-amber-600">{fmtMinutes(row.lateMinutes)}</span>
-                  : <span className="text-muted-foreground/50">—</span>}
-              </td>
-              <td className="px-3 py-3 tabular-nums text-center text-xs">
-                {row.earlyLeaveMinutes > 0
-                  ? <span className="text-sky-600">{fmtMinutes(row.earlyLeaveMinutes)}</span>
-                  : <span className="text-muted-foreground/50">—</span>}
-              </td>
-              <td className="px-3 py-3 tabular-nums text-center text-xs">
-                {row.overtimeMinutes > 0
-                  ? <span className="text-blue-600">{fmtMinutes(row.overtimeMinutes)}</span>
-                  : <span className="text-muted-foreground/50">—</span>}
-              </td>
+                {/* Hadir */}
+                <td className="px-4 py-3 tabular-nums text-center font-semibold text-emerald-600">
+                  {row.presentDays}
+                </td>
 
-              {/* Hari Libur */}
-              <td className="px-3 py-3 tabular-nums text-center border-l border-border/20">
-                {row.holidayWorkDays > 0
-                  ? <span className="font-semibold text-purple-600">{row.holidayWorkDays}</span>
-                  : <span className="text-muted-foreground/60">0</span>}
-              </td>
+                {/* Absen */}
+                <td className="px-4 py-3 tabular-nums text-center">
+                  {row.absentDays > 0
+                    ? <span className="font-semibold text-red-600">{row.absentDays}</span>
+                    : <span className="text-muted-foreground/50">0</span>}
+                </td>
 
-              {/* Rate */}
-              <td className="px-3 py-3 border-l border-border/20">
-                <RateBadge rate={row.attendanceRate} />
-              </td>
-            </tr>
-          ))}
+                {/* Izin Resmi — total cuti+izin+sakit, breakdown di bawah */}
+                <td className="px-4 py-3 tabular-nums text-center">
+                  <p className={totalIzin > 0 ? "font-semibold text-sky-600" : "text-muted-foreground/50"}>
+                    {totalIzin}
+                  </p>
+                  {totalIzin > 0 && (
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      C {row.leaveDays} · I {row.izinDays} · S {row.sakitDays}
+                    </p>
+                  )}
+                </td>
+
+                {/* Terlambat — hari lambat, sub: plg-cepat / ½hari jika ada */}
+                <td className="px-4 py-3 tabular-nums text-center">
+                  <p className={row.lateDays > 0 ? "font-semibold text-amber-600" : "text-muted-foreground/50"}>
+                    {row.lateDays}
+                  </p>
+                  {pelanggaranSub && (
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{pelanggaranSub}</p>
+                  )}
+                </td>
+
+                {/* Rate */}
+                <td className="px-4 py-3">
+                  <RateBadge rate={row.attendanceRate} />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
