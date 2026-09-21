@@ -191,4 +191,148 @@ describe('getReport', () => {
 
     expect(result.data[0].holidayWorkDays).toBe(1);
   });
+
+  // ── Status-based branching regression tests (Bug 1+2 fix) ─────────────────
+
+  test('should_count_leave_schedule_as_leaveDays_not_scheduledDays', async () => {
+    const schedules = [
+      {
+        status:     'LEAVE',
+        employeeId: 'e1',
+        employee:   { id: 'e1', name: 'Nia', employeeCode: 'EMP-001' },
+        attendance: null,
+      },
+    ];
+    repo.getReportData.mockResolvedValue(schedules);
+
+    // Employee entirely on LEAVE → filtered out (scheduledDays=0, holidayWorkDays=0)
+    const result = await getReport({ branchId: 'br1', startDate: '2025-01-01', endDate: '2025-01-31' });
+
+    expect(result.data).toHaveLength(0);
+  });
+
+  test('should_count_izin_schedule_as_izinDays_not_scheduledDays', async () => {
+    const schedules = [
+      {
+        status:     'IZIN',
+        employeeId: 'e1',
+        employee:   { id: 'e1', name: 'Nia', employeeCode: 'EMP-001' },
+        attendance: null,
+      },
+    ];
+    repo.getReportData.mockResolvedValue(schedules);
+
+    const result = await getReport({ branchId: 'br1', startDate: '2025-01-01', endDate: '2025-01-31' });
+
+    expect(result.data).toHaveLength(0);
+  });
+
+  test('should_count_sakit_schedule_as_sakitDays_not_scheduledDays', async () => {
+    const schedules = [
+      {
+        status:     'SAKIT',
+        employeeId: 'e1',
+        employee:   { id: 'e1', name: 'Nia', employeeCode: 'EMP-001' },
+        attendance: null,
+      },
+    ];
+    repo.getReportData.mockResolvedValue(schedules);
+
+    const result = await getReport({ branchId: 'br1', startDate: '2025-01-01', endDate: '2025-01-31' });
+
+    expect(result.data).toHaveLength(0);
+  });
+
+  test('should_include_employee_with_leave_and_working_days', async () => {
+    const schedules = [
+      {
+        status:     'LEAVE',
+        employeeId: 'e1',
+        employee:   { id: 'e1', name: 'Nia', employeeCode: 'EMP-001' },
+        attendance: null,
+      },
+      {
+        status:     'WORKING',
+        employeeId: 'e1',
+        employee:   { id: 'e1', name: 'Nia', employeeCode: 'EMP-001' },
+        attendance: { status: 'PRESENT', lateMinutes: 0, earlyLeaveMinutes: 0, overtimeMinutes: 0, isHolidayWork: false },
+      },
+    ];
+    repo.getReportData.mockResolvedValue(schedules);
+
+    const result = await getReport({ branchId: 'br1', startDate: '2025-01-01', endDate: '2025-01-31' });
+
+    expect(result.data).toHaveLength(1);
+    const row = result.data[0];
+    expect(row.leaveDays).toBe(1);
+    expect(row.scheduledDays).toBe(1);
+    expect(row.presentDays).toBe(1);
+    expect(row.absentDays).toBe(0);
+    expect(row.attendanceRate).toBe(100);
+  });
+
+  test('should_not_count_off_schedule_as_scheduledDays_when_no_attendance', async () => {
+    const schedules = [
+      {
+        status:     'OFF',
+        employeeId: 'e1',
+        employee:   { id: 'e1', name: 'Nia', employeeCode: 'EMP-001' },
+        attendance: null,
+      },
+    ];
+    repo.getReportData.mockResolvedValue(schedules);
+
+    // Employee only has OFF schedule, no holiday work → filtered out
+    const result = await getReport({ branchId: 'br1', startDate: '2025-01-01', endDate: '2025-01-31' });
+
+    expect(result.data).toHaveLength(0);
+  });
+
+  test('should_count_off_schedule_with_holiday_work_as_holidayWorkDays', async () => {
+    const schedules = [
+      {
+        status:     'OFF',
+        employeeId: 'e1',
+        employee:   { id: 'e1', name: 'Nia', employeeCode: 'EMP-001' },
+        attendance: { status: 'PRESENT', lateMinutes: 0, earlyLeaveMinutes: 10, overtimeMinutes: 60, isHolidayWork: true },
+      },
+    ];
+    repo.getReportData.mockResolvedValue(schedules);
+
+    const result = await getReport({ branchId: 'br1', startDate: '2025-01-01', endDate: '2025-01-31' });
+
+    // Employee appears (holidayWorkDays > 0)
+    expect(result.data).toHaveLength(1);
+    const row = result.data[0];
+    expect(row.scheduledDays).toBe(0);    // OFF day not a scheduled working day
+    expect(row.holidayWorkDays).toBe(1);
+    expect(row.earlyLeaveMinutes).toBe(10);
+    expect(row.overtimeMinutes).toBe(60);
+    expect(row.absentDays).toBe(0);       // OFF is not an absent day
+    expect(row.attendanceRate).toBe(0);   // 0 scheduledDays → rate = 0 (but they appear due to holiday work)
+  });
+
+  test('should_correctly_separate_leave_izin_sakit_breakdown', async () => {
+    const schedules = [
+      { status: 'LEAVE',   employeeId: 'e1', employee: { id: 'e1', name: 'Nia', employeeCode: 'EMP-001' }, attendance: null },
+      { status: 'LEAVE',   employeeId: 'e1', employee: { id: 'e1', name: 'Nia', employeeCode: 'EMP-001' }, attendance: null },
+      { status: 'IZIN',    employeeId: 'e1', employee: { id: 'e1', name: 'Nia', employeeCode: 'EMP-001' }, attendance: null },
+      { status: 'SAKIT',   employeeId: 'e1', employee: { id: 'e1', name: 'Nia', employeeCode: 'EMP-001' }, attendance: null },
+      { status: 'WORKING', employeeId: 'e1', employee: { id: 'e1', name: 'Nia', employeeCode: 'EMP-001' },
+        attendance: { status: 'PRESENT', lateMinutes: 0, earlyLeaveMinutes: 0, overtimeMinutes: 0, isHolidayWork: false } },
+    ];
+    repo.getReportData.mockResolvedValue(schedules);
+
+    const result = await getReport({ branchId: 'br1', startDate: '2025-01-01', endDate: '2025-01-31' });
+
+    expect(result.data).toHaveLength(1);
+    const row = result.data[0];
+    expect(row.leaveDays).toBe(2);
+    expect(row.izinDays).toBe(1);
+    expect(row.sakitDays).toBe(1);
+    expect(row.scheduledDays).toBe(1);  // only WORKING counted
+    expect(row.absentDays).toBe(0);     // LEAVE/IZIN/SAKIT not absent
+    expect(row.presentDays).toBe(1);
+    expect(row.attendanceRate).toBe(100);
+  });
 });
