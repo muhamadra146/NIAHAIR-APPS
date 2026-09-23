@@ -61,11 +61,10 @@ function StatusBadge({ status }: { status: LeaveStatus }) {
 // ── Filter pills ──────────────────────────────────────────────────────────────
 
 const FILTER_OPTIONS: { value: LeaveStatus | ""; label: string }[] = [
-  { value: "",          label: "Semua" },
-  { value: "PENDING",   label: "Menunggu" },
-  { value: "APPROVED",  label: "Disetujui" },
-  { value: "REJECTED",  label: "Ditolak" },
-  { value: "CANCELLED", label: "Dibatalkan" },
+  { value: "",         label: "Semua" },
+  { value: "PENDING",  label: "Menunggu" },
+  { value: "APPROVED", label: "Disetujui" },
+  { value: "REJECTED", label: "Ditolak" },
 ];
 
 // ── Review dialog (admin approve / reject) ────────────────────────────────────
