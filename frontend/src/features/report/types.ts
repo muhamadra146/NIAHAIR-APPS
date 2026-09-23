@@ -73,7 +73,7 @@ export interface InventoryReportItem {
 }
 
 export interface InventoryWarehouseGroup {
-  warehouse:   { id: string; name: string; code: string };
+  warehouse:   { id: string; name: string };
   totalSKU:    number;
   lowStockSKU: number;
   items:       InventoryReportItem[];

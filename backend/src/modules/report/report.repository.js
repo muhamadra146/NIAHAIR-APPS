@@ -286,7 +286,7 @@ const getInventoryReport = async ({ branchId }) => {
       qtyOnHand:    true,
       qtyReserved:  true,
       qtyAvailable: true,
-      warehouse: { select: { id: true, name: true, code: true } },
+      warehouse: { select: { id: true, name: true } },
       item: {
         select: {
           id: true, itemCode: true, name: true, itemType: true,
