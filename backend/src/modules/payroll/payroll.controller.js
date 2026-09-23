@@ -67,8 +67,8 @@ const updateNotesController = async (req, res, next) => {
 
 const getMyController = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
-    const result = await svc.getMy({ employeeId: req.user.employeeId, page: Number(page), limit: Number(limit) });
+    const { page = 1, limit = 20, year } = req.query;
+    const result = await svc.getMy({ employeeId: req.user.employeeId, page: Number(page), limit: Number(limit), year: year ? Number(year) : undefined });
     return success(res, result, "My payrolls fetched");
   } catch (err) { next(err); }
 };

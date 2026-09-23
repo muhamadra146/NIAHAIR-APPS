@@ -371,22 +371,44 @@ const updateNotes = async (id, notes) => {
 
 // ── Employee self-service ─────────────────────────────────────────────────────
 
-const getMy = async ({ employeeId, page = 1, limit = 20 }) => {
+const getMy = async ({ employeeId, page = 1, limit = 20, year }) => {
   if (!employeeId) throw new AppError("Employee not found for this user", StatusCodes.BAD_REQUEST);
   const { skip, take } = paginate(page, limit);
   const where = { employeeId, status: { in: ["APPROVED", "PAID"] } };
+
+  // Optional year filter — match payrolls whose periodStart falls within the year
+  if (year) {
+    where.periodStart = {
+      gte: new Date(Date.UTC(year, 0, 1)),
+      lte: new Date(Date.UTC(year, 11, 31)),
+    };
+  }
+
   const [rows, total] = await Promise.all([
     repo.findByEmployee({ skip, take, where }),
     repo.countByEmployee(where),
   ]);
 
-  // Attach commission breakdown to each payroll
-  const data = await Promise.all(rows.map(async (p) => {
-    const commissions = await prisma.commission.findMany({
+  // Batch: fetch all commissions for the full date range in ONE query (avoids N+1)
+  // Fix: include PAID commissions — markAsPaid() upgrades status APPROVED → PAID
+  let data;
+  if (rows.length === 0) {
+    data = [];
+  } else {
+    const minStart = rows.reduce(
+      (min, p) => (new Date(p.periodStart) < new Date(min) ? p.periodStart : min),
+      rows[0].periodStart,
+    );
+    const maxEnd = rows.reduce(
+      (max, p) => (new Date(p.periodEnd) > new Date(max) ? p.periodEnd : max),
+      rows[0].periodEnd,
+    );
+
+    const allCommissions = await prisma.commission.findMany({
       where: {
-        employeeId: p.employeeId,
-        status:     "APPROVED",
-        approvedAt: { gte: p.periodStart, lte: p.periodEnd },
+        employeeId,
+        status:     { in: ["APPROVED", "PAID"] },
+        approvedAt: { gte: new Date(minStart), lte: new Date(maxEnd) },
       },
       select: {
         id: true, commissionAmount: true, approvedAt: true,
@@ -395,8 +417,17 @@ const getMy = async ({ employeeId, page = 1, limit = 20 }) => {
         },
       },
     });
-    return { ...p, commissionBreakdown: buildCommissionBreakdown(commissions) };
-  }));
+
+    data = rows.map((p) => {
+      const pStart = new Date(p.periodStart);
+      const pEnd   = new Date(p.periodEnd);
+      const commissions = allCommissions.filter((c) => {
+        const dt = new Date(c.approvedAt);
+        return dt >= pStart && dt <= pEnd;
+      });
+      return { ...p, commissionBreakdown: buildCommissionBreakdown(commissions) };
+    });
+  }
 
   return { data, meta: paginationMeta(total, page, limit) };
 };

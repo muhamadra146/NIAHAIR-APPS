@@ -182,7 +182,8 @@ body{font-family:Arial,sans-serif;font-size:13px;color:#111;background:#f8fafc;-
   w.document.write(html);
   w.document.close();
   w.focus();
-  setTimeout(() => w.print(), 400);
+  // Use onload so print fires after all assets (logo image) are ready
+  w.onload = () => w.print();
 }
 
 // ── Payslip detail ────────────────────────────────────────────────────────────
@@ -332,15 +333,43 @@ function PayslipDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
           <p className="text-2xl font-bold tabular-nums text-white shrink-0">{fmtRp(Number(payroll.netSalary))}</p>
         </div>
       </div>
+
+      {/* ── Commission breakdown (if any) ── */}
+      {payroll.commissionBreakdown && payroll.commissionBreakdown.length > 0 && (
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div className="bg-slate-50 border-b border-slate-200 px-5 py-2.5">
+            <span className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Detail Komisi</span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {payroll.commissionBreakdown.map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-slate-700 truncate">{c.treatmentName ?? "Komisi"}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    {new Date(c.approvedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+                </div>
+                <span className="shrink-0 text-xs font-semibold tabular-nums text-emerald-700">
+                  {fmtRp(Number(c.commissionAmount))}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i);
+
 export function MyPayslipPage() {
   const [selected, setSelected] = useState<Payroll | null>(null);
-  const { data, isLoading } = useMyPayrolls({ limit: 50 });
+  const [year, setYear]         = useState<number>(CURRENT_YEAR);
+  const { data, isLoading } = useMyPayrolls({ limit: 50, year });
   const payrolls = data?.data ?? [];
 
   if (selected) {
@@ -353,6 +382,23 @@ export function MyPayslipPage() {
 
   return (
     <PageContainer title="Slip Gaji" subtitle="Riwayat slip gaji kamu">
+
+      {/* Year filter pills */}
+      <div className="flex gap-2 flex-wrap mb-1">
+        {YEAR_OPTIONS.map((y) => (
+          <button
+            key={y}
+            onClick={() => setYear(y)}
+            className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+              year === y
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+            }`}
+          >
+            {y}
+          </button>
+        ))}
+      </div>
 
       <div className="rounded-xl border border-slate-200 overflow-hidden">
         {isLoading ? (

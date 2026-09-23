@@ -41,7 +41,7 @@ export const markPayrollAsPaid = async (id: string): Promise<Payroll> => {
   return data.data;
 };
 
-export const fetchMyPayrolls = async (params: { page?: number; limit?: number } = {}): Promise<PaginatedResponse<Payroll>> => {
+export const fetchMyPayrolls = async (params: { page?: number; limit?: number; year?: number } = {}): Promise<PaginatedResponse<Payroll>> => {
   const { data } = await api.get<ApiResponse<PaginatedResponse<Payroll>>>("/payroll/my", { params });
   return data.data;
 };

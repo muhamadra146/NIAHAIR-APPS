@@ -68,7 +68,7 @@ export const useDeletePayroll = () => {
   });
 };
 
-export const useMyPayrolls = (params: { page?: number; limit?: number } = {}) =>
+export const useMyPayrolls = (params: { page?: number; limit?: number; year?: number } = {}) =>
   useQuery({ queryKey: ["myPayrolls", params], queryFn: () => fetchMyPayrolls(params) });
 
 export const useBpjsReport = (params: BpjsReportParams) =>
