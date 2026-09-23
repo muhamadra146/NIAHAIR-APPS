@@ -1,34 +1,32 @@
 import { useState } from "react";
-import { Plus, CheckCircle, XCircle, X, Clock } from "lucide-react";
+import { Plus, CheckCircle, XCircle, AlertTriangle, CalendarDays, Clock } from "lucide-react";
+import { EmptyState }    from "@/components/common/EmptyState";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { useAuthStore } from "@/stores/authStore";
+import { Button }        from "@/components/ui/button";
+import { Input }         from "@/components/ui/input";
+import { Label }         from "@/components/ui/label";
+import { Skeleton }      from "@/components/ui/skeleton";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { useAuthStore }  from "@/stores/authStore";
 import {
   useMyPermissions, usePermissions,
   useCreatePermission, useApprovePermission, useRejectPermission, useCancelPermission,
 } from "../hooks";
 import type { PermissionRequest, PermissionType } from "../types";
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
 // OFFICE punya Approval/Verifikasi sesuai access matrix
-const isManager = (role?: string) =>
-  ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"].includes(role ?? "");
+const ADMIN_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"];
 
-function statusBadge(status: PermissionRequest["status"]) {
-  if (status === "APPROVED") return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 border text-xs">Disetujui</Badge>;
-  if (status === "REJECTED") return <Badge className="bg-red-100 text-red-700 border-red-200 border text-xs">Ditolak</Badge>;
-  return <Badge className="bg-amber-100 text-amber-700 border-amber-200 border text-xs">Menunggu</Badge>;
-}
-
-function typeBadge(type: PermissionType) {
-  if (type === "LATE") return <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-orange-50 text-orange-700">Izin Terlambat</span>;
-  return <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700">Tidak Hadir</span>;
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString("id-ID", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+  return new Date(d).toLocaleDateString("id-ID", {
+    weekday: "short", day: "2-digit", month: "short", year: "numeric",
+  });
 }
 
 function apiErr(err: unknown) {
@@ -39,42 +37,70 @@ function apiErr(err: unknown) {
   return err instanceof Error ? err.message : "Terjadi kesalahan";
 }
 
-// ── Review dialog (approve / reject) ─────────────────────────────────
-function ReviewDialog({
-  perm, onClose,
-}: {
-  perm: PermissionRequest;
-  onClose: () => void;
-}) {
+// ── Badges ────────────────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status: PermissionRequest["status"] }) {
+  if (status === "APPROVED")
+    return <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Disetujui</span>;
+  if (status === "REJECTED")
+    return <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-50 text-red-700 border border-red-200">Ditolak</span>;
+  return <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">Menunggu</span>;
+}
+
+function TypeBadge({ type }: { type: PermissionType }) {
+  if (type === "LATE")
+    return <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-orange-50 text-orange-700">Izin Terlambat</span>;
+  return <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700">Tidak Hadir</span>;
+}
+
+// ── Filter pills ──────────────────────────────────────────────────────────────
+
+const FILTER_OPTIONS = [
+  { value: "",         label: "Semua" },
+  { value: "PENDING",  label: "Menunggu" },
+  { value: "APPROVED", label: "Disetujui" },
+  { value: "REJECTED", label: "Ditolak" },
+] as const;
+
+// ── Review dialog (admin) ─────────────────────────────────────────────────────
+
+function ReviewDialog({ perm, onClose }: { perm: PermissionRequest; onClose: () => void }) {
   const [note, setNote] = useState("");
   const [err,  setErr ] = useState<string | null>(null);
   const approveMut = useApprovePermission();
   const rejectMut  = useRejectPermission();
-  const pending = approveMut.isPending || rejectMut.isPending;
+  const pending    = approveMut.isPending || rejectMut.isPending;
 
   async function handle(action: "approve" | "reject") {
     setErr(null);
     try {
-      if (action === "approve") await approveMut.mutateAsync({ id: perm.id, input: { reviewNote: note || undefined } });
-      else                       await rejectMut.mutateAsync({ id: perm.id, input: { reviewNote: note || undefined } });
+      if (action === "approve")
+        await approveMut.mutateAsync({ id: perm.id, input: { reviewNote: note || undefined } });
+      else
+        await rejectMut.mutateAsync({ id: perm.id, input: { reviewNote: note || undefined } });
       onClose();
     } catch (e) { setErr(apiErr(e)); }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b px-5 py-4">
-          <h2 className="font-semibold text-sm">Review Izin</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
-        </div>
-        <div className="px-5 py-4 space-y-3">
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Review Izin</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
           <div className="rounded-lg bg-muted/30 px-4 py-3 text-sm space-y-1">
-            <p className="font-medium">{perm.employee.name}</p>
-            <div className="flex items-center gap-2">{typeBadge(perm.type)}</div>
+            <p className="font-medium">{perm.employee.name}
+              <span className="ml-2 text-xs font-normal text-muted-foreground">{perm.employee.role?.name}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <TypeBadge type={perm.type} />
+            </div>
             <p className="text-muted-foreground">{fmtDate(perm.date)}</p>
             {perm.type === "LATE" && perm.estimatedArrival && (
-              <p className="text-muted-foreground">Estimasi datang: <span className="font-medium">{perm.estimatedArrival}</span></p>
+              <p className="text-muted-foreground">
+                Estimasi datang: <span className="font-medium">{perm.estimatedArrival}</span>
+              </p>
             )}
             <p className="text-muted-foreground">Alasan: {perm.reason}</p>
           </div>
@@ -88,22 +114,24 @@ function ReviewDialog({
           </div>
           {err && <p className="text-xs text-red-600">{err}</p>}
         </div>
-        <div className="flex gap-2 border-t px-5 py-4">
+        <DialogFooter className="flex gap-2">
           <Button variant="outline" size="sm" onClick={onClose} disabled={pending} className="flex-1">Batal</Button>
           <Button variant="destructive" size="sm" onClick={() => handle("reject")} disabled={pending} className="flex-1">
             <XCircle className="h-3.5 w-3.5 mr-1" /> Tolak
           </Button>
-          <Button size="sm" onClick={() => handle("approve")} disabled={pending} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white">
+          <Button size="sm" onClick={() => handle("approve")} disabled={pending}
+            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white">
             <CheckCircle className="h-3.5 w-3.5 mr-1" /> Setujui
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-// ── Create form ───────────────────────────────────────────────────────
-function CreateForm({ onClose }: { onClose: () => void }) {
+// ── Create dialog (employee) ──────────────────────────────────────────────────
+
+function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const today = new Date().toISOString().split("T")[0];
   const [type,             setType            ] = useState<PermissionType>("ABSENCE");
   const [date,             setDate            ] = useState(today);
@@ -111,8 +139,12 @@ function CreateForm({ onClose }: { onClose: () => void }) {
   const [reason,           setReason          ] = useState("");
   const [notes,            setNotes           ] = useState("");
   const [err,              setErr             ] = useState<string | null>(null);
-
   const createMut = useCreatePermission();
+
+  function reset() {
+    setType("ABSENCE"); setDate(today); setEstimatedArrival("");
+    setReason(""); setNotes(""); setErr(null);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -127,18 +159,18 @@ function CreateForm({ onClose }: { onClose: () => void }) {
         notes:  notes.trim() || undefined,
         ...(type === "LATE" && { estimatedArrival }),
       });
+      reset();
       onClose();
     } catch (e) { setErr(apiErr(e)); }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b px-5 py-4">
-          <h2 className="font-semibold text-sm">Ajukan Izin</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
-        </div>
-        <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4">
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Ajukan Izin</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
           {/* Type selector */}
           <div className="space-y-1.5">
             <Label className="text-xs">Jenis Izin <span className="text-destructive">*</span></Label>
@@ -172,7 +204,6 @@ function CreateForm({ onClose }: { onClose: () => void }) {
                 type="time"
                 value={estimatedArrival}
                 onChange={(e) => setEstimatedArrival(e.target.value)}
-                placeholder="cth: 09:30"
               />
             </div>
           )}
@@ -180,7 +211,9 @@ function CreateForm({ onClose }: { onClose: () => void }) {
           <div className="space-y-1.5">
             <Label className="text-xs">Alasan <span className="text-destructive">*</span></Label>
             <Input
-              placeholder={type === "LATE" ? "cth: Ban bocor, macet parah..." : "cth: Urusan keluarga, Keperluan pribadi..."}
+              placeholder={type === "LATE"
+                ? "cth: Ban bocor, macet parah..."
+                : "cth: Urusan keluarga, Keperluan pribadi..."}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
             />
@@ -194,44 +227,111 @@ function CreateForm({ onClose }: { onClose: () => void }) {
             />
           </div>
           {err && <p className="text-xs text-red-600">{err}</p>}
-          <div className="flex gap-2 pt-1">
-            <Button type="button" variant="outline" size="sm" className="flex-1" onClick={onClose}>Batal</Button>
-            <Button type="submit" size="sm" className="flex-1" disabled={createMut.isPending}>
+          <DialogFooter>
+            <Button type="button" variant="outline" size="sm" onClick={() => { reset(); onClose(); }}>
+              Batal
+            </Button>
+            <Button type="submit" size="sm" disabled={createMut.isPending}>
               {createMut.isPending ? "Mengajukan..." : "Ajukan Izin"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Permission card ───────────────────────────────────────────────────────────
+
+function PermissionCard({
+  perm, isAdmin, onReview, onCancel,
+}: {
+  perm:     PermissionRequest;
+  isAdmin:  boolean;
+  onReview: (p: PermissionRequest) => void;
+  onCancel: (id: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border bg-card p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {isAdmin && (
+            <p className="font-semibold text-sm">
+              {perm.employee.name}
+              <span className="ml-2 text-xs text-muted-foreground font-normal">
+                {perm.employee.role?.name}
+              </span>
+            </p>
+          )}
+          <div className={`flex items-center gap-2 flex-wrap ${isAdmin ? "mt-0.5" : ""}`}>
+            <p className="font-medium text-sm">{fmtDate(perm.date)}</p>
+            <TypeBadge type={perm.type} />
+          </div>
+          {perm.type === "LATE" && perm.estimatedArrival && (
+            <p className="mt-0.5 text-xs text-orange-600 font-medium">
+              Estimasi datang: {perm.estimatedArrival}
+            </p>
+          )}
+          <p className="mt-0.5 text-sm text-muted-foreground">{perm.reason}</p>
+          {perm.notes && (
+            <p className="mt-0.5 text-xs text-muted-foreground italic">{perm.notes}</p>
+          )}
+          {perm.reviewNote && (
+            <p className="mt-1 text-xs rounded-md bg-muted/50 px-2 py-1">
+              Catatan: {perm.reviewNote}
+            </p>
+          )}
+        </div>
+        <div className="shrink-0 flex flex-col items-end gap-2">
+          <StatusBadge status={perm.status} />
+          {perm.status === "PENDING" && isAdmin && (
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onReview(perm)}>
+              Review
+            </Button>
+          )}
+          {perm.status === "PENDING" && !isAdmin && (
+            <Button size="sm" variant="ghost"
+              className="h-7 text-xs text-destructive hover:text-destructive"
+              onClick={() => onCancel(perm.id)}>
+              Batalkan
+            </Button>
+          )}
+        </div>
       </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Cabang: {perm.branch.name} · Diajukan {new Date(perm.createdAt).toLocaleDateString("id-ID")}
+      </p>
     </div>
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export function PermissionPage() {
   const { user } = useAuthStore();
-  const role     = user?.role?.code ?? "";
-  const manager  = isManager(role);
+  const isAdmin  = ADMIN_ROLES.includes(user?.role?.code ?? "");
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [reviewing,  setReviewing ] = useState<PermissionRequest | null>(null);
+  const [createOpen,   setCreateOpen ] = useState(false);
+  const [reviewing,    setReviewing  ] = useState<PermissionRequest | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
 
-  const myQuery   = useMyPermissions({ status: (statusFilter as PermissionRequest["status"]) || undefined });
-  const allQuery  = usePermissions({ status: (statusFilter as PermissionRequest["status"]) || undefined });
-  const query     = manager ? allQuery : myQuery;
-  const items     = query.data?.data ?? [];
+  const myQuery  = useMyPermissions({ status: (statusFilter as PermissionRequest["status"]) || undefined });
+  const allQuery = usePermissions({ status: (statusFilter as PermissionRequest["status"]) || undefined });
+  const query    = isAdmin ? allQuery : myQuery;
+  const items    = query.data?.data ?? [];
 
-  const cancelMut = useCancelPermission();
+  const pending    = items.filter((p) => p.status === "PENDING").length;
+  const cancelMut  = useCancelPermission();
 
   async function handleCancel(id: string) {
-    try { await cancelMut.mutateAsync(id); } catch { /* toast handled by global */ }
+    try { await cancelMut.mutateAsync(id); } catch { /* errors surfaced globally */ }
   }
 
   return (
     <PageContainer
       className="max-w-3xl"
       title="Pengajuan Izin"
-      subtitle={manager ? "Kelola izin ketidakhadiran karyawan" : "Ajukan dan pantau izin kamu"}
+      subtitle={isAdmin ? "Kelola izin ketidakhadiran karyawan" : "Ajukan dan pantau izin kamu"}
       action={
         <Button size="sm" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4 mr-1" /> Ajukan Izin
@@ -240,87 +340,68 @@ export function PermissionPage() {
     >
       <div className="space-y-5">
 
-      {/* Filter */}
-      <div className="flex gap-2 flex-wrap">
-        {(["", "PENDING", "APPROVED", "REJECTED"] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
-              statusFilter === s
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-background border-border text-muted-foreground hover:border-primary/50"
-            }`}
-          >
-            {s === "" ? "Semua" : s === "PENDING" ? "Menunggu" : s === "APPROVED" ? "Disetujui" : "Ditolak"}
-          </button>
-        ))}
-      </div>
+        {/* Pending warning (admin) */}
+        {isAdmin && pending > 0 && (
+          <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span><strong>{pending}</strong> pengajuan izin menunggu persetujuan</span>
+          </div>
+        )}
 
-      {/* List */}
-      {query.isLoading ? (
-        <div className="flex justify-center py-12">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
-      ) : items.length === 0 ? (
-        <div className="rounded-xl border border-dashed py-12 text-center">
-          <Clock className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-          <p className="text-sm text-muted-foreground">Belum ada pengajuan izin</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {items.map((perm) => (
-            <div key={perm.id} className="rounded-xl border bg-card p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  {manager && (
-                    <p className="font-semibold text-sm">{perm.employee.name}
-                      <span className="ml-2 text-xs text-muted-foreground font-normal">{perm.employee.role?.name}</span>
-                    </p>
-                  )}
-                  <div className={`flex items-center gap-2 ${manager ? "mt-0.5" : ""}`}>
-                    <p className="font-medium text-sm">{fmtDate(perm.date)}</p>
-                    {typeBadge(perm.type)}
-                  </div>
-                  {perm.type === "LATE" && perm.estimatedArrival && (
-                    <p className="mt-0.5 text-xs text-orange-600 font-medium">Estimasi datang: {perm.estimatedArrival}</p>
-                  )}
-                  <p className="mt-0.5 text-sm text-muted-foreground">{perm.reason}</p>
-                  {perm.notes && <p className="mt-0.5 text-xs text-muted-foreground italic">{perm.notes}</p>}
-                  {perm.reviewNote && (
-                    <p className="mt-1 text-xs rounded-md bg-muted/50 px-2 py-1">
-                      Catatan: {perm.reviewNote}
-                    </p>
-                  )}
-                </div>
-                <div className="shrink-0 flex flex-col items-end gap-2">
-                  {statusBadge(perm.status)}
-                  {perm.status === "PENDING" && manager && (
-                    <Button size="sm" variant="outline" className="h-7 text-xs"
-                      onClick={() => setReviewing(perm)}>
-                      Review
-                    </Button>
-                  )}
-                  {perm.status === "PENDING" && !manager && (
-                    <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive"
-                      onClick={() => handleCancel(perm.id)}
-                      disabled={cancelMut.isPending}>
-                      Batalkan
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Cabang: {perm.branch.name} · Diajukan {new Date(perm.createdAt).toLocaleDateString("id-ID")}
-              </p>
-            </div>
+        {/* Filter pills */}
+        <div className="flex gap-2 flex-wrap">
+          {FILTER_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setStatusFilter(opt.value)}
+              className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+                statusFilter === opt.value
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background border-border text-muted-foreground hover:border-primary/50"
+              }`}
+            >
+              {opt.label}
+            </button>
           ))}
         </div>
-      )}
 
-      {createOpen  && <CreateForm onClose={() => setCreateOpen(false)} />}
-      {reviewing   && <ReviewDialog perm={reviewing} onClose={() => setReviewing(null)} />}
-    </div>
+        {/* List */}
+        {query.isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
+          </div>
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={<Clock className="w-6 h-6" />}
+            title="Belum ada pengajuan izin"
+            description={
+              statusFilter
+                ? "Tidak ada pengajuan dengan status ini"
+                : isAdmin
+                  ? "Belum ada pengajuan izin dari karyawan"
+                  : 'Tekan "Ajukan Izin" untuk mulai'
+            }
+          />
+        ) : (
+          <div className="space-y-3">
+            {items.map((perm) => (
+              <PermissionCard
+                key={perm.id}
+                perm={perm}
+                isAdmin={isAdmin}
+                onReview={setReviewing}
+                onCancel={handleCancel}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Dialogs */}
+      <CreateDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      {reviewing && (
+        <ReviewDialog perm={reviewing} onClose={() => setReviewing(null)} />
+      )}
     </PageContainer>
   );
 }

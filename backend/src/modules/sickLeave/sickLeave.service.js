@@ -109,22 +109,26 @@ const approve = async (id, reviewedBy, reviewNote) => {
   if (!sick) throw new AppError("Data sakit tidak ditemukan", StatusCodes.NOT_FOUND);
   if (sick.status !== "PENDING") throw new AppError("Hanya sakit PENDING yang bisa disetujui", StatusCodes.BAD_REQUEST);
 
-  // Upsert StaffSchedule for each day in the range
+  // Schedule upserts + status update in one transaction — prevents ghost SAKIT schedules
+  // if the loop fails partway through (mirrors leave.service.js approve() pattern).
   const dates = dateRange(sick.startDate, sick.endDate);
-  for (const workDate of dates) {
-    await prisma.staffSchedule.upsert({
-      where:  { employeeId_branchId_workDate: { employeeId: sick.employeeId, branchId: sick.branchId, workDate } },
-      update: { status: "SAKIT", notes: sick.diagnosis ? `Sakit: ${sick.diagnosis}` : "Sakit" },
-      create: { employeeId: sick.employeeId, branchId: sick.branchId, workDate, status: "SAKIT", notes: sick.diagnosis ? `Sakit: ${sick.diagnosis}` : "Sakit" },
-    });
-  }
+  const noteText = sick.diagnosis ? `Sakit: ${sick.diagnosis}` : "Sakit";
 
-  return repo.update(id, {
-    status:     "APPROVED",
-    reviewedBy,
-    reviewedAt: new Date(),
-    reviewNote: reviewNote ?? null,
+  await prisma.$transaction(async (tx) => {
+    for (const workDate of dates) {
+      await tx.staffSchedule.upsert({
+        where:  { employeeId_branchId_workDate: { employeeId: sick.employeeId, branchId: sick.branchId, workDate } },
+        update: { status: "SAKIT", notes: noteText },
+        create: { employeeId: sick.employeeId, branchId: sick.branchId, workDate, status: "SAKIT", notes: noteText },
+      });
+    }
+    await tx.sickLeave.update({
+      where: { id },
+      data:  { status: "APPROVED", reviewedBy, reviewedAt: new Date(), reviewNote: reviewNote ?? null },
+    });
   });
+
+  return repo.findById(id);
 };
 
 const reject = async (id, reviewedBy, reviewNote) => {

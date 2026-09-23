@@ -1,4 +1,4 @@
-export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
 
 export interface LeaveEmployee {
   id:           string;
@@ -30,7 +30,7 @@ export interface LeaveListParams {
   limit?:      number;
   employeeId?: string;
   branchId?:   string;
-  status?:     LeaveStatus | "";
+  status?:     LeaveStatus | "";  // CANCELLED included via LeaveStatus union
 }
 
 export interface CreateLeaveInput {
