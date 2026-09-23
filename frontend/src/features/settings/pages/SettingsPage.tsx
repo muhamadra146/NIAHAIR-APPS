@@ -36,10 +36,12 @@ import { ShiftTable }         from "../components/shift/ShiftTable";
 import { ShiftForm }          from "../components/shift/ShiftForm";
 import { AccuratePanel }           from "../accurate/AccuratePanel";
 import { PayrollGlAccountTab }     from "../components/payrollGlAccount/PayrollGlAccountTab";
-import { LeaveSettingsTab }      from "../components/leave/LeaveSettingsTab";
-import { MembershipTab }         from "../components/membership/MembershipTab";
-import { AttendanceSettingsTab } from "../components/attendance/AttendanceSettingsTab";
-import { HolidayTab }            from "../components/holiday/HolidayTab";
+import { LeaveSettingsTab }        from "../components/leave/LeaveSettingsTab";
+import { MembershipTab }           from "../components/membership/MembershipTab";
+import { AttendanceSettingsTab }   from "../components/attendance/AttendanceSettingsTab";
+import { HolidayTab }              from "../components/holiday/HolidayTab";
+import { CommissionSettingsTab }   from "../components/commission/CommissionSettingsTab";
+import { SalaryTab }               from "../components/salary/SalaryTab";
 
 import type { EmployeeRole, User, Branch, PaymentMethod, CashAccount, Warehouse, ShiftMaster } from "../types";
 import type { BranchSyncResult } from "../api/branch.api";
@@ -1048,10 +1050,12 @@ const TABS = [
   { value: "gl-accounts",     label: "GL Akun" },
   { value: "warehouses",      label: "Gudang" },
   { value: "shifts",          label: "Shift" },
+  { value: "commission",      label: "Komisi" },
   { value: "leave",           label: "Cuti" },
   { value: "memberships",     label: "Membership" },
   { value: "holidays",        label: "Hari Libur" },
   { value: "attendance",      label: "Absensi" },
+  { value: "salary",          label: "Gaji" },
   { value: "payroll-gl",      label: "Akun Gaji" },
   { value: "accurate",        label: "Accurate" },
 ] as const;
@@ -1097,10 +1101,12 @@ export function SettingsPage() {
             <TabsContent value="gl-accounts"     className="mt-0 p-6"><GlAccountsTab /></TabsContent>
             <TabsContent value="warehouses"      className="mt-0 p-6"><WarehouseTab /></TabsContent>
             <TabsContent value="shifts"          className="mt-0 p-6"><ShiftTab /></TabsContent>
+            <TabsContent value="commission"      className="mt-0 p-6"><CommissionSettingsTab /></TabsContent>
             <TabsContent value="leave"           className="mt-0 p-6"><LeaveSettingsTab /></TabsContent>
             <TabsContent value="memberships"     className="mt-0 p-6"><MembershipTab /></TabsContent>
             <TabsContent value="holidays"        className="mt-0 p-6"><HolidayTab /></TabsContent>
             <TabsContent value="attendance"      className="mt-0 p-6"><AttendanceSettingsTab /></TabsContent>
+            <TabsContent value="salary"          className="mt-0 p-6"><SalaryTab /></TabsContent>
             <TabsContent value="payroll-gl"      className="mt-0 p-6"><PayrollGlAccountTab /></TabsContent>
             <TabsContent value="accurate"        className="mt-0 p-6"><AccuratePanel /></TabsContent>
           </div>
