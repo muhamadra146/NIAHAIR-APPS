@@ -431,7 +431,7 @@ const getProductionReport = async ({ startDate, endDate }) => {
 // ── Customer Analytics ────────────────────────────────────────────────────────
 
 const getCustomerAnalytics = async ({ branchId, startDate, endDate }) => {
-  const invoiceWhere = { status: "PAID", customerId: { not: null } };
+  const invoiceWhere = { status: "PAID" };
   if (branchId)  invoiceWhere.branchId = branchId;
   if (startDate || endDate) {
     invoiceWhere.invoiceDate = {};
