@@ -75,23 +75,25 @@ export function ReportsPage() {
         </Card>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-border">
-          {TABS.map((tab) => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                activeTab === tab.key
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="overflow-x-auto border-b border-border">
+          <div className="flex gap-1 min-w-max">
+            {TABS.map((tab) => (
+              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
+                  activeTab === tab.key
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {activeTab === "summary"            && <SummaryTab params={params} />}
         {activeTab === "revenue"            && <RevenueTab params={params} />}
-        {activeTab === "commissions"        && <CommissionsTab params={applied} />}
+        {activeTab === "commissions"        && <CommissionsTab params={params} />}
         {activeTab === "sales-by-item"      && <SalesByItemTab params={params} />}
         {activeTab === "inventory"          && <InventoryTab branchId={branchId ?? undefined} />}
         {activeTab === "production"         && <ProductionTab params={applied} />}
@@ -384,6 +386,9 @@ function AttendanceTab({
   const totAbsent      = rows.reduce((s, r) => s + r.absentDays,       0);
   const totLate        = rows.reduce((s, r) => s + r.lateDays,         0);
   const totOvertime    = rows.reduce((s, r) => s + r.overtimeMinutes,   0);
+  const totCuti        = rows.reduce((s, r) => s + (r.leaveDays  ?? 0), 0);
+  const totIzin        = rows.reduce((s, r) => s + (r.izinDays   ?? 0), 0);
+  const totSakit       = rows.reduce((s, r) => s + (r.sakitDays  ?? 0), 0);
   const avgRate        = rows.length > 0
     ? Math.round(rows.reduce((s, r) => s + r.attendanceRate, 0) / rows.length * 10) / 10
     : 0;
@@ -427,6 +432,9 @@ function AttendanceTab({
                   <th className="px-3 py-2.5 text-center text-xs font-semibold text-amber-600">Terlambat</th>
                   <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-500">Pulang Cepat</th>
                   <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-500">Lembur</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-violet-600">Cuti</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-orange-600">Izin</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-rose-600">Sakit</th>
                   <th className="px-3 py-2.5 text-right text-xs font-semibold text-blue-700">% Hadir</th>
                 </tr>
               </thead>
@@ -459,6 +467,15 @@ function AttendanceTab({
                       <td className="px-3 py-3 text-center text-sm text-muted-foreground">
                         {r.overtimeMinutes > 0 ? fmtMinutes(r.overtimeMinutes) : <span className="text-muted-foreground/40">—</span>}
                       </td>
+                      <td className="px-3 py-3 text-center text-sm">
+                        {(r.leaveDays ?? 0) > 0 ? <span className="text-violet-600 font-medium">{r.leaveDays}</span> : <span className="text-muted-foreground/40">0</span>}
+                      </td>
+                      <td className="px-3 py-3 text-center text-sm">
+                        {(r.izinDays ?? 0) > 0 ? <span className="text-orange-600 font-medium">{r.izinDays}</span> : <span className="text-muted-foreground/40">0</span>}
+                      </td>
+                      <td className="px-3 py-3 text-center text-sm">
+                        {(r.sakitDays ?? 0) > 0 ? <span className="text-rose-600 font-medium">{r.sakitDays}</span> : <span className="text-muted-foreground/40">0</span>}
+                      </td>
                       <td className={`px-3 py-3 text-right text-sm font-bold ${rateCls}`}>
                         {r.attendanceRate}%
                       </td>
@@ -474,6 +491,9 @@ function AttendanceTab({
                   <td className="px-3 py-2.5 text-center text-xs text-amber-600">{totLate}</td>
                   <td className="px-3 py-2.5 text-center text-xs text-muted-foreground">{rows.reduce((s, r) => s + r.earlyLeaveDays, 0)}</td>
                   <td className="px-3 py-2.5 text-center text-xs text-muted-foreground">{fmtMinutes(totOvertime)}</td>
+                  <td className="px-3 py-2.5 text-center text-xs text-violet-600">{totCuti > 0 ? totCuti : <span className="text-muted-foreground/40">0</span>}</td>
+                  <td className="px-3 py-2.5 text-center text-xs text-orange-600">{totIzin > 0 ? totIzin : <span className="text-muted-foreground/40">0</span>}</td>
+                  <td className="px-3 py-2.5 text-center text-xs text-rose-600">{totSakit > 0 ? totSakit : <span className="text-muted-foreground/40">0</span>}</td>
                   <td className="px-3 py-2.5 text-right text-xs text-blue-700">{avgRate}%</td>
                 </tr>
               </tbody>
@@ -575,7 +595,7 @@ function CommissionsTab({ params }: { params: Parameters<typeof useCommissionRep
 // ── Sales by item tab ─────────────────────────────────────────────────────────
 
 function SalesByItemTab({ params }: { params: Parameters<typeof useSalesByItem>[0] }) {
-  const { data = [], isLoading, isError, error } = useSalesByItem(params);
+  const { data = [], isLoading, isError, error, refetch } = useSalesByItem(params);
   const [selectedParent,   setSelectedParent]   = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
 
@@ -667,14 +687,7 @@ function SalesByItemTab({ params }: { params: Parameters<typeof useSalesByItem>[
     return <div className="space-y-2">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
   }
 
-  if (isError) {
-    return (
-      <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-6 text-center">
-        <p className="text-sm font-medium text-destructive">Gagal memuat laporan penjualan</p>
-        <p className="mt-1 text-xs text-muted-foreground">{String((error as Error)?.message ?? "Terjadi kesalahan pada server")}</p>
-      </div>
-    );
-  }
+  if (isError) return <ErrorBanner error={error} onRetry={() => refetch()} />;
 
   if (data.length === 0) {
     return <p className="py-12 text-center text-sm text-muted-foreground">Tidak ada data penjualan untuk periode ini.</p>;
@@ -902,6 +915,17 @@ function SalesByItemTab({ params }: { params: Parameters<typeof useSalesByItem>[
 
 // ── Inventory tab ─────────────────────────────────────────────────────────────
 
+function DateFilterNotice() {
+  return (
+    <div className="flex items-center gap-1.5 rounded-md bg-muted/50 border border-border px-3 py-2 text-xs text-muted-foreground">
+      <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+      </svg>
+      Filter tanggal tidak berlaku untuk tab ini — data ditampilkan sesuai kondisi terkini.
+    </div>
+  );
+}
+
 function InventoryTab({ branchId }: { branchId?: string }) {
   const { data, isLoading, isError, error, refetch } = useInventoryReport({ branchId });
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
@@ -936,6 +960,7 @@ function InventoryTab({ branchId }: { branchId?: string }) {
 
   return (
     <div className="space-y-4">
+      <DateFilterNotice />
       {/* KPI */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
@@ -1332,6 +1357,7 @@ function BpjsTab({ branchId }: { branchId?: string }) {
 
   return (
     <div className="space-y-4">
+      <DateFilterNotice />
       {/* Month picker (independent from global date range) */}
       <div className="flex items-center gap-3">
         <div className="flex flex-col gap-1">

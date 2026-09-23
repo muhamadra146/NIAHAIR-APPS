@@ -135,12 +135,13 @@ const getDailyRevenue = async ({ branchId, startDate, endDate }) => {
 
 // ── Commission by employee ────────────────────────────────────────────────────
 
-const getCommissionByEmployee = async ({ startDate, endDate }) => {
-  const dateCr = dateWhere(startDate, endDate, "createdAt");
+const getCommissionByEmployee = async ({ branchId, startDate, endDate }) => {
+  const dateCr       = dateWhere(startDate, endDate, "createdAt");
+  const branchFilter = branchId ? { employee: { branchId } } : {};
 
   const rows = await prisma.commission.groupBy({
     by:     ["employeeId"],
-    where:  { ...dateCr },
+    where:  { ...dateCr, ...branchFilter },
     _count: { _all: true },
     _sum:   { commissionAmount: true },
   });

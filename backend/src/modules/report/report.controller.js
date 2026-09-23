@@ -26,8 +26,8 @@ const revenueController = async (req, res, next) => {
 
 const commissionController = async (req, res, next) => {
   try {
-    const { startDate, endDate } = req.query;
-    const result = await getCommissionReport({ startDate, endDate });
+    const { branchId, startDate, endDate } = req.query;
+    const result = await getCommissionReport({ branchId, startDate, endDate });
     return success(res, result, "Commission report fetched");
   } catch (err) {
     next(err);

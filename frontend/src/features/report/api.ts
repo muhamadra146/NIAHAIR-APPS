@@ -16,7 +16,7 @@ export async function fetchRevenueReport(params: ReportParams = {}): Promise<Dai
 }
 
 export async function fetchCommissionReport(
-  params: Pick<ReportParams, "startDate" | "endDate"> = {},
+  params: ReportParams = {},
 ): Promise<CommissionByEmployee[]> {
   const { data } = await api.get<ApiResponse<CommissionByEmployee[]>>("/reports/commissions", { params });
   return data.data;

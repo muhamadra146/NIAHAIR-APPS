@@ -21,7 +21,7 @@ export function useRevenueReport(params: ReportParams = {}) {
   });
 }
 
-export function useCommissionReport(params: Pick<ReportParams, "startDate" | "endDate"> = {}) {
+export function useCommissionReport(params: ReportParams = {}) {
   return useQuery({
     queryKey: ["reports", "commissions", params],
     queryFn:  () => fetchCommissionReport(params),
