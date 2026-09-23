@@ -40,7 +40,6 @@ import { LeaveSettingsTab }        from "../components/leave/LeaveSettingsTab";
 import { MembershipTab }           from "../components/membership/MembershipTab";
 import { AttendanceSettingsTab }   from "../components/attendance/AttendanceSettingsTab";
 import { HolidayTab }              from "../components/holiday/HolidayTab";
-import { CommissionSettingsTab }   from "../components/commission/CommissionSettingsTab";
 import { SalaryTab }               from "../components/salary/SalaryTab";
 
 import type { EmployeeRole, User, Branch, PaymentMethod, CashAccount, Warehouse, ShiftMaster } from "../types";
@@ -1050,7 +1049,6 @@ const TABS = [
   { value: "gl-accounts",     label: "GL Akun" },
   { value: "warehouses",      label: "Gudang" },
   { value: "shifts",          label: "Shift" },
-  { value: "commission",      label: "Komisi" },
   { value: "leave",           label: "Cuti" },
   { value: "memberships",     label: "Membership" },
   { value: "holidays",        label: "Hari Libur" },
@@ -1101,7 +1099,6 @@ export function SettingsPage() {
             <TabsContent value="gl-accounts"     className="mt-0 p-6"><GlAccountsTab /></TabsContent>
             <TabsContent value="warehouses"      className="mt-0 p-6"><WarehouseTab /></TabsContent>
             <TabsContent value="shifts"          className="mt-0 p-6"><ShiftTab /></TabsContent>
-            <TabsContent value="commission"      className="mt-0 p-6"><CommissionSettingsTab /></TabsContent>
             <TabsContent value="leave"           className="mt-0 p-6"><LeaveSettingsTab /></TabsContent>
             <TabsContent value="memberships"     className="mt-0 p-6"><MembershipTab /></TabsContent>
             <TabsContent value="holidays"        className="mt-0 p-6"><HolidayTab /></TabsContent>
