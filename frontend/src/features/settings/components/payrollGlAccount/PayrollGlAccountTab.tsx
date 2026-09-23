@@ -57,7 +57,7 @@ export function PayrollGlAccountTab() {
 
   // GL account options grouped by category
   const glOptions = glAccounts
-    .filter((a) => a.isActive)
+    .slice()
     .sort((a, b) => (a.number ?? "").localeCompare(b.number ?? ""));
 
   if (isLoading) {
