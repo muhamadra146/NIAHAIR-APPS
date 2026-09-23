@@ -926,10 +926,13 @@ function DateFilterNotice() {
   );
 }
 
+const INVENTORY_PAGE_SIZE = 50;
+
 function InventoryTab({ branchId }: { branchId?: string }) {
   const { data, isLoading, isError, error, refetch } = useInventoryReport({ branchId });
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
   const [showLowOnly, setShowLowOnly] = useState(false);
+  const [page, setPage] = useState(1);
 
   function handleExport(filtered: Array<{ itemCode: string; name: string; categoryName: string | null; warehouseName: string; qtyOnHand: number; qtyReserved: number; qtyAvailable: number; isLowStock: boolean }>) {
     exportCSV(
@@ -958,6 +961,13 @@ function InventoryTab({ branchId }: { branchId?: string }) {
   const filtered = (selectedWarehouse === "all" ? allItems : byWarehouse.find((g) => g.warehouse.id === selectedWarehouse)?.items.map((i) => ({ ...i, warehouseName: byWarehouse.find((g) => g.warehouse.id === selectedWarehouse)?.warehouse.name ?? "" })) ?? [])
     .filter((item) => !showLowOnly || item.isLowStock);
 
+  const totalPages  = Math.max(1, Math.ceil(filtered.length / INVENTORY_PAGE_SIZE));
+  const safePage    = Math.min(page, totalPages);
+  const paginated   = filtered.slice((safePage - 1) * INVENTORY_PAGE_SIZE, safePage * INVENTORY_PAGE_SIZE);
+
+  function changeWarehouse(wid: string) { setSelectedWarehouse(wid); setPage(1); }
+  function toggleLowOnly() { setShowLowOnly((v) => !v); setPage(1); }
+
   return (
     <div className="space-y-4">
       <DateFilterNotice />
@@ -981,23 +991,23 @@ function InventoryTab({ branchId }: { branchId?: string }) {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1">
-          <button onClick={() => setSelectedWarehouse("all")}
+        <div className="flex flex-wrap gap-1">
+          <button onClick={() => changeWarehouse("all")}
             className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${selectedWarehouse === "all" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
           >Semua Gudang</button>
           {byWarehouse.map((g) => (
-            <button key={g.warehouse.id} onClick={() => setSelectedWarehouse(g.warehouse.id)}
+            <button key={g.warehouse.id} onClick={() => changeWarehouse(g.warehouse.id)}
               className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${selectedWarehouse === g.warehouse.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
             >{g.warehouse.name}</button>
           ))}
         </div>
-        <button onClick={() => setShowLowOnly((v) => !v)}
+        <button onClick={toggleLowOnly}
           className={`flex items-center gap-1 px-3 py-1 text-xs rounded-full border font-medium transition-colors ${showLowOnly ? "bg-red-500 text-white border-red-500" : "border-border text-muted-foreground hover:text-foreground"}`}
         >
           <AlertCircle className="h-3 w-3" /> Stok Menipis Saja
         </button>
         <div className="flex items-center gap-2 ml-auto">
-          <span className="text-xs text-muted-foreground">{filtered.length} item ditampilkan</span>
+          <span className="text-xs text-muted-foreground">{filtered.length} item</span>
           <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => handleExport(filtered)}>
             <Download className="h-3 w-3" /> CSV
           </Button>
@@ -1020,9 +1030,9 @@ function InventoryTab({ branchId }: { branchId?: string }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.length === 0
+                {paginated.length === 0
                   ? <tr><td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">Tidak ada item yang cocok.</td></tr>
-                  : filtered.map((item) => (
+                  : paginated.map((item) => (
                     <tr key={`${item.itemId}-${item.warehouseName}`} className={`hover:bg-muted/30 transition-colors ${item.isLowStock ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
                       <td className="px-4 py-2.5">
                         <p className="font-medium text-sm">{item.name}</p>
@@ -1048,6 +1058,57 @@ function InventoryTab({ branchId }: { branchId?: string }) {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-border px-4 py-3">
+              <span className="text-xs text-muted-foreground">
+                {((safePage - 1) * INVENTORY_PAGE_SIZE) + 1}–{Math.min(safePage * INVENTORY_PAGE_SIZE, filtered.length)} dari {filtered.length} item
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(1)}
+                  disabled={safePage === 1}
+                  className="px-2 py-1 text-xs rounded border border-border text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >«</button>
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  className="px-2.5 py-1 text-xs rounded border border-border text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >‹</button>
+
+                {/* Page numbers — show up to 5 around current */}
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - safePage) <= 2)
+                  .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("…");
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, i) =>
+                    p === "…"
+                      ? <span key={`ellipsis-${i}`} className="px-1 text-xs text-muted-foreground">…</span>
+                      : <button
+                          key={p}
+                          onClick={() => setPage(p as number)}
+                          className={`px-2.5 py-1 text-xs rounded border font-medium transition-colors ${safePage === p ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+                        >{p}</button>
+                  )
+                }
+
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  className="px-2.5 py-1 text-xs rounded border border-border text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >›</button>
+                <button
+                  onClick={() => setPage(totalPages)}
+                  disabled={safePage === totalPages}
+                  className="px-2 py-1 text-xs rounded border border-border text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >»</button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
