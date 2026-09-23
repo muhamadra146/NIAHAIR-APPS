@@ -333,9 +333,11 @@ export function PermissionPage() {
       title="Pengajuan Izin"
       subtitle={isAdmin ? "Kelola izin ketidakhadiran karyawan" : "Ajukan dan pantau izin kamu"}
       action={
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Ajukan Izin
-        </Button>
+        !isAdmin ? (
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Ajukan Izin
+          </Button>
+        ) : undefined
       }
     >
       <div className="space-y-5">

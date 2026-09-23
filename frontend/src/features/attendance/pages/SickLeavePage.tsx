@@ -459,9 +459,11 @@ export function SickLeavePage() {
       title="Pengajuan Sakit"
       subtitle={isAdmin ? "Kelola pengajuan sakit karyawan" : "Ajukan dan pantau izin sakit kamu"}
       action={
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Ajukan Sakit
-        </Button>
+        !isAdmin ? (
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Ajukan Sakit
+          </Button>
+        ) : undefined
       }
     >
       <div className="space-y-5">
