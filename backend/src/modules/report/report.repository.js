@@ -142,7 +142,7 @@ const getCommissionByEmployee = async ({ branchId, startDate, endDate }) => {
   let employeeIdFilter = {};
   if (branchId) {
     const branchEmployees = await prisma.employee.findMany({
-      where:  { branchId },
+      where:  { homeBranchId: branchId },
       select: { id: true },
     });
     const ids = branchEmployees.map((e) => e.id);
