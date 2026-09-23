@@ -136,12 +136,23 @@ const getDailyRevenue = async ({ branchId, startDate, endDate }) => {
 // ── Commission by employee ────────────────────────────────────────────────────
 
 const getCommissionByEmployee = async ({ branchId, startDate, endDate }) => {
-  const dateCr       = dateWhere(startDate, endDate, "createdAt");
-  const branchFilter = branchId ? { employee: { branchId } } : {};
+  const dateCr = dateWhere(startDate, endDate, "createdAt");
+
+  // groupBy tidak support relation filter — pre-fetch employee IDs dulu jika branchId ada
+  let employeeIdFilter = {};
+  if (branchId) {
+    const branchEmployees = await prisma.employee.findMany({
+      where:  { branchId },
+      select: { id: true },
+    });
+    const ids = branchEmployees.map((e) => e.id);
+    if (ids.length === 0) return [];
+    employeeIdFilter = { employeeId: { in: ids } };
+  }
 
   const rows = await prisma.commission.groupBy({
     by:     ["employeeId"],
-    where:  { ...dateCr, ...branchFilter },
+    where:  { ...dateCr, ...employeeIdFilter },
     _count: { _all: true },
     _sum:   { commissionAmount: true },
   });
