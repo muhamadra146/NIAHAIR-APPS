@@ -281,7 +281,10 @@ const LOW_STOCK_THRESHOLD = 10;
 
 const getInventoryReport = async ({ branchId }) => {
   const inventories = await prisma.inventory.findMany({
-    where: branchId ? { warehouse: { branchId } } : {},
+    where: {
+      item:      { isActive: true },
+      warehouse: { isActive: true, ...(branchId ? { branchId } : {}) },
+    },
     select: {
       qtyOnHand:    true,
       qtyReserved:  true,
