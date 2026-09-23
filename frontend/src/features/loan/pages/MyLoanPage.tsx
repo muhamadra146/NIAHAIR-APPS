@@ -110,12 +110,25 @@ export function MyLoanPage() {
   );
 }
 
+function calcEstCompletion(loan: Loan): string | null {
+  if (loan.status !== "ACTIVE") return null;
+  const remaining = Number(loan.remainingAmount);
+  const monthly   = Number(loan.monthlyDeduction);
+  if (monthly <= 0 || remaining <= 0) return null;
+  const monthsLeft = Math.ceil(remaining / monthly);
+  const now   = new Date();
+  const estEnd = new Date(now.getFullYear(), now.getMonth() + monthsLeft, 1);
+  const label  = estEnd.toLocaleDateString("id-ID", { month: "short", year: "numeric" });
+  return `~${monthsLeft} bulan lagi · Est. selesai ${label}`;
+}
+
 function LoanCard({ loan, onClick }: { loan: Loan; onClick: () => void }) {
   const paid     = Number(loan.totalAmount) - Number(loan.remainingAmount);
   const pct      = Number(loan.totalAmount) > 0
     ? Math.round((paid / Number(loan.totalAmount)) * 100)
     : 0;
-  const isActive = loan.status === "ACTIVE";
+  const isActive   = loan.status === "ACTIVE";
+  const estLabel   = calcEstCompletion(loan);
 
   return (
     <div
@@ -150,6 +163,9 @@ function LoanCard({ loan, onClick }: { loan: Loan; onClick: () => void }) {
             style={{ width: `${pct}%` }}
           />
         </div>
+        {estLabel && (
+          <p className="mt-1.5 text-[11px] text-muted-foreground">{estLabel}</p>
+        )}
       </div>
     </div>
   );

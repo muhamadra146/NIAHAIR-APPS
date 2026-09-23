@@ -25,19 +25,25 @@ const getById = async (id) => {
 };
 
 const createLoan = async (body) => {
-  const loanNo = await repo.generateLoanNo();
-  const data = {
-    employeeId:       body.employeeId,
-    branchId:         body.branchId,
-    loanNo,
-    totalAmount:      body.totalAmount,
-    remainingAmount:  body.totalAmount,
-    monthlyDeduction: body.monthlyDeduction,
-    startDate:        new Date(body.startDate),
-    endDate:          body.endDate ? new Date(body.endDate) : null,
-    notes:            body.notes ?? null,
-  };
-  const loan = await repo.create(data);
+  const prisma = require("../../config/prisma");
+
+  // Run number generation + creation in a single transaction so MAX-based numbering
+  // is consistent. loanNo @unique in schema is the final guard against duplicates.
+  const loan = await prisma.$transaction(async (tx) => {
+    const loanNo = await repo.generateLoanNo(tx);
+    const data = {
+      employeeId:       body.employeeId,
+      branchId:         body.branchId,
+      loanNo,
+      totalAmount:      body.totalAmount,
+      remainingAmount:  body.totalAmount,
+      monthlyDeduction: body.monthlyDeduction,
+      startDate:        new Date(body.startDate),
+      endDate:          body.endDate ? new Date(body.endDate) : null,
+      notes:            body.notes ?? null,
+    };
+    return repo.create(data, tx);
+  });
 
   // Enqueue Accurate sync — loan is created with ACTIVE status by default
   await createSyncJob({

@@ -21,6 +21,7 @@ export interface LoanRepayment {
   notes:     string | null;
   payrollId: string | null;
   createdAt: string;
+  payroll:   { periodStart: string; periodEnd: string } | null;
 }
 
 export interface Loan {

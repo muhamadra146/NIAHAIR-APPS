@@ -52,10 +52,21 @@ export function MyLoanDetailPage() {
     );
   }
 
-  const paid = Number(loan.totalAmount) - Number(loan.remainingAmount);
-  const pct  = Number(loan.totalAmount) > 0
+  const paid        = Number(loan.totalAmount) - Number(loan.remainingAmount);
+  const pct         = Number(loan.totalAmount) > 0
     ? Math.round((paid / Number(loan.totalAmount)) * 100)
     : 0;
+  const remaining   = Number(loan.remainingAmount);
+  const monthly     = Number(loan.monthlyDeduction);
+  const monthsLeft  = loan.status === "ACTIVE" && monthly > 0 && remaining > 0
+    ? Math.ceil(remaining / monthly)
+    : null;
+  const estFinish   = monthsLeft != null
+    ? (() => { const d = new Date(); d.setMonth(d.getMonth() + monthsLeft); return d; })()
+    : null;
+  const estLabel    = estFinish
+    ? `~${monthsLeft} bulan lagi · Est. selesai ${estFinish.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}`
+    : null;
 
   return (
     <PageContainer>
@@ -113,11 +124,15 @@ export function MyLoanDetailPage() {
                 <span>Dibayar: {formatCurrency(paid)}</span>
                 <span>Sisa: {formatCurrency(loan.remainingAmount)}</span>
               </div>
+              {estLabel && (
+                <p className="mt-2 text-xs text-amber-600 font-medium">{estLabel}</p>
+              )}
             </div>
 
             {loan.notes && (
-              <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                {loan.notes}
+              <div className="rounded-md bg-muted/50 px-3 py-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">Catatan</p>
+                <p className="text-sm text-muted-foreground">{loan.notes}</p>
               </div>
             )}
           </CardContent>
@@ -151,8 +166,13 @@ export function MyLoanDetailPage() {
                         <td className="px-4 py-2.5 text-right font-medium text-green-700">{formatCurrency(r.amount)}</td>
                         <td className="px-4 py-2.5">
                           {r.payrollId ? (
-                            <span className="inline-flex items-center text-xs text-blue-600 font-medium bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
-                              Payroll
+                            <span className="inline-flex items-center gap-1 text-xs text-blue-600 font-medium bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
+                              Potongan Gaji
+                              {r.payroll?.periodStart && (
+                                <span className="text-[10px] opacity-70">
+                                  {new Date(r.payroll.periodStart).toLocaleDateString("id-ID", { month: "short", year: "numeric" })}
+                                </span>
+                              )}
                             </span>
                           ) : (
                             <span className="inline-flex items-center text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
