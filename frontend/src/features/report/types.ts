@@ -128,7 +128,7 @@ export interface ProductionReport {
 
 export interface CustomerAnalyticsRow {
   customerId:       string;
-  customer:         { id: string; name: string; customerNo: string | null; phone: string | null } | null;
+  customer:         { id: string; name: string; customerNo: string | null; mobilePhone: string | null } | null;
   totalSpent:       number;
   visitCount:       number;
   avgSpentPerVisit: number;

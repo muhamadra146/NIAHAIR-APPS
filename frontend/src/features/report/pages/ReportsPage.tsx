@@ -1303,7 +1303,7 @@ function CustomerAnalyticsTab({ params }: { params: ReportParams }) {
         No:              i + 1,
         "No. Customer":  c.customer?.customerNo ?? "",
         Nama:            c.customer?.name ?? "—",
-        Telepon:         c.customer?.phone ?? "",
+        Telepon:         c.customer?.mobilePhone ?? "",
         Kunjungan:       c.visitCount,
         "Total Belanja": fmtExportCurrency(c.totalSpent),
         "Avg/Kunjungan": fmtExportCurrency(c.avgSpentPerVisit),
@@ -1378,7 +1378,7 @@ function CustomerAnalyticsTab({ params }: { params: ReportParams }) {
                       <td className="px-4 py-2.5">
                         <p className="font-medium text-sm">{c.customer?.name ?? "—"}</p>
                         {c.customer?.customerNo && <p className="text-xs text-muted-foreground">{c.customer.customerNo}</p>}
-                        {c.customer?.phone && <p className="text-xs text-muted-foreground">{c.customer.phone}</p>}
+                        {c.customer?.mobilePhone && <p className="text-xs text-muted-foreground">{c.customer.mobilePhone}</p>}
                       </td>
                       <td className="px-4 py-2.5 text-right font-medium tabular-nums">{c.visitCount}</td>
                       <td className="px-4 py-2.5 text-right font-bold tabular-nums text-green-700">{formatCurrency(c.totalSpent)}</td>

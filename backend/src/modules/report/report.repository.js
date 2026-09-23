@@ -446,7 +446,7 @@ const getCustomerAnalytics = async ({ branchId, startDate, endDate }) => {
       customerId:  true,
       grandTotal:  true,
       invoiceDate: true,
-      customer:    { select: { id: true, name: true, customerNo: true, phone: true } },
+      customer:    { select: { id: true, name: true, customerNo: true, mobilePhone: true } },
     },
   });
 
