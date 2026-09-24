@@ -210,8 +210,10 @@ export function ConsultationListPage() {
   const [isiPage,    setIsiPage]    = useState(1);
 
   // Tab "Semua Catatan"
-  const [listSearch, setListSearch] = useState("");
-  const [listPage,   setListPage]   = useState(1);
+  const [listSearch,    setListSearch]    = useState("");
+  const [listPage,      setListPage]      = useState(1);
+  const [listStartDate, setListStartDate] = useState("");
+  const [listEndDate,   setListEndDate]   = useState("");
 
   // Tab "Statistik"
   const now        = new Date();
@@ -231,9 +233,12 @@ export function ConsultationListPage() {
   // ── Tab "Semua Catatan" ────────────────────────────────────────────────────
   const { data: listData, isLoading: loadingList } = useConsultationNotes(
     {
-      page: listPage, limit: 20,
-      branchId: isManager ? undefined : (branchId || undefined),
-      search:   listSearch || undefined,
+      page:      listPage,
+      limit:     20,
+      branchId:  isManager ? undefined : (branchId || undefined),
+      search:    listSearch    || undefined,
+      startDate: listStartDate || undefined,
+      endDate:   listEndDate   || undefined,
     },
     { enabled: tab === "list" },
   );
@@ -401,15 +406,51 @@ export function ConsultationListPage() {
         {/* ── Tab: Semua Catatan ───────────────────────────────────────────── */}
         <TabsContent value="list">
           <>
-            {/* Search bar */}
-            <div className="relative mb-4 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Cari nama klien..."
-                value={listSearch}
-                onChange={(e) => { setListSearch(e.target.value); setListPage(1); }}
-                className="pl-9"
-              />
+            {/* Filter bar */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {/* Search */}
+              <div className="relative flex-1 min-w-[180px] max-w-xs">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Cari nama klien..."
+                  value={listSearch}
+                  onChange={(e) => { setListSearch(e.target.value); setListPage(1); }}
+                  className="pl-9"
+                />
+              </div>
+
+              {/* Date range */}
+              <div className="flex items-center gap-0 rounded-lg border border-input bg-background shadow-sm overflow-hidden shrink-0">
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <input
+                    type="date"
+                    value={listStartDate}
+                    onChange={(e) => { setListStartDate(e.target.value); setListPage(1); }}
+                    className="text-sm bg-transparent focus:outline-none"
+                  />
+                </div>
+                <span className="text-muted-foreground text-xs px-1 select-none border-x border-input bg-muted/30 py-2">s/d</span>
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <input
+                    type="date"
+                    value={listEndDate}
+                    onChange={(e) => { setListEndDate(e.target.value); setListPage(1); }}
+                    className="text-sm bg-transparent focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Reset */}
+              {(listSearch || listStartDate || listEndDate) && (
+                <button
+                  type="button"
+                  onClick={() => { setListSearch(""); setListStartDate(""); setListEndDate(""); setListPage(1); }}
+                  className="text-xs text-muted-foreground hover:text-foreground underline shrink-0"
+                >
+                  Reset
+                </button>
+              )}
             </div>
 
             {loadingList ? (
