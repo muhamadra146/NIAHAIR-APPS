@@ -7,6 +7,7 @@ const { createNoteSchema, updateNoteSchema } = require("./consultation.validatio
 const uploadConsultationNote = require("../../middlewares/uploadConsultationNote.middleware");
 const {
   getAllController,
+  getUnfilledInvoicesController,
   getByIdController,
   getByInvoiceController,
   createController,
@@ -21,8 +22,10 @@ const router = Router();
 const MANAGER_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.FINANCE];
 
 // Stats — management only; list — any authenticated (service enforces ownership for non-managers)
-router.get("/stats",            authenticate, authorize(...MANAGER_ROLES), getStatsController);
-router.get("/",                 authenticate, getAllController);
+router.get("/stats",             authenticate, authorize(...MANAGER_ROLES), getStatsController);
+// Unfilled invoices (Tab "Isi Catatan") — HARUS sebelum /:id agar tidak salah match
+router.get("/unfilled-invoices", authenticate, getUnfilledInvoicesController);
+router.get("/",                  authenticate, getAllController);
 
 // By invoice — any authenticated user (used by stylist to fetch their form)
 router.get("/invoice/:invoiceId", authenticate, getByInvoiceController);

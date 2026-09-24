@@ -3,6 +3,8 @@ import type { ApiResponse, PaginatedResponse } from "@/types/api";
 import type {
   ConsultationNote,
   ConsultationNoteListParams,
+  UnfilledInvoice,
+  UnfilledInvoiceListParams,
   CreateConsultationNoteInput,
   UpdateConsultationNoteInput,
   ConsultationStats,
@@ -13,8 +15,18 @@ interface NoteListData {
   meta: PaginatedResponse<ConsultationNote>["meta"];
 }
 
+interface UnfilledInvoiceListData {
+  data: UnfilledInvoice[];
+  meta: PaginatedResponse<UnfilledInvoice>["meta"];
+}
+
 export async function fetchConsultationNotes(params: ConsultationNoteListParams = {}): Promise<NoteListData> {
   const { data } = await api.get<ApiResponse<NoteListData>>("/consultation-notes", { params });
+  return data.data;
+}
+
+export async function fetchUnfilledInvoices(params: UnfilledInvoiceListParams = {}): Promise<UnfilledInvoiceListData> {
+  const { data } = await api.get<ApiResponse<UnfilledInvoiceListData>>("/consultation-notes/unfilled-invoices", { params });
   return data.data;
 }
 
@@ -42,7 +54,9 @@ export async function deleteConsultationNote(id: string): Promise<void> {
   await api.delete(`/consultation-notes/${id}`);
 }
 
-export async function fetchConsultationStats(params: { branchId?: string; startDate?: string; endDate?: string } = {}): Promise<ConsultationStats> {
+export async function fetchConsultationStats(
+  params: { branchId?: string; startDate?: string; endDate?: string; month?: number; year?: number } = {}
+): Promise<ConsultationStats> {
   const { data } = await api.get<ApiResponse<ConsultationStats>>("/consultation-notes/stats", { params });
   return data.data;
 }

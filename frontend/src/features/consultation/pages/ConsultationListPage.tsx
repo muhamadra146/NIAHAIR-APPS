@@ -1,61 +1,63 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import {
   PenLine, Eye, BarChart3, ClipboardList, Trash2, User,
-  Calendar, CheckCircle2, Clock, ExternalLink, AlertCircle,
+  Calendar, CheckCircle2, Clock, AlertCircle, Search,
+  Users, UserPlus, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { EmptyState } from "@/components/common/EmptyState";
-import { Pagination } from "@/components/common/Pagination";
+import { EmptyState }    from "@/components/common/EmptyState";
+import { Pagination }    from "@/components/common/Pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Button }  from "@/components/ui/button";
-import { Badge }   from "@/components/ui/badge";
+import { Button }   from "@/components/ui/button";
+import { Badge }    from "@/components/ui/badge";
+import { Input }    from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { useAuthStore } from "@/stores/authStore";
-import { useViewOnly } from "@/hooks/useViewOnly";
-import { formatDate } from "@/lib/utils";
-import { api } from "@/lib/axios";
-import { useConsultationNotes, useConsultationStats, useDeleteConsultationNote } from "../hooks";
+import { useAuthStore }  from "@/stores/authStore";
+import { useViewOnly }   from "@/hooks/useViewOnly";
+import { formatDate }    from "@/lib/utils";
+import {
+  useConsultationNotes, useUnfilledInvoices,
+  useConsultationStats, useDeleteConsultationNote,
+} from "../hooks";
 import {
   PROFESSION_OPTIONS, DISCOVERY_OPTIONS, AGE_RANGE_OPTIONS,
   REASON_SERVICE_OPTIONS, HESITATION_OPTIONS, PREV_EXP_OPTIONS,
   getLabel,
 } from "../constants";
-import type { ConsultationNote } from "../types";
+import type { ConsultationNote, UnfilledInvoice } from "../types";
 
 const MANAGEMENT_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "FINANCE"];
 
-// ── Status config ──────────────────────────────────────────────────────────────
+// ── Badge Klien Baru / Lama ────────────────────────────────────────────────────
 
-type CatatanStatus = "sudah" | "belum";
+function ClientTypeBadge({ isNewClient }: { isNewClient: boolean }) {
+  if (isNewClient) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border-emerald-200 shrink-0">
+        <UserPlus className="h-2.5 w-2.5" /> Klien Baru
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold bg-blue-50 text-blue-700 border-blue-200 shrink-0">
+      <Users className="h-2.5 w-2.5" /> Klien Lama
+    </span>
+  );
+}
 
-const STATUS_CONFIG: Record<CatatanStatus, { label: string; icon: React.ReactNode; className: string }> = {
-  sudah: {
-    label:     "Sudah Diisi",
-    icon:      <CheckCircle2 className="h-3.5 w-3.5" />,
-    className: "bg-green-100 text-green-700 border-green-200",
-  },
-  belum: {
-    label:     "Belum Diisi",
-    icon:      <Clock className="h-3.5 w-3.5" />,
-    className: "bg-amber-100 text-amber-700 border-amber-200",
-  },
-};
+// ── Days ago badge ─────────────────────────────────────────────────────────────
 
-// ── Invoice type ───────────────────────────────────────────────────────────────
-
-interface InvoiceRow {
-  id:          string;
-  invoiceNo:   string;
-  invoiceDate: string;
-  grandTotal:  number | string;
-  customer:    { name: string; customerNo?: string };
-  items:       Array<{ item: { name: string } }>;
+function DaysAgoBadge({ dateStr }: { dateStr: string }) {
+  const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
+  if (days === 0) return <span className="text-xs text-muted-foreground">Hari ini</span>;
+  if (days === 1) return <span className="text-xs text-amber-600 font-medium">Kemarin</span>;
+  if (days <= 3)  return <span className="text-xs text-amber-600 font-medium">{days} hari lalu</span>;
+  return <span className="text-xs text-red-500 font-medium">{days} hari lalu</span>;
 }
 
 // ── Stats helpers ──────────────────────────────────────────────────────────────
@@ -121,16 +123,19 @@ function NoteCard({ note, isViewOnly = false }: { note: ConsultationNote; isView
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
-                <div>
+                <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold leading-tight">{note.customer?.name}</p>
-                  {note.customer?.mobilePhone && (
-                    <p className="text-xs text-muted-foreground">{note.customer.mobilePhone}</p>
+                  {note.isNewClient !== undefined && (
+                    <ClientTypeBadge isNewClient={note.isNewClient} />
                   )}
                 </div>
                 {note.branch && (
                   <Badge variant="outline" className="text-xs shrink-0">{note.branch.name}</Badge>
                 )}
               </div>
+              {note.customer?.mobilePhone && (
+                <p className="text-xs text-muted-foreground">{note.customer.mobilePhone}</p>
+              )}
               <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1">
                   <Calendar className="w-3 h-3" />{formatDate(note.filledAt)}
@@ -195,72 +200,60 @@ function NoteCard({ note, isViewOnly = false }: { note: ConsultationNote; isView
 export function ConsultationListPage() {
   const { user, branchId } = useAuthStore();
   const isViewOnly = useViewOnly();
-  const roleCode  = user?.role?.code ?? "";
-  const isManager = MANAGEMENT_ROLES.includes(roleCode);
+  const roleCode   = user?.role?.code ?? "";
+  const isManager  = MANAGEMENT_ROLES.includes(roleCode);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const [tab,        setTab]       = useState<"isi" | "list" | "stats">("isi");
 
-  const [tab,       setTab]   = useState<"isi" | "list" | "stats">("isi");
-  const [startDate, setStart] = useState(today);
-  const [endDate,   setEnd]   = useState(today);
-  const [listPage,  setListPage] = useState(1);
+  // Tab "Isi Catatan"
+  const [isiSearch,  setIsiSearch]  = useState("");
+  const [isiPage,    setIsiPage]    = useState(1);
 
-  // ── Tab "Isi Catatan": fetch invoices + filled note IDs ──────────────────
-  const { data: invoicesData, isLoading: loadingInvoices } = useQuery({
-    queryKey:  ["invoices-for-consultation", startDate, endDate, branchId],
-    queryFn:   async () => {
-      const { data } = await api.get("/invoices", {
-        params: { limit: 200, branchId: branchId || undefined, startDate, endDate },
-      }) as any;
-      return (data.data?.data ?? []) as InvoiceRow[];
-    },
-    staleTime: 0,
-    refetchOnMount: true,
-    enabled: tab === "isi",
-  });
+  // Tab "Semua Catatan"
+  const [listSearch, setListSearch] = useState("");
+  const [listPage,   setListPage]   = useState(1);
 
-  const { data: allNotesData, isLoading: loadingNotes } = useQuery({
-    queryKey:  ["consultation-note-ids", startDate, endDate, branchId],
-    queryFn:   async () => {
-      const { data } = await api.get("/consultation-notes", {
-        params: { limit: 1000, branchId: branchId || undefined },
-      }) as any;
-      const notes: any[] = data.data?.data ?? [];
-      return new Map<string, string>(notes.map((n) => [n.invoiceId, n.id]));
-    },
-    staleTime: 0,
-    refetchOnMount: true,
-    enabled: tab === "isi",
-  });
+  // Tab "Statistik"
+  const now        = new Date();
+  const [statMonth, setStatMonth] = useState(now.getMonth() + 1);
+  const [statYear,  setStatYear]  = useState(now.getFullYear());
 
-  const invoices   = invoicesData ?? [];
-  const noteMap    = allNotesData ?? new Map<string, string>();
-  const loadingIsi = loadingInvoices || loadingNotes;
+  // ── Tab "Isi Catatan": fetch unfilled invoices ─────────────────────────────
+  const { data: unfilledData, isLoading: loadingUnfilled } = useUnfilledInvoices(
+    { page: isiPage, limit: 20, branchId: branchId || undefined, search: isiSearch || undefined },
+    { enabled: tab === "isi" },
+  );
+  const unfilledInvoices = unfilledData?.data ?? [];
+  const unfilledMeta     = unfilledData?.meta;
+  const unfilledTotal    = unfilledMeta?.total ?? 0;
+  const unfilledPages    = unfilledMeta ? Math.ceil(unfilledMeta.total / 20) : 1;
 
-  const sudahCount = invoices.filter((inv) => noteMap.has(inv.id)).length;
-  const belumCount = invoices.filter((inv) => !noteMap.has(inv.id)).length;
-
-  // Belum diisi di atas, sudah di bawah
-  const sortedInvoices = [...invoices].sort((a, b) => {
-    const aFilled = noteMap.has(a.id) ? 1 : 0;
-    const bFilled = noteMap.has(b.id) ? 1 : 0;
-    return aFilled - bFilled;
-  });
-
-  // ── Tab "Semua Catatan" ───────────────────────────────────────────────────
+  // ── Tab "Semua Catatan" ────────────────────────────────────────────────────
   const { data: listData, isLoading: loadingList } = useConsultationNotes(
-    { page: listPage, limit: 20, branchId: isManager ? undefined : (branchId || undefined) },
+    {
+      page: listPage, limit: 20,
+      branchId: isManager ? undefined : (branchId || undefined),
+      search:   listSearch || undefined,
+    },
     { enabled: tab === "list" },
   );
-
   const notes      = listData?.data ?? [];
-  const meta       = listData?.meta;
-  const totalPages = meta ? Math.ceil(meta.total / 20) : 1;
+  const listMeta   = listData?.meta;
+  const totalPages = listMeta ? Math.ceil(listMeta.total / 20) : 1;
 
-  // ── Tab "Statistik" ───────────────────────────────────────────────────────
-  const { data: stats } = useConsultationStats({
-    branchId: isManager ? undefined : (branchId || undefined),
-  });
+  // ── Tab "Statistik" ────────────────────────────────────────────────────────
+  const { data: stats } = useConsultationStats(
+    {
+      branchId: isManager ? undefined : (branchId || undefined),
+      month:    statMonth,
+      year:     statYear,
+    },
+  );
+
+  const MONTHS = [
+    "Januari","Februari","Maret","April","Mei","Juni",
+    "Juli","Agustus","September","Oktober","November","Desember",
+  ];
 
   return (
     <PageContainer
@@ -271,12 +264,17 @@ export function ConsultationListPage() {
         <TabsList>
           <TabsTrigger value="isi" className="gap-1.5">
             <PenLine className="w-4 h-4" /> Isi Catatan
+            {unfilledTotal > 0 && tab !== "isi" && (
+              <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-amber-500 text-white text-[10px] font-semibold">
+                {unfilledTotal}
+              </span>
+            )}
           </TabsTrigger>
           <TabsTrigger value="list" className="gap-1.5">
             <ClipboardList className="w-4 h-4" /> Semua Catatan
-            {meta && meta.total > 0 && (
+            {listMeta && listMeta.total > 0 && (
               <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-primary/15 text-primary text-[10px] font-semibold">
-                {meta.total}
+                {listMeta.total}
               </span>
             )}
           </TabsTrigger>
@@ -289,200 +287,254 @@ export function ConsultationListPage() {
 
         {/* ── Tab: Isi Catatan ─────────────────────────────────────────────── */}
         <TabsContent value="isi">
-        <>
-          {/* Date filter */}
-          <div className="flex items-center gap-0 mb-4 w-fit rounded-lg border border-input bg-background shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-2">
-              <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              <input
-                type="date" value={startDate}
-                onChange={(e) => setStart(e.target.value)}
-                className="text-sm bg-transparent focus:outline-none"
+          <>
+            {/* Search bar */}
+            <div className="relative mb-4 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Cari nama klien atau no. invoice..."
+                value={isiSearch}
+                onChange={(e) => { setIsiSearch(e.target.value); setIsiPage(1); }}
+                className="pl-9"
               />
             </div>
-            <span className="text-muted-foreground text-xs px-1 select-none border-x border-input bg-muted/30 py-2">s/d</span>
-            <div className="flex items-center gap-2 px-3 py-2">
-              <input
-                type="date" value={endDate}
-                onChange={(e) => setEnd(e.target.value)}
-                className="text-sm bg-transparent focus:outline-none"
-              />
-            </div>
-          </div>
 
-          {/* Summary bar */}
-          {!loadingIsi && invoices.length > 0 && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm mb-4 text-muted-foreground">
-              <span>Menampilkan <strong className="text-foreground">{invoices.length}</strong> invoice</span>
-              <span className="text-border">·</span>
-              {belumCount > 0 && (
-                <span className="flex items-center gap-1 text-amber-600 font-medium">
-                  <Clock className="w-3.5 h-3.5" />{belumCount} belum diisi
-                </span>
-              )}
-              {sudahCount > 0 && belumCount > 0 && <span className="text-border">·</span>}
-              {sudahCount > 0 && (
-                <span className="flex items-center gap-1 text-green-600 font-medium">
-                  <CheckCircle2 className="w-3.5 h-3.5" />{sudahCount} sudah diisi
-                </span>
-              )}
-            </div>
-          )}
+            {/* Summary */}
+            {!loadingUnfilled && (
+              <div className="flex items-center gap-2 text-sm mb-4 text-muted-foreground">
+                {unfilledTotal > 0 ? (
+                  <span className="flex items-center gap-1 text-amber-600 font-medium">
+                    <Clock className="w-3.5 h-3.5" />{unfilledTotal} invoice belum diisi catatan
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-green-600 font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Semua sudah diisi
+                  </span>
+                )}
+              </div>
+            )}
 
-          {/* Skeleton */}
-          {loadingIsi && (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-14 w-full rounded-xl" />
-              ))}
-            </div>
-          )}
+            {/* Skeleton */}
+            {loadingUnfilled && (
+              <div className="space-y-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-14 w-full rounded-xl" />
+                ))}
+              </div>
+            )}
 
-          {/* Empty */}
-          {!loadingIsi && invoices.length === 0 && (
-            <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
-              <AlertCircle className="h-8 w-8" />
-              <p className="text-sm">Tidak ada invoice untuk tanggal ini.</p>
-            </div>
-          )}
+            {/* Empty */}
+            {!loadingUnfilled && unfilledInvoices.length === 0 && (
+              <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
+                <CheckCircle2 className="h-10 w-10 text-green-500" />
+                <p className="text-sm font-medium text-green-600">Semua catatan sudah diisi!</p>
+                <p className="text-xs">
+                  {isiSearch ? "Tidak ada invoice yang cocok dengan pencarian." : "Tidak ada invoice yang perlu diisi."}
+                </p>
+              </div>
+            )}
 
-          {/* Table */}
-          {!loadingIsi && invoices.length > 0 && (
-            <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/40">
-                    <th className="px-4 py-2.5 text-left font-semibold text-foreground/70 text-xs uppercase tracking-wide">Invoice</th>
-                    <th className="px-4 py-2.5 text-left font-semibold text-foreground/70 text-xs uppercase tracking-wide">Pelanggan</th>
-                    <th className="px-4 py-2.5 text-left font-semibold text-foreground/70 text-xs uppercase tracking-wide hidden sm:table-cell">Tanggal</th>
-                    <th className="px-4 py-2.5 text-center font-semibold text-foreground/70 text-xs uppercase tracking-wide">Status</th>
-                    <th className="px-4 py-2.5 text-right font-semibold text-foreground/70 text-xs uppercase tracking-wide">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {sortedInvoices.map((inv) => {
-                    const noteId = noteMap.get(inv.id);
-                    const status: CatatanStatus = noteId ? "sudah" : "belum";
-                    const cfg    = STATUS_CONFIG[status];
-
-                    return (
+            {/* Table */}
+            {!loadingUnfilled && unfilledInvoices.length > 0 && (
+              <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/40">
+                      <th className="px-4 py-2.5 text-left font-semibold text-foreground/70 text-xs uppercase tracking-wide">Invoice</th>
+                      <th className="px-4 py-2.5 text-left font-semibold text-foreground/70 text-xs uppercase tracking-wide">Pelanggan</th>
+                      <th className="px-4 py-2.5 text-left font-semibold text-foreground/70 text-xs uppercase tracking-wide hidden sm:table-cell">Tanggal</th>
+                      <th className="px-4 py-2.5 text-center font-semibold text-foreground/70 text-xs uppercase tracking-wide">Tipe</th>
+                      <th className="px-4 py-2.5 text-right font-semibold text-foreground/70 text-xs uppercase tracking-wide">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {unfilledInvoices.map((inv: UnfilledInvoice) => (
                       <tr key={inv.id} className="hover:bg-muted/20 transition-colors">
                         <td className="px-4 py-3">
-                          <Link
-                            to={`/invoices/${inv.id}`}
-                            className="flex items-center gap-1.5 font-medium text-primary hover:underline"
-                          >
-                            {inv.invoiceNo}
-                            <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                          </Link>
+                          <span className="font-medium font-mono text-foreground">{inv.invoiceNo}</span>
                         </td>
                         <td className="px-4 py-3">
                           <div className="font-medium">{inv.customer.name}</div>
+                          {inv.customer.mobilePhone && (
+                            <div className="text-xs text-muted-foreground">{inv.customer.mobilePhone}</div>
+                          )}
                           {inv.items?.length > 0 && (
                             <div className="text-xs text-muted-foreground truncate max-w-[160px]">
                               {inv.items.map((i) => i.item.name).join(", ")}
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap hidden sm:table-cell">
-                          {formatDate(inv.invoiceDate)}
+                        <td className="px-4 py-3 hidden sm:table-cell">
+                          <div className="text-muted-foreground">{formatDate(inv.invoiceDate)}</div>
+                          <DaysAgoBadge dateStr={inv.invoiceDate} />
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {status === "belum" ? (
-                            <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 border-amber-200">
-                              <Clock className="h-3 w-3" /> Belum Diisi
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-600">
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Sudah
-                            </span>
-                          )}
+                          <ClientTypeBadge isNewClient={inv.isNewClient} />
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {status === "belum" ? (
-                            !isViewOnly && (
-                              <Link to={`/consultation-notes/new?invoiceId=${inv.id}`}>
-                                <Button size="sm" className="h-7 px-2.5 text-xs">
-                                  Isi Sekarang
-                                </Button>
-                              </Link>
-                            )
-                          ) : (
-                            <Link to={`/consultation-notes/${noteId}/edit`}>
-                              <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs">
-                                <Eye className="h-3 w-3 mr-1" /> Lihat
+                          {!isViewOnly && (
+                            <Link to={`/consultation-notes/new?invoiceId=${inv.id}&newClient=${inv.isNewClient}`}>
+                              <Button size="sm" className="h-7 px-2.5 text-xs">
+                                Isi Sekarang
                               </Button>
                             </Link>
                           )}
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Pagination */}
+            <Pagination
+              page={isiPage}
+              limit={20}
+              total={unfilledTotal}
+              totalPages={unfilledPages}
+              onPageChange={setIsiPage}
+            />
+          </>
         </TabsContent>
 
         {/* ── Tab: Semua Catatan ───────────────────────────────────────────── */}
         <TabsContent value="list">
-        <>
-          {loadingList ? (
-            <div className="space-y-3">
-              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+          <>
+            {/* Search bar */}
+            <div className="relative mb-4 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Cari nama klien..."
+                value={listSearch}
+                onChange={(e) => { setListSearch(e.target.value); setListPage(1); }}
+                className="pl-9"
+              />
             </div>
-          ) : notes.length === 0 ? (
-            <EmptyState
-              icon={<ClipboardList className="w-6 h-6" />}
-              title="Belum ada catatan"
-              description="Mulai isi catatan klien pertama"
-              action={
-                <Button size="sm" onClick={() => setTab("isi")}>
-                  <PenLine className="w-4 h-4 mr-1.5" /> Ke Tab Isi Catatan
-                </Button>
-              }
-            />
-          ) : (
-            <div className="space-y-3">
-              {notes.map((note) => <NoteCard key={note.id} note={note} isViewOnly={isViewOnly} />)}
-            </div>
-          )}
 
-          <Pagination
-            page={listPage}
-            limit={20}
-            total={meta?.total ?? 0}
-            totalPages={totalPages}
-            onPageChange={setListPage}
-          />
-        </>
+            {loadingList ? (
+              <div className="space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+              </div>
+            ) : notes.length === 0 ? (
+              <EmptyState
+                icon={<ClipboardList className="w-6 h-6" />}
+                title="Belum ada catatan"
+                description={listSearch ? "Tidak ada catatan yang cocok dengan pencarian." : "Mulai isi catatan klien pertama"}
+                action={
+                  !listSearch ? (
+                    <Button size="sm" onClick={() => setTab("isi")}>
+                      <PenLine className="w-4 h-4 mr-1.5" /> Ke Tab Isi Catatan
+                    </Button>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <div className="space-y-3">
+                {notes.map((note) => <NoteCard key={note.id} note={note} isViewOnly={isViewOnly} />)}
+              </div>
+            )}
+
+            <Pagination
+              page={listPage}
+              limit={20}
+              total={listMeta?.total ?? 0}
+              totalPages={totalPages}
+              onPageChange={setListPage}
+            />
+          </>
         </TabsContent>
 
         {/* ── Tab: Statistik ──────────────────────────────────────────────── */}
         {isManager && (
-        <TabsContent value="stats">
-        {stats && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Card className="text-center">
-              <CardContent className="pt-5 pb-4">
-                <p className="text-4xl font-bold text-primary">{stats.total}</p>
-                <p className="text-xs text-muted-foreground mt-1">Total Catatan</p>
-              </CardContent>
-            </Card>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <StatCard title="Tau Nia Hair dari Mana"          data={stats.discoveryChannel} options={DISCOVERY_OPTIONS}      total={stats.total} accent="bg-pink-50 text-pink-700" />
-            <StatCard title="Profesi / Aktivitas"             data={stats.profession}       options={PROFESSION_OPTIONS}     total={stats.total} accent="bg-blue-50 text-blue-700" />
-            <StatCard title="Perkiraan Usia"                  data={stats.ageRange}         options={AGE_RANGE_OPTIONS}      total={stats.total} accent="bg-purple-50 text-purple-700" />
-            <StatCard title="Kenapa Mau Extension"            data={stats.reasonForService} options={REASON_SERVICE_OPTIONS} total={stats.total} accent="bg-orange-50 text-orange-700" />
-            <StatCard title="Yang Bikin Ragu"                 data={stats.hesitation}       options={HESITATION_OPTIONS}     total={stats.total} accent="bg-yellow-50 text-yellow-700" />
-            <StatCard title="Pengalaman Extension Sebelumnya" data={stats.previousExpType}  options={PREV_EXP_OPTIONS}       total={stats.total} accent="bg-green-50 text-green-700" />
-          </div>
-        </div>
-        )}
-        </TabsContent>
+          <TabsContent value="stats">
+            <>
+              {/* Filter bulan */}
+              <div className="flex items-center gap-2 mb-5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (statMonth === 1) { setStatMonth(12); setStatYear((y) => y - 1); }
+                    else setStatMonth((m) => m - 1);
+                  }}
+                  className="p-1.5 rounded-lg border hover:bg-muted transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-sm font-semibold min-w-[130px] text-center">
+                  {MONTHS[statMonth - 1]} {statYear}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (statMonth === 12) { setStatMonth(1); setStatYear((y) => y + 1); }
+                    else setStatMonth((m) => m + 1);
+                  }}
+                  className="p-1.5 rounded-lg border hover:bg-muted transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setStatMonth(now.getMonth() + 1); setStatYear(now.getFullYear()); }}
+                  className="text-xs text-primary underline ml-1"
+                >
+                  Bulan ini
+                </button>
+              </div>
+
+              {stats ? (
+                <div className="space-y-4">
+                  {/* Ringkasan total */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Card className="text-center">
+                      <CardContent className="pt-5 pb-4">
+                        <p className="text-4xl font-bold text-primary">{stats.total}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Total Catatan</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="text-center border-emerald-200 bg-emerald-50/40">
+                      <CardContent className="pt-5 pb-4">
+                        <p className="text-4xl font-bold text-emerald-600">{stats.newClientCount}</p>
+                        <p className="text-xs text-emerald-700 mt-1 font-medium">Klien Baru</p>
+                        <p className="text-xs text-muted-foreground">
+                          {stats.total > 0 ? Math.round((stats.newClientCount / stats.total) * 100) : 0}% dari total
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="text-center border-blue-200 bg-blue-50/40">
+                      <CardContent className="pt-5 pb-4">
+                        <p className="text-4xl font-bold text-blue-600">{stats.returningClientCount}</p>
+                        <p className="text-xs text-blue-700 mt-1 font-medium">Klien Lama</p>
+                        <p className="text-xs text-muted-foreground">
+                          {stats.total > 0 ? Math.round((stats.returningClientCount / stats.total) * 100) : 0}% dari total
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Label keterangan */}
+                  <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+                    Data di bawah hanya dari <strong className="text-emerald-700">Klien Baru</strong> ({stats.newClientCount} catatan) — lebih akurat untuk analisis akuisisi marketing.
+                  </p>
+
+                  {/* Acquisition stats */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <StatCard title="Tau Nia Hair dari Mana"          data={stats.discoveryChannel} options={DISCOVERY_OPTIONS}      total={stats.newClientCount} accent="bg-pink-50 text-pink-700" />
+                    <StatCard title="Profesi / Aktivitas"             data={stats.profession}       options={PROFESSION_OPTIONS}     total={stats.newClientCount} accent="bg-blue-50 text-blue-700" />
+                    <StatCard title="Perkiraan Usia"                  data={stats.ageRange}         options={AGE_RANGE_OPTIONS}      total={stats.newClientCount} accent="bg-purple-50 text-purple-700" />
+                    <StatCard title="Kenapa Mau Extension"            data={stats.reasonForService} options={REASON_SERVICE_OPTIONS} total={stats.newClientCount} accent="bg-orange-50 text-orange-700" />
+                    <StatCard title="Yang Bikin Ragu"                 data={stats.hesitation}       options={HESITATION_OPTIONS}     total={stats.newClientCount} accent="bg-yellow-50 text-yellow-700" />
+                    <StatCard title="Pengalaman Extension Sebelumnya" data={stats.previousExpType}  options={PREV_EXP_OPTIONS}       total={stats.newClientCount} accent="bg-green-50 text-green-700" />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
+                </div>
+              )}
+            </>
+          </TabsContent>
         )}
       </Tabs>
     </PageContainer>

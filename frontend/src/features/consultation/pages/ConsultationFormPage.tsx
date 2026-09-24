@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Search, User, Calendar, Receipt, Scissors,
   ChevronLeft, Save, Sparkles, Heart, MessageSquareQuote,
-  CheckCircle2,
+  Users, UserPlus,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button }   from "@/components/ui/button";
@@ -13,15 +13,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge }    from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/stores/authStore";
-import { formatDate } from "@/lib/utils";
-import { api } from "@/lib/axios";
+import { formatDate }   from "@/lib/utils";
+import { api }          from "@/lib/axios";
 import { useConsultationNoteByInvoice, useCreateConsultationNote, useUpdateConsultationNote } from "../hooks";
 import {
   PROFESSION_OPTIONS, AGE_RANGE_OPTIONS, DAILY_STYLING_OPTIONS,
   DISCOVERY_OPTIONS, REASON_SERVICE_OPTIONS, HESITATION_OPTIONS,
   PREV_EXP_OPTIONS,
 } from "../constants";
-import type { CreateConsultationNoteInput } from "../types";
+import type { CreateConsultationNoteInput, UnfilledInvoice } from "../types";
 
 // ── Question ───────────────────────────────────────────────────────────────────
 
@@ -119,16 +119,7 @@ function Section({ icon, letter, title, gradient, children }: {
 
 // ── Invoice picker ─────────────────────────────────────────────────────────────
 
-interface InvoiceOption {
-  id:          string;
-  invoiceNo:   string;
-  invoiceDate: string;
-  customer:    { name: string; mobilePhone: string | null };
-  items:       Array<{ item: { name: string } }>;
-  status:      string;
-}
-
-function InvoiceCard({ inv, onSelect }: { inv: InvoiceOption; onSelect: (inv: InvoiceOption) => void }) {
+function InvoiceCard({ inv, onSelect }: { inv: UnfilledInvoice; onSelect: (inv: UnfilledInvoice) => void }) {
   return (
     <button
       type="button"
@@ -139,9 +130,19 @@ function InvoiceCard({ inv, onSelect }: { inv: InvoiceOption; onSelect: (inv: In
         <span className="font-bold text-sm font-mono group-hover:text-primary transition-colors">
           {inv.invoiceNo}
         </span>
-        <Badge variant="outline" className="text-xs">{formatDate(inv.invoiceDate)}</Badge>
+        <div className="flex items-center gap-2">
+          {inv.isNewClient ? (
+            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">Klien Baru</span>
+          ) : (
+            <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">Klien Lama</span>
+          )}
+          <Badge variant="outline" className="text-xs">{formatDate(inv.invoiceDate)}</Badge>
+        </div>
       </div>
       <p className="text-sm font-semibold">{inv.customer?.name}</p>
+      {inv.customer?.mobilePhone && (
+        <p className="text-xs text-muted-foreground">{inv.customer.mobilePhone}</p>
+      )}
       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
         {inv.items?.map((i) => i.item.name).join(", ")}
       </p>
@@ -149,27 +150,21 @@ function InvoiceCard({ inv, onSelect }: { inv: InvoiceOption; onSelect: (inv: In
   );
 }
 
-function InvoicePicker({ onSelect }: { onSelect: (inv: InvoiceOption) => void }) {
+function InvoicePicker({ onSelect }: { onSelect: (inv: UnfilledInvoice) => void }) {
   const { branchId } = useAuthStore();
-  const [search,         setSearch]         = useState("");
-  const [todayList,      setTodayList]      = useState<InvoiceOption[]>([]);
-  const [searchResults,  setSearchResults]  = useState<InvoiceOption[]>([]);
-  const [loadingToday,   setLoadingToday]   = useState(true);
-  const [loadingSearch,  setLoadingSearch]  = useState(false);
-  const [usedInvoiceIds, setUsedInvoiceIds] = useState<Set<string>>(new Set());
+  const [search,        setSearch]        = useState("");
+  const [unfilledList,  setUnfilledList]  = useState<UnfilledInvoice[]>([]);
+  const [searchResults, setSearchResults] = useState<UnfilledInvoice[]>([]);
+  const [loadingInit,   setLoadingInit]   = useState(true);
+  const [loadingSearch, setLoadingSearch] = useState(false);
 
-  // Load used invoice IDs + today's invoices on mount
+  // Load unfilled invoices on mount via API
   useEffect(() => {
-    const today = new Date().toISOString().split("T")[0];
-    Promise.all([
-      api.get("/consultation-notes", { params: { limit: 1000 } }),
-      api.get("/invoices", { params: { limit: 100, branchId: branchId || undefined, startDate: today, endDate: today } }),
-    ]).then(([notesRes, invRes]: any) => {
-      const ids = new Set<string>((notesRes.data?.data?.data ?? []).map((n: any) => n.invoiceId as string));
-      setUsedInvoiceIds(ids);
-      const all: InvoiceOption[] = invRes.data?.data?.data ?? [];
-      setTodayList(all.filter((inv) => !ids.has(inv.id)));
-    }).catch(() => {}).finally(() => setLoadingToday(false));
+    api.get("/consultation-notes/unfilled-invoices", {
+      params: { limit: 50, branchId: branchId || undefined },
+    }).then(({ data }: any) => {
+      setUnfilledList(data.data?.data ?? []);
+    }).catch(() => {}).finally(() => setLoadingInit(false));
   }, [branchId]);
 
   const handleSearch = async (q: string) => {
@@ -177,25 +172,18 @@ function InvoicePicker({ onSelect }: { onSelect: (inv: InvoiceOption) => void })
     if (q.length < 2) { setSearchResults([]); return; }
     setLoadingSearch(true);
     try {
-      const { data } = await api.get("/invoices", {
-        params: { limit: 50, branchId: branchId || undefined },
+      const { data } = await api.get("/consultation-notes/unfilled-invoices", {
+        params: { limit: 50, branchId: branchId || undefined, search: q },
       }) as any;
-      const all: InvoiceOption[] = data.data?.data ?? [];
-      setSearchResults(
-        all.filter(
-          (inv) =>
-            !usedInvoiceIds.has(inv.id) && (
-              inv.invoiceNo.toLowerCase().includes(q.toLowerCase()) ||
-              inv.customer?.name?.toLowerCase().includes(q.toLowerCase())
-            )
-        )
-      );
+      setSearchResults(data.data?.data ?? []);
     } finally {
       setLoadingSearch(false);
     }
   };
 
-  const isSearching = search.length >= 2;
+  const isSearching   = search.length >= 2;
+  const displayList   = isSearching ? searchResults : unfilledList;
+  const loadingList   = isSearching ? loadingSearch : loadingInit;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
@@ -219,42 +207,29 @@ function InvoicePicker({ onSelect }: { onSelect: (inv: InvoiceOption) => void })
           />
         </div>
 
-        {/* Search results */}
-        {isSearching && (
-          <div className="space-y-2">
-            {loadingSearch && [1,2,3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
-            {!loadingSearch && searchResults.map((inv) => (
+        {/* Invoice list */}
+        <Card className="shadow-md border-0 ring-1 ring-border/50">
+          <CardContent className="pt-4 pb-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-primary" />
+              <span className="text-sm font-semibold">
+                {isSearching ? "Hasil Pencarian" : "Invoice Belum Diisi"}
+              </span>
+              {!loadingList && (
+                <span className="ml-auto text-xs text-muted-foreground">{displayList.length} invoice</span>
+              )}
+            </div>
+            {loadingList && [1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+            {!loadingList && displayList.length === 0 && (
+              <p className="text-sm text-center text-muted-foreground py-4">
+                {isSearching ? "Invoice tidak ditemukan" : "Tidak ada invoice yang belum diisi"}
+              </p>
+            )}
+            {!loadingList && displayList.map((inv) => (
               <InvoiceCard key={inv.id} inv={inv} onSelect={onSelect} />
             ))}
-            {!loadingSearch && searchResults.length === 0 && (
-              <p className="text-sm text-center text-muted-foreground py-6">Invoice tidak ditemukan</p>
-            )}
-          </div>
-        )}
-
-        {/* Today's invoices */}
-        {!isSearching && (
-          <Card className="shadow-md border-0 ring-1 ring-border/50">
-            <CardContent className="pt-4 pb-3 space-y-3">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-primary" />
-                <span className="text-sm font-semibold">Invoice Hari Ini</span>
-                {!loadingToday && (
-                  <span className="ml-auto text-xs text-muted-foreground">{todayList.length} invoice</span>
-                )}
-              </div>
-              {loadingToday && [1,2,3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
-              {!loadingToday && todayList.length === 0 && (
-                <p className="text-sm text-center text-muted-foreground py-4">
-                  Tidak ada invoice hari ini yang belum diisi
-                </p>
-              )}
-              {!loadingToday && todayList.map((inv) => (
-                <InvoiceCard key={inv.id} inv={inv} onSelect={onSelect} />
-              ))}
-            </CardContent>
-          </Card>
-        )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
@@ -279,6 +254,16 @@ const EMPTY: FormState = {
   additionalNotes: "",
 };
 
+// Invoice info used in form header
+interface InvoiceInfo {
+  id:          string;
+  invoiceNo:   string;
+  invoiceDate: string;
+  customer:    { name: string; mobilePhone: string | null };
+  items:       Array<{ item: { name: string } }>;
+  isNewClient: boolean;
+}
+
 // ── Main form page ─────────────────────────────────────────────────────────────
 
 export function ConsultationFormPage() {
@@ -287,15 +272,19 @@ export function ConsultationFormPage() {
   const navigate          = useNavigate();
   const isEdit            = !!id;
 
-  const [invoiceId,      setInvoiceId]      = useState(searchParams.get("invoiceId") ?? "");
-  const [invoiceInfo,    setInvoiceInfo]    = useState<InvoiceOption | null>(null);
-  const [form, setForm]                    = useState<FormState>(EMPTY);
-  const [editNote, setEditNote]            = useState<any>(null);
-  const [noteError, setNoteError]          = useState(false);
+  const [invoiceId,    setInvoiceId]    = useState(searchParams.get("invoiceId") ?? "");
+  const [invoiceInfo,  setInvoiceInfo]  = useState<InvoiceInfo | null>(null);
+  const [isNewClient,  setIsNewClient]  = useState<boolean>(
+    // Dari URL param saat klik "Isi Sekarang" di list — default true (tampil full form)
+    searchParams.get("newClient") !== "false"
+  );
+  const [form, setForm]                = useState<FormState>(EMPTY);
+  const [editNote, setEditNote]        = useState<any>(null);
+  const [noteError, setNoteError]      = useState(false);
 
   const { data: existingNote } = useConsultationNoteByInvoice(isEdit ? "" : invoiceId);
 
-  // Fetch invoice info when invoiceId comes from URL params (no picker was used)
+  // Fetch invoice info when invoiceId comes from URL params
   useEffect(() => {
     if (isEdit || !invoiceId || invoiceInfo) return;
     api.get(`/invoices/${invoiceId}`).then(({ data }: any) => {
@@ -307,17 +296,20 @@ export function ConsultationFormPage() {
         invoiceDate: inv.invoiceDate,
         customer:    inv.customer,
         items:       inv.items ?? [],
-        status:      inv.status ?? "",
+        isNewClient, // dari URL param
       });
     }).catch(() => {});
-  }, [invoiceId, isEdit, invoiceInfo]);
+  }, [invoiceId, isEdit, invoiceInfo, isNewClient]);
 
+  // Load existing note for edit mode
   useEffect(() => {
     if (!isEdit || !id) return;
     api.get(`/consultation-notes/${id}`).then(({ data }: any) => {
       const note = data.data;
       setEditNote(note);
       setInvoiceId(note.invoiceId);
+      // Untuk edit: pakai isNewClient dari note (computed backend)
+      if (note.isNewClient !== undefined) setIsNewClient(note.isNewClient);
       setForm({
         profession:             note.profession ?? "",
         professionOther:        note.professionOther ?? "",
@@ -345,14 +337,16 @@ export function ConsultationFormPage() {
           invoiceDate: note.invoice.invoiceDate,
           customer:    note.customer,
           items:       note.invoice.items,
-          status:      "",
+          isNewClient: note.isNewClient ?? true,
         });
       }
     });
   }, [isEdit, id]);
 
+  // Load existing note data into form (new mode, note already exists for invoice)
   useEffect(() => {
     if (isEdit || !invoiceId || !existingNote) return;
+    if (existingNote.isNewClient !== undefined) setIsNewClient(existingNote.isNewClient);
     setForm({
       profession:             existingNote.profession ?? "",
       professionOther:        existingNote.professionOther ?? "",
@@ -402,14 +396,25 @@ export function ConsultationFormPage() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
+  // Nomor soal: klien baru mulai dari 1 (A+B+C), klien lama mulai dari 1 (C saja)
+  const qOffset = isNewClient ? 0 : 7; // A=3 soal, B=4 soal = 7 soal yang dilewati
+
   if (!invoiceId && !isEdit) {
-    return <InvoicePicker onSelect={(inv) => { setInvoiceId(inv.id); setInvoiceInfo(inv); }} />;
+    return (
+      <InvoicePicker
+        onSelect={(inv) => {
+          setInvoiceId(inv.id);
+          setInvoiceInfo(inv);
+          setIsNewClient(inv.isNewClient);
+        }}
+      />
+    );
   }
 
   if (isEdit && !editNote) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-4">
-        {[1,2,3,4].map(i => <Skeleton key={i} className="h-40 rounded-2xl" />)}
+        {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-40 rounded-2xl" />)}
       </div>
     );
   }
@@ -446,8 +451,7 @@ export function ConsultationFormPage() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Button
-            variant="outline"
-            size="sm"
+            variant="outline" size="sm"
             onClick={() => navigate("/consultation-notes")}
             disabled={isPending}
           >
@@ -469,7 +473,18 @@ export function ConsultationFormPage() {
               <span className="text-white font-bold text-base">{initials}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-white text-base leading-tight">{customerName}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-bold text-white text-base leading-tight">{customerName}</p>
+                {isNewClient ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 rounded-full px-2 py-0.5">
+                    <UserPlus className="w-2.5 h-2.5" /> Klien Baru
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-sky-100 bg-sky-500/30 rounded-full px-2 py-0.5">
+                    <Users className="w-2.5 h-2.5" /> Klien Lama
+                  </span>
+                )}
+              </div>
               {phone && <p className="text-white/70 text-xs mt-0.5">{phone}</p>}
             </div>
             {invoiceDate && (
@@ -501,128 +516,158 @@ export function ConsultationFormPage() {
           </div>
         </div>
 
-        {/* ── Section A: Profil Klien ── */}
-        <Section icon={<User className="w-4 h-4" />} letter="A" title="Profil Klien" gradient="bg-gradient-to-r from-blue-600 to-blue-500">
-          <Q num={1} label="Apa profesi atau aktivitas utama klien?">
-            <Pills
-              options={PROFESSION_OPTIONS}
-              value={form.profession ?? ""}
-              onChange={(v) => set("profession", v)}
-            />
-            {form.profession === "OTHER" && (
-              <TextExtra
-                placeholder="Tulis profesi..."
-                value={form.professionOther ?? ""}
-                onChange={(v) => set("professionOther", v)}
-              />
-            )}
-          </Q>
+        {/* ── Banner klien lama (jika klien lama) ── */}
+        {!isNewClient && (
+          <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 flex items-start gap-2">
+            <Users className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-blue-800">Klien Lama</p>
+              <p className="text-xs text-blue-600 mt-0.5">
+                Form ringkas — hanya catatan sesi ini yang perlu diisi.
+              </p>
+            </div>
+          </div>
+        )}
 
-          <Q num={2} label="Perkiraan usia klien?">
-            <Pills
-              options={AGE_RANGE_OPTIONS}
-              value={form.ageRange ?? ""}
-              onChange={(v) => set("ageRange", v)}
-            />
-          </Q>
-
-          <Q num={3} label="Styling yang sering dipakai sehari-hari?" hint="Bisa pilih lebih dari satu">
-            <Pills
-              options={DAILY_STYLING_OPTIONS}
-              value={form.dailyStyling ?? []}
-              onChange={(v) => set("dailyStyling", v)}
-              multi
-            />
-            {(form.dailyStyling ?? []).includes("OTHER") && (
-              <TextExtra
-                placeholder="Tulis styling lainnya..."
-                value={form.dailyStylingOther ?? ""}
-                onChange={(v) => set("dailyStylingOther", v)}
+        {/* ── Section A: Profil Klien (hanya klien baru) ── */}
+        {isNewClient && (
+          <Section
+            icon={<User className="w-4 h-4" />}
+            letter="A" title="Profil Klien"
+            gradient="bg-gradient-to-r from-blue-600 to-blue-500"
+          >
+            <Q num={1} label="Apa profesi atau aktivitas utama klien?">
+              <Pills
+                options={PROFESSION_OPTIONS}
+                value={form.profession ?? ""}
+                onChange={(v) => set("profession", v)}
               />
-            )}
-          </Q>
-        </Section>
-
-        {/* ── Section B: Motivasi ── */}
-        <Section icon={<Heart className="w-4 h-4" />} letter="B" title="Motivasi & Perjalanan Klien" gradient="bg-gradient-to-r from-rose-500 to-pink-500">
-          <Q num={4} label="Tau Nia Hair dari mana?">
-            <Pills
-              options={DISCOVERY_OPTIONS}
-              value={form.discoveryChannel ?? ""}
-              onChange={(v) => set("discoveryChannel", v)}
-            />
-            {(form.discoveryChannel === "KOL" || form.discoveryChannel === "OTHER") && (
-              <TextExtra
-                placeholder={form.discoveryChannel === "KOL" ? "Nama KOL / artis..." : "Tulis sumber..."}
-                value={form.discoveryChannelDetail ?? ""}
-                onChange={(v) => set("discoveryChannelDetail", v)}
-              />
-            )}
-          </Q>
-
-          <Q num={5} label="Kenapa mau extension atau service ini?" hint="Bisa pilih lebih dari satu">
-            <Pills
-              options={REASON_SERVICE_OPTIONS}
-              value={form.reasonForService ?? []}
-              onChange={(v) => set("reasonForService", v)}
-              multi
-            />
-            {((form.reasonForService ?? []).includes("ACARA_KHUSUS") || (form.reasonForService ?? []).includes("OTHER")) && (
-              <TextExtra
-                placeholder={(form.reasonForService ?? []).includes("ACARA_KHUSUS") ? "Acara apa?" : "Tulis alasan lain..."}
-                value={form.reasonForServiceOther ?? ""}
-                onChange={(v) => set("reasonForServiceOther", v)}
-              />
-            )}
-          </Q>
-
-          <Q num={6} label="Sebelum booking, apa yang bikin ragu?" hint="Bisa pilih lebih dari satu">
-            <Pills
-              options={HESITATION_OPTIONS}
-              value={form.hesitation ?? []}
-              onChange={(v) => set("hesitation", v)}
-              multi
-            />
-            {(form.hesitation ?? []).includes("OTHER") && (
-              <TextExtra
-                placeholder="Tulis keraguannya..."
-                value={form.hesitationOther ?? ""}
-                onChange={(v) => set("hesitationOther", v)}
-              />
-            )}
-          </Q>
-
-          <Q num={7} label="Pernah pakai extensions di tempat lain sebelumnya?">
-            <Pills
-              options={PREV_EXP_OPTIONS}
-              value={form.previousExpType ?? ""}
-              onChange={(v) => set("previousExpType", v)}
-            />
-            {form.previousExpType === "PERNAH_LAIN" && (
-              <TextExtra
-                placeholder="Nama salon / tempat sebelumnya..."
-                value={form.previousSalonName ?? ""}
-                onChange={(v) => set("previousSalonName", v)}
-              />
-            )}
-            {(form.previousExpType === "PERNAH_LAIN" || form.previousExpType === "OTHER") && (
-              <div className="space-y-1.5 mt-1">
-                <Label className="text-xs text-muted-foreground">Kenapa pindah ke Nia Hair?</Label>
-                <Textarea
-                  placeholder="Kalau tidak ada alasan khusus, ketik 'tidak ada'"
-                  value={form.reasonSwitchToNia ?? ""}
-                  onChange={(e) => set("reasonSwitchToNia", e.target.value)}
-                  rows={2}
-                  className="text-sm resize-none"
+              {form.profession === "OTHER" && (
+                <TextExtra
+                  placeholder="Tulis profesi..."
+                  value={form.professionOther ?? ""}
+                  onChange={(v) => set("professionOther", v)}
                 />
-              </div>
-            )}
-          </Q>
-        </Section>
+              )}
+            </Q>
 
-        {/* ── Section C: Catatan Sesi ── */}
-        <Section icon={<Sparkles className="w-4 h-4" />} letter="C" title="Catatan Sesi Ini" gradient="bg-gradient-to-r from-violet-600 to-purple-500">
-          <Q num={8} label="Ada kendala selama pemakaian extensions?">
+            <Q num={2} label="Perkiraan usia klien?">
+              <Pills
+                options={AGE_RANGE_OPTIONS}
+                value={form.ageRange ?? ""}
+                onChange={(v) => set("ageRange", v)}
+              />
+            </Q>
+
+            <Q num={3} label="Styling yang sering dipakai sehari-hari?" hint="Bisa pilih lebih dari satu">
+              <Pills
+                options={DAILY_STYLING_OPTIONS}
+                value={form.dailyStyling ?? []}
+                onChange={(v) => set("dailyStyling", v)}
+                multi
+              />
+              {(form.dailyStyling ?? []).includes("OTHER") && (
+                <TextExtra
+                  placeholder="Tulis styling lainnya..."
+                  value={form.dailyStylingOther ?? ""}
+                  onChange={(v) => set("dailyStylingOther", v)}
+                />
+              )}
+            </Q>
+          </Section>
+        )}
+
+        {/* ── Section B: Motivasi (hanya klien baru) ── */}
+        {isNewClient && (
+          <Section
+            icon={<Heart className="w-4 h-4" />}
+            letter="B" title="Motivasi & Perjalanan Klien"
+            gradient="bg-gradient-to-r from-rose-500 to-pink-500"
+          >
+            <Q num={4} label="Tau Nia Hair dari mana?">
+              <Pills
+                options={DISCOVERY_OPTIONS}
+                value={form.discoveryChannel ?? ""}
+                onChange={(v) => set("discoveryChannel", v)}
+              />
+              {(form.discoveryChannel === "KOL" || form.discoveryChannel === "OTHER") && (
+                <TextExtra
+                  placeholder={form.discoveryChannel === "KOL" ? "Nama KOL / artis..." : "Tulis sumber..."}
+                  value={form.discoveryChannelDetail ?? ""}
+                  onChange={(v) => set("discoveryChannelDetail", v)}
+                />
+              )}
+            </Q>
+
+            <Q num={5} label="Kenapa mau extension atau service ini?" hint="Bisa pilih lebih dari satu">
+              <Pills
+                options={REASON_SERVICE_OPTIONS}
+                value={form.reasonForService ?? []}
+                onChange={(v) => set("reasonForService", v)}
+                multi
+              />
+              {((form.reasonForService ?? []).includes("ACARA_KHUSUS") || (form.reasonForService ?? []).includes("OTHER")) && (
+                <TextExtra
+                  placeholder={(form.reasonForService ?? []).includes("ACARA_KHUSUS") ? "Acara apa?" : "Tulis alasan lain..."}
+                  value={form.reasonForServiceOther ?? ""}
+                  onChange={(v) => set("reasonForServiceOther", v)}
+                />
+              )}
+            </Q>
+
+            <Q num={6} label="Sebelum booking, apa yang bikin ragu?" hint="Bisa pilih lebih dari satu">
+              <Pills
+                options={HESITATION_OPTIONS}
+                value={form.hesitation ?? []}
+                onChange={(v) => set("hesitation", v)}
+                multi
+              />
+              {(form.hesitation ?? []).includes("OTHER") && (
+                <TextExtra
+                  placeholder="Tulis keraguannya..."
+                  value={form.hesitationOther ?? ""}
+                  onChange={(v) => set("hesitationOther", v)}
+                />
+              )}
+            </Q>
+
+            <Q num={7} label="Pernah pakai extensions di tempat lain sebelumnya?">
+              <Pills
+                options={PREV_EXP_OPTIONS}
+                value={form.previousExpType ?? ""}
+                onChange={(v) => set("previousExpType", v)}
+              />
+              {form.previousExpType === "PERNAH_LAIN" && (
+                <TextExtra
+                  placeholder="Nama salon / tempat sebelumnya..."
+                  value={form.previousSalonName ?? ""}
+                  onChange={(v) => set("previousSalonName", v)}
+                />
+              )}
+              {(form.previousExpType === "PERNAH_LAIN" || form.previousExpType === "OTHER") && (
+                <div className="space-y-1.5 mt-1">
+                  <Label className="text-xs text-muted-foreground">Kenapa pindah ke Nia Hair?</Label>
+                  <Textarea
+                    placeholder="Kalau tidak ada alasan khusus, ketik 'tidak ada'"
+                    value={form.reasonSwitchToNia ?? ""}
+                    onChange={(e) => set("reasonSwitchToNia", e.target.value)}
+                    rows={2}
+                    className="text-sm resize-none"
+                  />
+                </div>
+              )}
+            </Q>
+          </Section>
+        )}
+
+        {/* ── Section C: Catatan Sesi (semua klien) ── */}
+        <Section
+          icon={<Sparkles className="w-4 h-4" />}
+          letter={isNewClient ? "C" : ""}
+          title="Catatan Sesi Ini"
+          gradient="bg-gradient-to-r from-violet-600 to-purple-500"
+        >
+          <Q num={isNewClient ? 8 : 1} label="Ada kendala selama pemakaian extensions?">
             <div className="flex flex-wrap gap-2 mb-2">
               {["Tidak ada", "Sering nyangkut", "Ada yang lepas", "Gatal"].map((s) => (
                 <button
@@ -644,7 +689,7 @@ export function ConsultationFormPage() {
             />
           </Q>
 
-          <Q num={9} label="Ada perubahan kebiasaan atau perasaan setelah pakai extensions?">
+          <Q num={isNewClient ? 9 : 2} label="Ada perubahan kebiasaan atau perasaan setelah pakai extensions?">
             <div className="flex flex-wrap gap-2 mb-2">
               {["Baru pasang", "Tidak ada", "Lebih percaya diri", "Lebih mudah styling"].map((s) => (
                 <button
@@ -671,7 +716,7 @@ export function ConsultationFormPage() {
           </Q>
 
           <Q
-            num={10}
+            num={isNewClient ? 10 : 3}
             label="Satu hal menarik yang klien bilang hari ini"
             hint="Cerita, perasaan, reaksi, atau momen berkesan dari sesi ini"
             required
@@ -693,7 +738,7 @@ export function ConsultationFormPage() {
             )}
           </Q>
 
-          <Q num={11} label="Catatan tambahan lainnya" hint="Opsional">
+          <Q num={isNewClient ? 11 : 4} label="Catatan tambahan lainnya" hint="Opsional">
             <Textarea
               placeholder="Hal lain yang perlu dicatat..."
               value={form.additionalNotes ?? ""}
@@ -705,7 +750,6 @@ export function ConsultationFormPage() {
         </Section>
 
       </div>
-
     </div>
   );
 }

@@ -8,6 +8,7 @@ const {
   count,
   findById,
   findByInvoiceId,
+  findUnfilledInvoices,
   isEmployeeAssignedToInvoice,
   create,
   update,
@@ -19,15 +20,18 @@ const MANAGEMENT_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "FINANCE"];
 
 const isManager = (roleCode) => MANAGEMENT_ROLES.includes(roleCode);
 
-// ── List ──────────────────────────────────────────────────────────────
+// ── List (Semua Catatan) ───────────────────────────────────────────────────────
 
-const listNotes = async ({ page, limit, customerId, branchId, filledByEmployeeId, startDate, endDate }, user) => {
+const listNotes = async ({ page, limit, customerId, branchId, filledByEmployeeId, startDate, endDate, search }, user) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
-  if (customerId)           where.customerId           = customerId;
-  if (branchId)             where.branchId             = branchId;
-  if (filledByEmployeeId)   where.filledByEmployeeId   = filledByEmployeeId;
+  if (customerId)          where.customerId          = customerId;
+  if (branchId)            where.branchId            = branchId;
+  if (filledByEmployeeId)  where.filledByEmployeeId  = filledByEmployeeId;
+  if (search) {
+    where.customer = { name: { contains: search, mode: "insensitive" } };
+  }
 
   if (startDate || endDate) {
     where.filledAt = {};
@@ -47,7 +51,20 @@ const listNotes = async ({ page, limit, customerId, branchId, filledByEmployeeId
   return { data, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
-// ── Single ────────────────────────────────────────────────────────────
+// ── Unfilled invoices (Tab "Isi Catatan") ─────────────────────────────────────
+
+const getUnfilledInvoiceList = async ({ page, limit, branchId, search }) => {
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const { data, total } = await findUnfilledInvoices({
+    branchId: branchId || undefined,
+    search:   search   || undefined,
+    skip,
+    take,
+  });
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
+};
+
+// ── Single ────────────────────────────────────────────────────────────────────
 
 const getNoteById = async (id) => {
   const note = await findById(id);
@@ -59,12 +76,11 @@ const getNoteByInvoiceId = async (invoiceId) => {
   return findByInvoiceId(invoiceId);
 };
 
-// ── Create ────────────────────────────────────────────────────────────
+// ── Create ────────────────────────────────────────────────────────────────────
 
 const createNote = async (body, user) => {
   const { invoiceId, ...rest } = body;
 
-  // Verify invoice exists
   const invoice = await prisma.invoice.findUnique({
     where:  { id: invoiceId },
     select: { id: true, customerId: true, branchId: true, status: true },
@@ -74,11 +90,9 @@ const createNote = async (body, user) => {
     throw new AppError("Invoice sudah dibatalkan", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
-  // Check if note already exists
   const existing = await findByInvoiceId(invoiceId);
   if (existing) throw new AppError("Catatan untuk invoice ini sudah ada", StatusCodes.CONFLICT);
 
-  // Non-manager: must be assigned to invoice
   if (!isManager(user.roleCode)) {
     const assigned = await isEmployeeAssignedToInvoice(invoiceId, user.employeeId);
     if (!assigned) {
@@ -88,21 +102,20 @@ const createNote = async (body, user) => {
 
   return create({
     invoiceId,
-    customerId:        invoice.customerId,
-    branchId:          invoice.branchId,
+    customerId:         invoice.customerId,
+    branchId:           invoice.branchId,
     filledByEmployeeId: user.employeeId ?? null,
-    filledAt:          new Date(),
+    filledAt:           new Date(),
     ...rest,
   });
 };
 
-// ── Update ────────────────────────────────────────────────────────────
+// ── Update ────────────────────────────────────────────────────────────────────
 
 const updateNote = async (id, body, user) => {
   const note = await findById(id);
   if (!note) throw new AppError("Catatan tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  // Non-manager: must be assigned to the invoice
   if (!isManager(user.roleCode)) {
     const assigned = await isEmployeeAssignedToInvoice(note.invoiceId, user.employeeId);
     if (!assigned) {
@@ -110,21 +123,29 @@ const updateNote = async (id, body, user) => {
     }
   }
 
-  const { invoiceId, ...rest } = body; // invoiceId cannot be changed
+  const { invoiceId, ...rest } = body;
   return update(id, {
     ...rest,
     filledByEmployeeId: user.employeeId ?? note.filledByEmployeeId,
-    filledAt: new Date(),
+    filledAt:           new Date(),
   });
 };
 
-// ── Stats ─────────────────────────────────────────────────────────────
+// ── Stats ─────────────────────────────────────────────────────────────────────
 
-const getStatsData = async ({ branchId, startDate, endDate }) => {
+const getStatsData = async ({ branchId, startDate, endDate, month, year }) => {
   const where = {};
   if (branchId) where.branchId = branchId;
 
-  if (startDate || endDate) {
+  if (month && year) {
+    // Filter by bulan & tahun
+    const m = parseInt(month, 10);
+    const y = parseInt(year, 10);
+    where.filledAt = {
+      gte: new Date(y, m - 1, 1),
+      lte: new Date(y, m, 0, 23, 59, 59, 999),
+    };
+  } else if (startDate || endDate) {
     where.filledAt = {};
     if (startDate) where.filledAt.gte = new Date(startDate);
     if (endDate) {
@@ -137,13 +158,12 @@ const getStatsData = async ({ branchId, startDate, endDate }) => {
   return getStats(where);
 };
 
-// ── Upload Foto Before/After ──────────────────────────────────────────
+// ── Upload Foto Before/After ──────────────────────────────────────────────────
 
 const uploadNotePhoto = async (id, { url, publicId, type }, user) => {
   const note = await findById(id);
   if (!note) throw new AppError("Catatan tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  // Non-manager: harus terkait dengan invoice catatan ini
   if (!isManager(user.roleCode)) {
     const assigned = await isEmployeeAssignedToInvoice(note.invoiceId, user.employeeId);
     if (!assigned) {
@@ -159,7 +179,6 @@ const uploadNotePhoto = async (id, { url, publicId, type }, user) => {
   const urlField = isBefore ? "beforePhotoUrl"      : "afterPhotoUrl";
   const pidField = isBefore ? "beforePhotoPublicId" : "afterPhotoPublicId";
 
-  // Hapus asset Cloudinary lama sebelum diganti (cegah orphan)
   if (note[pidField]) {
     await cloudinary.uploader.destroy(note[pidField]).catch(() => {});
   }
@@ -167,7 +186,7 @@ const uploadNotePhoto = async (id, { url, publicId, type }, user) => {
   return update(id, { [urlField]: url, [pidField]: publicId });
 };
 
-// ── Delete ────────────────────────────────────────────────────────────
+// ── Delete ────────────────────────────────────────────────────────────────────
 
 const deleteNote = async (id, user) => {
   const note = await findById(id);
@@ -183,4 +202,14 @@ const deleteNote = async (id, user) => {
   await remove(id);
 };
 
-module.exports = { listNotes, getNoteById, getNoteByInvoiceId, createNote, updateNote, uploadNotePhoto, deleteNote, getStatsData };
+module.exports = {
+  listNotes,
+  getUnfilledInvoiceList,
+  getNoteById,
+  getNoteByInvoiceId,
+  createNote,
+  updateNote,
+  uploadNotePhoto,
+  deleteNote,
+  getStatsData,
+};

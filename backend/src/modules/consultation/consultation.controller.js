@@ -2,6 +2,7 @@ const { success, created } = require("../../common/responses/apiResponse");
 const AppError = require("../../common/errors/AppError");
 const {
   listNotes,
+  getUnfilledInvoiceList,
   getNoteById,
   getNoteByInvoiceId,
   createNote,
@@ -15,6 +16,15 @@ const getAllController = async (req, res, next) => {
   try {
     const result = await listNotes(req.query, req.user);
     return success(res, result, "Catatan fetched");
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getUnfilledInvoicesController = async (req, res, next) => {
+  try {
+    const result = await getUnfilledInvoiceList(req.query, req.user);
+    return success(res, result, "Invoice belum diisi fetched");
   } catch (err) {
     next(err);
   }
@@ -91,6 +101,7 @@ const uploadPhotoController = async (req, res, next) => {
 
 module.exports = {
   getAllController,
+  getUnfilledInvoicesController,
   getByIdController,
   getByInvoiceController,
   createController,

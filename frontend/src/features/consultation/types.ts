@@ -8,6 +8,9 @@ export interface ConsultationNote {
   createdAt:              string;
   updatedAt:              string;
 
+  // Computed by backend
+  isNewClient?:           boolean;
+
   profession:             string | null;
   professionOther:        string | null;
   ageRange:               string | null;
@@ -29,39 +32,56 @@ export interface ConsultationNote {
   interestingNote:        string;
   additionalNotes:        string | null;
 
-  // Foto Before/After (opsional)
   beforePhotoUrl?:        string | null;
   beforePhotoPublicId?:   string | null;
   afterPhotoUrl?:         string | null;
   afterPhotoPublicId?:    string | null;
 
-  customer?:        { id: string; name: string; customerNo: string | null; mobilePhone: string | null };
-  branch?:          { id: string; code: string; name: string };
-  filledByEmployee?:{ id: string; employeeCode: string; name: string } | null;
+  customer?:         { id: string; name: string; customerNo: string | null; mobilePhone: string | null };
+  branch?:           { id: string; code: string; name: string };
+  filledByEmployee?: { id: string; employeeCode: string; name: string } | null;
   invoice?: {
-    id: string;
-    invoiceNo: string;
+    id:          string;
+    invoiceNo:   string;
     invoiceDate: string;
     items: Array<{ item: { id: string; name: string; itemType: string } }>;
     treatmentSessions: Array<{
       treatmentItems: Array<{
         assignments: Array<{
           employee: { id: string; name: string; employeeCode: string };
-          slotKey: string | null;
+          slotKey:  string | null;
         }>;
       }>;
     }>;
   };
 }
 
+// Invoice belum diisi (Tab "Isi Catatan")
+export interface UnfilledInvoice {
+  id:          string;
+  invoiceNo:   string;
+  invoiceDate: string;
+  isNewClient: boolean;
+  customer:    { id: string; name: string; customerNo: string | null; mobilePhone: string | null };
+  items:       Array<{ item: { id: string; name: string; itemType: string } }>;
+}
+
 export interface ConsultationNoteListParams {
-  page?:                number;
-  limit?:               number;
-  customerId?:          string;
-  branchId?:            string;
-  filledByEmployeeId?:  string;
-  startDate?:           string;
-  endDate?:             string;
+  page?:               number;
+  limit?:              number;
+  customerId?:         string;
+  branchId?:           string;
+  filledByEmployeeId?: string;
+  startDate?:          string;
+  endDate?:            string;
+  search?:             string;
+}
+
+export interface UnfilledInvoiceListParams {
+  page?:     number;
+  limit?:    number;
+  branchId?: string;
+  search?:   string;
 }
 
 export interface CreateConsultationNoteInput {
@@ -89,12 +109,15 @@ export interface CreateConsultationNoteInput {
 export type UpdateConsultationNoteInput = Omit<CreateConsultationNoteInput, "invoiceId">;
 
 export interface ConsultationStats {
-  total:            number;
-  profession:       Record<string, number>;
-  ageRange:         Record<string, number>;
-  dailyStyling:     Record<string, number>;
-  discoveryChannel: Record<string, number>;
-  reasonForService: Record<string, number>;
-  hesitation:       Record<string, number>;
-  previousExpType:  Record<string, number>;
+  total:                number;
+  newClientCount:       number;
+  returningClientCount: number;
+  // Acquisition metrics — hanya dari klien baru
+  profession:           Record<string, number>;
+  ageRange:             Record<string, number>;
+  dailyStyling:         Record<string, number>;
+  discoveryChannel:     Record<string, number>;
+  reasonForService:     Record<string, number>;
+  hesitation:           Record<string, number>;
+  previousExpType:      Record<string, number>;
 }
