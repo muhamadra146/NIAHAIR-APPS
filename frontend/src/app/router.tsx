@@ -119,20 +119,27 @@ export const router = createBrowserRouter([
             ],
           },
 
-          // ── Operasional: POS + OFFICE + FINANCE (no STAFF_OPERASIONAL)
+          // ── Operasional: POS only — CASHIER + MANAGER + ADMIN (bukan OFFICE/FINANCE)
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","CASHIER"]} />,
+            children: [
+              { path: "/invoices",         element: <InvoiceListPage /> },
+              { path: "/invoices/:id",     element: <InvoiceDetailPage /> },
+              { path: "/invoice-payments", element: <InvoicePaymentListPage /> },
+            ],
+          },
+
+          // ── Operasional: Booking, Deposit, Komplain — POS + OFFICE + FINANCE (no STAFF_OPERASIONAL)
           {
             element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","CASHIER","OFFICE","FINANCE"]} />,
             children: [
-              { path: "/appointments",     element: <AppointmentListPage /> },
-              { path: "/appointments/:id", element: <AppointmentDetailPage /> },
-              { path: "/complaints",       element: <ComplaintPage /> },
-              { path: "/invoices",         element: <InvoiceListPage /> },
-              { path: "/invoices/:id",     element: <InvoiceDetailPage /> },
+              { path: "/appointments",         element: <AppointmentListPage /> },
+              { path: "/appointments/:id",     element: <AppointmentDetailPage /> },
+              { path: "/complaints",           element: <ComplaintPage /> },
               { path: "/deposits",             element: <DepositListPage /> },
               { path: "/deposits/:id",         element: <DepositDetailPage /> },
               { path: "/deposits/:id/pay",     element: <DepositPaymentPage /> },
               { path: "/deposit-payments",     element: <DepositPaymentListPage /> },
-              { path: "/invoice-payments",     element: <InvoicePaymentListPage /> },
             ],
           },
 

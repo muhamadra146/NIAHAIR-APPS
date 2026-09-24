@@ -1,6 +1,8 @@
 const { Router } = require("express");
 const authenticate = require("../../middlewares/auth.middleware");
-const validate = require("../../middlewares/validate.middleware");
+const authorize    = require("../../middlewares/role.middleware");
+const validate     = require("../../middlewares/validate.middleware");
+const { ROLES }    = require("../../common/constants/role.constant");
 const { createCommissionRuleSchema, updateCommissionRuleSchema } = require("./commissionRule.validation");
 const {
   getAllController,
@@ -12,10 +14,15 @@ const {
 
 const router = Router();
 
-router.get("/",       authenticate, getAllController);
-router.post("/",      authenticate, validate(createCommissionRuleSchema), createController);
-router.get("/:id",    authenticate, getByIdController);
-router.put("/:id",    authenticate, validate(updateCommissionRuleSchema), updateController);
-router.delete("/:id", authenticate, deleteController);
+// Baca aturan komisi — MANAGEMENT + FINANCE (perlu tahu aturan saat verifikasi)
+const VIEW_ROLES  = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.FINANCE];
+// Ubah aturan komisi — ADMIN only
+const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER];
+
+router.get("/",       authenticate, authorize(...VIEW_ROLES),  getAllController);
+router.post("/",      authenticate, authorize(...ADMIN_ROLES), validate(createCommissionRuleSchema), createController);
+router.get("/:id",    authenticate, authorize(...VIEW_ROLES),  getByIdController);
+router.put("/:id",    authenticate, authorize(...ADMIN_ROLES), validate(updateCommissionRuleSchema), updateController);
+router.delete("/:id", authenticate, authorize(...ADMIN_ROLES), deleteController);
 
 module.exports = router;

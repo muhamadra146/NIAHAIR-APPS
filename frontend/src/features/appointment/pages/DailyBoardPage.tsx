@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/stores/authStore";
+import { useViewOnly } from "@/hooks/useViewOnly";
 import {
   fetchAppointments,
   changeAppointmentStatus,
@@ -592,6 +593,7 @@ function DraggableCard({
   onCancel,
   checkingInvoice,
   isDragOverlay,
+  readOnly,
 }: {
   appointment:      Appointment;
   date:             string;
@@ -603,11 +605,12 @@ function DraggableCard({
   onCancel?:        (appt: Appointment) => void;
   checkingInvoice?: boolean;
   isDragOverlay?:   boolean;
+  readOnly?:        boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id:       a.id,
     data:     { status: a.status },
-    disabled: isDragOverlay,
+    disabled: isDragOverlay || !!readOnly,
   });
 
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
@@ -664,7 +667,7 @@ function DraggableCard({
       {/* Colored time header */}
       <div className={`${timeBg} px-3 py-2 flex items-center justify-between rounded-t-xl`}>
         <div className="flex items-center gap-2">
-          {canDrag && !isDragOverlay && (
+          {canDrag && !isDragOverlay && !readOnly && (
             <div
               {...listeners}
               {...attributes}
@@ -767,10 +770,12 @@ function DraggableCard({
             <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100" title="Detail" asChild>
               <Link to={`/appointments/${a.id}`}><Eye className="h-3.5 w-3.5" /></Link>
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100" title="Atur Staff"
-              onClick={(e) => { e.stopPropagation(); setShowStaff((v) => !v); }}>
-              <Users className="h-3.5 w-3.5" />
-            </Button>
+            {!readOnly && (
+              <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100" title="Atur Staff"
+                onClick={(e) => { e.stopPropagation(); setShowStaff((v) => !v); }}>
+                <Users className="h-3.5 w-3.5" />
+              </Button>
+            )}
             {a.status === "IN_PROGRESS" && onInvoice && (
               <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-blue-500 hover:text-blue-700 hover:bg-blue-50" title="Invoice"
                 onClick={() => onInvoice(a)} disabled={checkingInvoice}>
@@ -793,7 +798,7 @@ function DraggableCard({
         </div>
 
         {/* Primary advance button — full width, colored */}
-        {next && nextLabel && (
+        {!readOnly && next && nextLabel && (
           <button
             onClick={() => onAdvance(a.id, next)}
             disabled={advancing}
@@ -841,6 +846,7 @@ function DroppableColumn({
   onReschedule,
   onCancel,
   checkingInvoiceId,
+  readOnly,
 }: {
   col:                BoardColumnConfig;
   appointments:       Appointment[];
@@ -852,6 +858,7 @@ function DroppableColumn({
   onReschedule?:      (appt: Appointment) => void;
   onCancel?:          (appt: Appointment) => void;
   checkingInvoiceId?: string | null;
+  readOnly?:          boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.status });
 
@@ -900,6 +907,7 @@ function DroppableColumn({
               onReschedule={onReschedule}
               onCancel={onCancel}
               checkingInvoice={checkingInvoiceId === a.id}
+              readOnly={readOnly}
             />
           ))
         )}
@@ -933,6 +941,7 @@ function AppointmentListRow({
   onCancel,
   checkingInvoice,
   isRescheduledView,
+  readOnly,
 }: {
   appointment:       Appointment;
   date:              string;
@@ -945,6 +954,7 @@ function AppointmentListRow({
   checkingInvoice?:  boolean;
   /** True saat ditampilkan di tab Reschedule — sembunyikan advance/staff, tampilkan badge Reschedule */
   isRescheduledView?: boolean;
+  readOnly?:          boolean;
 }) {
   const [showStaff,  setShowStaff]  = useState(false);
   const [showAssign, setShowAssign] = useState(false);
@@ -1078,8 +1088,8 @@ function AppointmentListRow({
 
       {/* Action column */}
       <div className="shrink-0 flex flex-col items-end justify-center gap-1 px-3 py-2.5 border-l border-slate-100">
-        {/* Primary advance button — disembunyikan di tab Reschedule */}
-        {!isRescheduledView && next && nextLabel && (
+        {/* Primary advance button — disembunyikan di tab Reschedule dan untuk view-only roles */}
+        {!readOnly && !isRescheduledView && next && nextLabel && (
           <Button
             size="sm"
             className="h-7 px-3 text-xs rounded-lg whitespace-nowrap"
@@ -1095,8 +1105,8 @@ function AppointmentListRow({
           <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100" title="Detail" asChild>
             <Link to={`/appointments/${a.id}`}><Eye className="h-3 w-3" /></Link>
           </Button>
-          {/* Atur Staff — disembunyikan di tab Reschedule (staff diatur ulang di tanggal baru) */}
-          {!isRescheduledView && (
+          {/* Atur Staff — disembunyikan di tab Reschedule dan untuk view-only roles */}
+          {!readOnly && !isRescheduledView && (
             <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100" title="Atur Staff"
               onClick={(e) => { e.stopPropagation(); setShowStaff((v) => !v); }}>
               <Users className="h-3 w-3" />
@@ -1148,7 +1158,8 @@ function AppointmentListRow({
 
 export function DailyBoardPage() {
   const { branchId } = useAuthStore();
-  const qc = useQueryClient();
+  const qc           = useQueryClient();
+  const isViewOnly   = useViewOnly();
 
   const [date, setDate]                           = useState(todayStr);
   const [boardFilter, setBoardFilter]             = useState<BoardFilter>("ACTIVE");
@@ -1252,6 +1263,7 @@ export function DailyBoardPage() {
 
   function onDragEnd(event: DragEndEvent) {
     setDragging(null);
+    if (isViewOnly) return;
     const { active, over } = event;
     if (!over) return;
     const appt      = appointments.find((a) => a.id === active.id);
@@ -1298,9 +1310,10 @@ export function DailyBoardPage() {
     advancingId,
     onAdvance:    handleAdvance,
     onStaffSaved,
-    onInvoice:    handleInvoiceClick,
-    onReschedule: handleReschedule,
-    onCancel:     setCancelAppt,
+    onInvoice:    isViewOnly ? undefined : handleInvoiceClick,
+    onReschedule: isViewOnly ? undefined : handleReschedule,
+    onCancel:     isViewOnly ? undefined : setCancelAppt,
+    readOnly:     isViewOnly,
   };
 
   // ── Render ─────────────────────────────────────────────────────────
@@ -1488,10 +1501,11 @@ export function DailyBoardPage() {
                   advancingId={advancingId}
                   onAdvance={handleAdvance}
                   onStaffSaved={onStaffSaved}
-                  onInvoice={handleInvoiceClick}
-                  onReschedule={handleReschedule}
-                  onCancel={setCancelAppt}
+                  onInvoice={isViewOnly ? undefined : handleInvoiceClick}
+                  onReschedule={isViewOnly ? undefined : handleReschedule}
+                  onCancel={isViewOnly ? undefined : setCancelAppt}
                   checkingInvoice={checkingInvoice === a.id}
+                  readOnly={isViewOnly}
                 />
               ))
             )}
@@ -1570,11 +1584,12 @@ export function DailyBoardPage() {
                     advancingId={advancingId}
                     onAdvance={handleAdvance}
                     onStaffSaved={onStaffSaved}
-                    onInvoice={handleInvoiceClick}
-                    onReschedule={handleReschedule}
-                    onCancel={setCancelAppt}
+                    onInvoice={isViewOnly ? undefined : handleInvoiceClick}
+                    onReschedule={isViewOnly ? undefined : handleReschedule}
+                    onCancel={isViewOnly ? undefined : setCancelAppt}
                     checkingInvoice={checkingInvoice === a.id}
                     isRescheduledView={boardFilter === "RESCHEDULED"}
+                    readOnly={isViewOnly}
                   />
                 ))
             )}

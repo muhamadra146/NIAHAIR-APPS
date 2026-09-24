@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Loader2, RefreshCw } from "lucide-react";
+import { useAuthStore } from "@/stores/authStore";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { SimpleSelect } from "@/components/ui/simple-select";
 import { usePurchaseReturns } from "../hooks";
 import type { PurchaseReturnStatus } from "../types";
+
+const WRITE_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "INVENTORY", "FINANCE"];
 
 const STATUS_LABEL: Record<PurchaseReturnStatus, string> = {
   DRAFT:     "Draft",
@@ -25,6 +28,8 @@ const fmt = (v: string | number) => `Rp ${Number(v).toLocaleString("id-ID")}`;
 
 export function PurchaseReturnListPage() {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const canWrite  = WRITE_ROLES.includes(user?.roleCode ?? "");
   const [status, setStatus]   = useState<PurchaseReturnStatus | "">("");
   const [page,   setPage]     = useState(1);
 
@@ -46,10 +51,12 @@ export function PurchaseReturnListPage() {
             <RefreshCw className="h-4 w-4" />
             Refresh
           </Button>
-          <Button size="sm" onClick={() => navigate("/purchase-returns/new")} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            Buat Retur
-          </Button>
+          {canWrite && (
+            <Button size="sm" onClick={() => navigate("/purchase-returns/new")} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              Buat Retur
+            </Button>
+          )}
         </div>
       </div>
 
