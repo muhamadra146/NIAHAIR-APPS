@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 // ── Accurate Sync — Production Order ──────────────────────────────────────────
 //
 // Alur dokumen di Accurate Online (Produksi → Pekerjaan Pesanan):
@@ -48,7 +49,7 @@ const ACCURATE_PENYELESAIAN_DELETE = "/roll-over/delete.do";
 // ── Langkah 1: Buat Pekerjaan Pesanan (Job Order / JC) ───────────────────────
 const syncPekerjaanToAccurate = async (order, accurateBranchId) => {
   if (order.accuratePekerjaanId) {
-    console.log(`[production sync] Pekerjaan already synced id=${order.accuratePekerjaanId}`);
+    logger.info(`[production sync] Pekerjaan already synced id=${order.accuratePekerjaanId}`);
     return order.accuratePekerjaanId;
   }
 
@@ -94,14 +95,14 @@ const syncPekerjaanToAccurate = async (order, accurateBranchId) => {
   }
 
   const payload = mapPekerjaanToAccurate(order, accurateBranchId);
-  console.log("[production sync] Pekerjaan payload", JSON.stringify(payload));
+  logger.info("[production sync] Pekerjaan payload", JSON.stringify(payload));
 
   const response = await accurateRequest(ACCURATE_PEKERJAAN_SAVE, {
     method: "POST",
     body:   payload,
   });
 
-  console.log("[production sync] Pekerjaan response", JSON.stringify(response));
+  logger.info("[production sync] Pekerjaan response", JSON.stringify(response));
 
   if (!response.s || !response.r?.id) {
     throw new AppError(
@@ -114,7 +115,7 @@ const syncPekerjaanToAccurate = async (order, accurateBranchId) => {
   const accuratePekerjaanNumber = response.r.number ?? response.r.no ?? null;
 
   await markPekerjaanSynced({ id: order.id, accuratePekerjaanId, accuratePekerjaanNumber });
-  console.log(`[production sync] Pekerjaan saved id=${accuratePekerjaanId} number=${accuratePekerjaanNumber}`);
+  logger.info(`[production sync] Pekerjaan saved id=${accuratePekerjaanId} number=${accuratePekerjaanNumber}`);
 
   return accuratePekerjaanId;
 };
@@ -122,7 +123,7 @@ const syncPekerjaanToAccurate = async (order, accurateBranchId) => {
 // ── Langkah 2: Buat Penyelesaian Pesanan (Roll Over / RO) ─────────────────────
 const syncPenyelesaianToAccurate = async (order, accuratePekerjaanId, accurateBranchId) => {
   if (order.accuratePenyelesaianId) {
-    console.log(`[production sync] Penyelesaian already synced id=${order.accuratePenyelesaianId}`);
+    logger.info(`[production sync] Penyelesaian already synced id=${order.accuratePenyelesaianId}`);
     return { skipped: true, reason: "Penyelesaian already synced" };
   }
 
@@ -148,14 +149,14 @@ const syncPenyelesaianToAccurate = async (order, accuratePekerjaanId, accurateBr
   }
 
   const payload = mapPenyelesaianToAccurate(order, accuratePekerjaanId, accurateBranchId);
-  console.log("[production sync] Penyelesaian payload", JSON.stringify(payload));
+  logger.info("[production sync] Penyelesaian payload", JSON.stringify(payload));
 
   const response = await accurateRequest(ACCURATE_PENYELESAIAN_SAVE, {
     method: "POST",
     body:   payload,
   });
 
-  console.log("[production sync] Penyelesaian response", JSON.stringify(response));
+  logger.info("[production sync] Penyelesaian response", JSON.stringify(response));
 
   if (!response.s || !response.r?.id) {
     throw new AppError(
@@ -168,7 +169,7 @@ const syncPenyelesaianToAccurate = async (order, accuratePekerjaanId, accurateBr
   const accuratePenyelesaianNumber = response.r.number ?? response.r.no ?? null;
 
   await markPenyelesaianSynced({ id: order.id, accuratePenyelesaianId, accuratePenyelesaianNumber });
-  console.log(`[production sync] Penyelesaian saved id=${accuratePenyelesaianId} number=${accuratePenyelesaianNumber}`);
+  logger.info(`[production sync] Penyelesaian saved id=${accuratePenyelesaianId} number=${accuratePenyelesaianNumber}`);
 
   return { accuratePenyelesaianId, accuratePenyelesaianNumber };
 };
@@ -258,14 +259,14 @@ const deleteFromAccurate = async ({ accuratePekerjaanId, accuratePenyelesaianId 
         { method: "DELETE" },
       );
       if (!resp.s) {
-        console.warn(
+        logger.warn(
           `[production sync] Gagal hapus RO id=${accuratePenyelesaianId}: ${extractAccurateError(resp)}`,
         );
       } else {
-        console.log(`[production sync] RO id=${accuratePenyelesaianId} dihapus dari Accurate`);
+        logger.info(`[production sync] RO id=${accuratePenyelesaianId} dihapus dari Accurate`);
       }
     } catch (err) {
-      console.warn(`[production sync] Error hapus RO id=${accuratePenyelesaianId}:`, err?.message);
+      logger.warn(`[production sync] Error hapus RO id=${accuratePenyelesaianId}:`, err?.message);
     }
   }
 
@@ -277,14 +278,14 @@ const deleteFromAccurate = async ({ accuratePekerjaanId, accuratePenyelesaianId 
         { method: "DELETE" },
       );
       if (!resp.s) {
-        console.warn(
+        logger.warn(
           `[production sync] Gagal hapus JC id=${accuratePekerjaanId}: ${extractAccurateError(resp)}`,
         );
       } else {
-        console.log(`[production sync] JC id=${accuratePekerjaanId} dihapus dari Accurate`);
+        logger.info(`[production sync] JC id=${accuratePekerjaanId} dihapus dari Accurate`);
       }
     } catch (err) {
-      console.warn(`[production sync] Error hapus JC id=${accuratePekerjaanId}:`, err?.message);
+      logger.warn(`[production sync] Error hapus JC id=${accuratePekerjaanId}:`, err?.message);
     }
   }
 };

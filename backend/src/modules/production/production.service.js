@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { Prisma, ProductionStatus } = require("@prisma/client");
 const { StatusCodes }              = require("http-status-codes");
 const AppError                     = require("../../common/errors/AppError");
@@ -223,7 +224,7 @@ const updateStatus = async (id, newStatus, employeeId) => {
   // Non-blocking: error dicatat di log, tidak di-throw ke client.
   if (newStatus === "COMPLETED") {
     syncProductionToAccurate(id).catch((err) => {
-      console.error(`[production] Auto-sync Accurate gagal untuk ${id}:`, err?.message ?? err);
+      logger.error(`[production] Auto-sync Accurate gagal untuk ${id}:`, err?.message ?? err);
     });
   }
 
@@ -424,7 +425,7 @@ const submitQC = async (id, { status, notes, inspectionDate }, qcEmployeeId) => 
   // Trigger Accurate sync setelah PASS (non-blocking, di luar transaksi)
   if (status === "PASS") {
     syncProductionToAccurate(id).catch((err) => {
-      console.error(`[production] Auto-sync Accurate gagal untuk ${id}:`, err?.message ?? err);
+      logger.error(`[production] Auto-sync Accurate gagal untuk ${id}:`, err?.message ?? err);
     });
   }
 
@@ -455,7 +456,7 @@ const remove = async (id) => {
       accuratePekerjaanId:    syncRow.accuratePekerjaanId,
       accuratePenyelesaianId: syncRow.accuratePenyelesaianId,
     }).catch((err) => {
-      console.error(`[production] Gagal hapus dari Accurate, lanjut hapus DB:`, err?.message ?? err);
+      logger.error(`[production] Gagal hapus dari Accurate, lanjut hapus DB:`, err?.message ?? err);
     });
   }
 

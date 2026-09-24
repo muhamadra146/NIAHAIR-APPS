@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { accurateRequest }                       = require("../accurate/accurate.client");
 const { getAccurateBranchId }                   = require("../branch/branch.repository");
 const prisma                                    = require("../../config/prisma");
@@ -8,7 +9,7 @@ const ACCURATE_RECEIPT_SAVE   = "/sales-receipt/save.do";
 const ACCURATE_RECEIPT_DELETE = "/sales-receipt/delete.do";
 
 const syncPaymentToAccurate = async (paymentId) => {
-  console.log(`[payment sync] start paymentId=${paymentId}`);
+  logger.info(`[payment sync] start paymentId=${paymentId}`);
 
   const payment = await findPaymentForSync(paymentId);
   if (!payment) throw new Error(`Payment not found: ${paymentId}`);
@@ -46,7 +47,7 @@ const syncPaymentToAccurate = async (paymentId) => {
 
   const payload = mapPaymentToAccurate(payment, accurateBranchId);
 
-  console.log("[payment sync payload]", JSON.stringify(payload));
+  logger.info("[payment sync payload]", JSON.stringify(payload));
 
   const response = await accurateRequest(ACCURATE_RECEIPT_SAVE, {
     method: "POST",
@@ -69,7 +70,7 @@ const syncPaymentToAccurate = async (paymentId) => {
     accurateReceiptNumber,
   });
 
-  console.log(
+  logger.info(
     `[payment sync] success paymentId=${paymentId}` +
     ` accurateId=${accurateReceiptId} number=${accurateReceiptNumber}`
   );
@@ -78,19 +79,19 @@ const syncPaymentToAccurate = async (paymentId) => {
 };
 
 const deletePaymentFromAccurate = async (accurateReceiptId) => {
-  console.log(`[payment sync] delete from Accurate accurateReceiptId=${accurateReceiptId}`);
+  logger.info(`[payment sync] delete from Accurate accurateReceiptId=${accurateReceiptId}`);
   try {
     const response = await accurateRequest(ACCURATE_RECEIPT_DELETE, {
       method: "POST",
       body:   { id: accurateReceiptId },
     });
     if (!response.s) {
-      console.warn(`[payment sync] Accurate delete failed (ignored): ${JSON.stringify(response)}`);
+      logger.warn(`[payment sync] Accurate delete failed (ignored): ${JSON.stringify(response)}`);
     } else {
-      console.log(`[payment sync] deleted from Accurate accurateReceiptId=${accurateReceiptId}`);
+      logger.info(`[payment sync] deleted from Accurate accurateReceiptId=${accurateReceiptId}`);
     }
   } catch (err) {
-    console.warn(`[payment sync] Accurate delete error (ignored): ${err.message}`);
+    logger.warn(`[payment sync] Accurate delete error (ignored): ${err.message}`);
   }
 };
 

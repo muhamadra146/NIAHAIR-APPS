@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const prisma          = require("../../config/prisma");
@@ -255,7 +256,7 @@ const changeAppointmentStatus = async (id, body, userId) => {
     try {
       await openTreatmentSession(id);
     } catch (err) {
-      console.warn(`[appointment status] openTreatmentSession failed for ${id}: ${err.message}`);
+      logger.warn(`[appointment status] openTreatmentSession failed for ${id}: ${err.message}`);
     }
   }
 
@@ -264,7 +265,7 @@ const changeAppointmentStatus = async (id, body, userId) => {
     try {
       await closeTreatmentSession(id);
     } catch (err) {
-      console.warn(`[appointment status] closeTreatmentSession failed for ${id}: ${err.message}`);
+      logger.warn(`[appointment status] closeTreatmentSession failed for ${id}: ${err.message}`);
     }
   }
 

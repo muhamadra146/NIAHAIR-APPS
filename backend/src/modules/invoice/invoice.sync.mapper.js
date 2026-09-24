@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Maps a local Invoice (with customer, items, invoiceDeposits) to an Accurate
  * sales invoice payload. Pure function — no DB, no API.
  *
@@ -66,11 +66,11 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
       for (const mu of ti.materialUsages) {
         for (const usageItem of mu.usageItems) {
           if (!usageItem.materialItem?.accurateItemId) {
-            console.warn(`[invoice sync mapper] skipping material item ${usageItem.materialItem?.itemCode} — not synced to Accurate`);
+            logger.warn(`[invoice sync mapper] skipping material item ${usageItem.materialItem?.itemCode} — not synced to Accurate`);
             continue;
           }
           if (!usageItem.unit?.accurateUnitId) {
-            console.warn(`[invoice sync mapper] skipping material item ${usageItem.materialItem?.itemCode} — unit not synced to Accurate`);
+            logger.warn(`[invoice sync mapper] skipping material item ${usageItem.materialItem?.itemCode} — unit not synced to Accurate`);
             continue;
           }
           const entry = {
@@ -82,7 +82,7 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
           if (warehouse?.accurateWarehouseId) {
             entry.warehouseId = warehouse.accurateWarehouseId;
           } else {
-            console.warn(`[invoice sync mapper] skipping material item ${usageItem.materialItem.itemCode} — no warehouse`);
+            logger.warn(`[invoice sync mapper] skipping material item ${usageItem.materialItem.itemCode} — no warehouse`);
             continue;
           }
           materialEntries.push(entry);

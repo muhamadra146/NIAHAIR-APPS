@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { accurateRequest } = require("../accurate/accurate.client");
@@ -44,8 +45,8 @@ const syncUnitsFromAccurate = async () => {
     accurateRowCount = response.sp?.rowCount ?? 0;
 
     const units = response.d ?? [];
-    console.log("SYNC ACCURATE UNIT PAGE:", page, "/", pageCount);
-    console.log("FIRST UNIT ID:", units[0]?.id);
+    logger.info("SYNC ACCURATE UNIT PAGE:", page, "/", pageCount);
+    logger.info("FIRST UNIT ID:", units[0]?.id);
 
     for (const item of units) {
       accurateIds.push(item.id);
@@ -58,7 +59,7 @@ const syncUnitsFromAccurate = async () => {
       const accurateId = parseInt(item.id, 10);
 
       if (processedIds.has(accurateId)) {
-        console.log("SKIP DUPLICATE:", accurateId);
+        logger.info("SKIP DUPLICATE:", accurateId);
         skippedDuplicate++;
         continue;
       }
@@ -76,17 +77,17 @@ const syncUnitsFromAccurate = async () => {
         const existing = await findByAccurateId(accurateId);
 
         if (existing) {
-          console.log("UPDATE:", accurateId, existing.id);
+          logger.info("UPDATE:", accurateId, existing.id);
           const { accurateUnitId, ...updateData } = mapped;
           await updateByAccurateId(accurateId, updateData);
           updated++;
         } else {
-          console.log("CREATE:", accurateId);
+          logger.info("CREATE:", accurateId);
           await createFromAccurate(mapped);
           created++;
         }
       } catch (_err) {
-        console.error("UNIT SYNC ERROR:", accurateId, _err.message);
+        logger.error("UNIT SYNC ERROR:", accurateId, _err.message);
         failed++;
       }
     }
@@ -96,7 +97,7 @@ const syncUnitsFromAccurate = async () => {
 
   // Duplicate ID analysis
   const uniqueAccurateIds = new Set(accurateIds.filter(Boolean));
-  console.log({
+  logger.info({
     totalFromAccurate: accurateIds.length,
     uniqueFromAccurate: uniqueAccurateIds.size,
     duplicate: accurateIds.length - uniqueAccurateIds.size,
@@ -110,11 +111,11 @@ const syncUnitsFromAccurate = async () => {
     const duplicateIds = Object.entries(frequency)
       .filter(([, c]) => c > 1)
       .map(([id, c]) => ({ id: Number(id), count: c }));
-    console.log("DUPLICATE IDs:", duplicateIds);
+    logger.info("DUPLICATE IDs:", duplicateIds);
   }
 
   const totalProcessed = created + updated + skippedDuplicate + failed;
-  console.log("SYNC COMPLETE", {
+  logger.info("SYNC COMPLETE", {
     accurateRowCount,
     uniqueIds: processedIds.size,
     created,

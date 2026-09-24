@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const prisma               = require("../../config/prisma");
 const { findSyncStatusBatch, findSyncStatus } = require("./stockOpname.sync.repository");
 
@@ -84,7 +85,7 @@ const findAll = async ({ skip, take, where }) => {
     return rows.map((r) => ({ ...r, ...(syncMap[r.id] ?? {}) }));
   } catch (err) {
     // Sync status gagal → tetap kembalikan rows tanpa field Accurate (non-fatal)
-    console.error("[stockOpname.repository] findSyncStatusBatch error:", err.message);
+    logger.error("[stockOpname.repository] findSyncStatusBatch error:", err.message);
     return rows;
   }
 };
@@ -99,7 +100,7 @@ const findById = async (id) => {
     const syncFields = await findSyncStatus(id);
     return { ...opname, ...syncFields };
   } catch (err) {
-    console.error("[stockOpname.repository] findSyncStatus error:", err.message);
+    logger.error("[stockOpname.repository] findSyncStatus error:", err.message);
     return opname;
   }
 };

@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { accurateRequest }       = require("../accurate/accurate.client");
 const { getAccurateBranchId }   = require("../branch/branch.repository");
 const { mapTransferToAccurate } = require("./stockTransfer.sync.mapper");
@@ -12,7 +13,7 @@ const {
 const ACCURATE_ITEM_TRANSFER_SAVE = "/item-transfer/save.do";
 
 const syncTransferToAccurate = async (transferId) => {
-  console.log(`[transfer sync] start transferId=${transferId}`);
+  logger.info(`[transfer sync] start transferId=${transferId}`);
 
   const transfer = await findTransferForSync(transferId);
   if (!transfer) throw new Error(`Stock transfer not found: ${transferId}`);
@@ -63,14 +64,14 @@ const syncTransferToAccurate = async (transferId) => {
 
   const payload = mapTransferToAccurate(transfer, accurateBranchId);
 
-  console.log("[transfer sync payload]", JSON.stringify(payload));
+  logger.info("[transfer sync payload]", JSON.stringify(payload));
 
   const response = await accurateRequest(ACCURATE_ITEM_TRANSFER_SAVE, {
     method: "POST",
     body:   payload,
   });
 
-  console.log("[transfer sync response]", JSON.stringify(response));
+  logger.info("[transfer sync response]", JSON.stringify(response));
 
   if (!response.s || !response.r?.id) {
     throw new Error(`Accurate API error: ${JSON.stringify(response)}`);
@@ -89,7 +90,7 @@ const syncTransferToAccurate = async (transferId) => {
     }
   }
 
-  console.log(
+  logger.info(
     `[transfer sync] success transferId=${transferId}` +
     ` accurateId=${accurateTransferId} number=${accurateTransferNumber}`
   );
@@ -99,7 +100,7 @@ const syncTransferToAccurate = async (transferId) => {
 
 // ── TRANSFER_IN sync (Terima Barang) ──────────────────────────────────
 const syncTransferReceiveToAccurate = async (transferId) => {
-  console.log(`[transfer receive sync] start transferId=${transferId}`);
+  logger.info(`[transfer receive sync] start transferId=${transferId}`);
 
   const transfer = await findTransferForSync(transferId);
   if (!transfer) throw new Error(`Stock transfer not found: ${transferId}`);
@@ -149,14 +150,14 @@ const syncTransferReceiveToAccurate = async (transferId) => {
     }),
   };
 
-  console.log("[transfer receive sync payload]", JSON.stringify(payload));
+  logger.info("[transfer receive sync payload]", JSON.stringify(payload));
 
   const response = await accurateRequest(ACCURATE_ITEM_TRANSFER_SAVE, {
     method: "POST",
     body:   payload,
   });
 
-  console.log("[transfer receive sync response]", JSON.stringify(response));
+  logger.info("[transfer receive sync response]", JSON.stringify(response));
 
   if (!response.s || !response.r?.id) {
     throw new Error(`Accurate API error: ${JSON.stringify(response)}`);
@@ -167,7 +168,7 @@ const syncTransferReceiveToAccurate = async (transferId) => {
 
   await markTransferReceiveSynced({ id: transferId, accurateReceiveId, accurateReceiveNumber });
 
-  console.log(
+  logger.info(
     `[transfer receive sync] success transferId=${transferId}` +
     ` accurateId=${accurateReceiveId} number=${accurateReceiveNumber}`
   );

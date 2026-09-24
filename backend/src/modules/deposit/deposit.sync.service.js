@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { accurateRequest }                     = require("../accurate/accurate.client");
 const { getAccurateBranchId }                 = require("../branch/branch.repository");
 const prisma                                  = require("../../config/prisma");
@@ -8,7 +9,7 @@ const ACCURATE_DEPOSIT_SAVE   = "/sales-invoice/save.do";
 const ACCURATE_DEPOSIT_DELETE = "/sales-invoice/delete.do";
 
 const syncDepositToAccurate = async (depositId) => {
-  console.log(`[deposit sync] start depositId=${depositId}`);
+  logger.info(`[deposit sync] start depositId=${depositId}`);
 
   const deposit = await findDepositForSync(depositId);
 
@@ -36,7 +37,7 @@ const syncDepositToAccurate = async (depositId) => {
 
   const payload = mapDepositToAccurate(deposit, accurateBranchId);
 
-  console.log("[deposit sync payload]", JSON.stringify(payload));
+  logger.info("[deposit sync payload]", JSON.stringify(payload));
 
   // Use accurateRequest — owns auth headers and base URL.
   // Endpoint is relative; accurate.client prepends env.accurate.baseUrl.
@@ -59,7 +60,7 @@ const syncDepositToAccurate = async (depositId) => {
     accurateDepositNumber: accurateNumber,
   });
 
-  console.log(
+  logger.info(
     `[deposit sync] success depositId=${depositId}` +
     ` accurateId=${accurateId} number=${accurateNumber}`
   );
@@ -68,7 +69,7 @@ const syncDepositToAccurate = async (depositId) => {
 };
 
 const updateDepositInAccurate = async (depositId) => {
-  console.log(`[deposit sync] update in Accurate depositId=${depositId}`);
+  logger.info(`[deposit sync] update in Accurate depositId=${depositId}`);
 
   const deposit = await findDepositForSync(depositId);
   if (!deposit?.accurateDepositId) return { skipped: true };
@@ -90,12 +91,12 @@ const updateDepositInAccurate = async (depositId) => {
     throw new Error(`Accurate update error: ${JSON.stringify(response)}`);
   }
 
-  console.log(`[deposit sync] updated in Accurate depositId=${depositId}`);
+  logger.info(`[deposit sync] updated in Accurate depositId=${depositId}`);
   return { updated: true };
 };
 
 const deleteDepositFromAccurate = async (accurateDepositId) => {
-  console.log(`[deposit sync] delete from Accurate accurateDepositId=${accurateDepositId}`);
+  logger.info(`[deposit sync] delete from Accurate accurateDepositId=${accurateDepositId}`);
 
   try {
     const response = await accurateRequest(ACCURATE_DEPOSIT_DELETE, {
@@ -104,12 +105,12 @@ const deleteDepositFromAccurate = async (accurateDepositId) => {
     });
 
     if (!response.s) {
-      console.warn(`[deposit sync] Accurate delete failed (ignored): ${JSON.stringify(response)}`);
+      logger.warn(`[deposit sync] Accurate delete failed (ignored): ${JSON.stringify(response)}`);
     } else {
-      console.log(`[deposit sync] deleted from Accurate accurateDepositId=${accurateDepositId}`);
+      logger.info(`[deposit sync] deleted from Accurate accurateDepositId=${accurateDepositId}`);
     }
   } catch (err) {
-    console.warn(`[deposit sync] Accurate delete error (ignored): ${err.message}`);
+    logger.warn(`[deposit sync] Accurate delete error (ignored): ${err.message}`);
   }
 };
 

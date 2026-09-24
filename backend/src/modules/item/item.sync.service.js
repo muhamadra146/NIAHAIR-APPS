@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { accurateRequest } = require("../accurate/accurate.client");
@@ -105,7 +106,7 @@ const syncItemUnitsAndPrices = async (itemId, accurateItem) => {
       // Units must already exist — item sync does NOT create units
       const localUnit = await findUnitByAccurateId(accurateUnitId);
       if (!localUnit) {
-        console.error(`UNIT NOT FOUND (run /units/sync/accurate first): id=${accurateUnitId} name=${unit.name}`);
+        logger.error(`UNIT NOT FOUND (run /units/sync/accurate first): id=${accurateUnitId} name=${unit.name}`);
         continue;
       }
 
@@ -139,7 +140,7 @@ const syncItemUnitsAndPrices = async (itemId, accurateItem) => {
         }
       }
     } catch (_err) {
-      console.error("ITEM UNIT/PRICE SYNC ERROR:", unit?.id, _err.message);
+      logger.error("ITEM UNIT/PRICE SYNC ERROR:", unit?.id, _err.message);
     }
   }
 
@@ -151,7 +152,7 @@ const syncItemUnitsAndPrices = async (itemId, accurateItem) => {
         await updateItemPurchaseUnit(itemId, purchaseLocalUnit.id);
       }
     } catch (_err) {
-      console.error("ITEM PURCHASE UNIT UPDATE ERROR:", itemId, _err.message);
+      logger.error("ITEM PURCHASE UNIT UPDATE ERROR:", itemId, _err.message);
     }
   }
 };
@@ -196,8 +197,8 @@ const syncItemsFromAccurate = async ({ accurateBranchId } = {}) => {
     accurateRowCount = response.sp?.rowCount   ?? 0;
 
     const items = response.d ?? [];
-    console.log("SYNC ACCURATE ITEM PAGE:", page, "/", pageCount);
-    console.log("FIRST ITEM ID:", items[0]?.id);
+    logger.info("SYNC ACCURATE ITEM PAGE:", page, "/", pageCount);
+    logger.info("FIRST ITEM ID:", items[0]?.id);
 
     for (const item of items) {
       accurateIds.push(item.id);
@@ -210,7 +211,7 @@ const syncItemsFromAccurate = async ({ accurateBranchId } = {}) => {
       const accurateId = parseInt(item.id, 10);
 
       if (processedIds.has(accurateId)) {
-        console.log("SKIP DUPLICATE:", accurateId);
+        logger.info("SKIP DUPLICATE:", accurateId);
         skippedDuplicate++;
         continue;
       }
@@ -229,7 +230,7 @@ const syncItemsFromAccurate = async ({ accurateBranchId } = {}) => {
             item.vendorUnitId       = detailRes.d.vendorUnitId;
           }
         } catch (_detailErr) {
-          console.error("ITEM DETAIL FETCH ERROR:", item.id, _detailErr.message);
+          logger.error("ITEM DETAIL FETCH ERROR:", item.id, _detailErr.message);
         }
 
         // Resolve defaultUnitId from unit1 BEFORE mapping so the item row
@@ -246,7 +247,7 @@ const syncItemsFromAccurate = async ({ accurateBranchId } = {}) => {
           const localCat = await findCategoryByAccurateId(parseInt(item.itemCategory.id, 10));
           categoryId = localCat?.id ?? null;
           if (!localCat) {
-            console.warn(`CATEGORY NOT FOUND (run /item-categories/sync first): id=${item.itemCategory.id} name=${item.itemCategory.name}`);
+            logger.warn(`CATEGORY NOT FOUND (run /item-categories/sync first): id=${item.itemCategory.id} name=${item.itemCategory.name}`);
           }
         }
 
@@ -265,13 +266,13 @@ const syncItemsFromAccurate = async ({ accurateBranchId } = {}) => {
         let localItemId;
 
         if (existing) {
-          console.log("UPDATE:", accurateId, existing.id);
+          logger.info("UPDATE:", accurateId, existing.id);
           const { accurateItemId, ...updateData } = mapped;
           await updateByAccurateId(accurateId, updateData);
           localItemId = existing.id;
           updated++;
         } else {
-          console.log("CREATE:", accurateId);
+          logger.info("CREATE:", accurateId);
           const result = await createFromAccurate(mapped);
           localItemId = result.id;
           created++;
@@ -280,7 +281,7 @@ const syncItemsFromAccurate = async ({ accurateBranchId } = {}) => {
         // Sync item_units and item_prices for all units in a single pass
         await syncItemUnitsAndPrices(localItemId, item);
       } catch (_err) {
-        console.error("ITEM SYNC ERROR:", accurateId, _err.message);
+        logger.error("ITEM SYNC ERROR:", accurateId, _err.message);
         failed++;
       }
     }
@@ -290,7 +291,7 @@ const syncItemsFromAccurate = async ({ accurateBranchId } = {}) => {
 
   // Duplicate ID analysis
   const uniqueAccurateIds = new Set(accurateIds.filter(Boolean));
-  console.log({
+  logger.info({
     totalFromAccurate: accurateIds.length,
     uniqueFromAccurate: uniqueAccurateIds.size,
     duplicate: accurateIds.length - uniqueAccurateIds.size,
@@ -304,11 +305,11 @@ const syncItemsFromAccurate = async ({ accurateBranchId } = {}) => {
     const duplicateIds = Object.entries(frequency)
       .filter(([, c]) => c > 1)
       .map(([id, c]) => ({ id: Number(id), count: c }));
-    console.log("DUPLICATE IDs:", duplicateIds);
+    logger.info("DUPLICATE IDs:", duplicateIds);
   }
 
   const totalProcessed = created + updated + skippedDuplicate + failed;
-  console.log("SYNC COMPLETE", {
+  logger.info("SYNC COMPLETE", {
     accurateRowCount,
     uniqueIds: processedIds.size,
     created,

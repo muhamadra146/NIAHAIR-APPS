@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
@@ -323,7 +324,7 @@ const deleteTransfer = async (id, userRole, actingBranchId) => {
       const { accurateRequest } = require("../accurate/accurate.client");
       await accurateRequest(`/item-transfer/delete.do?id=${transfer.accurateTransferId}`, { method: "DELETE" });
     } catch (err) {
-      console.warn(`[delete transfer] Accurate delete failed (ignored): ${err.message}`);
+      logger.warn(`[delete transfer] Accurate delete failed (ignored): ${err.message}`);
     }
   }
 
@@ -422,7 +423,7 @@ const undoReceive = async (id, userRole, actingBranchId) => {
       const { accurateRequest } = require("../accurate/accurate.client");
       await accurateRequest(`/item-transfer/delete.do?id=${accurateReceiveId}`, { method: "DELETE" });
     } catch (err) {
-      console.warn(`[undo receive] Accurate delete TRANSFER_IN failed (ignored): ${err.message}`);
+      logger.warn(`[undo receive] Accurate delete TRANSFER_IN failed (ignored): ${err.message}`);
     }
   }
 

@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { StatusCodes }   = require("http-status-codes");
 const AppError          = require("../../common/errors/AppError");
 const { accurateRequest } = require("../accurate/accurate.client");
@@ -23,12 +24,12 @@ const BATCH_CONCURRENCY = 10;
 // ── Main sync ─────────────────────────────────────────────────────────
 
 const syncInventoryFromAccurate = async () => {
-  console.log("[inventory sync] start");
+  logger.info("[inventory sync] start");
 
   const warehouses = await findWarehousesForSync();
 
   if (warehouses.length === 0) {
-    console.log("[inventory sync] no warehouses with Accurate mapping — nothing to do");
+    logger.info("[inventory sync] no warehouses with Accurate mapping — nothing to do");
     return { warehousesProcessed: 0, itemsUpdated: 0, skipped: 0 };
   }
 
@@ -37,7 +38,7 @@ const syncInventoryFromAccurate = async () => {
     warehouses.map((w) => [w.accurateWarehouseId, w])
   );
 
-  console.log(
+  logger.info(
     `[inventory sync] mapped warehouses: ${warehouses.map((w) => `${w.name}(${w.accurateWarehouseId})`).join(", ")}`
   );
 
@@ -64,7 +65,7 @@ const syncInventoryFromAccurate = async () => {
     pageCount   = listRes.sp?.pageCount ?? 1;
     const items = listRes.d ?? [];
 
-    console.log(`[inventory sync] list.do page=${page}/${pageCount} count=${items.length}`);
+    logger.info(`[inventory sync] list.do page=${page}/${pageCount} count=${items.length}`);
 
     for (const item of items) {
       if (!item.id) { skipped++; continue; }
@@ -81,7 +82,7 @@ const syncInventoryFromAccurate = async () => {
     page++;
   } while (page <= pageCount);
 
-  console.log(`[inventory sync] INVENTORY items to process: ${inventoryItems.length} (skipped so far: ${skipped})`);
+  logger.info(`[inventory sync] INVENTORY items to process: ${inventoryItems.length} (skipped so far: ${skipped})`);
 
   // ── Step 2: Proses paralel dengan batching (BATCH_CONCURRENCY item sekaligus) ─
   // Setiap item memanggil detail.do untuk mendapatkan stok per gudang.
@@ -93,7 +94,7 @@ const syncInventoryFromAccurate = async () => {
       );
 
       if (!detailRes.s || !detailRes.d) {
-        console.error(`[inventory sync] detail.do failed id=${accurateId} item=${localItem.itemCode}`);
+        logger.error(`[inventory sync] detail.do failed id=${accurateId} item=${localItem.itemCode}`);
         return { updated: 0, skipped: 1 };
       }
 
@@ -111,7 +112,7 @@ const syncInventoryFromAccurate = async () => {
         });
 
         if (changed) {
-          console.log(
+          logger.info(
             `[inventory sync] updated ${localItem.itemCode}` +
             ` warehouse=${localWarehouse.name} qty=${quantity}`
           );
@@ -121,7 +122,7 @@ const syncInventoryFromAccurate = async () => {
 
       return { updated, skipped: 0 };
     } catch (err) {
-      console.error(`[inventory sync] failed item=${localItem.itemCode}`, err.message);
+      logger.error(`[inventory sync] failed item=${localItem.itemCode}`, err.message);
       return { updated: 0, skipped: 1 };
     }
   };
@@ -136,14 +137,14 @@ const syncInventoryFromAccurate = async () => {
       skipped      += r.skipped;
     }
 
-    console.log(
+    logger.info(
       `[inventory sync] batch ${Math.floor(i / BATCH_CONCURRENCY) + 1}/` +
       `${Math.ceil(inventoryItems.length / BATCH_CONCURRENCY)}` +
       ` updated=${itemsUpdated} skipped=${skipped}`
     );
   }
 
-  console.log(
+  logger.info(
     `[inventory sync] done —` +
     ` warehousesProcessed=${warehouses.length}` +
     ` itemsUpdated=${itemsUpdated}` +

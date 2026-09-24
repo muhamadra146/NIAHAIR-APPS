@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { accurateRequest }                                               = require("../accurate/accurate.client");
 const { findPayrollForSync, findGlMappings, markPayrollSynced }         = require("./payroll.sync.repository");
 
@@ -149,14 +150,14 @@ const buildJournalLines = (payroll, glMap) => {
  * Fails with descriptive error if GL mappings or branch not configured.
  */
 const syncPayrollToAccurate = async (payrollId) => {
-  console.log(`[payroll sync] start payrollId=${payrollId}`);
+  logger.info(`[payroll sync] start payrollId=${payrollId}`);
 
   const payroll = await findPayrollForSync(payrollId);
   if (!payroll) throw new Error(`Payroll not found: ${payrollId}`);
 
   // ── Idempotency guard ────────────────────────────────────────────────
   if (payroll.accurateJournalId) {
-    console.log(`[payroll sync] skip — already synced payrollId=${payrollId}`);
+    logger.info(`[payroll sync] skip — already synced payrollId=${payrollId}`);
     return { skipped: true, reason: "Already synced" };
   }
 
@@ -204,7 +205,7 @@ const syncPayrollToAccurate = async (payrollId) => {
     detailSave:  lines,
   };
 
-  console.log(
+  logger.info(
     `[payroll sync] payload payrollId=${payrollId} totalDebit=${totalDebit} lines=${lines.length}`,
     JSON.stringify(payload),
   );
@@ -225,7 +226,7 @@ const syncPayrollToAccurate = async (payrollId) => {
   // ── Persist Accurate IDs ──────────────────────────────────────────────
   await markPayrollSynced({ id: payrollId, accurateJournalId, accurateJournalNumber });
 
-  console.log(
+  logger.info(
     `[payroll sync] done payrollId=${payrollId} ` +
     `accurateJournalId=${accurateJournalId} accurateJournalNumber=${accurateJournalNumber}`,
   );

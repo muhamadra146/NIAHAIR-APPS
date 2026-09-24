@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
@@ -34,7 +35,7 @@ const syncGlAccountsFromAccurate = async ({ accurateBranchId } = {}) => {
 
     pageCount = response.sp?.pageCount ?? 1;
     const accounts = response.d ?? [];
-    console.log(`[gl-account sync] page ${page}/${pageCount} — ${accounts.length} records`);
+    logger.info(`[gl-account sync] page ${page}/${pageCount} — ${accounts.length} records`);
 
     for (const item of accounts) {
       if (!item.id) { failed++; continue; }
@@ -54,7 +55,7 @@ const syncGlAccountsFromAccurate = async ({ accurateBranchId } = {}) => {
           created++;
         }
       } catch (err) {
-        console.error(`[gl-account sync] error id=${item.id}`, err.message);
+        logger.error(`[gl-account sync] error id=${item.id}`, err.message);
         failed++;
       }
     }
@@ -62,7 +63,7 @@ const syncGlAccountsFromAccurate = async ({ accurateBranchId } = {}) => {
     page++;
   } while (page <= pageCount);
 
-  console.log(`[gl-account sync] done — created=${created} updated=${updated} failed=${failed}`);
+  logger.info(`[gl-account sync] done — created=${created} updated=${updated} failed=${failed}`);
   return { created, updated, failed, synced: created + updated };
 };
 

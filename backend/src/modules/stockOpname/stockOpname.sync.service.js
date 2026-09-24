@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 // ── Accurate Sync — Stock Opname ──────────────────────────────────────────────
 //
 // Alur 2 dokumen di Accurate Online:
@@ -26,19 +27,19 @@ const ACCURATE_RESULT_SAVE = "/stock-opname-result/save.do";
 const syncOpnameOrderToAccurate = async (opname, accurateBranchId) => {
   // Idempotency: sudah ada → return ID yang ada
   if (opname.accurateOrderId) {
-    console.log(`[opname sync] Perintah already synced orderId=${opname.accurateOrderId}`);
+    logger.info(`[opname sync] Perintah already synced orderId=${opname.accurateOrderId}`);
     return opname.accurateOrderId;
   }
 
   const payload = mapOpnameOrderToAccurate(opname, accurateBranchId);
-  console.log("[opname sync] Perintah payload", JSON.stringify(payload));
+  logger.info("[opname sync] Perintah payload", JSON.stringify(payload));
 
   const response = await accurateRequest(ACCURATE_ORDER_SAVE, {
     method: "POST",
     body:   payload,
   });
 
-  console.log("[opname sync] Perintah response", JSON.stringify(response));
+  logger.info("[opname sync] Perintah response", JSON.stringify(response));
 
   if (!response.s || !response.r?.id) {
     throw new Error(`Accurate API error (Perintah SO): ${JSON.stringify(response)}`);
@@ -48,7 +49,7 @@ const syncOpnameOrderToAccurate = async (opname, accurateBranchId) => {
   const accurateOrderNumber = response.r.number ?? response.r.no ?? null;
 
   await markOpnameOrderSynced({ id: opname.id, accurateOrderId, accurateOrderNumber });
-  console.log(`[opname sync] Perintah saved orderId=${accurateOrderId} number=${accurateOrderNumber}`);
+  logger.info(`[opname sync] Perintah saved orderId=${accurateOrderId} number=${accurateOrderNumber}`);
 
   return accurateOrderId;
 };
@@ -57,7 +58,7 @@ const syncOpnameOrderToAccurate = async (opname, accurateBranchId) => {
 const syncOpnameResultToAccurate = async (opname, accurateOrderId, accurateBranchId) => {
   // Idempotency: sudah ada → skip
   if (opname.accurateResultId) {
-    console.log(`[opname sync] Hasil already synced resultId=${opname.accurateResultId}`);
+    logger.info(`[opname sync] Hasil already synced resultId=${opname.accurateResultId}`);
     return { skipped: true, reason: "Hasil already synced" };
   }
 
@@ -68,7 +69,7 @@ const syncOpnameResultToAccurate = async (opname, accurateOrderId, accurateBranc
   });
 
   if (itemsWithDiff.length === 0) {
-    console.log("[opname sync] Tidak ada item dengan selisih — Hasil SO tidak dibuat");
+    logger.info("[opname sync] Tidak ada item dengan selisih — Hasil SO tidak dibuat");
     return { skipped: true, reason: "No items with difference" };
   }
 
@@ -88,14 +89,14 @@ const syncOpnameResultToAccurate = async (opname, accurateOrderId, accurateBranc
   }
 
   const payload = mapOpnameResultToAccurate(opname, accurateOrderId, itemsWithDiff, accurateBranchId);
-  console.log("[opname sync] Hasil payload", JSON.stringify(payload));
+  logger.info("[opname sync] Hasil payload", JSON.stringify(payload));
 
   const response = await accurateRequest(ACCURATE_RESULT_SAVE, {
     method: "POST",
     body:   payload,
   });
 
-  console.log("[opname sync] Hasil response", JSON.stringify(response));
+  logger.info("[opname sync] Hasil response", JSON.stringify(response));
 
   if (!response.s || !response.r?.id) {
     throw new Error(`Accurate API error (Hasil SO): ${JSON.stringify(response)}`);
@@ -105,7 +106,7 @@ const syncOpnameResultToAccurate = async (opname, accurateOrderId, accurateBranc
   const accurateResultNumber = response.r.number ?? response.r.no ?? null;
 
   await markOpnameResultSynced({ id: opname.id, accurateResultId, accurateResultNumber });
-  console.log(`[opname sync] Hasil saved resultId=${accurateResultId} number=${accurateResultNumber}`);
+  logger.info(`[opname sync] Hasil saved resultId=${accurateResultId} number=${accurateResultNumber}`);
 
   return { accurateResultId, accurateResultNumber };
 };

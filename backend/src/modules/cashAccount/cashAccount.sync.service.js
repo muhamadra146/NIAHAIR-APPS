@@ -1,15 +1,16 @@
+﻿const logger = require('../../utils/logger');
 const { findByUsage } = require("../glAccount/glAccount.sync.repository");
 const { upsertCashAccount, findAllActiveAccurateIds, deactivateManyByIds } = require("./cashAccount.sync.repository");
 
 const CASH_ACCOUNT_USAGE = "CASH_ACCOUNT";
 
 const syncCashAccountsFromAccurate = async () => {
-  console.log("[cashAccount sync] reading from gl_accounts where usage=CASH_ACCOUNT");
+  logger.info("[cashAccount sync] reading from gl_accounts where usage=CASH_ACCOUNT");
 
   const glAccounts = await findByUsage(CASH_ACCOUNT_USAGE);
 
   if (glAccounts.length === 0) {
-    console.log("[cashAccount sync] no CASH_ACCOUNT accounts found");
+    logger.info("[cashAccount sync] no CASH_ACCOUNT accounts found");
     return { synced: 0, skipped: 0, deactivated: 0, message: "Tidak ada akun dengan penggunaan 'Cash Account'. Tag akun di Settings → GL Akun terlebih dahulu." };
   }
 
@@ -30,7 +31,7 @@ const syncCashAccountsFromAccurate = async () => {
 
     syncedAccurateIds.add(gl.accurateGlAccountId);
     synced++;
-    console.log(`[cashAccount sync] upserted no=${gl.number} name=${gl.name}`);
+    logger.info(`[cashAccount sync] upserted no=${gl.number} name=${gl.name}`);
   }
 
   // Auto-deactivate accounts that are no longer tagged
@@ -43,10 +44,10 @@ const syncCashAccountsFromAccurate = async () => {
   if (toDeactivate.length > 0) {
     await deactivateManyByIds(toDeactivate);
     deactivated = toDeactivate.length;
-    console.log(`[cashAccount sync] deactivated=${deactivated} untagged accounts`);
+    logger.info(`[cashAccount sync] deactivated=${deactivated} untagged accounts`);
   }
 
-  console.log(`[cashAccount sync] done — synced=${synced} skipped=${skipped} deactivated=${deactivated}`);
+  logger.info(`[cashAccount sync] done — synced=${synced} skipped=${skipped} deactivated=${deactivated}`);
   return { synced, skipped, deactivated };
 };
 

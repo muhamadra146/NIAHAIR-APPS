@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { accurateRequest }               = require("../accurate/accurate.client");
 const { findLoanForSync, markLoanSynced } = require("./loan.sync.repository");
 
@@ -41,14 +42,14 @@ const findAccurateEmployeeId = async (employeeCode) => {
  * Fails with descriptive error if branch or employee not mapped.
  */
 const syncLoanToAccurate = async (loanId) => {
-  console.log(`[loan sync] start loanId=${loanId}`);
+  logger.info(`[loan sync] start loanId=${loanId}`);
 
   const loan = await findLoanForSync(loanId);
   if (!loan) throw new Error(`Loan not found: ${loanId}`);
 
   // ── Idempotency guard ────────────────────────────────────────────────
   if (loan.accurateLoanId) {
-    console.log(`[loan sync] skip — already synced loanId=${loanId}`);
+    logger.info(`[loan sync] skip — already synced loanId=${loanId}`);
     return { skipped: true, reason: "Already synced" };
   }
 
@@ -88,7 +89,7 @@ const syncLoanToAccurate = async (loanId) => {
     description: loan.notes ?? `Kasbon ${loan.employee.name} - ${loan.loanNo}`,
   };
 
-  console.log(`[loan sync] payload loanId=${loanId}`, JSON.stringify(payload));
+  logger.info(`[loan sync] payload loanId=${loanId}`, JSON.stringify(payload));
 
   // ── Call Accurate API ─────────────────────────────────────────────────
   const response = await accurateRequest(ACCURATE_EMPLOYEE_LOAN_SAVE, {
@@ -106,7 +107,7 @@ const syncLoanToAccurate = async (loanId) => {
   // ── Persist Accurate IDs ──────────────────────────────────────────────
   await markLoanSynced({ id: loanId, accurateLoanId, accurateLoanNumber });
 
-  console.log(
+  logger.info(
     `[loan sync] done loanId=${loanId} ` +
     `accurateLoanId=${accurateLoanId} accurateLoanNumber=${accurateLoanNumber}`,
   );

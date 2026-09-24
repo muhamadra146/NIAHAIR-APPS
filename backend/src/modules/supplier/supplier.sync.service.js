@@ -1,5 +1,6 @@
-'use strict';
+﻿'use strict';
 
+const logger = require('../../utils/logger');
 const { StatusCodes }              = require("http-status-codes");
 const AppError                     = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
@@ -92,7 +93,7 @@ const syncSuppliersFromAccurate = async ({ accurateBranchId } = {}) => {
           item.fax              = d.fax;                 // fax (fallback telepon bisnis)
         }
       } catch (detailErr) {
-        console.warn(`[supplier sync] detail fetch failed id=${accurateId}:`, detailErr.message);
+        logger.warn(`[supplier sync] detail fetch failed id=${accurateId}:`, detailErr.message);
       }
 
       const mapped   = mapAccurateToSupplier(item);
@@ -106,12 +107,12 @@ const syncSuppliersFromAccurate = async ({ accurateBranchId } = {}) => {
         created++;
       }
     } catch (err) {
-      console.error(`[supplier sync] error id=${listItem.id}`, err.message);
+      logger.error(`[supplier sync] error id=${listItem.id}`, err.message);
       failed++;
     }
   }
 
-  console.log(`[supplier sync] done — created=${created} updated=${updated} failed=${failed}`);
+  logger.info(`[supplier sync] done — created=${created} updated=${updated} failed=${failed}`);
   return { created, updated, failed };
 };
 

@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
@@ -120,7 +121,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   try {
     activeMembership = await getActiveMembership(customerId);
   } catch (err) {
-    console.warn(`[invoice create] membership fetch failed for customer ${customerId}: ${err.message}`);
+    logger.warn(`[invoice create] membership fetch failed for customer ${customerId}: ${err.message}`);
   }
 
   if (treatmentSessionIds && treatmentSessionIds.length > 0) {
@@ -388,7 +389,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   try {
     await setupTreatmentSession(invoice.id);
   } catch (err) {
-    console.warn(`[invoice create] treatment session setup failed for ${invoice.id}: ${err.message}`);
+    logger.warn(`[invoice create] treatment session setup failed for ${invoice.id}: ${err.message}`);
   }
 
   // Deposit fully covered the invoice — trigger same workflow as payment path
@@ -478,7 +479,7 @@ const updateInvoice = async (id, body, userId) => {
   try {
     activeMembership = await getActiveMembership(existing.customerId);
   } catch (err) {
-    console.warn(`[invoice update] membership fetch failed for customer ${existing.customerId}: ${err.message}`);
+    logger.warn(`[invoice update] membership fetch failed for customer ${existing.customerId}: ${err.message}`);
   }
 
   // Re-resolve prices and build new line items (same logic as createInvoice)
@@ -638,7 +639,7 @@ const updateInvoice = async (id, body, userId) => {
   try {
     await resetTreatmentSessionItems(id);
   } catch (err) {
-    console.warn(`[invoice update] treatment session reset failed for ${id}: ${err.message}`);
+    logger.warn(`[invoice update] treatment session reset failed for ${id}: ${err.message}`);
   }
 
   // Re-sync to Accurate
@@ -916,12 +917,12 @@ const deleteInvoice = async (id) => {
         body:   { id: invoice.accurateInvoiceId },
       });
       if (!resp.s) {
-        console.warn(`[invoice delete] Accurate delete failed for accurateId=${invoice.accurateInvoiceId}:`, resp.d ?? resp);
+        logger.warn(`[invoice delete] Accurate delete failed for accurateId=${invoice.accurateInvoiceId}:`, resp.d ?? resp);
       } else {
-        console.log(`[invoice delete] Accurate delete ok accurateId=${invoice.accurateInvoiceId}`);
+        logger.info(`[invoice delete] Accurate delete ok accurateId=${invoice.accurateInvoiceId}`);
       }
     } catch (err) {
-      console.warn(`[invoice delete] Accurate delete error (continuing with local delete): ${err.message}`);
+      logger.warn(`[invoice delete] Accurate delete error (continuing with local delete): ${err.message}`);
     }
   }
 

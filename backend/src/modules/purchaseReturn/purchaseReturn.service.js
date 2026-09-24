@@ -1,5 +1,6 @@
-'use strict';
+﻿'use strict';
 
+const logger = require('../../utils/logger');
 const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
@@ -189,7 +190,7 @@ const postPurchaseReturn = async (id, employeeId) => {
 
   // Enqueue Accurate sync (non-blocking)
   pushPurchaseReturnToAccurate(id).catch((err) => {
-    console.error(`[return sync] failed returnId=${id}:`, err.message);
+    logger.error(`[return sync] failed returnId=${id}:`, err.message);
   });
 
   return repo.findById(id);

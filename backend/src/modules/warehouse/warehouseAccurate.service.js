@@ -1,5 +1,6 @@
-'use strict';
+﻿'use strict';
 
+const logger = require('../../utils/logger');
 const { StatusCodes }     = require("http-status-codes");
 const AppError            = require("../../common/errors/AppError");
 const { accurateRequest } = require("../accurate/accurate.client");
@@ -35,7 +36,7 @@ const syncWarehousesFromAccurate = async ({ accurateBranchId } = {}) => {
     pageCount = response.sp?.pageCount ?? 1;
     const warehouses = response.d ?? [];
 
-    console.log(`[accurate warehouse sync] page ${page}/${pageCount} — ${warehouses.length} items`);
+    logger.info(`[accurate warehouse sync] page ${page}/${pageCount} — ${warehouses.length} items`);
 
     for (const item of warehouses) {
       if (!item.id) { failed++; continue; }
@@ -54,13 +55,13 @@ const syncWarehousesFromAccurate = async ({ accurateBranchId } = {}) => {
         const isNew = result.createdAt.getTime() === result.updatedAt.getTime();
         if (isNew) {
           created++;
-          console.log(`[accurate warehouse sync] create accurateId=${accurateId} name="${result.name}"`);
+          logger.info(`[accurate warehouse sync] create accurateId=${accurateId} name="${result.name}"`);
         } else {
           updated++;
-          console.log(`[accurate warehouse sync] update accurateId=${accurateId} name="${result.name}"`);
+          logger.info(`[accurate warehouse sync] update accurateId=${accurateId} name="${result.name}"`);
         }
       } catch (err) {
-        console.error(`[accurate warehouse sync] failed accurateId=${accurateId}`, err.message);
+        logger.error(`[accurate warehouse sync] failed accurateId=${accurateId}`, err.message);
         failed++;
       }
     }
@@ -69,7 +70,7 @@ const syncWarehousesFromAccurate = async ({ accurateBranchId } = {}) => {
   } while (page <= pageCount);
 
   const total = created + updated + failed;
-  console.log(`[accurate warehouse sync] done — created=${created} updated=${updated} failed=${failed} total=${total}`);
+  logger.info(`[accurate warehouse sync] done — created=${created} updated=${updated} failed=${failed} total=${total}`);
 
   return { created, updated, failed };
 };

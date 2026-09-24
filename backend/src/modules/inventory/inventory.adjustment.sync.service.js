@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { StatusCodes }             = require("http-status-codes");
 const AppError                     = require("../../common/errors/AppError");
 const prisma                       = require("../../config/prisma");
@@ -102,7 +103,7 @@ const pushAdjustmentToAccurate = async (movementId) => {
     accurateBranchId,
   });
 
-  console.log("[adjustment sync payload]", JSON.stringify(payload));
+  logger.info("[adjustment sync payload]", JSON.stringify(payload));
 
   const response = await accurateRequest(ACCURATE_ITEM_ADJUSTMENT_SAVE, {
     method: "POST",
@@ -123,7 +124,7 @@ const pushAdjustmentToAccurate = async (movementId) => {
     data:  { accurateAdjustmentId },
   });
 
-  console.log(`[adjustment sync] success movementId=${movementId} accurateId=${accurateAdjustmentId}`);
+  logger.info(`[adjustment sync] success movementId=${movementId} accurateId=${accurateAdjustmentId}`);
 
   return { synced: true, accurateAdjustmentId };
 };

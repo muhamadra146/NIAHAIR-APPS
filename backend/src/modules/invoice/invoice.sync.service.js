@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { accurateRequest }         = require("../accurate/accurate.client");
 const { findWarehouseByBranchId } = require("../inventory/inventory.repository");
 const { getAccurateBranchId }     = require("../branch/branch.repository");
@@ -11,7 +12,7 @@ const { mapInvoiceToAccurate } = require("./invoice.sync.mapper");
 const ACCURATE_INVOICE_SAVE = "/sales-invoice/save.do";
 
 const syncInvoiceToAccurate = async (invoiceId) => {
-  console.log(`[invoice sync] start invoiceId=${invoiceId}`);
+  logger.info(`[invoice sync] start invoiceId=${invoiceId}`);
 
   const invoice = await findInvoiceForSync(invoiceId);
   if (!invoice) throw new Error(`Invoice not found: ${invoiceId}`);
@@ -65,7 +66,7 @@ const syncInvoiceToAccurate = async (invoiceId) => {
       body:   { id: invoice.accurateInvoiceId },
     });
     currentAccurateItemIds = (currentResp.r?.detailItem ?? []).map((i) => i.id);
-    console.log(`[invoice sync] current Accurate items: ${currentAccurateItemIds.join(",")}`);
+    logger.info(`[invoice sync] current Accurate items: ${currentAccurateItemIds.join(",")}`);
   }
 
   // Look up Accurate branch ID for this invoice's branch
@@ -101,7 +102,7 @@ const syncInvoiceToAccurate = async (invoiceId) => {
     }
   }
 
-  console.log(
+  logger.info(
     `[invoice sync] ${isUpdate ? "update" : "create"} invoiceId=${invoiceId}` +
     ` accurateId=${accurateId} number=${accurateNumber}`
   );

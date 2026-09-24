@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { accurateRequest }                                     = require("../accurate/accurate.client");
 const { getAccurateBranchId }                                 = require("../branch/branch.repository");
 const prisma                                                  = require("../../config/prisma");
@@ -8,7 +9,7 @@ const ACCURATE_RECEIPT_SAVE   = "/sales-receipt/save.do";
 const ACCURATE_RECEIPT_DELETE = "/sales-receipt/delete.do";
 
 const syncDepositPaymentToAccurate = async (depositPaymentId) => {
-  console.log(`[deposit-payment sync] start id=${depositPaymentId}`);
+  logger.info(`[deposit-payment sync] start id=${depositPaymentId}`);
 
   const dp = await findDepositPaymentForSync(depositPaymentId);
   if (!dp) throw new Error(`DepositPayment not found: ${depositPaymentId}`);
@@ -45,7 +46,7 @@ const syncDepositPaymentToAccurate = async (depositPaymentId) => {
 
   const payload = mapDepositPaymentToAccurate(dp, accurateBranchId);
 
-  console.log("[deposit-payment sync payload]", JSON.stringify(payload));
+  logger.info("[deposit-payment sync payload]", JSON.stringify(payload));
 
   const response = await accurateRequest(ACCURATE_RECEIPT_SAVE, {
     method: "POST",
@@ -67,7 +68,7 @@ const syncDepositPaymentToAccurate = async (depositPaymentId) => {
     accurateReceiptNumber,
   });
 
-  console.log(
+  logger.info(
     `[deposit-payment sync] success id=${depositPaymentId}` +
     ` accurateId=${accurateReceiptId} number=${accurateReceiptNumber}`
   );
@@ -76,19 +77,19 @@ const syncDepositPaymentToAccurate = async (depositPaymentId) => {
 };
 
 const deleteDepositPaymentFromAccurate = async (accurateReceiptId) => {
-  console.log(`[deposit-payment sync] delete from Accurate accurateReceiptId=${accurateReceiptId}`);
+  logger.info(`[deposit-payment sync] delete from Accurate accurateReceiptId=${accurateReceiptId}`);
   try {
     const response = await accurateRequest(ACCURATE_RECEIPT_DELETE, {
       method: "POST",
       body:   { id: accurateReceiptId },
     });
     if (!response.s) {
-      console.warn(`[deposit-payment sync] Accurate delete failed (ignored): ${JSON.stringify(response)}`);
+      logger.warn(`[deposit-payment sync] Accurate delete failed (ignored): ${JSON.stringify(response)}`);
     } else {
-      console.log(`[deposit-payment sync] deleted from Accurate accurateReceiptId=${accurateReceiptId}`);
+      logger.info(`[deposit-payment sync] deleted from Accurate accurateReceiptId=${accurateReceiptId}`);
     }
   } catch (err) {
-    console.warn(`[deposit-payment sync] Accurate delete error (ignored): ${err.message}`);
+    logger.warn(`[deposit-payment sync] Accurate delete error (ignored): ${err.message}`);
   }
 };
 

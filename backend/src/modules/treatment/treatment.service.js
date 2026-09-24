@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
@@ -109,7 +110,7 @@ const updateSession = async (id, body) => {
   const isBeingCompleted = completedAt && !session.completedAt && session.invoiceId;
   if (isBeingCompleted) {
     syncInvoiceToAccurate(session.invoiceId).catch((err) => {
-      console.warn(`[treatment complete] Accurate re-sync failed for invoice ${session.invoiceId}: ${err.message}`);
+      logger.warn(`[treatment complete] Accurate re-sync failed for invoice ${session.invoiceId}: ${err.message}`);
     });
   }
 

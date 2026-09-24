@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { accurateRequest } = require("../accurate/accurate.client");
@@ -49,8 +50,8 @@ const syncCustomersFromAccurate = async ({ accurateBranchId } = {}) => {
     accurateRowCount = response.sp?.rowCount ?? 0;
 
     const customers = response.d ?? [];
-    console.log("SYNC ACCURATE CUSTOMER PAGE:", page, "/", pageCount);
-    console.log("FIRST CUSTOMER ID:", customers[0]?.id);
+    logger.info("SYNC ACCURATE CUSTOMER PAGE:", page, "/", pageCount);
+    logger.info("FIRST CUSTOMER ID:", customers[0]?.id);
 
     for (const item of customers) {
       // Task 1: record raw ID before any guard so totals are honest.
@@ -66,7 +67,7 @@ const syncCustomersFromAccurate = async ({ accurateBranchId } = {}) => {
 
       // Task 2: duplicate guard — same ID already handled earlier in this run.
       if (processedIds.has(accurateId)) {
-        console.log("SKIP DUPLICATE:", accurateId);
+        logger.info("SKIP DUPLICATE:", accurateId);
         skippedDuplicate++;
         continue;
       }
@@ -96,17 +97,17 @@ const syncCustomersFromAccurate = async ({ accurateBranchId } = {}) => {
           // birthDate, gender, membershipId are absent from the mapper, so
           // updateData is already safe to apply in full.
           const { accurateCustomerId, syncSource, ...updateData } = mapped;
-          console.log("UPDATE:", accurateId, existing.id);
+          logger.info("UPDATE:", accurateId, existing.id);
           await updateByAccurateId(accurateId, updateData);
           updated++;
         } else {
           // No matching row — this is a real create.
-          console.log("CREATE:", accurateId);
+          logger.info("CREATE:", accurateId);
           await createFromAccurate(mapped);
           created++;
         }
       } catch (_err) {
-        console.error(`[accurate customer sync] error processing id=${accurateId}`, _err.message);
+        logger.error(`[accurate customer sync] error processing id=${accurateId}`, _err.message);
         failed++;
       }
     }
@@ -116,7 +117,7 @@ const syncCustomersFromAccurate = async ({ accurateBranchId } = {}) => {
 
   // ── Task 1: duplicate ID analysis ────────────────────────────────────────
   const uniqueAccurateIds = new Set(accurateIds.filter(Boolean).map(Number));
-  console.log({
+  logger.info({
     totalFromAccurate: accurateIds.length,
     uniqueFromAccurate: uniqueAccurateIds.size,
     duplicate: accurateIds.length - uniqueAccurateIds.size,
@@ -130,7 +131,7 @@ const syncCustomersFromAccurate = async ({ accurateBranchId } = {}) => {
     const duplicateIds = Object.entries(frequency)
       .filter(([, count]) => count > 1)
       .map(([id, count]) => ({ id: Number(id), count }));
-    console.log("DUPLICATE IDs:", duplicateIds);
+    logger.info("DUPLICATE IDs:", duplicateIds);
   }
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -142,14 +143,14 @@ const syncCustomersFromAccurate = async ({ accurateBranchId } = {}) => {
     const result = await deactivateMissingFromAccurate(Array.from(uniqueAccurateIds));
     deactivated = result.count;
     if (deactivated > 0) {
-      console.log("DEACTIVATED (no longer in Accurate):", deactivated);
+      logger.info("DEACTIVATED (no longer in Accurate):", deactivated);
     }
   }
   // ─────────────────────────────────────────────────────────────────────────
 
   // Task 4: final validation log.
   const totalProcessed = created + updated + skippedDuplicate + failed;
-  console.log("SYNC COMPLETE", {
+  logger.info("SYNC COMPLETE", {
     accurateRowCount,
     uniqueIds: processedIds.size,
     created,

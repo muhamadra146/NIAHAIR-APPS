@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
@@ -41,13 +42,13 @@ const syncFromAccurate = async () => {
 
     pageCount = response.sp?.pageCount ?? 1;
     const batch = response.d ?? [];
-    console.log(`SYNC ITEM CATEGORY FETCH PAGE: ${page}/${pageCount}, count: ${batch.length}`);
+    logger.info(`SYNC ITEM CATEGORY FETCH PAGE: ${page}/${pageCount}, count: ${batch.length}`);
     all.push(...batch);
     page++;
   } while (page <= pageCount);
 
   // ── Pass 1: upsert all categories without parentId ─────────────────────
-  console.log(`SYNC ITEM CATEGORY PASS 1: upsert ${all.length} categories flat`);
+  logger.info(`SYNC ITEM CATEGORY PASS 1: upsert ${all.length} categories flat`);
   for (const cat of all) {
     if (!cat.id) { failed++; continue; }
     try {
@@ -56,14 +57,14 @@ const syncFromAccurate = async () => {
       await repo.upsertFromAccurate(accurateCategoryId, cat.name || "Unknown", null);
       if (existing) { updated++; } else { created++; }
     } catch (err) {
-      console.error("CATEGORY SYNC PASS1 ERROR:", cat.id, err.message);
+      logger.error("CATEGORY SYNC PASS1 ERROR:", cat.id, err.message);
       failed++;
     }
   }
 
   // ── Pass 2: resolve parentId for subcategories ─────────────────────────
   const subcategories = all.filter((c) => c.parent?.id);
-  console.log(`SYNC ITEM CATEGORY PASS 2: link ${subcategories.length} subcategories to parents`);
+  logger.info(`SYNC ITEM CATEGORY PASS 2: link ${subcategories.length} subcategories to parents`);
 
   for (const cat of subcategories) {
     try {
@@ -72,18 +73,18 @@ const syncFromAccurate = async () => {
 
       const parentRow = await repo.findByAccurateId(parentAccurateId);
       if (!parentRow) {
-        console.warn(`CATEGORY PARENT NOT FOUND: accurateId=${parentAccurateId}`);
+        logger.warn(`CATEGORY PARENT NOT FOUND: accurateId=${parentAccurateId}`);
         continue;
       }
 
       await repo.setParent(childAccurateId, parentRow.id);
     } catch (err) {
-      console.error("CATEGORY SYNC PASS2 ERROR:", cat.id, err.message);
+      logger.error("CATEGORY SYNC PASS2 ERROR:", cat.id, err.message);
       failed++;
     }
   }
 
-  console.log("ITEM CATEGORY SYNC COMPLETE", { created, updated, failed });
+  logger.info("ITEM CATEGORY SYNC COMPLETE", { created, updated, failed });
   return { created, updated, failed };
 };
 

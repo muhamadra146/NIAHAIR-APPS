@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { accurateRequest } = require("../accurate/accurate.client");
@@ -14,16 +15,16 @@ const fetchCustomerNoFromAccurate = async (accurateId) => {
   try {
     const detail = await accurateRequest(ACCURATE_CUSTOMER_DETAIL(accurateId));
     if (detail.s && detail.d?.no) return detail.d.no;
-    console.error(`[accurate customer sync] detail.do missing customerNo for accurateId=${accurateId}`);
+    logger.error(`[accurate customer sync] detail.do missing customerNo for accurateId=${accurateId}`);
   } catch (err) {
-    console.error(`[accurate customer sync] detail.do failed accurateId=${accurateId}`, err.message);
+    logger.error(`[accurate customer sync] detail.do failed accurateId=${accurateId}`, err.message);
   }
   return null;
 };
 
 // ── Push local customer to Accurate ──────────────────────────────────
 const pushCustomerToAccurate = async (customerId) => {
-  console.log(`[accurate customer sync] start customerId=${customerId}`);
+  logger.info(`[accurate customer sync] start customerId=${customerId}`);
 
   const customer = await findById(customerId);
   if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
@@ -41,7 +42,7 @@ const pushCustomerToAccurate = async (customerId) => {
       body:   payload,
     });
   } catch (err) {
-    console.error(`[accurate customer sync] failed customerId=${customerId}`, err.message);
+    logger.error(`[accurate customer sync] failed customerId=${customerId}`, err.message);
     await markSyncFailed(customerId, err.message);
     throw err;
   }
@@ -51,7 +52,7 @@ const pushCustomerToAccurate = async (customerId) => {
       typeof response.d === "string"
         ? response.d
         : response.message || "Accurate API rejected customer push";
-    console.error(`[accurate customer sync] failed customerId=${customerId}`, errMsg);
+    logger.error(`[accurate customer sync] failed customerId=${customerId}`, errMsg);
     await markSyncFailed(customerId, errMsg);
     throw new AppError(errMsg, StatusCodes.BAD_GATEWAY);
   }
@@ -59,7 +60,7 @@ const pushCustomerToAccurate = async (customerId) => {
   const accurateId = response.r?.id;
   if (!accurateId) {
     const errMsg = "Accurate did not return customer ID";
-    console.error(`[accurate customer sync] failed — ${errMsg}`);
+    logger.error(`[accurate customer sync] failed — ${errMsg}`);
     await markSyncFailed(customerId, errMsg);
     throw new AppError(errMsg, StatusCodes.BAD_GATEWAY);
   }
@@ -67,7 +68,7 @@ const pushCustomerToAccurate = async (customerId) => {
   // save.do may omit customerNo — fetch from detail.do if missing
   let customerNo = response.r?.customerNo || null;
   if (!customerNo) {
-    console.log(`[accurate customer sync] customerNo missing from save response — calling detail.do`);
+    logger.info(`[accurate customer sync] customerNo missing from save response — calling detail.do`);
     customerNo = await fetchCustomerNoFromAccurate(accurateId);
   }
 
@@ -76,7 +77,7 @@ const pushCustomerToAccurate = async (customerId) => {
     customerNo,
   });
 
-  console.log(
+  logger.info(
     `[accurate customer sync] success customerId=${customerId}` +
     ` accurateId=${accurateId} customerNo=${customerNo}`
   );
@@ -94,7 +95,7 @@ const pushCustomerToAccurate = async (customerId) => {
 // and detail.do was also unavailable at that moment).
 const repairMissingCustomerNo = async () => {
   const customers = await findCustomersMissingCustomerNo();
-  console.log(`[accurate customer repair] found ${customers.length} customer(s) missing customerNo`);
+  logger.info(`[accurate customer repair] found ${customers.length} customer(s) missing customerNo`);
 
   let repaired = 0;
   let failed   = 0;
@@ -104,7 +105,7 @@ const repairMissingCustomerNo = async () => {
       const detail = await accurateRequest(ACCURATE_CUSTOMER_DETAIL(customer.accurateCustomerId));
 
       if (!detail.s || !detail.d?.no) {
-        console.error(
+        logger.error(
           `[accurate customer repair] customerNo unavailable` +
           ` customerId=${customer.id} accurateId=${customer.accurateCustomerId}`
         );
@@ -117,13 +118,13 @@ const repairMissingCustomerNo = async () => {
         customerNo:         detail.d.no,
       });
 
-      console.log(
+      logger.info(
         `[accurate customer repair] repaired customerId=${customer.id}` +
         ` customerNo=${detail.d.no}`
       );
       repaired++;
     } catch (err) {
-      console.error(
+      logger.error(
         `[accurate customer repair] failed customerId=${customer.id}`,
         err.message
       );
@@ -137,7 +138,7 @@ const repairMissingCustomerNo = async () => {
 // ── Retry all FAILED local syncs ──────────────────────────────────────
 const retryFailedCustomerSync = async () => {
   const customers = await findFailedSyncs();
-  console.log(`[accurate customer retry] found ${customers.length} failed sync(s)`);
+  logger.info(`[accurate customer retry] found ${customers.length} failed sync(s)`);
 
   let retried   = 0;
   let succeeded = 0;
@@ -148,10 +149,10 @@ const retryFailedCustomerSync = async () => {
     try {
       await pushCustomerToAccurate(customer.id);
       succeeded++;
-      console.log(`[accurate customer retry] succeeded customerId=${customer.id}`);
+      logger.info(`[accurate customer retry] succeeded customerId=${customer.id}`);
     } catch (err) {
       // markSyncFailed is already called inside pushCustomerToAccurate
-      console.error(`[accurate customer retry] still failing customerId=${customer.id}`, err.message);
+      logger.error(`[accurate customer retry] still failing customerId=${customer.id}`, err.message);
       failed++;
     }
   }

@@ -1,5 +1,6 @@
-'use strict';
+﻿'use strict';
 
+const logger = require('../../utils/logger');
 const { StatusCodes }     = require("http-status-codes");
 const AppError            = require("../../common/errors/AppError");
 const prisma              = require("../../config/prisma");
@@ -90,7 +91,7 @@ const pushPurchaseInvoiceToAccurate = async (purchaseInvoiceId) => {
   if (!response.s && invoice.supplierInvoiceNo && primaryBillNo !== invoice.invoiceNo) {
     const isDuplicate = JSON.stringify(response).includes("sudah ada");
     if (isDuplicate) {
-      console.log("[purchase sync] billNumber duplicate, retrying with internal invoiceNo");
+      logger.info("[purchase sync] billNumber duplicate, retrying with internal invoiceNo");
       payload  = mapPurchaseInvoiceToAccurate(invoice, invoice.invoiceNo, accurateBranchId);
       response = await accurateRequest(ACCURATE_PURCHASE_INVOICE_SAVE, {
         method: "POST",
@@ -128,7 +129,7 @@ const pushPurchaseInvoiceToAccurate = async (purchaseInvoiceId) => {
     }).catch(() => {});
   }
 
-  console.log(`[purchase sync] success invoiceId=${purchaseInvoiceId} accurateId=${accuratePurchaseInvoiceId}`);
+  logger.info(`[purchase sync] success invoiceId=${purchaseInvoiceId} accurateId=${accuratePurchaseInvoiceId}`);
 
   return { synced: true, accuratePurchaseInvoiceId, accuratePurchaseInvoiceNumber };
 };

@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
@@ -75,13 +76,13 @@ const bulkSave = async (sessionId, rows) => {
   try {
     await generateServiceMovement(sessionId);
   } catch (err) {
-    console.warn(`[materialUsage bulkSave] generateServiceMovement failed for session ${sessionId}: ${err.message}`);
+    logger.warn(`[materialUsage bulkSave] generateServiceMovement failed for session ${sessionId}: ${err.message}`);
   }
 
   // Re-sync to Accurate if treatment session is already completed
   if (session.completedAt && session.invoiceId) {
     syncInvoiceToAccurate(session.invoiceId).catch((err) => {
-      console.warn(`[materialUsage bulkSave] Accurate re-sync failed for invoice ${session.invoiceId}: ${err.message}`);
+      logger.warn(`[materialUsage bulkSave] Accurate re-sync failed for invoice ${session.invoiceId}: ${err.message}`);
     });
   }
 
@@ -105,7 +106,7 @@ const removeUsageItem = async (id) => {
     const session = await findSessionById(sessionId);
     if (session?.completedAt && session?.invoiceId) {
       syncInvoiceToAccurate(session.invoiceId).catch((err) => {
-        console.warn(`[materialUsage removeUsageItem] Accurate re-sync failed for invoice ${session.invoiceId}: ${err.message}`);
+        logger.warn(`[materialUsage removeUsageItem] Accurate re-sync failed for invoice ${session.invoiceId}: ${err.message}`);
       });
     }
   }
@@ -128,14 +129,14 @@ const editUsageItemQty = async (id, qty) => {
     try {
       await generateServiceMovement(sessionId);
     } catch (err) {
-      console.warn(`[materialUsage editQty] generateServiceMovement failed: ${err.message}`);
+      logger.warn(`[materialUsage editQty] generateServiceMovement failed: ${err.message}`);
     }
 
     // Re-sync to Accurate if session is already completed
     const session = await findSessionById(sessionId);
     if (session?.completedAt && session?.invoiceId) {
       syncInvoiceToAccurate(session.invoiceId).catch((err) => {
-        console.warn(`[materialUsage editQty] Accurate re-sync failed for invoice ${session.invoiceId}: ${err.message}`);
+        logger.warn(`[materialUsage editQty] Accurate re-sync failed for invoice ${session.invoiceId}: ${err.message}`);
       });
     }
   }

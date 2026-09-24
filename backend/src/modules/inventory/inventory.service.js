@@ -1,3 +1,4 @@
+﻿const logger = require('../../utils/logger');
 const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
@@ -562,7 +563,7 @@ const createStockAdjustment = async (inventoryId, { qtyActual, reason, notes, gl
       await pushAdjustmentToAccurate(result.movementId);
       accurateSynced = true;
     } catch (err) {
-      console.error("[adjustment] Accurate push failed:", err.message);
+      logger.error("[adjustment] Accurate push failed:", err.message);
       accurateError = err.message;
     }
   }
@@ -634,7 +635,7 @@ const createBatchStockAdjustment = async ({ glAccountId, reason, notes, items, c
         await pushAdjustmentToAccurate(movementId);
         syncedCount++;
       } catch (err) {
-        console.error(`[batch adjustment] Accurate push failed movementId=${movementId}:`, err.message);
+        logger.error(`[batch adjustment] Accurate push failed movementId=${movementId}:`, err.message);
         accurateErrors.push(err.message);
       }
     }

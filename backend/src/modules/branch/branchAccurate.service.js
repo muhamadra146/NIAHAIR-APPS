@@ -1,5 +1,6 @@
-'use strict';
+﻿'use strict';
 
+const logger = require('../../utils/logger');
 /**
  * branchAccurate.service.js
  * Sync branches FROM Accurate Online → local Branch table.
@@ -43,7 +44,7 @@ const syncBranchesFromAccurate = async () => {
 
     pageCount = response.sp?.pageCount ?? 1;
     const branches = response.d ?? [];
-    console.log(`[branch sync] page ${page}/${pageCount} — ${branches.length} items`);
+    logger.info(`[branch sync] page ${page}/${pageCount} — ${branches.length} items`);
 
     for (const b of branches) {
       if (!b.id) continue;
@@ -86,7 +87,7 @@ const syncBranchesFromAccurate = async () => {
           localId:          alreadyMapped.id,
           status:           "updated",
         });
-        console.log(`[branch sync] updated accurateId=${ab.accurateBranchId} name="${ab.name}"`);
+        logger.info(`[branch sync] updated accurateId=${ab.accurateBranchId} name="${ab.name}"`);
         continue;
       }
 
@@ -115,7 +116,7 @@ const syncBranchesFromAccurate = async () => {
           localId:          byName.id,
           status:           "matched",
         });
-        console.log(
+        logger.info(
           `[branch sync] matched "${ab.name}" (accurateId=${ab.accurateBranchId}) → local id=${byName.id}`
         );
       } else {
@@ -126,13 +127,13 @@ const syncBranchesFromAccurate = async () => {
           status:           "unmatched",
           hint:             "Create a local branch with the same name, then re-sync",
         });
-        console.warn(
+        logger.warn(
           `[branch sync] no local branch found for Accurate branch "${ab.name}" (id=${ab.accurateBranchId})`
         );
       }
     } catch (err) {
       failed++;
-      console.error(
+      logger.error(
         `[branch sync] error for Accurate branch id=${ab.accurateBranchId}`,
         err.message
       );
@@ -145,7 +146,7 @@ const syncBranchesFromAccurate = async () => {
     }
   }
 
-  console.log(
+  logger.info(
     `[branch sync] done — total=${accurateBranches.length} matched=${matched} unmatched=${unmatched} failed=${failed}`
   );
 
