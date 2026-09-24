@@ -88,6 +88,7 @@ export function EmployeeListPage() {
         nikKtp:            values.nikKtp           || undefined,
         resignDate:        values.resignDate        || undefined,
         commissionEnabled: values.commissionEnabled,
+        payDay:            values.payDay ?? undefined,
         homeBranchId:      values.homeBranchId     || undefined,
       });
       if ((values.branchIds ?? []).length > 0) {

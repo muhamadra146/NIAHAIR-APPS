@@ -95,7 +95,7 @@ export async function createBatchStockAdjustment(
 
 export async function fetchGlAccounts(params?: { category?: string; usage?: string }): Promise<GlAccount[]> {
   const { data } = await api.get<ApiResponse<{ data: GlAccount[]; meta: unknown }>>("/gl-accounts", {
-    params: { limit: 100, ...(params ?? {}) },
+    params: { limit: 2000, ...(params ?? {}) },
   });
   return data.data.data;
 }

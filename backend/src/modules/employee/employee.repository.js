@@ -118,7 +118,14 @@ const hardDelete = (id) =>
       data:  { closedByEmployeeId: null },
     });
 
+    // Null-out nullable FK: complaint.employeeId (no onDelete:SetNull in schema)
+    await tx.complaint.updateMany({
+      where: { employeeId: id },
+      data:  { employeeId: null },
+    });
+
     // Delete required-FK child records in correct order
+    await tx.productionEmployee.deleteMany({ where: { employeeId: id } });
     await tx.commission.deleteMany({ where: { employeeId: id } });
     await tx.attendanceCorrectionRequest.deleteMany({ where: { employeeId: id } });
     await tx.attendance.deleteMany({ where: { employeeId: id } });
@@ -128,7 +135,6 @@ const hardDelete = (id) =>
     await tx.treatmentAssignment.deleteMany({ where: { employeeId: id } });
     await tx.appointmentStaff.deleteMany({ where: { employeeId: id } });
     await tx.overtimeChargeEmployee.deleteMany({ where: { employeeId: id } });
-    await tx.branchCommissionRule.deleteMany({ where: { employeeId: id } });
     await tx.commissionRule.deleteMany({ where: { employeeId: id } });
     await tx.loanRepayment.deleteMany({ where: { loan: { employeeId: id } } });
     await tx.loan.deleteMany({ where: { employeeId: id } });
