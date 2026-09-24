@@ -12,10 +12,10 @@ const getStatsController = async (req, res, next) => {
 
 const getAllController = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, branchId, status, employeeId, severity } = req.query;
+    const { page = 1, limit = 20, branchId, status, employeeId, severity, search, startDate, endDate } = req.query;
     const result = await svc.getAll({
       page: Number(page), limit: Number(limit),
-      branchId, status, employeeId, severity,
+      branchId, status, employeeId, severity, search, startDate, endDate,
     });
     return success(res, result, "Komplain berhasil diambil");
   } catch (err) { next(err); }

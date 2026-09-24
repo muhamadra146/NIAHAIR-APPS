@@ -104,4 +104,7 @@ export interface ComplaintListParams {
   status?:     ComplaintStatus | "";
   employeeId?: string;
   severity?:   ComplaintSeverity | "";
+  search?:     string;
+  startDate?:  string;
+  endDate?:    string;
 }

@@ -83,13 +83,31 @@ const getStats = async ({ branchId }) => {
 };
 
 // ── List ──────────────────────────────────────────────────────────────
-const getAll = async ({ page = 1, limit = 20, branchId, status, employeeId, severity }) => {
+const getAll = async ({ page = 1, limit = 20, branchId, status, employeeId, severity, search, startDate, endDate }) => {
   const { skip, take } = paginate(page, limit);
   const where = {};
   if (branchId)   where.branchId   = branchId;
   if (status)     where.status     = status;
   if (employeeId) where.employeeId = employeeId;
   if (severity)   where.severity   = severity;
+
+  // Search by nama klien (via appointment.customer)
+  if (search) {
+    where.appointment = {
+      customer: { name: { contains: search, mode: "insensitive" } },
+    };
+  }
+
+  // Date range filter (createdAt)
+  if (startDate || endDate) {
+    where.createdAt = {};
+    if (startDate) where.createdAt.gte = new Date(startDate);
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      where.createdAt.lte = end;
+    }
+  }
 
   const [rows, total] = await Promise.all([repo.findAll({ skip, take, where }), repo.count(where)]);
   return { data: rows, meta: paginationMeta(total, page, limit) };
