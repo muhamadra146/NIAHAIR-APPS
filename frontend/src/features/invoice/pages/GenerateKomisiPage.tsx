@@ -453,7 +453,8 @@ function JobAssignmentModal({
 // ── Days ago helper ───────────────────────────────────────────────────
 
 function DaysAgo({ dateStr }: { dateStr: string }) {
-  const days = Math.floor((Date.now() - new Date(dateStr + "T12:00:00").getTime()) / 86_400_000);
+  const dateOnly = dateStr.slice(0, 10); // handle full ISO or date-only
+  const days = Math.floor((Date.now() - new Date(dateOnly + "T12:00:00").getTime()) / 86_400_000);
   if (days === 0) return <span className="text-xs text-muted-foreground">Hari ini</span>;
   if (days === 1) return <span className="text-xs text-amber-600 font-medium">Kemarin</span>;
   if (days <= 7)  return <span className="text-xs text-amber-600 font-medium">{days} hari lalu</span>;
