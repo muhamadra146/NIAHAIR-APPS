@@ -1,10 +1,12 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import {
-  ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Clock, Ban,
+  ChevronLeft, ChevronRight, CheckCircle2, Clock, Ban,
   AlertCircle, ExternalLink, RefreshCw, Lock, X, Loader2, ClipboardList,
+  Search, Calendar,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Button }        from "@/components/ui/button";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Skeleton }      from "@/components/ui/skeleton";
@@ -450,64 +452,22 @@ function JobAssignmentModal({
   );
 }
 
-// ── Days ago helper ───────────────────────────────────────────────────
+// ── Days ago badge ────────────────────────────────────────────────────
 
-function DaysAgo({ dateStr }: { dateStr: string }) {
-  const dateOnly = dateStr.slice(0, 10); // handle full ISO or date-only
+function DaysAgoBadge({ dateStr }: { dateStr: string }) {
+  const dateOnly = dateStr.slice(0, 10);
   const days = Math.floor((Date.now() - new Date(dateOnly + "T12:00:00").getTime()) / 86_400_000);
   if (days === 0) return <span className="text-xs text-muted-foreground">Hari ini</span>;
   if (days === 1) return <span className="text-xs text-amber-600 font-medium">Kemarin</span>;
-  if (days <= 7)  return <span className="text-xs text-amber-600 font-medium">{days} hari lalu</span>;
+  if (days <= 3)  return <span className="text-xs text-amber-600 font-medium">{days} hari lalu</span>;
   return <span className="text-xs text-red-500 font-medium">{days} hari lalu</span>;
 }
 
-// ── Invoice row (shared) ──────────────────────────────────────────────
+// ── hasJobItems helper ────────────────────────────────────────────────
 
-function InvoiceRow({
-  inv, onOpen,
-}: {
-  inv:    JobAssignmentInvoice;
-  onOpen: (inv: JobAssignmentInvoice) => void;
-}) {
-  const status     = getInvoiceStatus(inv);
-  const cfg        = STATUS_CFG[status];
-  const hasJobItems = inv.treatmentSessions.some((s) =>
+function hasJobItems(inv: JobAssignmentInvoice): boolean {
+  return inv.treatmentSessions.some((s) =>
     s.treatmentItems.some((ti) => (ti.item.commissionCategory?.jobs?.length ?? 0) > 0),
-  );
-
-  return (
-    <div
-      className={`flex items-center justify-between px-4 py-3 rounded-xl border border-border bg-card shadow-sm transition-colors ${
-        hasJobItems ? "cursor-pointer hover:bg-muted/40 group" : "opacity-60"
-      }`}
-      onClick={() => hasJobItems && onOpen(inv)}
-    >
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm font-medium font-mono">{inv.invoiceNo}</span>
-            <Link to={`/invoices/${inv.id}`} onClick={(e) => e.stopPropagation()}
-              className="text-muted-foreground hover:text-primary">
-              <ExternalLink className="h-3 w-3" />
-            </Link>
-          </div>
-          <p className="text-xs text-muted-foreground truncate">
-            {inv.customer.name} · <DaysAgo dateStr={inv.invoiceDate} />
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center gap-3 shrink-0 ml-3">
-        <span className="text-sm font-medium tabular-nums hidden sm:block">
-          {formatCurrency(inv.grandTotal)}
-        </span>
-        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
-          {cfg.icon}{cfg.label}
-        </span>
-        {hasJobItems && (
-          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -518,24 +478,23 @@ export function GenerateKomisiPage() {
   const { branchId } = useAuthStore();
 
   const [tab,             setTab]             = useState<"pending" | "tanggal">("pending");
+  const [pendingSearch,   setPendingSearch]   = useState("");
   const [date,            setDate]            = useState(todayStr);
+  const [dateSearch,      setDateSearch]      = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<JobAssignmentInvoice | null>(null);
   const [noteInvoice,     setNoteInvoice]     = useState<JobAssignmentInvoice | null>(null);
-  const [expandedGroups,  setExpandedGroups]  = useState<Set<InvoiceStatus>>(
-    new Set(["belum", "terisi", "pending"]),
-  );
 
   const isToday   = date === todayStr();
   const dateLabel = isToday ? "Hari Ini" : formatDateLabel(date);
 
-  // Tab "Belum Diisi" — 90 hari ke belakang, tanpa filter endDate
+  // Tab "Belum Diisi" — 90 hari ke belakang
   const ninetyDaysAgo = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - 90);
     return d.toISOString().slice(0, 10);
   }, []);
 
-  const { data: pendingInvoices = [], isLoading: loadingPending, refetch: refetchPending } = useQuery({
+  const { data: pendingInvoices = [], isLoading: loadingPending } = useQuery({
     queryKey:       ["job-assignment-invoices", "pending-all", branchId],
     queryFn:        () => fetchJobAssignmentInvoices({ branchId: branchId ?? undefined, startDate: ninetyDaysAgo }),
     staleTime:      0,
@@ -543,15 +502,15 @@ export function GenerateKomisiPage() {
     enabled:        tab === "pending",
   });
 
-  // Filter hanya yang belum diproses
-  const unprocessed = useMemo(() =>
-    pendingInvoices
+  const unprocessed = useMemo(() => {
+    const q = pendingSearch.toLowerCase();
+    return pendingInvoices
       .filter((i) => getInvoiceStatus(i) === "belum" || getInvoiceStatus(i) === "terisi")
-      .sort((a, b) => new Date(a.invoiceDate).getTime() - new Date(b.invoiceDate).getTime()),
-    [pendingInvoices],
-  );
+      .filter((i) => !q || i.customer.name.toLowerCase().includes(q) || i.invoiceNo.toLowerCase().includes(q))
+      .sort((a, b) => new Date(a.invoiceDate).getTime() - new Date(b.invoiceDate).getTime());
+  }, [pendingInvoices, pendingSearch]);
 
-  // Tab "Per Tanggal" — current behavior
+  // Tab "Per Tanggal"
   const { data: dateInvoices = [], isLoading: loadingDate, isFetching, refetch: refetchDate } = useQuery({
     queryKey:       ["job-assignment-invoices", date, branchId],
     queryFn:        () => fetchJobAssignmentInvoices({ startDate: date, endDate: date, branchId: branchId ?? undefined }),
@@ -560,28 +519,94 @@ export function GenerateKomisiPage() {
     enabled:        tab === "tanggal",
   });
 
+  const filteredDateInvoices = useMemo(() => {
+    const q = dateSearch.toLowerCase();
+    if (!q) return dateInvoices;
+    return dateInvoices.filter(
+      (i) => i.customer.name.toLowerCase().includes(q) || i.invoiceNo.toLowerCase().includes(q),
+    );
+  }, [dateInvoices, dateSearch]);
+
   const { data: empData } = useEmployees({ isActive: true, limit: 200 });
   const allEmployees = useMemo(() => empData?.data ?? [], [empData]);
 
-  function toggleGroup(status: InvoiceStatus) {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(status)) next.delete(status);
-      else next.add(status);
-      return next;
-    });
-  }
-
-  const dateGroups: { status: InvoiceStatus; label: string; items: JobAssignmentInvoice[] }[] = [
-    { status: "belum",    label: "Belum Diisi",       items: dateInvoices.filter((i) => getInvoiceStatus(i) === "belum") },
-    { status: "terisi",   label: "Siap Kalkulasi",    items: dateInvoices.filter((i) => getInvoiceStatus(i) === "terisi") },
-    { status: "pending",  label: "Menunggu Approval", items: dateInvoices.filter((i) => getInvoiceStatus(i) === "pending") },
-    { status: "approved", label: "Disetujui",         items: dateInvoices.filter((i) => getInvoiceStatus(i) === "approved") },
-    { status: "paid",     label: "Dibayar",           items: dateInvoices.filter((i) => getInvoiceStatus(i) === "paid") },
-  ].filter((g) => g.items.length > 0);
-
   function handleSuccess() {
     void qc.invalidateQueries({ queryKey: ["job-assignment-invoices"] });
+  }
+
+  // ── Table header ──────────────────────────────────────────────────────
+  function TableHead() {
+    return (
+      <thead>
+        <tr className="border-b border-border bg-muted/40">
+          <th className="px-4 py-2.5 text-left font-semibold text-foreground/70 text-xs uppercase tracking-wide">Invoice</th>
+          <th className="px-4 py-2.5 text-left font-semibold text-foreground/70 text-xs uppercase tracking-wide">Pelanggan</th>
+          <th className="px-4 py-2.5 text-left font-semibold text-foreground/70 text-xs uppercase tracking-wide hidden sm:table-cell">Tanggal</th>
+          <th className="px-4 py-2.5 text-center font-semibold text-foreground/70 text-xs uppercase tracking-wide">Status</th>
+          <th className="px-4 py-2.5 text-right font-semibold text-foreground/70 text-xs uppercase tracking-wide">Aksi</th>
+        </tr>
+      </thead>
+    );
+  }
+
+  // ── Table row ─────────────────────────────────────────────────────────
+  function InvoiceTableRow({ inv, showIsiButton = false }: { inv: JobAssignmentInvoice; showIsiButton?: boolean }) {
+    const status = getInvoiceStatus(inv);
+    const cfg    = STATUS_CFG[status];
+    const canFill = hasJobItems(inv);
+
+    return (
+      <tr
+        className={`hover:bg-muted/20 transition-colors group ${canFill && !showIsiButton ? "cursor-pointer" : ""}`}
+        onClick={() => { if (canFill && !showIsiButton) setSelectedInvoice(inv); }}
+      >
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium font-mono text-foreground">{inv.invoiceNo}</span>
+            <Link to={`/invoices/${inv.id}`} onClick={(e) => e.stopPropagation()}
+              className="text-muted-foreground hover:text-primary">
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="text-xs text-muted-foreground tabular-nums">{formatCurrency(inv.grandTotal)}</div>
+        </td>
+        <td className="px-4 py-3">
+          <div className="font-medium">{inv.customer.name}</div>
+          {inv.customer.mobilePhone && (
+            <div className="text-xs text-muted-foreground">{inv.customer.mobilePhone}</div>
+          )}
+        </td>
+        <td className="px-4 py-3 hidden sm:table-cell">
+          <div className="text-sm text-muted-foreground">{formatDate(inv.invoiceDate)}</div>
+          <DaysAgoBadge dateStr={inv.invoiceDate} />
+        </td>
+        <td className="px-4 py-3 text-center">
+          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${cfg.badge}`}>
+            {cfg.icon}{cfg.label}
+          </span>
+        </td>
+        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+          {showIsiButton ? (
+            canFill ? (
+              <Button size="sm" className="h-7 px-2.5 text-xs" onClick={() => setSelectedInvoice(inv)}>
+                Isi Sekarang
+              </Button>
+            ) : (
+              <span className="text-xs text-muted-foreground">Tidak ada job</span>
+            )
+          ) : (
+            canFill && (
+              <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1"
+                  onClick={() => setSelectedInvoice(inv)}>
+                  Isi <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )
+          )}
+        </td>
+      </tr>
+    );
   }
 
   return (
@@ -603,135 +628,161 @@ export function GenerateKomisiPage() {
 
         {/* ── Tab: Belum Diisi ─────────────────────────────────── */}
         <TabsContent value="pending">
-          <div className="space-y-4 mt-2">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Invoice PAID yang belum diisi pengerjaan (90 hari terakhir)
-              </p>
-              <Button variant="outline" size="sm" className="h-7 gap-1.5"
-                onClick={() => void refetchPending()} disabled={loadingPending}>
-                <RefreshCw className={`h-3.5 w-3.5 ${loadingPending ? "animate-spin" : ""}`} />
-              </Button>
+          <>
+            {/* Search */}
+            <div className="relative mb-4 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Cari nama klien atau no. invoice..."
+                value={pendingSearch}
+                onChange={(e) => setPendingSearch(e.target.value)}
+                className="pl-9"
+              />
             </div>
 
-            {loadingPending ? (
-              <div className="space-y-2">
-                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[60px] w-full rounded-xl" />)}
-              </div>
-            ) : unprocessed.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
-                <CheckCircle2 className="h-8 w-8 text-green-500" />
-                <p className="text-sm font-medium text-green-600">Semua invoice sudah diisi!</p>
-                <p className="text-xs">Tidak ada pengerjaan yang tertinggal dalam 90 hari terakhir.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {/* Summary */}
-                <div className="flex items-center gap-2 text-sm text-amber-600 font-medium mb-1">
-                  <Clock className="h-3.5 w-3.5" />
-                  {unprocessed.length} invoice belum diisi — diurutkan dari yang paling lama
-                </div>
-                {unprocessed.map((inv) => (
-                  <InvoiceRow key={inv.id} inv={inv} onOpen={setSelectedInvoice} />
-                ))}
+            {/* Summary */}
+            {!loadingPending && (
+              <div className="flex items-center gap-2 text-sm mb-4 text-muted-foreground">
+                {unprocessed.length > 0 ? (
+                  <span className="flex items-center gap-1 text-amber-600 font-medium">
+                    <Clock className="w-3.5 h-3.5" />{unprocessed.length} invoice belum diisi komisi
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-green-600 font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Semua sudah diisi
+                  </span>
+                )}
               </div>
             )}
-          </div>
+
+            {/* Skeleton */}
+            {loadingPending && (
+              <div className="space-y-2">
+                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
+              </div>
+            )}
+
+            {/* Empty */}
+            {!loadingPending && unprocessed.length === 0 && (
+              <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
+                <CheckCircle2 className="h-10 w-10 text-green-500" />
+                <p className="text-sm font-medium text-green-600">Semua pengerjaan sudah diisi!</p>
+                <p className="text-xs">
+                  {pendingSearch ? "Tidak ada invoice yang cocok dengan pencarian." : "Tidak ada invoice yang perlu diisi dalam 90 hari terakhir."}
+                </p>
+              </div>
+            )}
+
+            {/* Table */}
+            {!loadingPending && unprocessed.length > 0 && (
+              <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
+                <table className="w-full text-sm">
+                  <TableHead />
+                  <tbody className="divide-y divide-border/60">
+                    {unprocessed.map((inv) => (
+                      <InvoiceTableRow key={inv.id} inv={inv} showIsiButton />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         </TabsContent>
 
         {/* ── Tab: Per Tanggal ─────────────────────────────────── */}
         <TabsContent value="tanggal">
-          <div className="space-y-5 mt-2">
-            {/* Date navigator */}
-            <div className="flex items-center gap-1.5">
-              <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg"
-                onClick={() => setDate((d) => shiftDate(d, -1))}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <input type="date" value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="h-8 rounded-lg border border-input bg-background px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg"
-                onClick={() => setDate((d) => shiftDate(d, 1))}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+          <>
+            {/* Filter bar */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {/* Search */}
+              <div className="relative flex-1 min-w-[180px] max-w-xs">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Cari nama klien atau invoice..."
+                  value={dateSearch}
+                  onChange={(e) => setDateSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              {/* Date navigator */}
+              <div className="flex items-center gap-0 rounded-lg border border-input bg-background shadow-sm overflow-hidden shrink-0">
+                <button type="button"
+                  className="flex items-center px-2.5 py-2 hover:bg-muted/40 transition-colors"
+                  onClick={() => setDate((d) => shiftDate(d, -1))}>
+                  <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+                </button>
+                <div className="flex items-center gap-2 px-3 py-2 border-x border-input">
+                  <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <input type="date" value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="text-sm bg-transparent focus:outline-none" />
+                </div>
+                <button type="button"
+                  className="flex items-center px-2.5 py-2 hover:bg-muted/40 transition-colors"
+                  onClick={() => setDate((d) => shiftDate(d, 1))}>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </div>
+
               {!isToday && (
-                <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg"
+                <button type="button"
+                  className="text-xs text-primary underline shrink-0"
                   onClick={() => setDate(todayStr())}>
                   Hari Ini
-                </Button>
+                </button>
               )}
-              <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+
+              <button type="button"
+                className="p-1.5 rounded-lg border hover:bg-muted transition-colors shrink-0"
                 onClick={() => void refetchDate()} disabled={loadingDate || isFetching}>
-                <RefreshCw className={`h-4 w-4 ${loadingDate || isFetching ? "animate-spin" : ""}`} />
-              </Button>
-              <span className="text-sm text-muted-foreground ml-1">{dateLabel}</span>
+                <RefreshCw className={`h-3.5 w-3.5 text-muted-foreground ${loadingDate || isFetching ? "animate-spin" : ""}`} />
+              </button>
+
+              {dateSearch && (
+                <button type="button"
+                  onClick={() => setDateSearch("")}
+                  className="text-xs text-muted-foreground hover:text-foreground underline shrink-0">
+                  Reset
+                </button>
+              )}
             </div>
 
-            {/* Summary */}
-            {!loadingDate && dateInvoices.length > 0 && (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                <span>{dateInvoices.length} invoice</span>
-                {dateGroups.map((g) => {
-                  const cfg = STATUS_CFG[g.status];
-                  return (
-                    <span key={g.status} className="flex items-center gap-1">
-                      <span className="text-border">·</span>
-                      <span className={`flex items-center gap-1 font-medium ${
-                        g.status === "belum" ? "text-amber-600 dark:text-amber-400"
-                          : g.status === "terisi" ? "text-blue-600 dark:text-blue-400"
-                          : g.status === "pending" ? "text-purple-600 dark:text-purple-400"
-                          : "text-green-600 dark:text-green-400"
-                      }`}>
-                        {cfg.icon}{g.items.length} {g.label.toLowerCase()}
-                      </span>
-                    </span>
-                  );
-                })}
-              </div>
-            )}
+            {/* Label tanggal */}
+            <p className="text-sm text-muted-foreground mb-3">{dateLabel}</p>
 
+            {/* Skeleton */}
             {loadingDate ? (
-              <div className="space-y-2">
-                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[60px] w-full rounded-xl" />)}
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <div className="border-b bg-muted/40 h-10" />
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4 px-4 py-3 border-b last:border-0">
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-5 w-24 hidden sm:block" />
+                    <Skeleton className="h-4 w-20 hidden sm:block ml-auto" />
+                  </div>
+                ))}
               </div>
-            ) : dateInvoices.length === 0 ? (
+            ) : filteredDateInvoices.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
                 <Ban className="h-8 w-8" />
-                <p className="text-sm">Tidak ada invoice PAID pada tanggal ini.</p>
+                <p className="text-sm">
+                  {dateSearch ? "Tidak ada invoice yang cocok." : "Tidak ada invoice PAID pada tanggal ini."}
+                </p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {dateGroups.map((group) => {
-                  const cfg      = STATUS_CFG[group.status];
-                  const expanded = expandedGroups.has(group.status);
-                  return (
-                    <div key={group.status}>
-                      <button type="button"
-                        className="flex w-full items-center gap-2 mb-2 text-left"
-                        onClick={() => toggleGroup(group.status)}>
-                        <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? "" : "-rotate-90"}`} />
-                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          {group.label}
-                        </span>
-                        <span className={`rounded-full border px-1.5 py-0 text-[11px] font-semibold ${cfg.badge}`}>
-                          {group.items.length}
-                        </span>
-                      </button>
-                      {expanded && (
-                        <div className="space-y-2">
-                          {group.items.map((inv) => (
-                            <InvoiceRow key={inv.id} inv={inv} onOpen={setSelectedInvoice} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+              <div className="rounded-xl border border-border bg-card overflow-hidden overflow-x-auto">
+                <table className="w-full text-sm">
+                  <TableHead />
+                  <tbody className="divide-y divide-border/60">
+                    {filteredDateInvoices.map((inv) => (
+                      <InvoiceTableRow key={inv.id} inv={inv} />
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
-          </div>
+          </>
         </TabsContent>
       </Tabs>
 
