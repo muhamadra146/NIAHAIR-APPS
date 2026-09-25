@@ -216,13 +216,20 @@ export const router = createBrowserRouter([
             ],
           },
 
-          // ── Keuangan: Payroll & Generate Komisi — ADMIN + FINANCE
+          // ── Keuangan: Payroll — FINANCE only
           {
             element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","FINANCE"]} />,
             children: [
-              { path: "/payroll",     element: <PayrollPage /> },
+              { path: "/payroll",      element: <PayrollPage /> },
               { path: "/payroll/bpjs", element: <BpjsReportPage /> },
-              { path: "/generate-komisi",               element: <GenerateKomisiPage /> },
+            ],
+          },
+
+          // ── Generate Komisi — FINANCE + STAFF_OPERASIONAL (staff isi job mereka)
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","FINANCE","STAFF_OPERASIONAL"]} />,
+            children: [
+              { path: "/generate-komisi",                element: <GenerateKomisiPage /> },
               { path: "/generate-komisi/:id/calculator", element: <CommissionCalculatorPage /> },
             ],
           },
