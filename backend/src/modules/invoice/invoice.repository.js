@@ -408,15 +408,42 @@ const deleteWithTransaction = (invoiceId) =>
           await tx.materialUsageItem.deleteMany({ where: { materialUsageId: { in: usages.map((u) => u.id) } } });
           await tx.materialUsage.deleteMany({ where: { id: { in: usages.map((u) => u.id) } } });
         }
+
+        // Commission referencing TreatmentJobAssignment — harus dihapus
+        // SEBELUM TreatmentJobAssignment (FK: commission → treatmentJobAssignment)
+        await tx.commission.deleteMany({ where: { invoiceId } });
+
+        // TreatmentAssignment & TreatmentJobAssignment — keduanya punya FK ke treatmentItem
         await tx.treatmentAssignment.deleteMany({ where: { treatmentItemId: { in: tItemIds } } });
+        await tx.treatmentJobAssignment.deleteMany({ where: { treatmentItemId: { in: tItemIds } } });
         await tx.treatmentItem.deleteMany({ where: { id: { in: tItemIds } } });
+      } else {
+        // Tidak ada treatmentItem, tapi commission masih perlu dihapus
+        await tx.commission.deleteMany({ where: { invoiceId } });
       }
 
       await tx.treatmentMedia.deleteMany({ where: { treatmentSessionId: { in: sessionIds } } });
       await tx.treatmentSession.deleteMany({ where: { id: { in: sessionIds } } });
+    } else {
+      // Tidak ada treatmentSession sama sekali
+      await tx.commission.deleteMany({ where: { invoiceId } });
     }
 
-    await tx.commission.deleteMany({ where: { invoiceId } });
+    // OvertimeCharge — children dulu, baru parent
+    const otCharges = await tx.overtimeCharge.findMany({
+      where:  { invoiceId },
+      select: { id: true },
+    });
+    if (otCharges.length > 0) {
+      await tx.overtimeChargeEmployee.deleteMany({
+        where: { overtimeChargeId: { in: otCharges.map((o) => o.id) } },
+      });
+      await tx.overtimeCharge.deleteMany({ where: { invoiceId } });
+    }
+
+    // ClientConsultationNote — punya FK invoiceId
+    await tx.clientConsultationNote.deleteMany({ where: { invoiceId } });
+
     await tx.invoiceDeposit.deleteMany({ where: { invoiceId } });
     await tx.invoiceStatusHistory.deleteMany({ where: { invoiceId } });
     await tx.payment.deleteMany({ where: { invoiceId } });
