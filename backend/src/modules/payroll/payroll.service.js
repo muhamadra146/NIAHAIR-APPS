@@ -4,6 +4,7 @@ const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { resolveOrderBy } = require("../../utils/sort");
 const repo            = require("./payroll.repository");
+const settingRepo     = require("../setting/setting.repository");
 const { createSyncJob } = require("../syncQueue/syncQueue.service");
 
 const ORDER_MAP = {
@@ -59,10 +60,25 @@ const buildPeriodFromPayDay = (payDay, yearMonth) => {
 };
 
 // ── Generate payroll items from raw data ──────────────────────────────────────
-const HS_RATE_SMALL = 75_000;
-const HS_RATE_LARGE = 50_000;
+// Default HS rates — dapat di-override via Setting key payroll_hs_rate_small / payroll_hs_rate_large
+const HS_RATE_SMALL_DEFAULT = 75_000;
+const HS_RATE_LARGE_DEFAULT = 50_000;
 
-const buildItems = (salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments = [], unusedLeavePayouts = [], approvedLatePermissions = [], holidays = []) => {
+/** Baca HS rate dari tabel Setting, fallback ke default jika belum dikonfigurasi */
+const fetchHsRates = async () => {
+  const [small, large] = await Promise.all([
+    settingRepo.findByKey("payroll_hs_rate_small"),
+    settingRepo.findByKey("payroll_hs_rate_large"),
+  ]);
+  return {
+    small: small ? Number(small.value) : HS_RATE_SMALL_DEFAULT,
+    large: large ? Number(large.value) : HS_RATE_LARGE_DEFAULT,
+  };
+};
+
+const buildItems = (salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments = [], unusedLeavePayouts = [], approvedLatePermissions = [], holidays = [], hsRates = {}) => {
+  const HS_RATE_SMALL = hsRates.small ?? HS_RATE_SMALL_DEFAULT;
+  const HS_RATE_LARGE = hsRates.large ?? HS_RATE_LARGE_DEFAULT;
   const s = salarySetting;
 
   // Holiday date set for O(1) lookup
@@ -241,8 +257,9 @@ const generate = async ({ employeeId, branchId, yearMonth, payDay, periodStart: 
   if (!salarySetting)
     throw new AppError("No active salary setting found for this employee", StatusCodes.BAD_REQUEST);
 
+  const hsRates = await fetchHsRates();
   const { items, grossIncome, totalDeductions, netSalary } =
-    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays);
+    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays, hsRates);
 
   const payroll = await prisma.payroll.create({
     data: {
@@ -280,8 +297,9 @@ const recalculate = async (id, userId) => {
   if (!salarySetting)
     throw new AppError("No active salary setting found", StatusCodes.BAD_REQUEST);
 
+  const hsRates = await fetchHsRates();
   const { items, grossIncome, totalDeductions, netSalary } =
-    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays);
+    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays, hsRates);
 
   await repo.replaceAutoItems(id, items);
   const updated = await repo.update(id, {
@@ -510,9 +528,9 @@ const bulkGenerate = async ({ branchId, payDay, yearMonth, notes }, createdBy) =
         { employeeId: emp.id, branchId: emp.homeBranchId ?? branchId, yearMonth, payDay, notes },
         createdBy,
       );
-      results.push({ employeeId: emp.id, name: emp.name, employeeCode: emp.employeeCode, status: "created", payrollId: payroll.id });
+      results.push({ employeeId: emp.id, employeeName: emp.name, employeeCode: emp.employeeCode, status: "created", payrollId: payroll.id });
     } catch (err) {
-      results.push({ employeeId: emp.id, name: emp.name, employeeCode: emp.employeeCode, status: "error", error: err.message });
+      results.push({ employeeId: emp.id, employeeName: emp.name, employeeCode: emp.employeeCode, status: "error", message: err.message });
     }
   }
 

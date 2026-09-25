@@ -165,7 +165,7 @@ export const sidebarNav: NavItem[] = [
   },
 
   {
-    label: "Generate Komisi",
+    label: "Input Job",
     href:  "/generate-komisi",
     icon:  Sparkles,
     roles: [...ADMIN_ROLES, "FINANCE", "STAFF_OPERASIONAL"],

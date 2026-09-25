@@ -3,7 +3,7 @@ const authenticate = require("../../middlewares/auth.middleware");
 const authorize    = require("../../middlewares/role.middleware");
 const validate     = require("../../middlewares/validate.middleware");
 const { ROLES }   = require("../../common/constants/role.constant");
-const { generateSchema, updateNotesSchema } = require("./payroll.validation");
+const { generateSchema, bulkGenerateSchema, updateNotesSchema } = require("./payroll.validation");
 const {
   getAllController, getByIdController, generateController, bulkGenerateController,
   recalculateController, submitController, approveController, markAsPaidController,
@@ -28,7 +28,7 @@ router.post("/generate",
 );
 
 router.post("/bulk-generate",
-  authenticate, authorize(...ALL_ADMIN), bulkGenerateController,
+  authenticate, authorize(...ALL_ADMIN), validate(bulkGenerateSchema), bulkGenerateController,
 );
 
 router.post("/:id/recalculate",

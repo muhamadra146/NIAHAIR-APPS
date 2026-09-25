@@ -610,7 +610,7 @@ export function GenerateKomisiPage() {
   }
 
   return (
-    <PageContainer title="Generate Komisi" subtitle="Isi pengerjaan & kalkulasi komisi">
+    <PageContainer title="Input Job" subtitle="Isi pengerjaan & kalkulasi komisi">
       <Tabs value={tab} onValueChange={(v) => setTab(v as "pending" | "tanggal")}>
         <TabsList>
           <TabsTrigger value="pending" className="gap-1.5">

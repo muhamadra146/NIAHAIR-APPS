@@ -82,7 +82,7 @@ function AccurateJournalBadge({
   );
 }
 
-const CAN_DELETE: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
+const CAN_DELETE: string[] = ["SUPER_ADMIN", "OWNER"];
 
 // filterInputCls imported from @/lib/ui-utils
 

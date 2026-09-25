@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { Download }          from "lucide-react";
 import { PageContainer }     from "@/components/layout/PageContainer";
 import { Badge }             from "@/components/ui/badge";
+import { Button }            from "@/components/ui/button";
 import { useAllBranches }    from "@/features/settings/hooks";
 import { useAuthStore }      from "@/stores/authStore";
 import { useBpjsReport }     from "../hooks";
+import type { BpjsReportResult } from "../types";
 
 const fmtRp = (n: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
@@ -25,6 +28,59 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   PENDING_APPROVAL: { label: "Menunggu", cls: "bg-amber-50 text-amber-700 border-amber-200" },
   DRAFT:            { label: "Draft",    cls: "bg-slate-50 text-slate-600 border-slate-200" },
 };
+
+function exportBpjsToCsv(data: BpjsReportResult, yearMonth: string) {
+  const fmtNum = (n: number) => n.toLocaleString("id-ID");
+  const headers = [
+    "Karyawan", "Jabatan", "Periode", "Status", "Gaji Pokok",
+    "JHT Kary", "JHT Per", "JP Kary", "JP Per", "Kes Kary", "Kes Per",
+    "Total Karyawan", "Total Perusahaan",
+  ];
+
+  const rows = data.data.map((row) => [
+    row.employee.name,
+    row.employee.role.name,
+    `${new Date(row.periodStart).toLocaleDateString("id-ID")} - ${new Date(row.periodEnd).toLocaleDateString("id-ID")}`,
+    row.status,
+    fmtNum(row.baseSalary),
+    fmtNum(row.bpjsJht),
+    fmtNum(row.bpjsJhtEmployer),
+    fmtNum(row.bpjsJp),
+    fmtNum(row.bpjsJpEmployer),
+    fmtNum(row.bpjsKesehatan),
+    fmtNum(row.bpjsKesehatanEmployer),
+    fmtNum(row.totalEmployee),
+    fmtNum(row.totalEmployer),
+  ]);
+
+  // Totals row
+  const t = data.totals;
+  rows.push([
+    "TOTAL", "", "", "",
+    fmtNum(t.baseSalary),
+    fmtNum(t.bpjsJht),
+    fmtNum(t.bpjsJhtEmployer),
+    fmtNum(t.bpjsJp),
+    fmtNum(t.bpjsJpEmployer),
+    fmtNum(t.bpjsKesehatan),
+    fmtNum(t.bpjsKesehatanEmployer),
+    fmtNum(t.totalEmployee),
+    fmtNum(t.totalEmployer),
+  ]);
+
+  const csvContent = [headers, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+
+  // BOM for Excel UTF-8 compatibility
+  const blob = new Blob(["﻿" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `laporan-bpjs-${yearMonth}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export function BpjsReportPage() {
   const { branchId: sessionBranchId } = useAuthStore();
@@ -66,6 +122,18 @@ export function BpjsReportPage() {
               <option value="">Semua Cabang</option>
               {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
+          </div>
+          <div className="ml-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={!data || data.data.length === 0}
+              onClick={() => data && exportBpjsToCsv(data, yearMonth)}
+            >
+              <Download className="h-4 w-4" />
+              Export CSV
+            </Button>
           </div>
         </div>
 
