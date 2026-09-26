@@ -390,6 +390,29 @@ export interface CustomerMembershipRecord {
   membership:  Membership;
 }
 
+// ── Omset Bonus Tier ──────────────────────────────────────────────────
+export interface OmsetBonusTier {
+  id:           string;
+  employeeId:   string;
+  minimumOmset: number;
+  percentage:   number;
+  sortOrder:    number;
+  createdAt:    string;
+  updatedAt:    string;
+}
+
+export interface CreateOmsetBonusTierInput {
+  minimumOmset: number;
+  percentage:   number;
+  sortOrder?:   number;
+}
+
+export interface UpdateOmsetBonusTierInput {
+  minimumOmset?: number;
+  percentage?:   number;
+  sortOrder?:    number;
+}
+
 // ── Payroll GL Account Mapping ─────────────────────────────────────────
 export type PayrollGlCategory =
   | "gaji"

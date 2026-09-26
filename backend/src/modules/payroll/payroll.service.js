@@ -76,7 +76,7 @@ const fetchHsRates = async () => {
   };
 };
 
-const buildItems = (salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments = [], unusedLeavePayouts = [], approvedLatePermissions = [], holidays = [], hsRates = {}) => {
+const buildItems = (salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments = [], unusedLeavePayouts = [], approvedLatePermissions = [], holidays = [], hsRates = {}, omsetBonusTiers = [], branchOmset = 0) => {
   const HS_RATE_SMALL = hsRates.small ?? HS_RATE_SMALL_DEFAULT;
   const HS_RATE_LARGE = hsRates.large ?? HS_RATE_LARGE_DEFAULT;
   const s = salarySetting;
@@ -176,6 +176,29 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   addItem("INCOME", "libur_kerja",     "Kerja di Hari Libur",             holidayWorkAmount, holidayWorkingDays, s.holidayRatePerDay ?? 0);
   addItem("INCOME", "service_charge_hs", "Service Charge Home Service",   hsServiceChargeTotal, hsAppointments.length, hsAppointments.length > 0 ? (hsAppointments[0].staffs.length <= 3 ? HS_RATE_SMALL : HS_RATE_LARGE) : 0);
 
+  // Omset bonus — cari tier tertinggi yang dicapai
+  if (omsetBonusTiers.length > 0 && branchOmset > 0) {
+    // Tiers sudah diurutkan ascending berdasarkan minimumOmset (dari repo)
+    // Cari tier tertinggi yang omset aktual >= minimumOmset
+    let hitTier = null;
+    for (const tier of omsetBonusTiers) {
+      if (branchOmset >= Number(tier.minimumOmset)) {
+        hitTier = tier;
+      }
+    }
+    if (hitTier) {
+      const bonusAmount = D(branchOmset).mul(D(hitTier.percentage)).div(D(100));
+      addItem(
+        "INCOME",
+        "bonus_omset",
+        `Bonus Omset (${hitTier.percentage}% × ${new Intl.NumberFormat("id-ID").format(branchOmset)})`,
+        bonusAmount,
+        null,
+        hitTier.percentage,
+      );
+    }
+  }
+
   // Payout cuti tahunan tidak terpakai (hanya bulan Desember)
   for (const q of unusedLeavePayouts) {
     const unusedDays = q.totalDays - q.usedDays;
@@ -255,7 +278,7 @@ const generate = async ({ employeeId, branchId, yearMonth, payDay, periodStart: 
   const overlapping = await repo.findOverlapping(employeeId, periodStart, periodEnd, null);
   if (overlapping) throw new AppError("Payroll sudah ada untuk periode ini (overlap terdeteksi)", StatusCodes.CONFLICT);
 
-  const { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays } =
+  const { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset } =
     await repo.getGenerationData(employeeId, branchId, periodStart, periodEnd);
 
   if (!salarySetting)
@@ -263,7 +286,7 @@ const generate = async ({ employeeId, branchId, yearMonth, payDay, periodStart: 
 
   const hsRates = await fetchHsRates();
   const { items, grossIncome, totalDeductions, netSalary } =
-    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays, hsRates);
+    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays, hsRates, omsetBonusTiers, branchOmset);
 
   const payroll = await prisma.payroll.create({
     data: {
@@ -295,7 +318,7 @@ const recalculate = async (id, userId) => {
   if (existing.status !== "DRAFT")
     throw new AppError("Only DRAFT payrolls can be recalculated", StatusCodes.BAD_REQUEST);
 
-  const { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays } =
+  const { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset } =
     await repo.getGenerationData(existing.employeeId, existing.branchId, existing.periodStart, existing.periodEnd);
 
   if (!salarySetting)
@@ -303,7 +326,7 @@ const recalculate = async (id, userId) => {
 
   const hsRates = await fetchHsRates();
   const { items, grossIncome, totalDeductions, netSalary } =
-    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays, hsRates);
+    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays, hsRates, omsetBonusTiers, branchOmset);
 
   await repo.replaceAutoItems(id, items);
   const updated = await repo.update(id, {

@@ -31,6 +31,7 @@ import {
 } from "../hooks";
 import { EmployeeUpdateForm } from "../components/EmployeeForm";
 import { SalarySettingForm } from "../components/SalarySettingForm";
+import { OmsetBonusTierTab } from "../../settings/components/omsetBonusTier/OmsetBonusTierTab";
 import type { UpdateEmployeeFormValues, SalarySettingFormValues } from "../schemas/employee.schema";
 import type { SalarySetting } from "../types";
 
@@ -314,6 +315,7 @@ export function EmployeeDetailPage() {
                 </span>
               )}
             </TabsTrigger>
+            <TabsTrigger value="bonus-omset">Bonus Omset</TabsTrigger>
             {isOwnProfile && (
               <TabsTrigger value="security">Keamanan</TabsTrigger>
             )}
@@ -421,6 +423,19 @@ export function EmployeeDetailPage() {
                 </div>
               )}
             </div>
+          </TabsContent>
+
+          {/* Bonus Omset tab */}
+          <TabsContent value="bonus-omset" className="mt-4">
+            <OmsetBonusTierTab
+              embedded
+              fixedEmployee={{
+                id:           id!,
+                name:         employee.name,
+                role:         { name: employee.role?.name ?? "" },
+                employeeCode: employee.employeeCode,
+              }}
+            />
           </TabsContent>
 
           {isOwnProfile && (

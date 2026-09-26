@@ -137,16 +137,10 @@ const getAvailableStaff = async ({ date, branchId, startTime, endTime, excludeAp
     },
   });
 
-  if (startTime && endTime) {
-    // Filter: shift must cover the entire requested window
-    records = records.filter((r) => {
-      if (!r.shift?.startTime || !r.shift?.endTime) return false;
-      return r.shift.startTime <= startTime && r.shift.endTime >= endTime;
-    });
-
-    // Note: overlap/conflict filter dihapus — karyawan boleh handle lebih dari 1 client
-    // di jam yang sama (diatur oleh manager salon)
-  }
+  // Filter shift window DIHAPUS — staff yang WORKING bisa dipilih berapapun jamnya.
+  // startTime & endTime tetap dikirim ke response sebagai info shift, bukan gate.
+  // Note: overlap/conflict filter juga tidak ada — karyawan boleh handle lebih dari 1 client
+  // di jam yang sama (diatur oleh manager salon)
 
   // For today: mark staff who have already checked out
   const todayStr = new Date(Date.now() + 7 * 3600 * 1000).toISOString().split("T")[0]; // WIB (UTC+7)

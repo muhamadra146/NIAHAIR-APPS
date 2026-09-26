@@ -40,6 +40,8 @@ import { LeaveSettingsTab }        from "../components/leave/LeaveSettingsTab";
 import { MembershipTab }           from "../components/membership/MembershipTab";
 import { AttendanceSettingsTab }   from "../components/attendance/AttendanceSettingsTab";
 import { HolidayTab }              from "../components/holiday/HolidayTab";
+import { SalaryTab }              from "../components/salary/SalaryTab";
+import { OmsetBonusTierTab }      from "../components/omsetBonusTier/OmsetBonusTierTab";
 
 import type { EmployeeRole, User, Branch, PaymentMethod, CashAccount, Warehouse, ShiftMaster } from "../types";
 import type { BranchSyncResult } from "../api/branch.api";
@@ -1052,6 +1054,8 @@ const TABS = [
   { value: "memberships",     label: "Membership" },
   { value: "holidays",        label: "Hari Libur" },
   { value: "attendance",      label: "Absensi" },
+  { value: "salary",          label: "Gaji Karyawan" },
+  { value: "bonus-omset",     label: "Bonus Omset" },
   { value: "payroll-gl",      label: "Akun Gaji" },
   { value: "accurate",        label: "Accurate" },
 ] as const;
@@ -1101,6 +1105,8 @@ export function SettingsPage() {
             <TabsContent value="memberships"     className="mt-0 p-6"><MembershipTab /></TabsContent>
             <TabsContent value="holidays"        className="mt-0 p-6"><HolidayTab /></TabsContent>
             <TabsContent value="attendance"      className="mt-0 p-6"><AttendanceSettingsTab /></TabsContent>
+            <TabsContent value="salary"          className="mt-0 p-6"><SalaryTab /></TabsContent>
+            <TabsContent value="bonus-omset"     className="mt-0 p-6"><OmsetBonusTierTab /></TabsContent>
             <TabsContent value="payroll-gl"      className="mt-0 p-6"><PayrollGlAccountTab /></TabsContent>
             <TabsContent value="accurate"        className="mt-0 p-6"><AccuratePanel /></TabsContent>
           </div>

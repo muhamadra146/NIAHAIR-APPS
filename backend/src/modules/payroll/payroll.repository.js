@@ -52,7 +52,7 @@ const replaceAutoItems = async (payrollId, items) => {
 
 // Data needed for payroll generation
 const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) => {
-  const [salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, approvedLatePermissions, holidays] = await Promise.all([
+  const [salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, approvedLatePermissions, holidays, omsetBonusTiers, branchOmsetAggregate] = await Promise.all([
     // Active salary setting
     prisma.employeeSalarySettings.findFirst({
       where: { employeeId, isActive: true },
@@ -136,6 +136,22 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) =
       where: { date: { gte: periodStart, lte: periodEnd } },
       select: { date: true },
     }),
+
+    // Omset bonus tiers for this employee (sorted ascending by minimumOmset)
+    prisma.employeeOmsetBonusTier.findMany({
+      where:   { employeeId },
+      orderBy: { minimumOmset: "asc" },
+    }),
+
+    // Branch omset: sum of PAID invoice grandTotal in period
+    prisma.invoice.aggregate({
+      where: {
+        branchId,
+        status:    "PAID",
+        createdAt: { gte: periodStart, lte: periodEnd },
+      },
+      _sum: { grandTotal: true },
+    }),
   ]);
 
   // For December payrolls: fetch ANNUAL leave quotas with payout rate > 0
@@ -155,7 +171,9 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) =
     });
   }
 
-  return { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays };
+  const branchOmset = Number(branchOmsetAggregate._sum?.grandTotal ?? 0);
+
+  return { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset };
 };
 
 const findByEmployee = ({ skip, take, where }) =>

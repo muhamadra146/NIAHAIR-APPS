@@ -29,6 +29,9 @@ import {
 } from "../api/membership.api";
 import { fetchHolidays, createHoliday, updateHoliday, deleteHoliday } from "../api/holiday.api";
 import { fetchPayrollGlAccounts, savePayrollGlAccounts } from "../api/payrollGlAccount.api";
+import {
+  fetchOmsetBonusTiers, createOmsetBonusTier, updateOmsetBonusTier, deleteOmsetBonusTier,
+} from "../api/omsetBonusTier.api";
 import type {
   EmployeeListParams, EmployeeRoleListParams, UserListParams, BranchListParams,
   PaymentMethodListParams, CashAccountListParams, WarehouseListParams,
@@ -47,11 +50,12 @@ import type {
   CreateMembershipInput, UpdateMembershipInput, MembershipListParams,
   CreateHolidayInput, UpdateHolidayInput,
   SavePayrollGlAccountsInput,
+  CreateOmsetBonusTierInput, UpdateOmsetBonusTierInput,
 } from "../types";
 
 // ── Employees ─────────────────────────────────────────────────────────
-export const useEmployees = (params: EmployeeListParams = {}) =>
-  useQuery({ queryKey: ["employees", params], queryFn: () => fetchEmployees(params) });
+export const useEmployees = (params: EmployeeListParams = {}, options: { enabled?: boolean } = {}) =>
+  useQuery({ queryKey: ["employees", params], queryFn: () => fetchEmployees(params), enabled: options.enabled ?? true });
 
 export const useEmployee = (id: string) =>
   useQuery({ queryKey: ["employees", id], queryFn: () => fetchEmployee(id), enabled: Boolean(id) });
@@ -610,6 +614,38 @@ export const useDeleteHoliday = () => {
   return useMutation({
     mutationFn: (id: string) => deleteHoliday(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["holidays"] }); },
+  });
+};
+
+// ── Omset Bonus Tiers ─────────────────────────────────────────────────
+export const useOmsetBonusTiers = (employeeId: string) =>
+  useQuery({
+    queryKey: ["omsetBonusTiers", employeeId],
+    queryFn:  () => fetchOmsetBonusTiers(employeeId),
+    enabled:  Boolean(employeeId),
+  });
+
+export const useCreateOmsetBonusTier = (employeeId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateOmsetBonusTierInput) => createOmsetBonusTier(employeeId, input),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ["omsetBonusTiers", employeeId] }); },
+  });
+};
+
+export const useUpdateOmsetBonusTier = (id: string, employeeId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateOmsetBonusTierInput) => updateOmsetBonusTier(id, input),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ["omsetBonusTiers", employeeId] }); },
+  });
+};
+
+export const useDeleteOmsetBonusTier = (employeeId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteOmsetBonusTier(id),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ["omsetBonusTiers", employeeId] }); },
   });
 };
 

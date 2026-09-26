@@ -489,7 +489,7 @@ function MovementsTab({ branchId, showAllBranches = false }: { branchId?: string
   });
   const itemDropResults = itemDropData ?? [];
 
-  const { data: warehouseDropData } = useWarehouses({ branchId: branchId ?? undefined, limit: 100 });
+  const { data: warehouseDropData } = useWarehouses({ limit: 100 });
   const warehouseOptions: SelectOption[] = [
     { value: "", label: "Semua Gudang" },
     ...(warehouseDropData?.data ?? []).map((w) => ({ value: w.id, label: w.name })),
@@ -1272,7 +1272,7 @@ function OpeningBalanceDialog({ branchId, onClose }: { branchId?: string | null;
   const [showDrop, setShowDrop]       = useState(false);
 
   const createMut = useCreateOpeningBalance();
-  const { data: warehouseData } = useWarehouses({ branchId: branchId ?? undefined, limit: 100 });
+  const { data: warehouseData } = useWarehouses({ limit: 100 });
   const warehouses = warehouseData?.data ?? [];
 
   // Gunakan item master (bukan inventory records) agar item baru tanpa stok pun bisa ditemukan

@@ -268,6 +268,7 @@ model Employee {
   overtimeChargeEmployees  OvertimeChargeEmployee[]
   staffSchedules        StaffSchedule[]
   salarySettings        EmployeeSalarySettings[]
+  omsetBonusTiers       EmployeeOmsetBonusTier[]
   loans                 Loan[]
   payrolls              Payroll[]
   leaveQuotas           LeaveQuota[]
@@ -2829,6 +2830,27 @@ model EmployeeSalarySettings {
   @@index([employeeId])
   @@index([effectiveDate])
   @@map("employee_salary_settings")
+}
+
+// =====================================================
+// EMPLOYEE OMSET BONUS TIERS
+// =====================================================
+
+model EmployeeOmsetBonusTier {
+  id           String  @id @default(uuid())
+  employeeId   String
+
+  minimumOmset Decimal @db.Decimal(18, 2)   // threshold omset minimum (e.g. 1000000)
+  percentage   Decimal @db.Decimal(10, 4)   // bonus % dari omset aktual (e.g. 0.44)
+  sortOrder    Int     @default(0)           // urutan tier ascending
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@map("employee_omset_bonus_tiers")
 }
 
 // =====================================================

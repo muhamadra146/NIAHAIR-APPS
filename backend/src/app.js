@@ -70,6 +70,8 @@ const purchaseReturnRouter          = require("./modules/purchaseReturn/purchase
 const dashboardRouter               = require("./modules/dashboard/dashboard.route");
 const payrollGlAccountRouter        = require("./modules/payrollGlAccount/payrollGlAccount.route");
 const stockOpnameRouter             = require("./modules/stockOpname/stockOpname.route");
+const omsetBonusTierRouter           = require("./modules/omsetBonusTier/omsetBonusTier.route");
+const omsetBonusTierStandaloneRouter = omsetBonusTierRouter.standaloneRouter;
 
 
 const app = express();
@@ -176,6 +178,8 @@ v1.use("/production-orders",                    productionRouter);
 v1.use("/purchase-returns",                     purchaseReturnRouter);
 v1.use("/dashboard",                            dashboardRouter);
 v1.use("/stock-opnames",                        stockOpnameRouter);
+v1.use("/employees/:employeeId/omset-bonus-tiers", omsetBonusTierRouter);
+v1.use("/omset-bonus-tiers",                    omsetBonusTierStandaloneRouter);
 
 app.use("/api/v1", v1);
 

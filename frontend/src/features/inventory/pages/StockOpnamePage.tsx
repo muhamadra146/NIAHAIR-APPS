@@ -302,7 +302,7 @@ function CreateOpnameDialog({ branchId, onClose }: { branchId?: string | null; o
   const [warehouseId, setWarehouseId] = useState("");
   const [notes, setNotes]             = useState("");
 
-  const { data: warehouseData } = useWarehouses({ branchId: branchId ?? undefined, limit: 100 });
+  const { data: warehouseData } = useWarehouses({ limit: 100 });
   const warehouses = warehouseData?.data ?? [];
 
   const createMut = useCreateStockOpname();
