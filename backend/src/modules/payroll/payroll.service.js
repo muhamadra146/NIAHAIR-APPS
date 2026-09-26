@@ -144,8 +144,12 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
     ? D(s.baseSalary).mul(D(kesehatanPct)).div(D(100))
     : D(0);
 
-  // Kasbon deduction = sum of monthlyDeduction for each ACTIVE loan
-  const kasbonTotal = activeLoans.reduce((acc, l) => acc + Number(l.monthlyDeduction), 0);
+  // Kasbon deduction = sum cicilan per loan — gunakan Math.min agar cicilan terakhir
+  // tidak melebihi sisa (Bug fix #1: partial last installment)
+  const kasbonTotal = activeLoans.reduce(
+    (acc, l) => acc + Math.min(Number(l.monthlyDeduction), Number(l.remainingAmount)),
+    0
+  );
 
   const items = [];
 
@@ -335,6 +339,9 @@ const markAsPaid = async (id, paidBy) => {
   if (existing.status !== "APPROVED")
     throw new AppError("Only APPROVED payrolls can be marked as paid", StatusCodes.BAD_REQUEST);
 
+  // Bug fix #4: kumpulkan loan yang baru PAID_OFF di dalam tx, sync setelah tx
+  const paidOffLoanIds = [];
+
   await prisma.$transaction(async (tx) => {
     const now = new Date();
 
@@ -357,19 +364,26 @@ const markAsPaid = async (id, paidBy) => {
     if (kasbonItems.length > 0) {
       const activeLoans = await tx.loan.findMany({ where: { employeeId: existing.employeeId, status: "ACTIVE" } });
       for (const loan of activeLoans) {
-        const repayAmt = Number(loan.monthlyDeduction);
+        // Bug fix #1: gunakan Math.min agar cicilan terakhir tidak overstated
+        const repayAmt = Math.min(Number(loan.monthlyDeduction), Number(loan.remainingAmount));
         if (repayAmt <= 0) continue;
         const alreadyRepaid = await tx.loanRepayment.findFirst({ where: { loanId: loan.id, payrollId: id } });
         if (alreadyRepaid) continue;
-        const newRemaining = Math.max(Number(loan.remainingAmount) - repayAmt, 0);
+        const newRemaining = Number(loan.remainingAmount) - repayAmt;
         const newStatus    = newRemaining <= 0 ? "PAID_OFF" : "ACTIVE";
         await tx.loanRepayment.create({
           data: { loanId: loan.id, payrollId: id, amount: repayAmt, paidAt: now },
         });
         await tx.loan.update({ where: { id: loan.id }, data: { remainingAmount: newRemaining, status: newStatus } });
+        if (newStatus === "PAID_OFF") paidOffLoanIds.push(loan.id);
       }
     }
   });
+
+  // Bug fix #4: sync ke Accurate untuk setiap kasbon yang baru lunas
+  for (const loanId of paidOffLoanIds) {
+    await createSyncJob({ entityType: "LOAN", entityId: loanId, direction: "APP_TO_ACCURATE" });
+  }
 
   // Enqueue Accurate sync — Jurnal Umum when payroll is PAID
   await createSyncJob({

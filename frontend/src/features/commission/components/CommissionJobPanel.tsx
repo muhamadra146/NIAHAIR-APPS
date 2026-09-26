@@ -43,9 +43,10 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
   const [editName,        setEditName]        = useState("");
   const [editKey,         setEditKey]         = useState("");
   const [editSort,        setEditSort]        = useState("0");
-  const [editDeductsFrom, setEditDeductsFrom] = useState("");   // commissionJobId atau ""
-  const [editPrice,       setEditPrice]       = useState("");   // pricePerUnit atau ""
-  const [editUnit,        setEditUnit]        = useState("helai"); // satuan unit
+  const [editDeductsFrom,  setEditDeductsFrom]  = useState("");      // commissionJobId atau ""
+  const [editPrice,        setEditPrice]        = useState("");      // pricePerUnit atau ""
+  const [editUnit,         setEditUnit]         = useState("helai"); // satuan unit
+  const [editStaffCountMax, setEditStaffCountMax] = useState("");    // staffCountMax atau ""
 
   const { data: jobs = [], isLoading } = useQuery({
     queryKey:  ["commission-jobs", categoryId],
@@ -80,12 +81,12 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
 
   function resetEdit() {
     setEditId(null); setEditName(""); setEditKey(""); setEditSort("0");
-    setEditDeductsFrom(""); setEditPrice(""); setEditUnit("helai");
+    setEditDeductsFrom(""); setEditPrice(""); setEditUnit("helai"); setEditStaffCountMax("");
   }
 
   function startNew() {
     setEditId("new"); setEditName(""); setEditKey(""); setEditSort(String(jobs.length));
-    setEditDeductsFrom(""); setEditPrice(""); setEditUnit("helai");
+    setEditDeductsFrom(""); setEditPrice(""); setEditUnit("helai"); setEditStaffCountMax("");
   }
 
   function startEdit(job: CommissionJob) {
@@ -96,6 +97,7 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
     setEditDeductsFrom(job.deductsFromJobId ?? "");
     setEditPrice(job.pricePerUnit ? String(Number(job.pricePerUnit)) : "");
     setEditUnit(job.unit || "helai");
+    setEditStaffCountMax(job.staffCountMax != null ? String(job.staffCountMax) : "");
   }
 
   function saveNew() {
@@ -107,6 +109,7 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
       deductsFromJobId: editDeductsFrom || null,
       pricePerUnit:     editPrice ? parseFloat(editPrice) : null,
       unit:             editUnit.trim() || "helai",
+      staffCountMax:    editStaffCountMax ? parseInt(editStaffCountMax, 10) : null,
     });
   }
 
@@ -119,6 +122,7 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
       deductsFromJobId: editDeductsFrom || null,
       pricePerUnit:     editPrice ? parseFloat(editPrice) : null,
       unit:             editUnit.trim() || "helai",
+      staffCountMax:    editStaffCountMax ? parseInt(editStaffCountMax, 10) : null,
     });
   }
 
@@ -206,6 +210,18 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
                             </>
                           )}
                         </div>
+                        {/* Row 3: staffCountMax (HS dynamic rate) */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-muted-foreground w-20 shrink-0">Maks. Staff:</span>
+                          <Input
+                            type="number" min={1}
+                            value={editStaffCountMax}
+                            onChange={e => setEditStaffCountMax(e.target.value)}
+                            className="h-6 text-xs w-16"
+                            placeholder="—"
+                          />
+                          <span className="text-[10px] text-muted-foreground">orang (kosong = tidak ada batas)</span>
+                        </div>
                         {/* Actions */}
                         <div className="flex gap-1.5">
                           <Button size="sm" className="h-6 px-2" disabled={isMutating} onClick={() => saveEdit(job.id)}>
@@ -241,6 +257,13 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
                                   @ Rp {Number(job.pricePerUnit).toLocaleString("id-ID")}/{job.unit || "helai"}
                                 </span>
                               )}
+                            </div>
+                          )}
+                          {job.staffCountMax != null && (
+                            <div className="mt-0.5">
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 text-blue-600 border-blue-300">
+                                ≤ {job.staffCountMax} staff
+                              </Badge>
                             </div>
                           )}
                         </div>
@@ -327,6 +350,18 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
                         />
                       </>
                     )}
+                  </div>
+                  {/* Row 3: staffCountMax (HS dynamic rate) */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground w-20 shrink-0">Maks. Staff:</span>
+                    <Input
+                      type="number" min={1}
+                      value={editStaffCountMax}
+                      onChange={e => setEditStaffCountMax(e.target.value)}
+                      className="h-6 text-xs w-16"
+                      placeholder="—"
+                    />
+                    <span className="text-[10px] text-muted-foreground">orang (kosong = tidak ada batas)</span>
                   </div>
                   {/* Actions */}
                   <div className="flex gap-1.5">

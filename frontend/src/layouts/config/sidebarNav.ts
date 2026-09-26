@@ -74,6 +74,14 @@ export const sidebarNav: NavItem[] = [
     group: "Overview",
   },
 
+  {
+    label: "Finance Dashboard",
+    href:  "/finance",
+    icon:  BarChart3,
+    roles: [...ADMIN_ROLES, "MANAGER", "FINANCE"],
+    group: "Overview",
+  },
+
   // ── Operasional ───────────────────────────────────────────────────────────
   {
     label:          "Deposit",
@@ -147,14 +155,6 @@ export const sidebarNav: NavItem[] = [
   },
 
   // ── Keuangan ──────────────────────────────────────────────────────────────
-  {
-    label: "Finance Dashboard",
-    href:  "/finance",
-    icon:  BarChart3,
-    roles: [...ADMIN_ROLES, "MANAGER", "FINANCE"],
-    group: "Keuangan",
-  },
-
   {
     label:         "Commissions",
     href:          "/commissions",

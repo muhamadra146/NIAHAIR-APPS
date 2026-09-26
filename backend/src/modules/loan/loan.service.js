@@ -65,7 +65,8 @@ const updateLoan = async (id, body) => {
   if (body.monthlyDeduction !== undefined) data.monthlyDeduction = body.monthlyDeduction;
   if (body.endDate          !== undefined) data.endDate          = body.endDate ? new Date(body.endDate) : null;
   if (body.notes            !== undefined) data.notes            = body.notes;
-  if (body.status           !== undefined) data.status           = body.status;
+  // Bug fix #2: status TIDAK boleh diubah langsung via update.
+  // Gunakan cancelLoan() atau alur repayment untuk mengubah status.
 
   return repo.update(id, data);
 };
@@ -75,7 +76,16 @@ const cancelLoan = async (id) => {
   if (!existing) throw new AppError("Loan not found", StatusCodes.NOT_FOUND);
   if (existing.status !== "ACTIVE")
     throw new AppError("Only ACTIVE loans can be cancelled", StatusCodes.BAD_REQUEST);
-  return repo.update(id, { status: "CANCELLED" });
+  const result = await repo.update(id, { status: "CANCELLED" });
+
+  // Bug fix #4: sync ke Accurate saat kasbon di-cancel
+  await createSyncJob({
+    entityType: "LOAN",
+    entityId:   id,
+    direction:  "APP_TO_ACCURATE",
+  });
+
+  return result;
 };
 
 const addRepayment = async (loanId, body) => {
@@ -89,7 +99,19 @@ const addRepayment = async (loanId, body) => {
   if (amount > Number(loan.remainingAmount))
     throw new AppError("Amount exceeds remaining balance", StatusCodes.BAD_REQUEST);
 
-  return repo.addRepayment(loanId, amount, new Date(body.paidAt), body.notes, body.payrollId);
+  const repayment = await repo.addRepayment(loanId, amount, new Date(body.paidAt), body.notes, body.payrollId);
+
+  // Bug fix #4: sync ke Accurate saat kasbon lunas (PAID_OFF)
+  const updated = await repo.findById(loanId);
+  if (updated && updated.status === "PAID_OFF") {
+    await createSyncJob({
+      entityType: "LOAN",
+      entityId:   loanId,
+      direction:  "APP_TO_ACCURATE",
+    });
+  }
+
+  return repayment;
 };
 
 const getRepayments = async (loanId) => {
@@ -117,6 +139,15 @@ const getMyLoanById = async (id, employeeId) => {
 const deleteLoan = async (id) => {
   const loan = await repo.findById(id);
   if (!loan) throw new AppError("Loan not found", StatusCodes.NOT_FOUND);
+
+  // Bug fix #3: cek repayment sebelum delete agar tidak crash FK constraint
+  if (loan.repayments && loan.repayments.length > 0) {
+    throw new AppError(
+      `Kasbon tidak bisa dihapus karena sudah memiliki ${loan.repayments.length} cicilan. Gunakan Cancel untuk menonaktifkan kasbon ini.`,
+      StatusCodes.CONFLICT
+    );
+  }
+
   await repo.remove(id);
 };
 

@@ -28,10 +28,18 @@ const createJob = async (categoryId, body) => {
   const cat = await prisma.commissionCategory.findUnique({ where: { id: categoryId }, select: { id: true } });
   if (!cat) throw new AppError("Commission category not found", StatusCodes.NOT_FOUND);
 
-  const { name, jobKey: rawKey, sortOrder = 0, deductsFromJobId, pricePerUnit, unit } = body;
+  const { name, jobKey: rawKey, sortOrder = 0, deductsFromJobId, pricePerUnit, unit, staffCountMax } = body;
   const jobKey = rawKey ? sanitizeKey(rawKey) : sanitizeKey(name);
 
   if (!name || !jobKey) throw new AppError("name wajib diisi", StatusCodes.BAD_REQUEST);
+
+  // Validasi staffCountMax: jika diisi, harus integer positif
+  if (staffCountMax !== undefined && staffCountMax !== null) {
+    const val = Number(staffCountMax);
+    if (!Number.isInteger(val) || val < 1) {
+      throw new AppError("staffCountMax harus bilangan bulat positif (≥1)", StatusCodes.BAD_REQUEST);
+    }
+  }
 
   const existing = await repo.findByKey(categoryId, jobKey);
   if (existing) throw new AppError(`Job key "${jobKey}" sudah ada di kategori ini`, StatusCodes.CONFLICT);
@@ -51,7 +59,8 @@ const createJob = async (categoryId, body) => {
     sortOrder,
     deductsFromJobId: deductsFromJobId ?? null,
     pricePerUnit:     pricePerUnit != null ? pricePerUnit : null,
-    unit:             unit           ? String(unit).trim() : "helai",
+    unit:             unit ? String(unit).trim() : "helai",
+    staffCountMax:    staffCountMax != null ? Number(staffCountMax) : null,
   });
 };
 
@@ -67,8 +76,19 @@ const updateJob = async (categoryId, id, body) => {
   if (body.name             !== undefined) data.name             = body.name;
   if (body.sortOrder        !== undefined) data.sortOrder        = Number(body.sortOrder);
   if (body.isActive         !== undefined) data.isActive         = body.isActive;
-  if (body.pricePerUnit     !== undefined) data.pricePerUnit     = body.pricePerUnit != null ? body.pricePerUnit : null;
-  if (body.unit             !== undefined) data.unit             = body.unit ? String(body.unit).trim() : "helai";
+  if (body.pricePerUnit  !== undefined) data.pricePerUnit = body.pricePerUnit != null ? body.pricePerUnit : null;
+  if (body.unit          !== undefined) data.unit         = body.unit ? String(body.unit).trim() : "helai";
+  if (body.staffCountMax !== undefined) {
+    if (body.staffCountMax !== null) {
+      const val = Number(body.staffCountMax);
+      if (!Number.isInteger(val) || val < 1) {
+        throw new AppError("staffCountMax harus bilangan bulat positif (≥1)", StatusCodes.BAD_REQUEST);
+      }
+      data.staffCountMax = val;
+    } else {
+      data.staffCountMax = null;
+    }
+  }
 
   // deductsFromJobId: validasi tidak boleh menunjuk ke diri sendiri + harus kategori sama
   if (body.deductsFromJobId !== undefined) {

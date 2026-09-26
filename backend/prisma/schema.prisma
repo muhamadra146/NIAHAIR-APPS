@@ -1880,6 +1880,10 @@ model CommissionJob {
   pricePerUnit     Decimal?  @db.Decimal(15, 2) @map("price_per_unit")
   // Satuan unit helper — bebas diisi: "helai", "sesi", "cm", dll.
   unit             String    @default("helai") @map("unit")
+  // Batas jumlah staff untuk rate dinamis (Home Service):
+  // jika diisi, job ini berlaku hanya ketika total staff di invoice ≤ staffCountMax.
+  // Job tanpa nilai (null) berlaku ketika total staff > staffCountMax job lainnya.
+  staffCountMax    Int?      @map("staff_count_max")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

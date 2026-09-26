@@ -43,6 +43,9 @@ export interface CommissionJob {
   deductsFromJobId:     string | null;
   pricePerUnit:         string | null;  // Decimal as string from API; harga/unit untuk PERCENTAGE helper
   unit:                 string;         // satuan: "helai", "sesi", "cm", dll.
+  // staffCountMax: batas jumlah staff untuk rate dinamis (HS).
+  // null = berlaku ketika jumlah staff melebihi semua job yang punya staffCountMax.
+  staffCountMax:        number | null;
   deductsFrom?:         { id: string; name: string } | null;
   createdAt:            string;
   updatedAt:            string;
@@ -52,9 +55,10 @@ export interface CreateCommissionJobInput {
   name:               string;
   jobKey?:            string;
   sortOrder?:         number;
-  deductsFromJobId?:  string | null;   // job primary yang basenya berkurang
-  pricePerUnit?:      number | null;   // harga default per unit
-  unit?:              string;          // satuan: "helai", "sesi", "cm", dll.
+  deductsFromJobId?:  string | null;
+  pricePerUnit?:      number | null;
+  unit?:              string;
+  staffCountMax?:     number | null;  // batas staff untuk HS dynamic rate
 }
 
 export interface UpdateCommissionJobInput {
@@ -64,6 +68,7 @@ export interface UpdateCommissionJobInput {
   deductsFromJobId?:  string | null;
   pricePerUnit?:      number | null;
   unit?:              string;
+  staffCountMax?:     number | null;  // batas staff untuk HS dynamic rate
 }
 
 // ── Commission Rule ───────────────────────────────────────────────────────────

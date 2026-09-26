@@ -521,6 +521,7 @@ async function _buildLegacyRows({ invoice, session, treatmentItem, forfeitReason
 // (employee + category + job) → komisI per job per staff, independen.
 
 async function _buildCategoryJobRows({ invoice, session, treatmentItem, forfeitReason, sessionForfeited, tx }) {
+  const db                   = tx ?? require("../../config/prisma");
   const invoiceDate          = invoice.invoiceDate;
   const commissionCategoryId = treatmentItem.item?.commissionCategoryId;
   if (!commissionCategoryId) return [];
@@ -532,15 +533,79 @@ async function _buildCategoryJobRows({ invoice, session, treatmentItem, forfeitR
   );
   if (jobAssignments.length === 0) return [];
 
+  // ── staffCountMax: hitung total staff yang assign di kategori ini dalam invoice ──
+  // Diperlukan untuk job HS yang punya batas jumlah staff (staffCountMax).
+  // Hitung dari SEMUA treatment items di invoice yang belong to kategori yang sama.
+  let staffCountForCategory = null; // null = belum perlu dihitung
+  const getStaffCount = async () => {
+    if (staffCountForCategory !== null) return staffCountForCategory;
+    const allItems = invoice.treatmentSessions.flatMap((s) => s.treatmentItems ?? []);
+    const sameCatItems = allItems.filter((ti) => ti.item?.commissionCategoryId === commissionCategoryId);
+    const allJas = sameCatItems.flatMap((ti) => (ti.jobAssignments ?? []).filter((ja) => ja.employeeId));
+    // Hitung unique employee yang assign di kategori ini dalam invoice
+    staffCountForCategory = new Set(allJas.map((ja) => ja.employeeId)).size;
+    return staffCountForCategory;
+  };
+
   const rows = [];
 
   for (const ja of jobAssignments) {
-    // Cari rule: employee + category + job, aktif pada tanggal invoice
-    const rule = await (tx ?? require("../../config/prisma")).commissionRule.findFirst({
+    // Cek apakah job ini punya staffCountMax (HS dynamic rate)
+    const job = await db.commissionJob.findUnique({
+      where:  { id: ja.commissionJobId },
+      select: { staffCountMax: true, commissionCategoryId: true },
+    });
+
+    // ── staffCountMax logic ──
+    // Jika job punya staffCountMax, tentukan commissionJobId yang tepat berdasarkan total staff.
+    // Cari semua jobs dalam kategori yang sama yang punya staffCountMax (atau null).
+    // Pilih job dengan staffCountMax >= totalStaff (terkecil yang memenuhi), atau null sebagai fallback.
+    let effectiveJobId = ja.commissionJobId;
+    if (job?.staffCountMax !== undefined && job.staffCountMax !== null) {
+      // Job ini punya staffCountMax → ada logika dynamic rate → resolve job yang tepat
+      const totalStaff  = await getStaffCount();
+      const siblingJobs = await db.commissionJob.findMany({
+        where:  { commissionCategoryId, isActive: true, staffCountMax: { not: null } },
+        select: { id: true, staffCountMax: true },
+        orderBy: { staffCountMax: "asc" },
+      });
+      // Job terkecil yang staffCountMax-nya >= totalStaff
+      const matched = siblingJobs.find((j) => j.staffCountMax >= totalStaff);
+      if (matched) {
+        effectiveJobId = matched.id;
+      } else {
+        // totalStaff melebihi semua staffCountMax → cari job tanpa staffCountMax (fallback)
+        const fallbackJob = await db.commissionJob.findFirst({
+          where:  { commissionCategoryId, isActive: true, staffCountMax: null },
+          select: { id: true },
+        });
+        effectiveJobId = fallbackJob?.id ?? ja.commissionJobId;
+      }
+    } else if (job?.staffCountMax === null && job !== null) {
+      // Job ini tidak punya staffCountMax — cek apakah ada sibling yang punya
+      const hasSiblingWithMax = await db.commissionJob.count({
+        where: { commissionCategoryId, isActive: true, staffCountMax: { not: null } },
+      });
+      if (hasSiblingWithMax > 0) {
+        // Kategori ini menggunakan dynamic rate — job null = fallback untuk >max
+        // Resolve berdasarkan totalStaff
+        const totalStaff  = await getStaffCount();
+        const siblingJobs = await db.commissionJob.findMany({
+          where:  { commissionCategoryId, isActive: true, staffCountMax: { not: null } },
+          select: { id: true, staffCountMax: true },
+          orderBy: { staffCountMax: "asc" },
+        });
+        const matched = siblingJobs.find((j) => j.staffCountMax >= totalStaff);
+        effectiveJobId = matched ? matched.id : ja.commissionJobId;
+      }
+    }
+
+    // Cari rule: employee + category + job yang sudah di-resolve, aktif pada tanggal invoice
+    const rule = await db.commissionRule.findFirst({
       where: {
         employeeId:           ja.employeeId,
         commissionCategoryId,
-        commissionJobId:      ja.commissionJobId,
+        commissionJobId:      effectiveJobId,
         isActive:             true,
         effectiveDate:        { lte: invoiceDate },
         OR: [{ endDate: null }, { endDate: { gte: invoiceDate } }],
