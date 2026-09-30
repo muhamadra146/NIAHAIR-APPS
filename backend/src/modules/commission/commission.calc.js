@@ -98,11 +98,10 @@ function detectColoristInSession(items) {
 //
 // Aturan:
 //   Helper (deductsFromJobId diisi):
-//     · HELPER_UNIT (pricePerUnit > 0): base helper = qty × harga/unit
-//         komisi = base × rate% (PERCENTAGE) atau nominal rule (FIXED)
-//         base helper memotong base job primary target
-//     · HELPER_FLAT (tanpa harga/unit): komisi = nominal rule,
-//         nominal itu memotong komisi akhir job primary target
+//     · Rule PERCENTAGE + harga/unit (HELPER_UNIT): base helper = qty × harga/unit,
+//         komisi = base × rate%, base helper memotong BASE job primary target
+//     · Rule FIXED (nilai flat, dengan/tanpa harga/unit): komisi = nominal rule
+//         (sekali per staf, tidak dikali qty), nominal memotong KOMISI akhir job primary
 //   Primary:
 //     sisa base staf = base item staf − Σ base helper
 //     porsi staf (splitMode):
@@ -163,15 +162,14 @@ function calcCategoryItem({ subtotal, itemQty, jobs, qtyOverrides = {} }) {
       let effectiveBase = D(0);
       let amount        = D(0);
 
-      if (role === "HELPER_UNIT") {
+      if (role === "HELPER_UNIT" && w.commissionType !== "FIXED") {
+        // Helper persen: base helper = qty × harga/unit → memotong BASE job utama
         effectiveBase = qty.mul(price);
-        if (hasRule(w)) {
-          amount = w.commissionType === "PERCENTAGE"
-            ? roundRp(effectiveBase.mul(rateOf(w)).div(100))
-            : roundRp(rateOf(w));
-        }
+        if (hasRule(w)) amount = roundRp(effectiveBase.mul(rateOf(w)).div(100));
         ded(job.deductsFromJobId).base = ded(job.deductsFromJobId).base.add(effectiveBase);
       } else {
+        // Helper bernilai flat (rule FIXED, dengan/tanpa harga per unit): nominal rule
+        // dibayar sekali per staf dan memotong KOMISI job utama (bukan base / invoice)
         amount = hasRule(w) ? roundRp(rateOf(w)) : D(0);
         if (amount.gt(0)) ded(job.deductsFromJobId).flat = ded(job.deductsFromJobId).flat.add(amount);
       }

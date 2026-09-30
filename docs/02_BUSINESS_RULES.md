@@ -5466,16 +5466,17 @@ Color (`EQUAL`), sisa base Rp 938.500, 2 staf, rate 10%:
 
 Job Helper memotong Job Utama yang ditunjuk pada item yang sama.
 
-Helper per unit (harga per unit diisi):
+Helper persen (rule PERCENTAGE, harga per unit diisi):
 
 - Base helper = qty × harga per unit.
-- Komisi helper = base helper × rate% (PERCENTAGE) atau nominal rule (FIXED).
+- Komisi helper = base helper × rate%.
 - Base helper memotong **base** Job Utama.
 
-Helper flat (harga per unit kosong):
+Helper bernilai flat (rule FIXED, dengan atau tanpa harga per unit):
 
-- Komisi helper = nominal rule (FIXED).
-- Nominal tersebut memotong **komisi akhir** Job Utama.
+- Komisi helper = nominal rule, dibayar **sekali per staf** (tidak dikali qty).
+- Nominal tersebut memotong **komisi akhir** Job Utama, bukan base / total invoice.
+- Total komisi item tidak bertambah: bagian helper diambil dari komisi Job Utama.
 
 ### Formula Job Utama
 
@@ -5491,9 +5492,11 @@ Komisi dibulatkan ke rupiah (half-up) dan minimal Rp 0.
 
 ### Example
 
-Color + cuci rambut (Rp 5.000/kepala, 1 kepala), subtotal Rp 943.500:
+Color 10% + cuci rambut (rule FIXED Rp 5.000), subtotal Rp 943.500:
 
-- Sisa base color = 943.500 − 5.000 = Rp 938.500.
+- Komisi color sebelum potongan = 943.500 × 10% = Rp 94.350.
+- Cuci rambut = Rp 5.000, diambil dari komisi color → color Rp 89.350.
+- Total komisi item = Rp 94.350.
 
 ---
 

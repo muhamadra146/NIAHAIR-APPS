@@ -66,7 +66,29 @@ describe("calcCategoryItem", () => {
     expect(rowsOf(jobs, "pasang")[0].amount).toBe(150_000);
   });
 
-  test("EQUAL + helper per unit: base dipotong lalu dibagi rata per staf", () => {
+  test("helper flat (FIXED) dengan harga/unit memotong KOMISI job utama, bukan base", () => {
+    // Kasus INV-0003: color 10% dari 943.500 = 94.350; cuci rambut flat 5.000 diambil dari komisi itu
+    const jobs = calcCategoryItem({
+      subtotal: 943_500,
+      itemQty:  1,
+      jobs: [
+        job("color", { unit: "sesi", splitMode: "EQUAL", sortOrder: 0,
+          workers: [worker("a", { workQty: 1 })] }),
+        job("cuci", { unit: "kepala", deductsFromJobId: "color", pricePerUnit: 5000, sortOrder: 1,
+          workers: [worker("c", { workQty: 2, commissionType: "FIXED", commissionValue: "5000" })] }),
+      ],
+    });
+    const color = jobs.find((j) => j.commissionJobId === "color");
+    expect(color.remainingBase).toBe(943_500);          // base tidak dipotong
+    expect(color.rows[0].amount).toBe(89_350);          // 94.350 − 5.000
+    expect(color.rows[0].flatDeduction).toBe(5000);
+    expect(rowsOf(jobs, "cuci")[0].amount).toBe(5000);  // sekali per staf, tidak dikali qty
+    expect(rowsOf(jobs, "cuci")[0].effectiveBase).toBe(0);
+    const total = jobs.flatMap((j) => j.rows).reduce((s, r) => s + r.amount, 0);
+    expect(total).toBe(94_350);                         // total = komisi job utama
+  });
+
+  test("EQUAL + helper persen per unit: base dipotong lalu dibagi rata per staf", () => {
     const jobs = calcCategoryItem({
       subtotal: 943_500,
       itemQty:  1,
@@ -74,14 +96,14 @@ describe("calcCategoryItem", () => {
         job("color", { unit: "sesi", splitMode: "EQUAL", sortOrder: 0,
           workers: [worker("a", { workQty: 1 }), worker("b", { workQty: 1 })] }),
         job("cuci", { unit: "kepala", deductsFromJobId: "color", pricePerUnit: 5000, sortOrder: 1,
-          workers: [worker("c", { workQty: 1, commissionType: "FIXED", commissionValue: "5000" })] }),
+          workers: [worker("c", { workQty: 1, commissionType: "PERCENTAGE", commissionValue: "10" })] }),
       ],
     });
     const color = jobs.find((j) => j.commissionJobId === "color");
     expect(color.remainingBase).toBe(938_500);
     expect(color.rows.map((r) => r.amount)).toEqual([46_925, 46_925]);
     expect(color.rows[0].workRatio).toBe(0.5);
-    expect(rowsOf(jobs, "cuci")[0].amount).toBe(5000);
+    expect(rowsOf(jobs, "cuci")[0].amount).toBe(500);          // 5.000 × 10%
     expect(rowsOf(jobs, "cuci")[0].effectiveBase).toBe(5000);
   });
 
@@ -144,7 +166,7 @@ describe("calcCategoryItem", () => {
           worker("b"),                          // fallback subtotal
         ] }),
         job("h", { deductsFromJobId: "p", pricePerUnit: 10_000, sortOrder: 1,
-          workers: [worker("c", { workQty: 1, commissionType: "FIXED", commissionValue: "10000" })] }),
+          workers: [worker("c", { workQty: 1 })] }), // helper persen → potong base 10.000
       ],
     });
     const [a, b] = rowsOf(jobs, "p");
