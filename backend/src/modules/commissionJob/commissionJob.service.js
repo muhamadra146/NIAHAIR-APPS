@@ -4,6 +4,17 @@ const prisma   = require("../../config/prisma");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo     = require("./commissionJob.repository");
 
+const SPLIT_MODES  = ["BY_QTY", "EQUAL", "FULL"];
+const DEFAULT_QTYS = ["ITEM_QTY", "ONE"];
+
+// Validasi enum opsional — undefined = tidak diubah
+const assertEnum = (value, allowed, field) => {
+  if (value === undefined) return;
+  if (!allowed.includes(value)) {
+    throw new AppError(`${field} harus salah satu dari: ${allowed.join(", ")}`, StatusCodes.BAD_REQUEST);
+  }
+};
+
 const sanitizeKey = (s) =>
   s.toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/__+/g, "_").replace(/^_|_$/g, "");
 
@@ -28,10 +39,12 @@ const createJob = async (categoryId, body) => {
   const cat = await prisma.commissionCategory.findUnique({ where: { id: categoryId }, select: { id: true } });
   if (!cat) throw new AppError("Commission category not found", StatusCodes.NOT_FOUND);
 
-  const { name, jobKey: rawKey, sortOrder = 0, deductsFromJobId, pricePerUnit, unit, staffCountMax } = body;
+  const { name, jobKey: rawKey, sortOrder = 0, deductsFromJobId, pricePerUnit, unit, staffCountMax, splitMode, defaultQty } = body;
   const jobKey = rawKey ? sanitizeKey(rawKey) : sanitizeKey(name);
 
   if (!name || !jobKey) throw new AppError("name wajib diisi", StatusCodes.BAD_REQUEST);
+  assertEnum(splitMode,  SPLIT_MODES,  "splitMode");
+  assertEnum(defaultQty, DEFAULT_QTYS, "defaultQty");
 
   // Validasi staffCountMax: jika diisi, harus integer positif
   if (staffCountMax !== undefined && staffCountMax !== null) {
@@ -61,6 +74,8 @@ const createJob = async (categoryId, body) => {
     pricePerUnit:     pricePerUnit != null ? pricePerUnit : null,
     unit:             unit ? String(unit).trim() : "helai",
     staffCountMax:    staffCountMax != null ? Number(staffCountMax) : null,
+    ...(splitMode  && { splitMode }),
+    ...(defaultQty && { defaultQty }),
   });
 };
 
@@ -78,6 +93,10 @@ const updateJob = async (categoryId, id, body) => {
   if (body.isActive         !== undefined) data.isActive         = body.isActive;
   if (body.pricePerUnit  !== undefined) data.pricePerUnit = body.pricePerUnit != null ? body.pricePerUnit : null;
   if (body.unit          !== undefined) data.unit         = body.unit ? String(body.unit).trim() : "helai";
+  assertEnum(body.splitMode,  SPLIT_MODES,  "splitMode");
+  assertEnum(body.defaultQty, DEFAULT_QTYS, "defaultQty");
+  if (body.splitMode  !== undefined) data.splitMode  = body.splitMode;
+  if (body.defaultQty !== undefined) data.defaultQty = body.defaultQty;
   if (body.staffCountMax !== undefined) {
     if (body.staffCountMax !== null) {
       const val = Number(body.staffCountMax);

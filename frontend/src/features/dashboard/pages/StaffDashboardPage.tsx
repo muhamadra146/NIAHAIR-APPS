@@ -10,7 +10,7 @@ import { PageContainer }       from "@/components/layout/PageContainer";
 import { useAuthStore }        from "@/stores/authStore";
 import { formatCurrency }      from "@/lib/utils";
 import { useAppointments }     from "@/features/appointment/hooks";
-import { useCommissions }      from "@/features/commission/hooks";
+import { useMyCommissions }    from "@/features/commission/hooks";
 import { useMyPayrolls }       from "@/features/payroll/hooks/index";
 import { useMyAttendanceToday } from "@/features/attendance/hooks";
 
@@ -65,8 +65,7 @@ const QUICK_LINKS = [
   { label: "Komisi Saya",    href: "/my-commission",   icon: BadgeDollarSign },
   { label: "Slip Gaji",      href: "/my-payslip",      icon: FileText        },
   { label: "Kasbon Saya",    href: "/my-kasbon",       icon: Banknote        },
-  { label: "Schedule",       href: "/schedule",        icon: CalendarRange   },
-  { label: "Booking",        href: "/appointments",    icon: CalendarDays    },
+  { label: "Jadwal Saya",    href: "/my-schedule",     icon: CalendarRange   },
 ];
 
 // ── Components ────────────────────────────────────────────────────────────────
@@ -151,7 +150,8 @@ function AttendanceCard() {
 
 function CommissionPeriodCard() {
   const period   = useCurrentPeriod();
-  const { data } = useCommissions({
+  // Komisi milik user login (GET /commissions/my)
+  const { data, isLoading } = useMyCommissions({
     limit:      1000,
     startDate:  period.start,
     endDate:    period.end,
@@ -161,7 +161,6 @@ function CommissionPeriodCard() {
   const total       = items.reduce((s, c) => s + Number(c.commissionAmount), 0);
   const paid        = items.filter(c => c.status === "PAID").reduce((s, c) => s + Number(c.commissionAmount), 0);
   const pending     = items.filter(c => c.status === "PENDING").reduce((s, c) => s + Number(c.commissionAmount), 0);
-  const isLoading   = !data;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm min-h-[140px]">
@@ -246,9 +245,10 @@ function TodayAppointmentsCard({ employeeId }: { employeeId: string }) {
             const cfg = APPT_STATUS[a.status] ?? APPT_STATUS.BOOKED;
             const time = new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
             return (
+              // Booking Harian default ke hari ini; /appointments/:id tidak bisa diakses semua role
               <Link
                 key={a.id}
-                to={`/appointments/${a.id}`}
+                to="/booking-harian"
                 className="flex items-center gap-4 px-5 py-3.5 group hover:bg-slate-50 transition-colors"
               >
                 <span className="text-xs font-mono text-slate-400 w-12 shrink-0 tabular-nums">{time}</span>
@@ -305,7 +305,7 @@ export function StaffDashboardPage() {
         {/* Quick links */}
         <section>
           <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Menu Cepat</p>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
             {QUICK_LINKS.map(({ label, href, icon: Icon }) => (
               <Link
                 key={href}

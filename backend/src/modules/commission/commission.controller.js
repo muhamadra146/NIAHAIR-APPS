@@ -1,6 +1,7 @@
 const { success } = require("../../common/responses/apiResponse");
 const {
   listCommissions,
+  listMyCommissions,
   getCommissionById,
   approveCommission,
   markCommissionPaid,
@@ -13,6 +14,15 @@ const getAllController = async (req, res, next) => {
   try {
     const result = await listCommissions(req.query);
     return success(res, result, "Commissions fetched");
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getMyController = async (req, res, next) => {
+  try {
+    const result = await listMyCommissions(req.user.employeeId, req.query);
+    return success(res, result, "My commissions fetched");
   } catch (err) {
     next(err);
   }
@@ -79,6 +89,7 @@ const deleteController = async (req, res, next) => {
 
 module.exports = {
   getAllController,
+  getMyController,
   getByIdController,
   approveController,
   payController,

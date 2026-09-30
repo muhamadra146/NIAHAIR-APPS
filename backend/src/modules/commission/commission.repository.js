@@ -4,6 +4,15 @@ const prisma = require("../../config/prisma");
 
 const withTransaction = (fn) => prisma.$transaction(fn);
 
+// ── Field CommissionJob untuk kalkulasi kategori-job ──────────────────
+// Dipakai include generator (di sini) & worksheet (invoice.repository).
+
+const JOB_CALC_SELECT = {
+  id: true, name: true, jobKey: true, sortOrder: true, isActive: true,
+  deductsFromJobId: true, pricePerUnit: true, unit: true,
+  splitMode: true, defaultQty: true, staffCountMax: true,
+};
+
 // ── Include shape for management reads ───────────────────────────────
 
 const INCLUDE = {
@@ -18,6 +27,17 @@ const INCLUDE = {
   },
   invoiceItem: {
     select: { id: true, itemId: true, qty: true, price: true, subtotal: true },
+  },
+  serviceItem: {
+    select: { id: true, name: true },
+  },
+  // Job kategori-job — untuk menampilkan rincian perhitungan (cara bagi, satuan)
+  treatmentJobAssignment: {
+    select: {
+      commissionJob: {
+        select: { id: true, name: true, unit: true, splitMode: true, deductsFromJobId: true, pricePerUnit: true },
+      },
+    },
   },
   // Invoice summary untuk per-invoice grouping di UI
   invoice: {
@@ -107,13 +127,10 @@ const findInvoiceForGeneration = (invoiceId, tx) => {
                 select: {
                   id:                   true,
                   commissionCategoryId: true,
-                  serviceJobSlots: {
-                    where: { isActive: true },
+                  commissionCategory: {
                     select: {
-                      id:             true,
-                      slotKey:        true,
-                      label:          true,
-                      commissionRate: true,
+                      id: true, name: true,
+                      jobs: { select: JOB_CALC_SELECT, orderBy: { sortOrder: "asc" } },
                     },
                   },
                 },
@@ -131,24 +148,8 @@ const findInvoiceForGeneration = (invoiceId, tx) => {
                 select: {
                   id:               true,
                   employeeId:       true,
-                  serviceJobSlotId: true,
                   commissionJobId:  true,
                   workQty:          true,
-                  commissionAmount: true,  // nominal manual — dipakai langsung jika ada
-                  serviceJobSlot: {
-                    select: {
-                      id:             true,
-                      slotKey:        true,
-                      commissionRate: true,
-                      commissionMode: true,
-                      roleId:         true,
-                      isMainJob:      true,
-                      slotType:       true,
-                      serviceJobRole: {
-                        select: { id: true, commissionRate: true },
-                      },
-                    },
-                  },
                 },
               },
             },
@@ -294,6 +295,7 @@ const findPayrollsContainingCommissions = (commissions, tx) => {
 };
 
 module.exports = {
+  JOB_CALC_SELECT,
   // management
   findAll,
   count,

@@ -33,12 +33,13 @@ const {
 } = require("./commission.repository");
 const {
   D,
-  isSameDayWIB,
   sumWorkQty,
   distributePool,
   canOverride,
   canRegenerate,
+  calcCategoryItem,
 } = require("./commission.calc");
+const { findActiveByEmployeeAndJob } = require("../commissionRule/commissionRule.repository");
 
 // ── Management ────────────────────────────────────────────────────────
 
@@ -66,6 +67,13 @@ const listCommissions = async ({
   ]);
 
   return { data: commissions, meta: paginationMeta(total, pageNum, limitNum) };
+};
+
+// Self-service: employeeId selalu dari user login, tidak bisa di-override via query
+const listMyCommissions = async (employeeId, { page, limit, status, branchId, startDate, endDate, sortBy }) => {
+  if (!employeeId)
+    throw new AppError("Akun ini tidak terhubung ke data karyawan", StatusCodes.FORBIDDEN);
+  return listCommissions({ page, limit, employeeId, status, branchId, startDate, endDate, sortBy });
 };
 
 const getCommissionById = async (id) => {
@@ -175,264 +183,12 @@ function resolveBaseAmount(invoiceItem, commissionBase, inclusiveTax) {
 // Siapa dapat sisa rupiah? Orang terakhir dalam urutan assignments dari DB.
 //   Urutan tidak dimanipulasi — konsisten dengan urutan TreatmentAssignment.
 
-// ── Job-slot path (sistem baru) ───────────────────────────────────────
-//
-// Dua sub-engine:
-//
-// A. LAMA (backward compat): slot tanpa roleId, pakai commissionMode (FIXED_RATE/WORK_QTY)
-//    FIXED_RATE: 1 staff, komisi = subtotal × rate%
-//    WORK_QTY  : banyak staff, dibagi proporsional by helaian
-//
-// B. BARU (role group engine): slot dengan roleId
-//    rolePool = role.commissionRate% × subtotal
-//    FLAT slots: deducted from pool, manual Rp input per treatment
-//    MAIN slot : dapat sisa pool = rolePool - sum(flatAmounts)
-//                jika banyak staff → split by helaian (workQty)
-
-// Helper — proses satu slot dengan engine lama (FIXED_RATE / WORK_QTY)
-function _processLegacySlot({ slot, assignments, invoice, invoiceItem, baseAmount, treatmentItem, forfeitReason, sessionForfeited }) {
-  const rows = [];
-  const rate  = D(slot.commissionRate);
-  const pool  = baseAmount.mul(rate).div(D(100));
-
-  if (slot.commissionMode === "FIXED_RATE") {
-    const ja = assignments[0];
-    const commissionAmount = ja.commissionAmount != null
-      ? D(String(ja.commissionAmount))
-      : pool.toDecimalPlaces(2);
-
-    rows.push({
-      invoiceId:                invoice.id,
-      invoiceItemId:            invoiceItem?.id ?? null,
-      treatmentAssignmentId:    null,
-      treatmentJobAssignmentId: ja.id,
-      serviceJobSlotId:         ja.serviceJobSlotId,
-      employeeId:               ja.employeeId,
-      serviceItemId:            treatmentItem.itemId,
-      commissionRuleId:         null,
-      commissionType:           "PERCENTAGE",
-      commissionValue:          slot.commissionRate,
-      commissionBase:           "AFTER_DISCOUNT_BEFORE_TAX",
-      workQty:                  null,
-      workRatio:                null,
-      baseAmount,
-      commissionAmount,
-      status:                   "PENDING",
-      isForfeit:                sessionForfeited,
-      forfeitReason,
-    });
-  } else {
-    // WORK_QTY
-    const totalQty      = assignments.reduce((s, ja) => s.add(D(ja.workQty ?? 0)), D(0));
-    const allHaveManual = assignments.every((ja) => ja.commissionAmount != null);
-    if (!allHaveManual && totalQty.isZero()) return rows;
-
-    const amounts = totalQty.isZero()
-      ? assignments.map(() => D(0))
-      : distributePool(pool, assignments.map((ja) => ({ workQty: ja.workQty ?? 0 })));
-
-    for (let i = 0; i < assignments.length; i++) {
-      const ja        = assignments[i];
-      const workQty   = D(ja.workQty ?? 0);
-      const workRatio = totalQty.isZero() ? D(0) : workQty.div(totalQty);
-      const commissionAmount = ja.commissionAmount != null
-        ? D(String(ja.commissionAmount))
-        : amounts[i];
-
-      rows.push({
-        invoiceId:                invoice.id,
-        invoiceItemId:            invoiceItem?.id ?? null,
-        treatmentAssignmentId:    null,
-        treatmentJobAssignmentId: ja.id,
-        serviceJobSlotId:         ja.serviceJobSlotId,
-        employeeId:               ja.employeeId,
-        serviceItemId:            treatmentItem.itemId,
-        commissionRuleId:         null,
-        commissionType:           "PERCENTAGE",
-        commissionValue:          slot.commissionRate,
-        commissionBase:           "AFTER_DISCOUNT_BEFORE_TAX",
-        workQty,
-        workRatio,
-        baseAmount,
-        commissionAmount,
-        status:                   "PENDING",
-        isForfeit:                sessionForfeited,
-        forfeitReason,
-      });
-    }
-  }
-
-  return rows;
-}
-
-// Helper — row builder (reused by both engines)
-function _makeRow({ invoice, invoiceItem, treatmentItem, ja, slot, workQty, workRatio, commissionAmount, forfeitReason, sessionForfeited }) {
-  return {
-    invoiceId:                invoice.id,
-    invoiceItemId:            invoiceItem?.id ?? null,
-    treatmentAssignmentId:    null,
-    treatmentJobAssignmentId: ja.id,
-    serviceJobSlotId:         ja.serviceJobSlotId,
-    employeeId:               ja.employeeId,
-    serviceItemId:            treatmentItem.itemId,
-    commissionRuleId:         null,
-    commissionType:           "PERCENTAGE",
-    commissionValue:          slot.commissionRate,
-    commissionBase:           "AFTER_DISCOUNT_BEFORE_TAX",
-    workQty:                  workQty ?? null,
-    workRatio:                workRatio ?? null,
-    baseAmount: invoiceItem ? D(invoiceItem.subtotal) : D(treatmentItem.priceSnapshot),
-    commissionAmount,
-    status:                   "PENDING",
-    isForfeit:                sessionForfeited,
-    forfeitReason,
-  };
-}
-
-function _buildJobSlotRows({ invoice, session, treatmentItem, forfeitReason, sessionForfeited }) {
-  const invoiceItem = invoice.items.find((ii) => ii.itemId === treatmentItem.itemId) ?? null;
-  const baseAmount  = invoiceItem ? D(invoiceItem.subtotal) : D(treatmentItem.priceSnapshot);
-
-  // Grup job assignments berdasarkan slot
-  const bySlot = new Map();
-  for (const ja of treatmentItem.jobAssignments) {
-    if (!ja.employeeId) continue;
-    const slotId = ja.serviceJobSlotId;
-    if (!bySlot.has(slotId)) bySlot.set(slotId, { slot: ja.serviceJobSlot, assignments: [] });
-    bySlot.get(slotId).assignments.push(ja);
-  }
-
-  const rows = [];
-
-  // Deteksi apakah ada slot dengan roleId (engine baru)
-  const hasRoleSlots = [...bySlot.values()].some(({ slot }) => slot?.roleId != null);
-
-  if (!hasRoleSlots) {
-    // ── Engine lama: FIXED_RATE / WORK_QTY ──
-    for (const { slot, assignments } of bySlot.values()) {
-      rows.push(..._processLegacySlot({ slot, assignments, invoice, invoiceItem, baseAmount, treatmentItem, forfeitReason, sessionForfeited }));
-    }
-    return rows;
-  }
-
-  // ── Engine baru: role group ──
-  // Pisahkan slot dengan roleId (baru) dan tanpa roleId (legacy)
-  const roleGroups  = new Map();  // roleId → { role, flatEntries, mainEntries }
-  const legacyEntries = [];
-
-  for (const entry of bySlot.values()) {
-    const { slot } = entry;
-    if (!slot?.roleId) {
-      legacyEntries.push(entry);
-    } else {
-      const rid = slot.roleId;
-      if (!roleGroups.has(rid)) {
-        roleGroups.set(rid, {
-          role:         slot.serviceJobRole,
-          flatEntries:  [],
-          mainEntries:  [],
-          otherEntries: [],
-        });
-      }
-      const grp = roleGroups.get(rid);
-      if (slot.slotType === "FLAT")       grp.flatEntries.push(entry);
-      else if (slot.isMainJob)            grp.mainEntries.push(entry);
-      else                                grp.otherEntries.push(entry);
-    }
-  }
-
-  // Proses slot legacy yang ada di item yang juga punya role-slot
-  for (const entry of legacyEntries) {
-    rows.push(..._processLegacySlot({ ...entry, invoice, invoiceItem, baseAmount, treatmentItem, forfeitReason, sessionForfeited }));
-  }
-
-  // Proses setiap role group
-  for (const { role, flatEntries, mainEntries, otherEntries } of roleGroups.values()) {
-    const rolePool = baseAmount.mul(D(role.commissionRate)).div(D(100)).toDecimalPlaces(2);
-
-    // ── FLAT slots — deduct dari pool, emit row langsung ──
-    let flatTotal = D(0);
-    for (const { slot, assignments: flatAssignments } of flatEntries) {
-      for (const ja of flatAssignments) {
-        const flatAmt = ja.commissionAmount != null
-          ? D(String(ja.commissionAmount))
-          : D(0);  // FLAT tanpa input → Rp 0 (admin harus isi manual)
-        flatTotal = flatTotal.add(flatAmt);
-
-        rows.push(_makeRow({
-          invoice, invoiceItem, treatmentItem, ja, slot,
-          workQty:          null,
-          workRatio:        null,
-          commissionAmount: flatAmt,
-          forfeitReason, sessionForfeited,
-        }));
-      }
-    }
-
-    // ── MAIN slot — dapat sisa pool setelah FLAT dibayar ──
-    const rawMain  = rolePool.sub(flatTotal);
-    const mainPool = rawMain.isNegative() ? D(0) : rawMain;
-
-    for (const { slot, assignments: mainAssignments } of mainEntries) {
-      if (mainAssignments.length === 0) continue;
-
-      if (mainAssignments.length === 1) {
-        // Satu staff — dapat full mainPool (atau manual override)
-        const ja  = mainAssignments[0];
-        const amt = ja.commissionAmount != null
-          ? D(String(ja.commissionAmount))
-          : mainPool.toDecimalPlaces(2);
-
-        rows.push(_makeRow({
-          invoice, invoiceItem, treatmentItem, ja, slot,
-          workQty:          ja.workQty ? D(ja.workQty) : null,
-          workRatio:        null,
-          commissionAmount: amt,
-          forfeitReason, sessionForfeited,
-        }));
-      } else {
-        // Banyak staff — split by helaian
-        const totalQty      = mainAssignments.reduce((s, ja) => s.add(D(ja.workQty ?? 0)), D(0));
-        const allHaveManual = mainAssignments.every((ja) => ja.commissionAmount != null);
-
-        // Jika tidak ada manual dan tidak ada helaian → skip
-        if (!allHaveManual && totalQty.isZero()) continue;
-
-        const amounts = totalQty.isZero()
-          ? mainAssignments.map(() => D(0))
-          : distributePool(mainPool, mainAssignments.map((ja) => ({ workQty: ja.workQty ?? 0 })));
-
-        for (let i = 0; i < mainAssignments.length; i++) {
-          const ja        = mainAssignments[i];
-          const workQty   = D(ja.workQty ?? 0);
-          const workRatio = totalQty.isZero() ? D(0) : workQty.div(totalQty);
-          const amt       = ja.commissionAmount != null
-            ? D(String(ja.commissionAmount))
-            : amounts[i];
-
-          rows.push(_makeRow({
-            invoice, invoiceItem, treatmentItem, ja, slot,
-            workQty, workRatio, commissionAmount: amt,
-            forfeitReason, sessionForfeited,
-          }));
-        }
-      }
-    }
-
-    // ── PERCENTAGE slots bukan main (edge case — pakai engine lama) ──
-    for (const entry of otherEntries) {
-      rows.push(..._processLegacySlot({ ...entry, invoice, invoiceItem, baseAmount, treatmentItem, forfeitReason, sessionForfeited }));
-    }
-  }
-
-  return rows;
-}
-
 // ── Legacy workQty path (sistem lama) ────────────────────────────────
 //
-// Digunakan ketika item tidak memiliki ServiceJobSlot (backward compat).
+// Digunakan ketika treatment item tidak memiliki job assignment kategori-job
+// (berbasis TreatmentAssignment + workQty — backward compat).
 
-async function _buildLegacyRows({ invoice, session, treatmentItem, forfeitReason, sessionForfeited, tx }) {
+async function _buildLegacyRows({ invoice, treatmentItem, tx }) {
   const invoiceDate          = invoice.invoiceDate;
   const commissionCategoryId = treatmentItem.item?.commissionCategoryId;
   if (!commissionCategoryId) return [];
@@ -495,7 +251,6 @@ async function _buildLegacyRows({ invoice, session, treatmentItem, forfeitReason
         invoiceItemId:            invoiceItem?.id ?? null,
         treatmentAssignmentId:    assignment.id,
         treatmentJobAssignmentId: null,
-        serviceJobSlotId:         null,
         employeeId:               assignment.employeeId,
         serviceItemId:            treatmentItem.itemId,
         commissionRuleId:         rule.id,
@@ -507,8 +262,6 @@ async function _buildLegacyRows({ invoice, session, treatmentItem, forfeitReason
         baseAmount,
         commissionAmount,
         status:                   "PENDING",
-        isForfeit:                sessionForfeited,
-        forfeitReason,
       });
     }
   }
@@ -517,172 +270,167 @@ async function _buildLegacyRows({ invoice, session, treatmentItem, forfeitReason
 
 // ── Sistem kategori-job (sistem terbaru) ─────────────────────────────
 //
-// TreatmentJobAssignment.commissionJobId → lookup CommissionRule per
-// (employee + category + job) → komisI per job per staff, independen.
+// TreatmentJobAssignment.commissionJobId → CommissionRule per (employee + category + job).
+// Perhitungan SATU sumber: calcCategoryItem (commission.calc.js) — dipakai kalkulator
+// (preview + finalize) dan regenerate, sehingga hasilnya selalu sama.
 
-async function _buildCategoryJobRows({ invoice, session, treatmentItem, forfeitReason, sessionForfeited, tx }) {
-  const db                   = tx ?? require("../../config/prisma");
-  const invoiceDate          = invoice.invoiceDate;
-  const commissionCategoryId = treatmentItem.item?.commissionCategoryId;
-  if (!commissionCategoryId) return [];
+// staffCountMax (rate dinamis HS): pilih job yang rule-nya dipakai berdasarkan total staf.
+// Grup HS = job ber-staffCountMax + SATU job cadangan (job aktif pertama tanpa batas).
+// Job lain di kategori yang sama (cuci, dll.) tetap memakai rule-nya sendiri.
+function _resolveRuleJobId(jobDef, catJobs, totalStaff) {
+  const active  = catJobs.filter((j) => j.isActive !== false);
+  const withMax = active.filter((j) => j.staffCountMax != null)
+    .sort((a, b) => a.staffCountMax - b.staffCountMax);
+  if (withMax.length === 0) return jobDef.id;
 
-  const invoiceItem = invoice.items.find((ii) => ii.itemId === treatmentItem.itemId) ?? null;
+  const fallback  = active.find((j) => j.staffCountMax == null) ?? null;
+  const inHsGroup = jobDef.staffCountMax != null || jobDef.id === fallback?.id;
+  if (!inHsGroup) return jobDef.id;
 
-  const jobAssignments = (treatmentItem.jobAssignments ?? []).filter(
-    (ja) => ja.commissionJobId && ja.employeeId
-  );
-  if (jobAssignments.length === 0) return [];
-
-  // ── staffCountMax: hitung total staff yang assign di kategori ini dalam invoice ──
-  // Diperlukan untuk job HS yang punya batas jumlah staff (staffCountMax).
-  // Hitung dari SEMUA treatment items di invoice yang belong to kategori yang sama.
-  let staffCountForCategory = null; // null = belum perlu dihitung
-  const getStaffCount = async () => {
-    if (staffCountForCategory !== null) return staffCountForCategory;
-    const allItems = invoice.treatmentSessions.flatMap((s) => s.treatmentItems ?? []);
-    const sameCatItems = allItems.filter((ti) => ti.item?.commissionCategoryId === commissionCategoryId);
-    const allJas = sameCatItems.flatMap((ti) => (ti.jobAssignments ?? []).filter((ja) => ja.employeeId));
-    // Hitung unique employee yang assign di kategori ini dalam invoice
-    staffCountForCategory = new Set(allJas.map((ja) => ja.employeeId)).size;
-    return staffCountForCategory;
-  };
-
-  const rows = [];
-
-  for (const ja of jobAssignments) {
-    // Cek apakah job ini punya staffCountMax (HS dynamic rate)
-    const job = await db.commissionJob.findUnique({
-      where:  { id: ja.commissionJobId },
-      select: { staffCountMax: true, commissionCategoryId: true },
-    });
-
-    // ── staffCountMax logic ──
-    // Jika job punya staffCountMax, tentukan commissionJobId yang tepat berdasarkan total staff.
-    // Cari semua jobs dalam kategori yang sama yang punya staffCountMax (atau null).
-    // Pilih job dengan staffCountMax >= totalStaff (terkecil yang memenuhi), atau null sebagai fallback.
-    let effectiveJobId = ja.commissionJobId;
-    if (job?.staffCountMax !== undefined && job.staffCountMax !== null) {
-      // Job ini punya staffCountMax → ada logika dynamic rate → resolve job yang tepat
-      const totalStaff  = await getStaffCount();
-      const siblingJobs = await db.commissionJob.findMany({
-        where:  { commissionCategoryId, isActive: true, staffCountMax: { not: null } },
-        select: { id: true, staffCountMax: true },
-        orderBy: { staffCountMax: "asc" },
-      });
-      // Job terkecil yang staffCountMax-nya >= totalStaff
-      const matched = siblingJobs.find((j) => j.staffCountMax >= totalStaff);
-      if (matched) {
-        effectiveJobId = matched.id;
-      } else {
-        // totalStaff melebihi semua staffCountMax → cari job tanpa staffCountMax (fallback)
-        const fallbackJob = await db.commissionJob.findFirst({
-          where:  { commissionCategoryId, isActive: true, staffCountMax: null },
-          select: { id: true },
-        });
-        effectiveJobId = fallbackJob?.id ?? ja.commissionJobId;
-      }
-    } else if (job?.staffCountMax === null && job !== null) {
-      // Job ini tidak punya staffCountMax — cek apakah ada sibling yang punya
-      const hasSiblingWithMax = await db.commissionJob.count({
-        where: { commissionCategoryId, isActive: true, staffCountMax: { not: null } },
-      });
-      if (hasSiblingWithMax > 0) {
-        // Kategori ini menggunakan dynamic rate — job null = fallback untuk >max
-        // Resolve berdasarkan totalStaff
-        const totalStaff  = await getStaffCount();
-        const siblingJobs = await db.commissionJob.findMany({
-          where:  { commissionCategoryId, isActive: true, staffCountMax: { not: null } },
-          select: { id: true, staffCountMax: true },
-          orderBy: { staffCountMax: "asc" },
-        });
-        const matched = siblingJobs.find((j) => j.staffCountMax >= totalStaff);
-        effectiveJobId = matched ? matched.id : ja.commissionJobId;
-      }
-    }
-
-    // Cari rule: employee + category + job yang sudah di-resolve, aktif pada tanggal invoice
-    const rule = await db.commissionRule.findFirst({
-      where: {
-        employeeId:           ja.employeeId,
-        commissionCategoryId,
-        commissionJobId:      effectiveJobId,
-        isActive:             true,
-        effectiveDate:        { lte: invoiceDate },
-        OR: [{ endDate: null }, { endDate: { gte: invoiceDate } }],
-      },
-      orderBy: { effectiveDate: "desc" },
-    });
-
-    if (!rule) continue;
-
-    let baseAmount;
-    if (invoiceItem) {
-      baseAmount = resolveBaseAmount(invoiceItem, rule.commissionBase, invoice.inclusiveTax ?? false);
-    } else {
-      baseAmount = D(treatmentItem.priceSnapshot ?? 0);
-    }
-
-    const commissionAmount =
-      rule.commissionType === "PERCENTAGE"
-        ? D(baseAmount).mul(D(rule.commissionValue)).div(100)
-        : D(rule.commissionValue);
-
-    rows.push({
-      invoiceId:                invoice.id,
-      invoiceItemId:            invoiceItem?.id ?? null,
-      treatmentAssignmentId:    null,
-      treatmentJobAssignmentId: ja.id,
-      serviceJobSlotId:         null,
-      employeeId:               ja.employeeId,
-      serviceItemId:            treatmentItem.itemId,
-      commissionRuleId:         rule.id,
-      commissionType:           rule.commissionType,
-      commissionValue:          rule.commissionValue,
-      commissionBase:           rule.commissionBase,
-      workQty:                  null,
-      workRatio:                D(1),
-      baseAmount,
-      commissionAmount,
-      status:                   "PENDING",
-      isForfeit:                sessionForfeited,
-      forfeitReason,
-    });
-  }
-
-  return rows;
+  const matched = withMax.find((j) => j.staffCountMax >= totalStaff);
+  if (matched) return matched.id;
+  return fallback?.id ?? jobDef.id;
 }
 
+// Total staf unik yang assign di kategori yang sama dalam satu invoice
+function _countStaffInCategory(invoice, commissionCategoryId) {
+  const ids = new Set();
+  for (const s of invoice.treatmentSessions ?? []) {
+    for (const ti of s.treatmentItems ?? []) {
+      if (ti.item?.commissionCategoryId !== commissionCategoryId) continue;
+      for (const ja of ti.jobAssignments ?? []) if (ja.employeeId) ids.add(ja.employeeId);
+    }
+  }
+  return ids.size;
+}
+
+/**
+ * Hitung komisi satu treatment item (sistem kategori-job).
+ * invoice harus memuat: invoiceDate, inclusiveTax, items[{id,itemId,qty,price,discount,subtotal,taxRate}],
+ *   treatmentSessions[].treatmentItems[]
+ * treatmentItem harus memuat: itemId, qty, conversionSnapshot, priceSnapshot,
+ *   item.commissionCategory{id,name,jobs[JOB_CALC_SELECT]}, jobAssignments[{id,employeeId,commissionJobId,workQty,employee?}]
+ * @returns null jika item tidak punya kategori / assignment
+ */
+async function calculateCategoryItem({ invoice, treatmentItem, qtyOverrides = {} }) {
+  const cat = treatmentItem.item?.commissionCategory;
+  if (!cat) return null;
+
+  const jas = (treatmentItem.jobAssignments ?? []).filter((ja) => ja.commissionJobId && ja.employeeId);
+  if (jas.length === 0) return null;
+
+  const invoiceItem = (invoice.items ?? []).find((ii) => ii.itemId === treatmentItem.itemId) ?? null;
+  const subtotal    = invoiceItem ? D(invoiceItem.subtotal) : D(treatmentItem.priceSnapshot ?? 0);
+  // qty item dalam satuan konversi (mis. 1 TEBAL × 180 = 180 helai)
+  const itemQty     = treatmentItem.qty != null
+    ? Math.round(Number(treatmentItem.qty) * Number(treatmentItem.conversionSnapshot ?? 1))
+    : null;
+  const asOfDate    = invoice.invoiceDate ? new Date(invoice.invoiceDate) : new Date();
+  const totalStaff  = _countStaffInCategory(invoice, cat.id);
+
+  const jobs = [];
+  for (const jobDef of cat.jobs ?? []) {
+    const workersRaw = jas.filter((ja) => ja.commissionJobId === jobDef.id);
+    if (workersRaw.length === 0) continue;
+
+    const ruleJobId = _resolveRuleJobId(jobDef, cat.jobs, totalStaff);
+    const workers   = await Promise.all(workersRaw.map(async (ja) => {
+      const rule = await findActiveByEmployeeAndJob(ja.employeeId, cat.id, ruleJobId, asOfDate);
+      // Base item menurut commissionBase rule staf (sebelum/sesudah diskon & pajak)
+      const itemBase = rule && invoiceItem
+        ? resolveBaseAmount(invoiceItem, rule.commissionBase, invoice.inclusiveTax ?? false)
+        : subtotal;
+      return {
+        itemBase:         Number(D(itemBase).toFixed(2)),
+        treatmentJobAssignmentId: ja.id,
+        employeeId:       ja.employeeId,
+        employeeName:     ja.employee?.name ?? "",
+        workQty:          ja.workQty != null ? Number(ja.workQty) : null,
+        commissionRuleId: rule?.id ?? null,
+        commissionType:   rule?.commissionType ?? null,
+        commissionValue:  rule?.commissionValue != null ? String(rule.commissionValue) : null,
+        commissionBase:   rule?.commissionBase ?? null,
+      };
+    }));
+
+    jobs.push({
+      commissionJobId:  jobDef.id,
+      jobName:          jobDef.name,
+      jobKey:           jobDef.jobKey,
+      sortOrder:        jobDef.sortOrder,
+      deductsFromJobId: jobDef.deductsFromJobId ?? null,
+      pricePerUnit:     jobDef.pricePerUnit != null ? Number(jobDef.pricePerUnit) : null,
+      unit:             jobDef.unit || "helai",
+      splitMode:        jobDef.splitMode ?? "BY_QTY",
+      workers,
+    });
+  }
+  if (jobs.length === 0) return null;
+
+  return {
+    invoiceItemId: invoiceItem?.id ?? null,
+    category:      { id: cat.id, name: cat.name },
+    subtotal:      Number(subtotal.toFixed(2)),
+    itemQty,
+    jobs:          calcCategoryItem({ subtotal, itemQty, jobs, qtyOverrides }),
+  };
+}
+
+// Baris hasil kalkulasi → data Commission (dipakai finalize & regenerate)
+// baseAmount disimpan = base milik staf (sisa base × porsi, atau qty × harga untuk helper);
+// helper flat menyimpan base item.
+function toCommissionData({ invoiceId, invoiceItemId, serviceItemId, row, commissionAmount }) {
+  return {
+    invoiceId,
+    invoiceItemId:            invoiceItemId ?? null,
+    treatmentAssignmentId:    null,
+    treatmentJobAssignmentId: row.treatmentJobAssignmentId,
+    employeeId:               row.employeeId,
+    serviceItemId,
+    commissionRuleId:         row.commissionRuleId,
+    commissionType:           row.commissionType ?? "PERCENTAGE",
+    commissionValue:          String(row.commissionValue ?? 0),
+    commissionBase:           row.commissionBase ?? "AFTER_DISCOUNT_BEFORE_TAX",
+    workQty:                  row.workQty != null ? String(row.workQty) : null,
+    workRatio:                row.workRatio != null ? String(row.workRatio) : null,
+    baseAmount:               String(row.effectiveBase > 0 ? row.effectiveBase : row.itemBase),
+    commissionAmount:         String(commissionAmount ?? row.amount),
+    status:                   "PENDING",
+  };
+}
+
+async function _buildCategoryJobRows({ invoice, treatmentItem }) {
+  const calc = await calculateCategoryItem({ invoice, treatmentItem });
+  if (!calc) return [];
+
+  return calc.jobs.flatMap((job) =>
+    job.rows
+      .filter((row) => row.hasRule)
+      .map((row) => toCommissionData({
+        invoiceId:     invoice.id,
+        invoiceItemId: calc.invoiceItemId,
+        serviceItemId: treatmentItem.itemId,
+        row,
+      })),
+  );
+}
+
+// Komisi tidak pernah dihanguskan otomatis (COM-012) — tidak ada pengecekan
+// tanggal selesai treatment vs tanggal invoice.
 async function _buildRows(invoice, tx) {
-  const invoiceDate = invoice.invoiceDate;
-  const rows        = [];
+  const rows = [];
 
   for (const session of invoice.treatmentSessions) {
-    const sessionForfeited =
-      session.completedAt == null ||
-      !isSameDayWIB(session.completedAt, invoiceDate);
-
-    const forfeitReason = sessionForfeited
-      ? `Treatment selesai ${
-          session.completedAt
-            ? session.completedAt.toISOString()
-            : "(null)"
-        } ≠ invoiceDate ${invoiceDate} (WIB)`
-      : null;
-
     for (const treatmentItem of session.treatmentItems) {
-      const hasJobSlots    = (treatmentItem.item?.serviceJobSlots?.length ?? 0) > 0;
       const hasJobAssignments = (treatmentItem.jobAssignments ?? []).some(ja => ja.commissionJobId);
 
       let itemRows;
       if (hasJobAssignments) {
         // ── Sistem kategori-job: TreatmentJobAssignment dengan commissionJobId ──
-        itemRows = await _buildCategoryJobRows({ invoice, session, treatmentItem, forfeitReason, sessionForfeited, tx });
-      } else if (hasJobSlots) {
-        // ── Sistem ServiceJobSlot based ──
-        itemRows = _buildJobSlotRows({ invoice, session, treatmentItem, forfeitReason, sessionForfeited });
+        itemRows = await _buildCategoryJobRows({ invoice, treatmentItem });
       } else {
         // ── Sistem lama: workQty / TreatmentAssignment based ──
-        itemRows = await _buildLegacyRows({ invoice, session, treatmentItem, forfeitReason, sessionForfeited, tx });
+        itemRows = await _buildLegacyRows({ invoice, treatmentItem, tx });
       }
 
       rows.push(...itemRows);
@@ -835,7 +583,12 @@ const deleteCommission = async (id, roleCode) => {
 };
 
 module.exports = {
+  // kalkulasi kategori-job (dipakai invoice worksheet/finalize)
+  _resolveRuleJobId, // diekspor untuk unit test
+  calculateCategoryItem,
+  toCommissionData,
   listCommissions,
+  listMyCommissions,
   getCommissionById,
   approveCommission,
   markCommissionPaid,

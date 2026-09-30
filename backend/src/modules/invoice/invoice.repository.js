@@ -1,4 +1,5 @@
 const prisma = require("../../config/prisma");
+const { JOB_CALC_SELECT } = require("../commission/commission.repository");
 
 const INCLUDE = {
   customer:          { select: { id: true, name: true, customerNo: true, mobilePhone: true } },
@@ -85,7 +86,7 @@ const findDailyAssignment = ({ start, end, branchId }) => {
 // ── Job Assignment INCLUDE (berat — untuk GenerateKomisiPage baru) ────
 
 const JOB_ASSIGNMENT_INCLUDE = {
-  customer: { select: { id: true, name: true, customerNo: true } },
+  customer: { select: { id: true, name: true, customerNo: true, mobilePhone: true } },
   treatmentSessions: {
     include: {
       appointment: {
@@ -109,20 +110,10 @@ const JOB_ASSIGNMENT_INCLUDE = {
                   id: true, code: true, name: true,
                   jobs: {
                     where:   { isActive: true },
-                    select:  { id: true, name: true, jobKey: true, sortOrder: true, deductsFromJobId: true, pricePerUnit: true },
+                    select:  { id: true, name: true, jobKey: true, sortOrder: true, deductsFromJobId: true, pricePerUnit: true, unit: true, splitMode: true, defaultQty: true },
                     orderBy: { sortOrder: "asc" },
                   },
                 },
-              },
-              serviceJobRoles: {
-                where:   { isActive: true },
-                include: {
-                  slots: {
-                    where:   { isActive: true, isMainJob: true },
-                    select:  { id: true, slotKey: true, commissionMode: true, isMainJob: true },
-                  },
-                },
-                orderBy: { sortOrder: "asc" },
               },
             },
           },
@@ -131,9 +122,6 @@ const JOB_ASSIGNMENT_INCLUDE = {
             where:   { employeeId: { not: null } },
             include: {
               employee:      { select: { id: true, name: true, employeeCode: true } },
-              serviceJobSlot: {
-                include: { serviceJobRole: { select: { id: true, roleName: true, commissionRate: true } } },
-              },
               commissionJob: { select: { id: true, name: true, jobKey: true } },
             },
           },
@@ -484,7 +472,8 @@ const WORKSHEET_INCLUDE = {
   customer:    { select: { id: true, name: true } },
   commissions: { select: { id: true, status: true } },
   // InvoiceItems — needed to resolve baseAmount per treatment item
-  items: { select: { id: true, itemId: true, subtotal: true } },
+  // (price/qty/discount/taxRate untuk commissionBase rule — lihat resolveBaseAmount)
+  items: { select: { id: true, itemId: true, qty: true, price: true, discount: true, subtotal: true, taxRate: true } },
   treatmentSessions: {
     include: {
       treatmentItems: {
@@ -497,15 +486,8 @@ const WORKSHEET_INCLUDE = {
               commissionCategory: {
                 select: {
                   id: true, code: true, name: true,
-                  jobs: {
-                    orderBy: { sortOrder: "asc" },
-                    select: {
-                      id: true, name: true, jobKey: true, sortOrder: true,
-                      deductsFromJobId: true,  // chain deduction target
-                      pricePerUnit:     true,  // default harga/unit untuk PERCENTAGE helper
-                      unit:             true,  // satuan unit (helai, sesi, cm, dll.)
-                    },
-                  },
+                  // Field kalkulasi (chain deduction, satuan, cara bagi, staffCountMax)
+                  jobs: { orderBy: { sortOrder: "asc" }, select: JOB_CALC_SELECT },
                 },
               },
             },

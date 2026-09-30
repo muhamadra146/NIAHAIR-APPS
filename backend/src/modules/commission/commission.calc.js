@@ -81,6 +81,174 @@ function detectColoristInSession(items) {
   );
 }
 
+// ── Kalkulasi sistem kategori-job (SATU sumber perhitungan) ───────────
+//
+// Dipakai oleh: Kalkulator Komisi (preview + finalize) dan regenerate.
+//
+// Input satu treatment item:
+//   subtotal  : base item default (InvoiceItem.subtotal / priceSnapshot)
+//   worker.itemBase (opsional): base item menurut commissionBase rule staf
+//               (sebelum/sesudah diskon & pajak); fallback ke subtotal
+//   itemQty   : qty item dalam satuan konversi (qty × conversionSnapshot, mis. 180 helai)
+//   jobs      : [{ commissionJobId, jobName, jobKey, sortOrder, deductsFromJobId,
+//                  pricePerUnit, unit, splitMode, workers: [{ treatmentJobAssignmentId,
+//                  employeeId, employeeName, workQty, commissionRuleId, commissionType,
+//                  commissionValue, commissionBase }] }]
+//   qtyOverrides : { [treatmentJobAssignmentId]: qty } — koreksi qty dari kalkulator
+//
+// Aturan:
+//   Helper (deductsFromJobId diisi):
+//     · HELPER_UNIT (pricePerUnit > 0): base helper = qty × harga/unit
+//         komisi = base × rate% (PERCENTAGE) atau nominal rule (FIXED)
+//         base helper memotong base job primary target
+//     · HELPER_FLAT (tanpa harga/unit): komisi = nominal rule,
+//         nominal itu memotong komisi akhir job primary target
+//   Primary:
+//     sisa base staf = base item staf − Σ base helper
+//     porsi staf (splitMode):
+//       BY_QTY : qty staf ÷ qty item (fallback ÷ total qty staf, lalu rata)
+//       EQUAL  : 1 ÷ jumlah staf
+//       FULL   : 1 (setiap staf penuh)
+//     PERCENTAGE: komisi = sisa base × porsi × rate% − (potongan flat × porsi)
+//     FIXED     : komisi = nominal rule − (potongan flat × porsi)
+//   Semua komisi dibulatkan ke rupiah (half-up), minimal 0.
+
+const toNum  = (d) => Number(D(d).toFixed(6));
+const roundRp = (d) => D(d).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+const maxZero = (d) => (D(d).isNegative() ? D(0) : D(d));
+
+function _primaryRatio(splitMode, { qty, itemQty, totalWorkQty, n }) {
+  if (splitMode === "FULL")  return D(1);
+  if (splitMode === "EQUAL") return D(1).div(n);
+  // BY_QTY
+  if (D(itemQty).gt(0))      return D(qty).div(itemQty);
+  if (D(totalWorkQty).gt(0)) return D(qty).div(totalWorkQty);
+  return D(1).div(n);
+}
+
+function calcCategoryItem({ subtotal, itemQty, jobs, qtyOverrides = {} }) {
+  const totalBase = D(subtotal ?? 0);
+  const qtyOf     = (w) => {
+    const o = qtyOverrides[w.treatmentJobAssignmentId];
+    return D(o !== undefined && o !== null ? o : (w.workQty ?? 0));
+  };
+  const hasRule   = (w) => w.commissionType != null;
+  const rateOf    = (w) => D(w.commissionValue ?? 0);
+  // Base item per staf mengikuti commissionBase rule-nya (fallback subtotal)
+  const baseOf    = (w) => (w.itemBase != null ? D(w.itemBase) : totalBase);
+
+  // jobId → { base, flat } potongan dari helper
+  const dedMap = {};
+  const ded    = (id) => (dedMap[id] ??= { base: D(0), flat: D(0) });
+
+  const baseRow = (w) => ({
+    treatmentJobAssignmentId: w.treatmentJobAssignmentId,
+    employeeId:               w.employeeId,
+    employeeName:             w.employeeName ?? "",
+    commissionRuleId:         w.commissionRuleId ?? null,
+    commissionType:           w.commissionType ?? null,
+    commissionValue:          w.commissionValue != null ? String(w.commissionValue) : null,
+    commissionBase:           w.commissionBase ?? null,
+    hasRule:                  hasRule(w),
+    itemBase:                 toNum(baseOf(w)),
+  });
+
+  // ── Phase 1: helper ──
+  const helpers = jobs.filter((j) => j.deductsFromJobId).map((job) => {
+    const price = D(job.pricePerUnit ?? 0);
+    const role  = price.gt(0) ? "HELPER_UNIT" : "HELPER_FLAT";
+
+    const rows = job.workers.map((w) => {
+      const qty = qtyOf(w);
+      let effectiveBase = D(0);
+      let amount        = D(0);
+
+      if (role === "HELPER_UNIT") {
+        effectiveBase = qty.mul(price);
+        if (hasRule(w)) {
+          amount = w.commissionType === "PERCENTAGE"
+            ? roundRp(effectiveBase.mul(rateOf(w)).div(100))
+            : roundRp(rateOf(w));
+        }
+        ded(job.deductsFromJobId).base = ded(job.deductsFromJobId).base.add(effectiveBase);
+      } else {
+        amount = hasRule(w) ? roundRp(rateOf(w)) : D(0);
+        if (amount.gt(0)) ded(job.deductsFromJobId).flat = ded(job.deductsFromJobId).flat.add(amount);
+      }
+
+      return {
+        ...baseRow(w),
+        workQty:       toNum(qty),
+        workRatio:     null,
+        effectiveBase: toNum(effectiveBase),
+        grossAmount:   toNum(amount),
+        flatDeduction: 0,
+        amount:        toNum(amount),
+      };
+    });
+
+    return { ...jobMeta(job), role, rows };
+  });
+
+  // ── Phase 2: primary ──
+  const primaries = jobs.filter((j) => !j.deductsFromJobId).map((job) => {
+    const d             = dedMap[job.commissionJobId] ?? { base: D(0), flat: D(0) };
+    const remainingBase = maxZero(totalBase.sub(d.base));
+    const n             = job.workers.length || 1;
+    const totalWorkQty  = job.workers.reduce((s, w) => s.add(qtyOf(w)), D(0));
+    const splitMode     = job.splitMode ?? "BY_QTY";
+
+    const rows = job.workers.map((w) => {
+      const qty        = qtyOf(w);
+      const ratio      = _primaryRatio(splitMode, { qty, itemQty: itemQty ?? 0, totalWorkQty, n });
+      const workerRemaining = maxZero(baseOf(w).sub(d.base));
+      const workerBase      = workerRemaining.mul(ratio);
+      const workerFlat = d.flat.mul(ratio);
+
+      let gross = D(0);
+      if (w.commissionType === "PERCENTAGE") gross = workerBase.mul(rateOf(w)).div(100);
+      else if (w.commissionType === "FIXED") gross = rateOf(w);
+
+      const amount = hasRule(w) ? roundRp(maxZero(gross.sub(workerFlat))) : D(0);
+
+      return {
+        ...baseRow(w),
+        workQty:       toNum(qty),
+        workRatio:     toNum(ratio),
+        effectiveBase: toNum(workerBase),
+        grossAmount:   toNum(gross),
+        flatDeduction: toNum(hasRule(w) ? workerFlat : 0),
+        remainingBase: toNum(workerRemaining),
+        amount:        toNum(amount),
+      };
+    });
+
+    return {
+      ...jobMeta(job),
+      role:          "PRIMARY",
+      remainingBase: toNum(remainingBase),
+      baseDeduction: toNum(d.base),
+      flatDeduction: toNum(d.flat),
+      rows,
+    };
+  });
+
+  return [...primaries, ...helpers].sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+function jobMeta(job) {
+  return {
+    commissionJobId:  job.commissionJobId,
+    jobName:          job.jobName,
+    jobKey:           job.jobKey,
+    sortOrder:        job.sortOrder ?? 0,
+    deductsFromJobId: job.deductsFromJobId ?? null,
+    pricePerUnit:     job.pricePerUnit != null ? Number(job.pricePerUnit) : null,
+    unit:             job.unit || "helai",
+    splitMode:        job.splitMode ?? "BY_QTY",
+  };
+}
+
 // ── Business rules (pure, tanpa DB) ──────────────────────────────────
 
 // Override diizinkan hanya jika komisi masih PENDING atau APPROVED.
@@ -110,6 +278,7 @@ module.exports = {
   calcCommissionAmount,
   distributePool,
   detectColoristInSession,
+  calcCategoryItem,
   canOverride,
   canRegenerate,
 };

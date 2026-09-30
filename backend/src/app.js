@@ -63,8 +63,6 @@ const glAccountRouter               = require("./modules/glAccount/glAccount.rou
 const supplierRouter                = require("./modules/supplier/supplier.route");
 const purchaseRouter                = require("./modules/purchase/purchase.route");
 const complaintRouter               = require("./modules/complaint/complaint.route");
-const serviceJobSlotRouter          = require("./modules/serviceJobSlot/serviceJobSlot.route");
-const serviceJobRoleRouter          = require("./modules/serviceJobRole/serviceJobRole.route");
 const productionRouter              = require("./modules/production/production.route");
 const purchaseReturnRouter          = require("./modules/purchaseReturn/purchaseReturn.route");
 const dashboardRouter               = require("./modules/dashboard/dashboard.route");
@@ -119,8 +117,6 @@ const v1 = express.Router();
 v1.use("/auth", authRouter);
 v1.use("/customers", customerRouter);
 v1.use("/items", itemRouter);
-v1.use("/items/:itemId/job-slots", serviceJobSlotRouter);
-v1.use("/items/:itemId/job-roles", serviceJobRoleRouter);
 v1.use("/employees", employeeRouter);
 v1.use("/employee-roles", employeeRoleRouter);
 v1.use("/branches", branchRouter);

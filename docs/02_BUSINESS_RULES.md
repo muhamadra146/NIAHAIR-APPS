@@ -5386,6 +5386,178 @@ Yang tidak memiliki sumber transaksi.
 
 ---
 
+# COM-006
+## Commission Job Configuration
+
+### Purpose
+
+Cara hitung komisi ditentukan oleh konfigurasi Job, bukan hardcode.
+
+### Rule
+
+Setiap Commission Category memiliki satu atau lebih Commission Job.
+
+Setiap Commission Job memiliki:
+
+| Field | Keterangan |
+|---|---|
+| Satuan (`unit`) | Label tampilan saja (helai, kepala, sesi, …). Tidak mempengaruhi perhitungan. |
+| Potong dari (`deductsFromJobId`) | Kosong = Job Utama (Primary). Diisi = Job Helper yang memotong Job Utama. |
+| Harga per unit (`pricePerUnit`) | Hanya untuk Job Helper. Diisi = Helper per unit; kosong = Helper flat. |
+| Cara Bagi (`splitMode`) | Hanya untuk Job Utama. Lihat COM-008. |
+| Qty Default (`defaultQty`) | Qty otomatis saat staf mencentang Job di Input Job. Lihat COM-007. |
+
+Komisi per staf mengikuti Commission Rule staf tersebut (PERCENTAGE atau FIXED) untuk kombinasi Employee + Category + Job yang aktif pada tanggal invoice.
+
+Staf tanpa Commission Rule tidak mendapat komisi untuk Job tersebut.
+
+---
+
+# COM-007
+## Default Work Quantity
+
+### Rule
+
+| Qty Default | Nilai otomatis |
+|---|---|
+| `ITEM_QTY` — Dari qty item | qty item × konversi satuan (contoh: 1 TEBAL × 180 = 180 helai) |
+| `ONE` — 1 | 1 (per kepala / per sesi) |
+
+Qty otomatis dapat dikoreksi staf di Input Job atau di Kalkulator Komisi.
+
+---
+
+# COM-008
+## Commission Split Between Staff
+
+### Purpose
+
+Menentukan porsi komisi Job Utama jika dikerjakan lebih dari satu staf.
+
+### Rule
+
+| Cara Bagi | Porsi staf |
+|---|---|
+| `BY_QTY` — Proporsional qty | qty dikerjakan staf ÷ qty item |
+| `EQUAL` — Bagi rata per staf | 1 ÷ jumlah staf yang mengerjakan Job tersebut |
+| `FULL` — Penuh per staf | 1 (setiap staf mendapat komisi penuh) |
+
+`BY_QTY`: pembagi adalah qty item, bukan total qty yang diisi staf. Qty yang tidak diisi tidak dibagikan ke siapa pun.
+
+Jika qty item tidak tersedia, porsi = qty staf ÷ total qty staf; jika semua qty 0, dibagi rata.
+
+### Examples
+
+Pasang rambut (`BY_QTY`), subtotal Rp 3.000.000, 180 helai, rate 10%:
+
+- Staf A 120 helai → 3.000.000 × 120/180 × 10% = Rp 200.000
+- Staf B 60 helai → 3.000.000 × 60/180 × 10% = Rp 100.000
+
+Color (`EQUAL`), sisa base Rp 938.500, 2 staf, rate 10%:
+
+- Masing-masing → 938.500 × 1/2 × 10% = Rp 46.925
+
+---
+
+# COM-009
+## Helper Job Deduction
+
+### Rule
+
+Job Helper memotong Job Utama yang ditunjuk pada item yang sama.
+
+Helper per unit (harga per unit diisi):
+
+- Base helper = qty × harga per unit.
+- Komisi helper = base helper × rate% (PERCENTAGE) atau nominal rule (FIXED).
+- Base helper memotong **base** Job Utama.
+
+Helper flat (harga per unit kosong):
+
+- Komisi helper = nominal rule (FIXED).
+- Nominal tersebut memotong **komisi akhir** Job Utama.
+
+### Formula Job Utama
+
+Base item staf mengikuti `commissionBase` pada Commission Rule staf tersebut (sebelum/sesudah diskon, sebelum/sesudah pajak, termasuk PPN inclusive). Tanpa rule: subtotal item.
+
+Sisa base staf = base item staf − Σ base helper per unit.
+
+PERCENTAGE: komisi = sisa base × porsi × rate% − (potongan helper flat × porsi).
+
+FIXED: komisi = nominal rule − (potongan helper flat × porsi).
+
+Komisi dibulatkan ke rupiah (half-up) dan minimal Rp 0.
+
+### Example
+
+Color + cuci rambut (Rp 5.000/kepala, 1 kepala), subtotal Rp 943.500:
+
+- Sisa base color = 943.500 − 5.000 = Rp 938.500.
+
+---
+
+# COM-010
+## Single Calculation Source
+
+### Rule
+
+Perhitungan komisi sistem kategori-job hanya dilakukan di backend Service, dalam satu fungsi.
+
+Kalkulator Komisi (preview dan simpan) serta Regenerate wajib memakai fungsi yang sama.
+
+Saat menyimpan, backend menghitung ulang dari data tersimpan + koreksi qty. Angka dari frontend tidak dipercaya.
+
+Koreksi nominal manual di Kalkulator dicatat sebagai Manual Override (siapa, kapan, hitungan sistem).
+
+Koreksi nominal manual hanya boleh dilakukan SUPER_ADMIN, OWNER, dan FINANCE (sama dengan izin override komisi). Role lain tetap boleh menyimpan hasil hitungan sistem.
+
+---
+
+# COM-011
+## Commission Transparency
+
+### Rule
+
+Rincian perhitungan setiap komisi wajib dapat dilihat oleh:
+
+- Admin (Kalkulator Komisi dan daftar Komisi).
+- Staf pemilik komisi (Komisi Saya).
+
+Rincian menampilkan: cara bagi, base, porsi, rate, potongan helper, dan hasil akhir.
+
+Contoh: `Rp 938.500 × 1/2 staf × 10% = Rp 46.925`.
+
+Staf hanya dapat melihat komisi miliknya sendiri; identitas staf diambil dari user yang login.
+
+---
+
+# COM-012
+## No Automatic Forfeit
+
+### Rule
+
+Komisi tidak pernah dihanguskan otomatis oleh sistem.
+
+Tidak ada pengecekan tanggal selesai treatment terhadap tanggal invoice.
+
+Pengurangan komisi hanya melalui mekanisme yang tercatat: potongan Job Helper (COM-009), potongan Komplain, atau Manual Override.
+
+---
+
+# COM-013
+## Dynamic Rate by Staff Count (Home Service)
+
+### Rule
+
+Job dengan `staffCountMax` membentuk grup rate dinamis bersama satu job cadangan (job aktif pertama tanpa `staffCountMax` di kategori yang sama).
+
+Untuk job dalam grup tersebut, rule komisi diambil dari job dengan `staffCountMax` terkecil yang ≥ jumlah staf unik di kategori pada invoice; jika tidak ada, dari job cadangan.
+
+Job lain di kategori yang sama tetap memakai rule-nya sendiri.
+
+---
+
 # CHAPTER 9 SUMMARY
 
 Payroll & Commission merupakan modul Compensation Management.

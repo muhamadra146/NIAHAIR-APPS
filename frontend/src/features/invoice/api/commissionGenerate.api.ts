@@ -1,5 +1,6 @@
 import { api } from "@/lib/axios";
 import type { ApiResponse, PaginatedResponse } from "@/types/api";
+import type { CommissionSplitMode, CommissionDefaultQty } from "@/features/commission/types";
 
 // ── Job Assignment Invoice types ──────────────────────────────────────
 
@@ -13,25 +14,9 @@ export interface JobAssignmentRef {
   id:               string;
   employeeId:       string | null;
   workQty:          string | null;
-  // Old system (serviceJobRole)
-  serviceJobSlotId: string | null;
-  serviceJobSlot: {
-    id:            string;
-    isMainJob:     boolean;
-    commissionMode: string;
-    serviceJobRole: { id: string; roleName: string; commissionRate: string } | null;
-  } | null;
-  // New system (commissionJob)
   commissionJobId: string | null;
   commissionJob:   { id: string; name: string; jobKey: string } | null;
   employee: { id: string; name: string; employeeCode: string } | null;
-}
-
-export interface ServiceJobRoleWithMainSlot {
-  id:             string;
-  roleName:       string;
-  commissionRate: string;
-  slots: Array<{ id: string; slotKey: string; commissionMode: string; isMainJob: true }>;
 }
 
 export interface CommissionJobRef {
@@ -41,6 +26,9 @@ export interface CommissionJobRef {
   sortOrder:        number;
   pricePerUnit:     string | null;   // null = primary atau FLAT helper
   deductsFromJobId: string | null;   // null = primary; ada isi = helper
+  unit:             string;          // satuan (label): "helai", "kepala", "sesi", …
+  splitMode:        CommissionSplitMode;
+  defaultQty:       CommissionDefaultQty;  // qty otomatis saat dicentang
 }
 
 export interface ItemCommissionCategory {
@@ -63,7 +51,6 @@ export interface JobAssignmentTreatmentItem {
     itemType:            string;
     commissionCategoryId: string | null;
     commissionCategory:  ItemCommissionCategory | null;
-    serviceJobRoles:     ServiceJobRoleWithMainSlot[];
   };
   jobAssignments: JobAssignmentRef[];
 }
@@ -79,7 +66,7 @@ export interface JobAssignmentInvoice {
   invoiceNo:   string;
   invoiceDate: string;
   grandTotal:  string;
-  customer:    { id: string; name: string; customerNo: string };
+  customer:    { id: string; name: string; customerNo: string; mobilePhone: string | null };
   treatmentSessions: JobAssignmentSession[];
   commissions: { id: string; status: string }[];
   _count:      { commissions: number };
@@ -90,9 +77,7 @@ export interface SubmitJobAssignmentsPayload {
     sessionId:   string;
     assignments: Array<{
       treatmentItemId:  string;
-      // One of these must be set:
-      serviceJobSlotId?: string | null;  // old system
-      commissionJobId?:  string | null;  // new system
+      commissionJobId:  string;
       employeeId:        string;
       workQty?:          number | null;
     }>;
@@ -184,18 +169,29 @@ export async function submitJobAssignments(
 
 // ── Commission Calculator / Worksheet ────────────────────────────────
 
-export interface WorksheetWorker {
+// Hasil kalkulasi dihitung backend (commission.calc.calcCategoryItem) — satu sumber
+// untuk kalkulator, finalize, dan regenerate. Frontend hanya menampilkan.
+
+/** PRIMARY = job utama; HELPER_UNIT = helper qty × harga/unit; HELPER_FLAT = helper nominal flat */
+export type CalcJobRole = "PRIMARY" | "HELPER_UNIT" | "HELPER_FLAT";
+
+export interface WorksheetRow {
   treatmentJobAssignmentId: string;
   employeeId:               string;
   employeeName:             string;
-  workQty:                  number | null;
   commissionRuleId:         string | null;
   commissionType:           "PERCENTAGE" | "FIXED" | null;
-  commissionValue:          string | null;   // "1.0" = 1%
+  commissionValue:          string | null;   // "10" = 10% atau nominal Rp (FIXED)
   commissionBase:           string | null;
-  baseAmount:               number;          // InvoiceItem.subtotal resolved by backend (full item base)
-  // Computed by chain calculation on frontend — effective base setelah chain deduction
-  effectiveBase?:           number;
+  hasRule:                  boolean;         // false = staf belum punya rule komisi
+  itemBase:                 number;          // base item menurut commissionBase rule staf
+  remainingBase?:           number;          // primary: base item staf − potongan base helper
+  workQty:                  number;
+  workRatio:                number | null;   // porsi staf (primary); null untuk helper
+  effectiveBase:            number;          // base milik staf (sisa base × porsi / qty × harga)
+  grossAmount:              number;          // komisi sebelum potongan flat
+  flatDeduction:            number;          // potongan helper flat (bagian staf ini)
+  amount:                   number;          // komisi hitungan sistem
 }
 
 export interface WorksheetJob {
@@ -203,19 +199,25 @@ export interface WorksheetJob {
   jobName:          string;
   jobKey:           string;
   sortOrder:        number;
-  // Chain deduction fields — dikirim dari backend, dipakai frontend untuk chain calc
   deductsFromJobId: string | null;   // null = primary; diisi = helper job
-  pricePerUnit:     number | null;   // harga default/unit untuk PERCENTAGE helper
-  unit:             string;          // satuan: "helai", "sesi", "cm", dll.
-  workers:          WorksheetWorker[];
+  pricePerUnit:     number | null;
+  unit:             string;          // satuan (label)
+  splitMode:        CommissionSplitMode;
+  role:             CalcJobRole;
+  // primary only
+  remainingBase?:   number;          // subtotal − potongan base helper
+  baseDeduction?:   number;
+  flatDeduction?:   number;
+  rows:             WorksheetRow[];
 }
 
 export interface WorksheetTreatmentItem {
   treatmentItemId: string;
   itemId:          string;
   itemName:        string;
+  invoiceItemId:   string | null;
   subtotal:        string;
-  qty:             number | null;   // qty item dari invoice (max helai untuk primary workers)
+  qty:             number | null;   // qty item dalam satuan konversi (mis. 180 helai)
   categoryId:      string;
   categoryName:    string;
   jobs:            WorksheetJob[];
@@ -230,21 +232,13 @@ export interface CommissionWorksheet {
   commissions:    { id: string; status: string }[];
 }
 
-export interface FinalizeCommissionRow {
-  treatmentJobAssignmentId: string;
-  commissionAmount:         number;
-  commissionRuleId:         string | null;
-  commissionType:           string;
-  commissionValue:          string;
-  commissionBase:           string;
-  baseAmount:               number;
-  workQty:                  number | null;
-  workRatio:                number | null;
-  notes:                    string | null;
-}
+/** key: treatmentJobAssignmentId */
+export type QtyOverrides    = Record<string, number>;
+export type AmountOverrides = Record<string, number>;
 
 export interface FinalizeCommissionPayload {
-  rows: FinalizeCommissionRow[];
+  qtyOverrides:    QtyOverrides;     // koreksi qty (backend menghitung ulang)
+  amountOverrides: AmountOverrides;  // koreksi nominal manual (tercatat sebagai manual override)
 }
 
 export interface FinalizeCommissionResult {
@@ -254,6 +248,18 @@ export interface FinalizeCommissionResult {
 export async function fetchCommissionWorksheet(invoiceId: string): Promise<CommissionWorksheet> {
   const { data } = await api.get<ApiResponse<CommissionWorksheet>>(
     `/invoices/${invoiceId}/commission-worksheet`,
+  );
+  return data.data;
+}
+
+/** Preview kalkulasi dengan koreksi qty — tidak menyimpan apa pun */
+export async function calculateCommissionWorksheet(
+  invoiceId:    string,
+  qtyOverrides: QtyOverrides,
+): Promise<CommissionWorksheet> {
+  const { data } = await api.post<ApiResponse<CommissionWorksheet>>(
+    `/invoices/${invoiceId}/commission-worksheet/calculate`,
+    { qtyOverrides },
   );
   return data.data;
 }

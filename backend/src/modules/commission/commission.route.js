@@ -4,6 +4,7 @@ const authorize    = require("../../middlewares/role.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
 const {
   getAllController,
+  getMyController,
   getByIdController,
   approveController,
   payController,
@@ -17,6 +18,9 @@ const router = Router();
 // MANAGER hanya view; FINANCE + OWNER full access
 const VIEW_ROLES    = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.FINANCE];
 const FINANCE_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.FINANCE];
+
+// Self — komisi milik user login (semua role). Harus sebelum /:id
+router.get("/my",  authenticate, getMyController);
 
 // View
 router.get("/",    authenticate, authorize(...VIEW_ROLES), getAllController);

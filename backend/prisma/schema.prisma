@@ -625,8 +625,6 @@ model Item {
   materialUsageItems  MaterialUsageItem[]
   serviceMaterials    ServiceMaterial[]    @relation("ServiceMaterials")
   usedAsMaterial      ServiceMaterial[]    @relation("MaterialItems")
-  serviceJobSlots     ServiceJobSlot[]
-  serviceJobRoles     ServiceJobRole[]
   productionItems     ProductionItem[]
   productionMaterials ProductionMaterial[]
   purchaseReturnItems PurchaseReturnItem[]
@@ -638,87 +636,6 @@ model Item {
   @@index([commissionCategoryId])
   @@index([name])
   @@map("items")
-}
-
-// =====================================================
-// SERVICE JOB SLOTS
-// =====================================================
-
-model ServiceJobSlot {
-  id String @id @default(uuid())
-
-  itemId String
-
-  slotKey String // e.g. "remove", "cuci", "service_lem", "bantu_masang"
-
-  label String // e.g. "Remove Rambut"
-
-  commissionRate Decimal @db.Decimal(8, 4) // % dari subtotal, e.g. 0.2500 = 0.25%
-
-  commissionMode CommissionMode @default(FIXED_RATE)
-  // FIXED_RATE: satu orang, komisi langsung = subtotal × rate
-  // WORK_QTY  : banyak orang, dibagi proporsional berdasarkan workQty (helaian)
-
-  // Role-based system (baru) — null = slot lama (backward compat, engine lama dipakai)
-  roleId    String?  // FK → ServiceJobRole
-  isMainJob Boolean  @default(false)   // true = job utama, dapat sisa pool setelah FLAT dibayar
-  slotType  SlotType @default(PERCENTAGE)
-  // PERCENTAGE: dapat bagian dari role pool (job utama, pakai workQty kalau banyak staff)
-  // FLAT      : dapat flat amount manual per treatment, dipotong dari pool terlebih dahulu
-
-  isRequired Boolean @default(false)
-
-  sortOrder Int @default(0)
-
-  isActive Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  item           Item             @relation(fields: [itemId], references: [id])
-  serviceJobRole ServiceJobRole?  @relation(fields: [roleId], references: [id])
-
-  treatmentJobAssignments TreatmentJobAssignment[]
-
-  commissions Commission[] @relation("CommissionJobSlot")
-
-  @@unique([itemId, slotKey])
-  @@index([itemId])
-  @@index([roleId])
-  @@map("service_job_slots")
-}
-
-enum CommissionMode {
-  FIXED_RATE
-  WORK_QTY
-}
-
-enum SlotType {
-  PERCENTAGE // slot dapat bagian dari role pool (default, job utama)
-  FLAT       // slot dapat flat amount manual, dipotong dari pool terlebih dahulu
-}
-
-// =====================================================
-// SERVICE JOB ROLES
-// =====================================================
-
-model ServiceJobRole {
-  id             String  @id @default(uuid())
-  itemId         String
-  roleName       String  // e.g. "Pemasang", "Asisten"
-  commissionRate Decimal @db.Decimal(8, 4) // % dari subtotal item, e.g. 5.0000 = 5%
-  sortOrder      Int     @default(0)
-  isActive       Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  item  Item             @relation(fields: [itemId], references: [id])
-  slots ServiceJobSlot[]
-
-  @@unique([itemId, roleName])
-  @@index([itemId])
-  @@map("service_job_roles")
 }
 
 // =====================================================
@@ -1798,6 +1715,19 @@ enum CommissionType {
   FIXED
 }
 
+// Cara bagi komisi job primary antar staf
+enum CommissionSplitMode {
+  BY_QTY  // proporsional: qty dikerjakan ÷ qty item (mis. helai)
+  EQUAL   // dibagi rata ke jumlah staf yang mengerjakan
+  FULL    // setiap staf dapat komisi penuh (tidak dibagi)
+}
+
+// Qty default pengerjaan saat job dicentang di Input Job
+enum CommissionDefaultQty {
+  ITEM_QTY  // qty item × konversi (mis. 1 TEBAL = 180 helai)
+  ONE       // 1 (per kepala / per sesi)
+}
+
 enum CommissionBase {
   BEFORE_DISCOUNT
   AFTER_DISCOUNT
@@ -1879,8 +1809,12 @@ model CommissionJob {
   deductsFromJobId String?   @map("deducts_from_job_id")
   // Harga default per unit untuk PERCENTAGE helper (bisa di-override di kalkulator).
   pricePerUnit     Decimal?  @db.Decimal(15, 2) @map("price_per_unit")
-  // Satuan unit helper — bebas diisi: "helai", "sesi", "cm", dll.
+  // Satuan unit — label bebas: "helai", "sesi", "kepala", "cm", dll. (hanya tampilan)
   unit             String    @default("helai") @map("unit")
+  // Cara bagi komisi job primary jika dikerjakan >1 staf (lihat CommissionSplitMode)
+  splitMode        CommissionSplitMode @default(BY_QTY) @map("split_mode")
+  // Qty default saat staf mencentang job di Input Job
+  defaultQty       CommissionDefaultQty @default(ITEM_QTY) @map("default_qty")
   // Batas jumlah staff untuk rate dinamis (Home Service):
   // jika diisi, job ini berlaku hanya ketika total staff di invoice ≤ staffCountMax.
   // Job tanpa nilai (null) berlaku ketika total staff > staffCountMax job lainnya.
@@ -1955,7 +1889,6 @@ model Commission {
   // Untuk komisi berbasis job slot (sistem baru)
   treatmentJobAssignmentId String?
 
-  serviceJobSlotId String?
 
   employeeId String
 
@@ -2007,7 +1940,6 @@ model Commission {
 
   treatmentAssignment    TreatmentAssignment?    @relation(fields: [treatmentAssignmentId],    references: [id])
   treatmentJobAssignment TreatmentJobAssignment? @relation(fields: [treatmentJobAssignmentId], references: [id])
-  serviceJobSlot         ServiceJobSlot?         @relation("CommissionJobSlot", fields: [serviceJobSlotId], references: [id])
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
@@ -2021,7 +1953,6 @@ model Commission {
   @@index([employeeId])
   @@index([status])
   @@index([commissionRuleId])
-  @@index([serviceJobSlotId])
   @@map("commissions")
 }
 
@@ -2355,8 +2286,6 @@ model TreatmentJobAssignment {
 
   treatmentItemId String
 
-  // Sistem lama (ServiceJobSlot based) — nullable setelah migrasi ke sistem baru
-  serviceJobSlotId String?
 
   // Sistem baru (CommissionJob based) — job dari kategori komisi item
   commissionJobId String?
@@ -2378,14 +2307,12 @@ model TreatmentJobAssignment {
   updatedAt DateTime @updatedAt
 
   treatmentItem  TreatmentItem   @relation(fields: [treatmentItemId], references: [id])
-  serviceJobSlot ServiceJobSlot? @relation(fields: [serviceJobSlotId], references: [id])
   commissionJob  CommissionJob?  @relation(fields: [commissionJobId], references: [id])
   employee       Employee?       @relation(fields: [employeeId], references: [id])
 
   commission Commission?
 
   @@index([treatmentItemId])
-  @@index([serviceJobSlotId])
   @@index([commissionJobId])
   @@index([employeeId])
   @@map("treatment_job_assignments")

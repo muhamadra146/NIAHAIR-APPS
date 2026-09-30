@@ -25,6 +25,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useViewOnly } from "@/hooks/useViewOnly";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { MasterItemTab } from "../components/MasterItemTab";
+import { StoredCommissionBreakdown } from "../components/CommissionBreakdown";
 import { CommissionSettingsTab } from "@/features/settings/components/commission/CommissionSettingsTab";
 import {
   useCommissions,
@@ -318,12 +319,21 @@ function ApprovalTab() {
             {/* Commission rows per employee */}
             <div className="divide-y divide-border">
               {group.items.map((c) => (
-                <div key={c.id} className="flex items-center justify-between px-5 py-3">
-                  <div>
-                    <p className="text-sm font-medium">{c.employee?.name ?? "—"}</p>
+                <div key={c.id} className="flex items-start justify-between gap-3 px-5 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {c.employee?.name ?? "—"}
+                      {c.treatmentJobAssignment?.commissionJob && (
+                        <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                          · {c.treatmentJobAssignment.commissionJob.name}
+                          {c.serviceItem ? ` · ${c.serviceItem.name}` : ""}
+                        </span>
+                      )}
+                    </p>
                     {c.employee?.employeeCode && (
                       <p className="text-xs text-muted-foreground">{c.employee.employeeCode}</p>
                     )}
+                    <StoredCommissionBreakdown commission={c} className="mt-1" />
                   </div>
                   <div className="flex items-center gap-2">
                     {c.isManualOverride && (
@@ -838,12 +848,19 @@ function InvoiceGroupRow({
                 i < group.items.length - 1 ? "border-b border-border/40" : ""
               }`}
             >
-              {/* Employee */}
-              <div className="flex-1 min-w-[120px]">
+              {/* Employee + rincian perhitungan */}
+              <div className="flex-1 min-w-[180px]">
                 <span className="text-sm font-medium">{c.employee?.name ?? "—"}</span>
                 {c.employee?.employeeCode && (
                   <span className="ml-1.5 text-xs text-muted-foreground">{c.employee.employeeCode}</span>
                 )}
+                {c.treatmentJobAssignment?.commissionJob && (
+                  <span className="ml-1.5 text-xs text-muted-foreground">
+                    · {c.treatmentJobAssignment.commissionJob.name}
+                    {c.serviceItem ? ` · ${c.serviceItem.name}` : ""}
+                  </span>
+                )}
+                <StoredCommissionBreakdown commission={c} className="mt-1" />
               </div>
 
               {/* Rate */}

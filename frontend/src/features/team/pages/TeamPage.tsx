@@ -1,24 +1,50 @@
 import { useAuthStore } from "@/stores/authStore";
 import { useViewOnly } from "@/hooks/useViewOnly";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AttendanceTab } from "../components/AttendanceTab";
 import { SelfCheckInView } from "../components/SelfCheckInView";
 
-// OFFICE dan FINANCE juga lihat AttendanceTab (bukan SelfCheckIn).
-// FINANCE akan read-only di AttendanceTab (via readOnly prop).
-const ADMIN_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE", "FINANCE"];
+// SUPER_ADMIN & OWNER tidak absen — hanya monitor kehadiran tim.
+const TEAM_ONLY_ROLES = ["SUPER_ADMIN", "OWNER"];
+// MANAGER, OFFICE, FINANCE: absen sendiri + monitor tim.
+// FINANCE read-only di AttendanceTab (via readOnly prop).
+const TEAM_AND_SELF_ROLES = ["MANAGER", "OFFICE", "FINANCE"];
 
 export function TeamPage() {
-  const roleCode   = useAuthStore((s) => s.user?.roleCode);
+  const roleCode   = useAuthStore((s) => s.user?.roleCode) ?? "";
   const isViewOnly = useViewOnly();
-  const isAdmin    = ADMIN_ROLES.includes(roleCode ?? "");
+
+  if (TEAM_ONLY_ROLES.includes(roleCode)) {
+    return (
+      <PageContainer title="Kehadiran Tim" subtitle="Monitor kehadiran harian seluruh karyawan">
+        <AttendanceTab readOnly={isViewOnly} />
+      </PageContainer>
+    );
+  }
+
+  if (TEAM_AND_SELF_ROLES.includes(roleCode)) {
+    return (
+      <PageContainer title="Attendance" subtitle="Catat kehadiran kamu dan monitor kehadiran tim">
+        <Tabs defaultValue="self" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="self">Absensi Saya</TabsTrigger>
+            <TabsTrigger value="team">Kehadiran Tim</TabsTrigger>
+          </TabsList>
+          <TabsContent value="self" className="mt-0">
+            <SelfCheckInView />
+          </TabsContent>
+          <TabsContent value="team" className="mt-0">
+            <AttendanceTab readOnly={isViewOnly} />
+          </TabsContent>
+        </Tabs>
+      </PageContainer>
+    );
+  }
 
   return (
-    <PageContainer
-      title={isAdmin ? "Kehadiran Tim" : "Absensi Saya"}
-      subtitle={isAdmin ? "Monitor kehadiran harian seluruh karyawan" : "Catat kehadiran dan lihat riwayat absensi kamu"}
-    >
-      {isAdmin ? <AttendanceTab readOnly={isViewOnly} /> : <SelfCheckInView />}
+    <PageContainer title="Absensi Saya" subtitle="Catat kehadiran dan lihat riwayat absensi kamu">
+      <SelfCheckInView />
     </PageContainer>
   );
 }
