@@ -115,6 +115,8 @@ export const router = createBrowserRouter([
             element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","CASHIER","STAFF_OPERASIONAL","OFFICE","FINANCE"]} />,
             children: [
               { path: "/booking-harian",          element: <DailyBoardPage /> },
+              // Detail booking: STAFF_OPERASIONAL hanya lihat (read-only di AppointmentDetailPage)
+              { path: "/appointments/:id",        element: <AppointmentDetailPage /> },
               { path: "/consultation-notes",      element: <ConsultationListPage /> },
               { path: "/consultation-notes/new",  element: <ConsultationFormPage /> },
               { path: "/consultation-notes/:id/edit", element: <ConsultationFormPage /> },
@@ -136,7 +138,6 @@ export const router = createBrowserRouter([
             element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","CASHIER","OFFICE","FINANCE"]} />,
             children: [
               { path: "/appointments",         element: <AppointmentListPage /> },
-              { path: "/appointments/:id",     element: <AppointmentDetailPage /> },
               { path: "/complaints",           element: <ComplaintPage /> },
               { path: "/deposits",             element: <DepositListPage /> },
               { path: "/deposits/:id",         element: <DepositDetailPage /> },

@@ -234,7 +234,7 @@ const INVOICE_STATUS_COLOR: Record<string, string> = {
   CANCELLED: "text-muted-foreground",
 };
 
-function InvoiceTab({ a }: { a: Appointment }) {
+function InvoiceTab({ a, readOnly }: { a: Appointment; readOnly: boolean }) {
   const { branchId } = useAuthStore();
   const navigate     = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
@@ -261,11 +261,13 @@ function InvoiceTab({ a }: { a: Appointment }) {
       <div className="py-8 text-center space-y-3">
         <FileText className="mx-auto h-10 w-10 text-muted-foreground/40" />
         <p className="text-sm text-muted-foreground">Invoice belum dibuat untuk booking ini.</p>
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          Buat Invoice
-        </Button>
-        <CreateInvoiceDialog
+        {!readOnly && (
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            Buat Invoice
+          </Button>
+        )}
+        {!readOnly && <CreateInvoiceDialog
           open={createOpen}
           onOpenChange={setCreateOpen}
           branchId={branchId ?? ""}
@@ -274,7 +276,7 @@ function InvoiceTab({ a }: { a: Appointment }) {
             setCreateOpen(false);
             navigate(`/invoices/${invoiceId}`);
           }}
-        />
+        />}
       </div>
     );
   }
@@ -297,13 +299,15 @@ function InvoiceTab({ a }: { a: Appointment }) {
           >
             {INVOICE_STATUS_LABEL[invoice.status] ?? invoice.status}
           </Badge>
-          <Link
-            to={`/invoices/${invoice.id}`}
-            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-          >
-            <ExternalLink className="h-3 w-3" />
-            Lihat Invoice
-          </Link>
+          {!readOnly && (
+            <Link
+              to={`/invoices/${invoice.id}`}
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              <ExternalLink className="h-3 w-3" />
+              Lihat Invoice
+            </Link>
+          )}
         </div>
       </div>
 
@@ -448,7 +452,9 @@ function PhotoSection({
   photos,
   onUploaded,
   onDeleted,
+  readOnly,
 }: {
+  readOnly:      boolean;
   appointmentId: string;
   type:          AppointmentPhotoType;
   label:         string;
@@ -491,7 +497,7 @@ function PhotoSection({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">{label}</p>
-        <Button
+        {!readOnly && <Button
           size="sm"
           variant="outline"
           disabled={uploading}
@@ -502,7 +508,7 @@ function PhotoSection({
             ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Uploading…</>
             : <><Upload className="mr-1.5 h-3.5 w-3.5" />Upload Foto</>
           }
-        </Button>
+        </Button>}
         <input
           ref={fileRef}
           type="file"
@@ -513,7 +519,12 @@ function PhotoSection({
         />
       </div>
 
-      {photos.length === 0 ? (
+      {photos.length === 0 && readOnly ? (
+        <div className="flex h-28 flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-muted-foreground">
+          <ImageIcon className="h-6 w-6" />
+          <p className="text-xs">Belum ada foto</p>
+        </div>
+      ) : photos.length === 0 ? (
         <div
           className="flex h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary/40 hover:text-primary/60 transition-colors"
           onClick={() => fileRef.current?.click()}
@@ -531,21 +542,21 @@ function PhotoSection({
                 className="h-full w-full cursor-pointer object-cover transition-transform group-hover:scale-105"
                 onClick={() => setLightbox(i)}
               />
-              <button
+              {!readOnly && <button
                 type="button"
                 onClick={() => handleDelete(p.id)}
                 className="absolute right-1 top-1 rounded-full bg-black/50 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive"
               >
                 <Trash2 className="h-3 w-3" />
-              </button>
+              </button>}
             </div>
           ))}
-          <div
+          {!readOnly && <div
             className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-border text-muted-foreground hover:border-primary/40 hover:text-primary/60 transition-colors"
             onClick={() => fileRef.current?.click()}
           >
             <Plus className="h-5 w-5" />
-          </div>
+          </div>}
         </div>
       )}
 
@@ -558,7 +569,7 @@ function PhotoSection({
 
 // ── Photos Tab ────────────────────────────────────────────────────────
 
-function PhotosTab({ a }: { a: Appointment }) {
+function PhotosTab({ a, readOnly }: { a: Appointment; readOnly: boolean }) {
   const qc = useQueryClient();
 
   const { data: photos = [], isLoading } = useQuery({
@@ -589,6 +600,7 @@ function PhotosTab({ a }: { a: Appointment }) {
             photos={refPhotos}
             onUploaded={invalidate}
             onDeleted={invalidate}
+            readOnly={readOnly}
           />
           <div className="border-t border-border" />
           <PhotoSection
@@ -598,6 +610,7 @@ function PhotosTab({ a }: { a: Appointment }) {
             photos={hairPhotos}
             onUploaded={invalidate}
             onDeleted={invalidate}
+            readOnly={readOnly}
           />
         </>
       )}
@@ -721,7 +734,7 @@ function AmbildDPDialog({
 
 // ── DP Tab ────────────────────────────────────────────────────────────
 
-function DepositTab({ a }: { a: Appointment }) {
+function DepositTab({ a, readOnly }: { a: Appointment; readOnly: boolean }) {
   const [dpOpen, setDpOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -755,10 +768,12 @@ function DepositTab({ a }: { a: Appointment }) {
             <p className="text-xs text-muted-foreground">Total: {formatCurrency(totalDP)}</p>
           )}
         </div>
-        <Button size="sm" onClick={() => setDpOpen(true)}>
-          <Plus className="mr-1.5 h-3.5 w-3.5" />
-          Ambil DP
-        </Button>
+        {!readOnly && (
+          <Button size="sm" onClick={() => setDpOpen(true)}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Ambil DP
+          </Button>
+        )}
       </div>
 
       {isLoading && <p className="text-sm text-muted-foreground">Memuat…</p>}
@@ -789,7 +804,8 @@ function DepositTab({ a }: { a: Appointment }) {
   );
 }
 
-export function AppointmentDetailView({ appointment }: { appointment: Appointment }) {
+/** readOnly: sembunyikan semua aksi ubah data (untuk STAFF_OPERASIONAL — hanya lihat detail) */
+export function AppointmentDetailView({ appointment, readOnly = false }: { appointment: Appointment; readOnly?: boolean }) {
   return (
     <Tabs defaultValue="details">
       <TabsList className="w-full justify-start overflow-x-auto">
@@ -803,11 +819,11 @@ export function AppointmentDetailView({ appointment }: { appointment: Appointmen
         <TabsTrigger value="invoice">Invoice</TabsTrigger>
       </TabsList>
       <TabsContent value="details">  <DetailsTab a={appointment} /></TabsContent>
-      <TabsContent value="photos">   <PhotosTab a={appointment} /></TabsContent>
+      <TabsContent value="photos">   <PhotosTab a={appointment} readOnly={readOnly} /></TabsContent>
       <TabsContent value="staff">    <StaffTab a={appointment} /></TabsContent>
-      <TabsContent value="dp">       <DepositTab a={appointment} /></TabsContent>
+      <TabsContent value="dp">       <DepositTab a={appointment} readOnly={readOnly} /></TabsContent>
       <TabsContent value="history">  <HistoryTab a={appointment} /></TabsContent>
-      <TabsContent value="invoice">  <InvoiceTab a={appointment} /></TabsContent>
+      <TabsContent value="invoice">  <InvoiceTab a={appointment} readOnly={readOnly} /></TabsContent>
     </Tabs>
   );
 }

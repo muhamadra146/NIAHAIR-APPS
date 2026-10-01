@@ -4,6 +4,7 @@ import { ChevronLeft, Pencil, RefreshCw, XCircle } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthStore } from "@/stores/authStore";
 import { useAppointment, useUpdateAppointment, useChangeAppointmentStatus } from "../hooks";
 import { AppointmentDetailView } from "../components/AppointmentDetailView";
 import { AppointmentUpdateForm } from "../components/AppointmentForm";
@@ -13,6 +14,9 @@ import type { UpdateAppointmentFormValues, ChangeStatusFormValues } from "../sch
 import type { Appointment } from "../types";
 
 const TERMINAL_STATUSES = ["COMPLETED", "CANCELLED", "NO_SHOW"] as const;
+
+// Role yang hanya boleh MELIHAT detail booking (dibuka dari Booking Harian)
+const READ_ONLY_ROLES = ["STAFF_OPERASIONAL"];
 
 function formatDt(iso: string | null | undefined) {
   if (!iso) return "—";
@@ -47,6 +51,10 @@ function CancelledBanner({ appointment }: { appointment: Appointment }) {
 export function AppointmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: appointment, isLoading, isError } = useAppointment(id!);
+  const roleCode = useAuthStore((st) => st.user?.roleCode) ?? "";
+  const readOnly = READ_ONLY_ROLES.includes(roleCode);
+  // Staf tidak punya akses daftar Booking → kembali ke Booking Harian
+  const backTo   = readOnly ? "/booking-harian" : "/appointments";
   const updateMutation = useUpdateAppointment(id!);
   const statusMutation = useChangeAppointmentStatus(id!);
 
@@ -103,7 +111,7 @@ export function AppointmentDetailPage() {
       <PageContainer>
         <div className="py-12 text-center text-sm text-muted-foreground">
           Appointment not found.{" "}
-          <Link to="/appointments" className="text-primary underline">
+          <Link to={backTo} className="text-primary underline">
             Back to list
           </Link>
         </div>
@@ -120,7 +128,7 @@ export function AppointmentDetailPage() {
         {/* Header */}
         <div className="flex items-start gap-2">
           <Button variant="ghost" size="icon" className="mt-0.5 shrink-0" asChild>
-            <Link to="/appointments">
+            <Link to={backTo}>
               <ChevronLeft className="h-5 w-5" />
             </Link>
           </Button>
@@ -137,7 +145,7 @@ export function AppointmentDetailPage() {
             </div>
 
             <div className="flex shrink-0 gap-2">
-              {!isTerminal && (
+              {!readOnly && !isTerminal && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -147,7 +155,7 @@ export function AppointmentDetailPage() {
                   Status
                 </Button>
               )}
-              {appointment.status !== "CANCELLED" && (
+              {!readOnly && appointment.status !== "CANCELLED" && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -165,7 +173,7 @@ export function AppointmentDetailPage() {
         <CancelledBanner appointment={appointment} />
 
         {/* Detail */}
-        <AppointmentDetailView appointment={appointment} />
+        <AppointmentDetailView appointment={appointment} readOnly={readOnly} />
       </div>
 
       <AppointmentUpdateForm
