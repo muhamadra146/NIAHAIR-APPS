@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/lib/toast";
@@ -16,8 +16,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   ChevronLeft, ChevronRight, RefreshCw, Home, Clock, Eye,
-  Loader2, X, Users, FileText, ClipboardList,
-  AlertTriangle, Scissors, Calendar, CalendarClock, Ban,
+  Loader2, Users, FileText,
+  AlertTriangle, AlertCircle, Scissors, Calendar, CalendarClock, Ban,
   LayoutList, LayoutGrid, CheckCircle2, Circle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -45,8 +45,6 @@ import {
 } from "@/components/ui/dialog";
 import { CreateInvoiceDialog } from "@/features/invoice/components/CreateInvoiceDialog";
 import { fetchInvoices } from "@/features/invoice/api";
-import { TreatmentAssignmentSection } from "@/features/invoice/components/TreatmentAssignmentSection";
-import { fetchCommissions } from "@/features/commission/api";
 import {
   StaffSlotSelector,
   APPOINTMENT_SLOTS,
@@ -79,8 +77,6 @@ const BOARD_COLUMNS: BoardColumnConfig[] = [
 
 // Row 1: BOOKED, IN_PROGRESS, COMPLETED (high-priority active)
 // Row 2: CONFIRMED, CHECK_IN (mid-flow active)
-const GRID_ROW1 = [BOARD_COLUMNS[0], BOARD_COLUMNS[3], BOARD_COLUMNS[4]];
-const GRID_ROW2 = [BOARD_COLUMNS[1], BOARD_COLUMNS[2]];
 
 const BOARD_FILTER_TABS = [
   { key: "ACTIVE",      label: "Aktif" },
@@ -157,6 +153,13 @@ function EmptyColumnState() {
   );
 }
 
+// ── API error message ─────────────────────────────────────────────────
+
+function apiErrorMessage(err: unknown, fallback: string): string {
+  const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+  return msg ?? (err instanceof Error && err.message ? err.message : fallback);
+}
+
 // ── Staff assign popover ──────────────────────────────────────────────
 
 function StaffAssignPopover({
@@ -174,15 +177,22 @@ function StaffAssignPopover({
 }) {
   const { branchId } = useAuthStore();
 
-  const [staffBySlot, setStaffBySlot] = useState<StaffBySlot>(() =>
+  const savedStaffBySlot = () =>
     appointment.staffs.reduce<StaffBySlot>(
       (acc, s) => {
         const key = APPOINTMENT_SLOTS.find((sl) => sl.key === s.slotKey)?.key ?? "pemasang";
         return { ...acc, [key]: [...acc[key], s.employee.id] };
       },
       { ...EMPTY_SLOTS }
-    )
-  );
+    );
+  const [staffBySlot, setStaffBySlot] = useState<StaffBySlot>(savedStaffBySlot);
+
+  // Dialog tetap ter-mount per kartu: reset ke data tersimpan setiap kali dibuka,
+  // agar pilihan yang dibatalkan tidak ikut tersimpan pada Simpan berikutnya
+  useEffect(() => {
+    if (open) setStaffBySlot(savedStaffBySlot());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   const [saving, setSaving] = useState(false);
 
   const startTime = new Date(appointment.startTime)
@@ -274,79 +284,6 @@ function StaffAssignPopover({
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Simpan"}
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ── Work assignment dialog ────────────────────────────────────────────
-
-function WorkAssignDialog({
-  appointmentId,
-  appointment,
-  open,
-  onClose,
-}: {
-  appointmentId: string;
-  appointment:   Appointment;
-  open:          boolean;
-  onClose:       () => void;
-}) {
-  const { data: invoiceData, isLoading } = useQuery({
-    queryKey:  ["invoices", "by-appointment", appointmentId],
-    queryFn:   () => fetchInvoices({ appointmentId, limit: 1 }),
-    enabled:   open,
-    staleTime: 0,
-  });
-
-  const invoice = invoiceData?.data?.[0] ?? null;
-
-  const { data: commissionsData } = useQuery({
-    queryKey:  ["commissions", "invoice", invoice?.id],
-    queryFn:   () => fetchCommissions({ invoiceId: invoice!.id, limit: 1 }),
-    enabled:   open && !!invoice,
-    staleTime: 0,
-  });
-  const hasExistingCommission = (commissionsData?.meta?.total ?? 0) > 0;
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ClipboardList className="h-4 w-4" />
-            Assign Pekerjaan
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            Assign staff dan generate komisi untuk appointment ini
-          </DialogDescription>
-        </DialogHeader>
-
-        {isLoading && (
-          <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Memuat data invoice…
-          </div>
-        )}
-
-        {!isLoading && !invoice && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
-            Invoice belum dibuat untuk appointment ini.
-            <br />
-            <span className="text-xs">Buat invoice terlebih dahulu dari tombol Invoice di card.</span>
-          </div>
-        )}
-
-        {!isLoading && invoice && (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground font-mono">{invoice.invoiceNo}</p>
-            <TreatmentAssignmentSection
-              invoiceId={invoice.id}
-              appointment={appointment}
-              hasExistingCommission={hasExistingCommission}
-            />
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );
@@ -616,7 +553,6 @@ function DraggableCard({
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
 
   const [showStaff,  setShowStaff]  = useState(false);
-  const [showAssign, setShowAssign] = useState(false);
 
   const startTime = new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
   const endTime   = new Date(a.endTime).toLocaleTimeString("id-ID",   { hour: "2-digit", minute: "2-digit" });
@@ -821,14 +757,6 @@ function DraggableCard({
         )}
       </div>
 
-      {showAssign && !isDragOverlay && (
-        <WorkAssignDialog
-          appointmentId={a.id}
-          appointment={a}
-          open={showAssign}
-          onClose={() => setShowAssign(false)}
-        />
-      )}
     </div>
   );
 }
@@ -957,7 +885,6 @@ function AppointmentListRow({
   readOnly?:          boolean;
 }) {
   const [showStaff,  setShowStaff]  = useState(false);
-  const [showAssign, setShowAssign] = useState(false);
 
   const next      = NEXT_STATUS[a.status];
   const nextLabel = NEXT_LABEL[a.status];
@@ -1142,14 +1069,6 @@ function AppointmentListRow({
         </div>
       </div>
 
-      {showAssign && (
-        <WorkAssignDialog
-          appointmentId={a.id}
-          appointment={a}
-          open={showAssign}
-          onClose={() => setShowAssign(false)}
-        />
-      )}
     </div>
   );
 }
@@ -1178,7 +1097,7 @@ export function DailyBoardPage() {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
-  const { data, isLoading, refetch, isFetching } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["daily-board", date, branchId],
     queryFn:  () =>
       fetchAppointments({ page: 1, limit: 200, branchId: branchId ?? undefined, startDate: date, endDate: date }),
@@ -1195,7 +1114,11 @@ export function DailyBoardPage() {
   });
 
   const appointments                = data?.appointments ?? [];
-  const rescheduledFromAppointments = rescheduledFromData?.appointments ?? [];
+  // Booking yang masih ada di tanggal ini (mis. reschedule jam saja / dipindah lalu kembali)
+  // bukan "di-reschedule dari" tanggal ini: buang agar tidak tampil & terhitung ganda
+  const appointmentIdsHere          = new Set(appointments.map((a) => a.id));
+  const rescheduledFromAppointments = (rescheduledFromData?.appointments ?? [])
+    .filter((a) => !appointmentIdsHere.has(a.id));
 
   // Tab Reschedule: hilangkan yang sudah CANCELLED — mereka pindah ke tab Dibatalkan
   // Tombol aksi di-hide via isActionable untuk status non-BOOKED lainnya
@@ -1221,8 +1144,10 @@ export function DailyBoardPage() {
   ) as Record<AppointmentStatus, Appointment[]>;
 
   // Stats
+  // Total = isi tab "Aktif" (booking hari ini yang tidak batal/no-show) = Berjalan + Selesai
   const totalActive    = appointments.filter((a) => ["BOOKED","CONFIRMED","CHECK_IN","IN_PROGRESS"].includes(a.status)).length;
   const totalCompleted = appointments.filter((a) => a.status === "COMPLETED").length;
+  const totalToday     = totalActive + totalCompleted;
 
   // ── Mutations ──────────────────────────────────────────────────────
 
@@ -1233,6 +1158,7 @@ export function DailyBoardPage() {
       qc.invalidateQueries({ queryKey: ["daily-board"] });
       qc.invalidateQueries({ queryKey: ["appointments"] });
     },
+    onError: (err) => toast.error(apiErrorMessage(err, "Gagal mengubah status booking")),
     onSettled: () => setAdv(null),
   });
 
@@ -1247,7 +1173,8 @@ export function DailyBoardPage() {
           setAdv(null);
           return;
         }
-      } catch {
+      } catch (err) {
+        toast.error(apiErrorMessage(err, "Gagal memeriksa status invoice"));
         setAdv(null);
         return;
       }
@@ -1292,6 +1219,8 @@ export function DailyBoardPage() {
       const result = await fetchInvoices({ appointmentId: appt.id, limit: 1 });
       setInvoiceExistingId((result.data ?? []).length > 0 ? result.data[0].id : null);
       setInvoiceAppt(appt);
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Gagal memuat invoice"));
     } finally {
       setCheckingInvoice(null);
     }
@@ -1355,8 +1284,8 @@ export function DailyBoardPage() {
 
           {/* Stats pills (desktop) */}
           <div className="hidden sm:flex items-center gap-2 flex-1 justify-center">
-            <StatPill label="Total"   value={appointments.length} cls="bg-slate-100 text-slate-600" />
-            <StatPill label="Aktif"   value={totalActive}         cls="bg-blue-50 text-blue-600"    />
+            <StatPill label="Total"    value={totalToday}  cls="bg-slate-100 text-slate-600" />
+            <StatPill label="Berjalan" value={totalActive} cls="bg-blue-50 text-blue-600"    />
             <StatPill label="Selesai" value={totalCompleted}      cls="bg-emerald-50 text-emerald-600" />
           </div>
 
@@ -1414,7 +1343,7 @@ export function DailyBoardPage() {
         <div className="flex items-center gap-1 overflow-x-auto pb-0 -mx-4 px-4 border-t border-slate-100">
           {BOARD_FILTER_TABS.map((tab) => {
             const cnt = tab.key === "ACTIVE"
-              ? appointments.filter((a) => ["BOOKED","CONFIRMED","CHECK_IN","IN_PROGRESS","COMPLETED"].includes(a.status)).length
+              ? totalToday
               : tab.key === "ALL"
               ? appointments.length + rescheduledFromVisible.length + rescheduledFromCancelled.length
               : tab.key === "RESCHEDULED"
@@ -1478,6 +1407,14 @@ export function DailyBoardPage() {
           <div className="flex h-64 items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
             <span className="text-sm">Memuat…</span>
+          </div>
+        ) : isError ? (
+          <div className="flex h-64 flex-col items-center justify-center gap-3 text-center">
+            <AlertCircle className="h-8 w-8 text-destructive" />
+            <p className="text-sm text-muted-foreground">Gagal memuat booking. Periksa koneksi lalu coba lagi.</p>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Coba Lagi
+            </Button>
           </div>
         ) : boardFilter === "ACTIVE" && viewMode === "list" ? (
 
@@ -1610,6 +1547,8 @@ export function DailyBoardPage() {
           setInvoiceAppt(null);
           setInvoiceExistingId(null);
           qc.invalidateQueries({ queryKey: ["invoices"] });
+          // Invoice lunas: booking otomatis COMPLETED di backend, jadi refresh board
+          onActionSuccess();
         }}
       />
 

@@ -38,7 +38,7 @@ router.post(
 router.patch(
   "/:id",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER),
   validate(updateAppointmentSchema),
   updateController
 );
@@ -54,7 +54,7 @@ router.delete(
 router.patch(
   "/:id/status",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER),
   validate(changeStatusSchema),
   changeStatusController
 );
