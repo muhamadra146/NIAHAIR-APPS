@@ -9,9 +9,181 @@ const {
   calcCommissionAmount,
   distributePool,
   detectColoristInSession,
+  calcCategoryItem,
   canOverride,
   canRegenerate,
 } = require("./commission.calc");
+
+// ── calcCategoryItem ──────────────────────────────────────────────────
+
+const worker = (id, over = {}) => ({
+  treatmentJobAssignmentId: id,
+  employeeId:      `e-${id}`,
+  employeeName:    `Staf ${id}`,
+  workQty:         null,
+  commissionRuleId: `r-${id}`,
+  commissionType:  "PERCENTAGE",
+  commissionValue: "10",
+  commissionBase:  "AFTER_DISCOUNT_BEFORE_TAX",
+  ...over,
+});
+
+const job = (id, over = {}) => ({
+  commissionJobId:  id,
+  jobName:          id,
+  jobKey:           id,
+  sortOrder:        0,
+  deductsFromJobId: null,
+  pricePerUnit:     null,
+  unit:             "helai",
+  splitMode:        "BY_QTY",
+  workers:          [],
+  ...over,
+});
+
+const rowsOf = (jobs, jobId) => jobs.find((j) => j.commissionJobId === jobId).rows;
+
+describe("calcCategoryItem", () => {
+  test("BY_QTY: dibagi proporsional qty ÷ qty item", () => {
+    const jobs = calcCategoryItem({
+      subtotal: 3_000_000,
+      itemQty:  180,
+      jobs: [job("pasang", {
+        workers: [worker("a", { workQty: 120 }), worker("b", { workQty: 60 })],
+      })],
+    });
+    const [a, b] = rowsOf(jobs, "pasang");
+    expect(a.amount).toBe(200_000);
+    expect(b.amount).toBe(100_000);
+    expect(a.workRatio).toBeCloseTo(2 / 3, 6);
+  });
+
+  test("BY_QTY: sisa helai yang tidak diisi tidak dibagikan", () => {
+    const jobs = calcCategoryItem({
+      subtotal: 3_000_000, itemQty: 180,
+      jobs: [job("pasang", { workers: [worker("a", { workQty: 90 })] })],
+    });
+    expect(rowsOf(jobs, "pasang")[0].amount).toBe(150_000);
+  });
+
+  test("helper flat (FIXED) dengan harga/unit memotong KOMISI job utama, bukan base", () => {
+    // Kasus INV-0003: color 10% dari 943.500 = 94.350; cuci rambut flat 5.000 diambil dari komisi itu
+    const jobs = calcCategoryItem({
+      subtotal: 943_500,
+      itemQty:  1,
+      jobs: [
+        job("color", { unit: "sesi", splitMode: "EQUAL", sortOrder: 0,
+          workers: [worker("a", { workQty: 1 })] }),
+        job("cuci", { unit: "kepala", deductsFromJobId: "color", pricePerUnit: 5000, sortOrder: 1,
+          workers: [worker("c", { workQty: 2, commissionType: "FIXED", commissionValue: "5000" })] }),
+      ],
+    });
+    const color = jobs.find((j) => j.commissionJobId === "color");
+    expect(color.remainingBase).toBe(943_500);          // base tidak dipotong
+    expect(color.rows[0].amount).toBe(89_350);          // 94.350 − 5.000
+    expect(color.rows[0].flatDeduction).toBe(5000);
+    expect(rowsOf(jobs, "cuci")[0].amount).toBe(5000);  // sekali per staf, tidak dikali qty
+    expect(rowsOf(jobs, "cuci")[0].effectiveBase).toBe(0);
+    const total = jobs.flatMap((j) => j.rows).reduce((s, r) => s + r.amount, 0);
+    expect(total).toBe(94_350);                         // total = komisi job utama
+  });
+
+  test("EQUAL + helper persen per unit: base dipotong lalu dibagi rata per staf", () => {
+    const jobs = calcCategoryItem({
+      subtotal: 943_500,
+      itemQty:  1,
+      jobs: [
+        job("color", { unit: "sesi", splitMode: "EQUAL", sortOrder: 0,
+          workers: [worker("a", { workQty: 1 }), worker("b", { workQty: 1 })] }),
+        job("cuci", { unit: "kepala", deductsFromJobId: "color", pricePerUnit: 5000, sortOrder: 1,
+          workers: [worker("c", { workQty: 1, commissionType: "PERCENTAGE", commissionValue: "10" })] }),
+      ],
+    });
+    const color = jobs.find((j) => j.commissionJobId === "color");
+    expect(color.remainingBase).toBe(938_500);
+    expect(color.rows.map((r) => r.amount)).toEqual([46_925, 46_925]);
+    expect(color.rows[0].workRatio).toBe(0.5);
+    expect(rowsOf(jobs, "cuci")[0].amount).toBe(500);          // 5.000 × 10%
+    expect(rowsOf(jobs, "cuci")[0].effectiveBase).toBe(5000);
+  });
+
+  test("EQUAL mengabaikan qty yang diisi staf", () => {
+    const jobs = calcCategoryItem({
+      subtotal: 1_000_000, itemQty: 1,
+      jobs: [job("color", { splitMode: "EQUAL",
+        workers: [worker("a", { workQty: 1 }), worker("b", { workQty: 1 })] })],
+    });
+    expect(rowsOf(jobs, "color").map((r) => r.amount)).toEqual([50_000, 50_000]);
+  });
+
+  test("FULL: setiap staf dapat komisi penuh", () => {
+    const jobs = calcCategoryItem({
+      subtotal: 1_000_000, itemQty: 1,
+      jobs: [job("x", { splitMode: "FULL", workers: [worker("a"), worker("b")] })],
+    });
+    expect(rowsOf(jobs, "x").map((r) => r.amount)).toEqual([100_000, 100_000]);
+  });
+
+  test("HELPER_FLAT: nominal memotong komisi akhir primary sesuai porsi", () => {
+    const jobs = calcCategoryItem({
+      subtotal: 1_000_000, itemQty: 1,
+      jobs: [
+        job("p", { splitMode: "EQUAL", workers: [worker("a"), worker("b")] }),
+        job("h", { deductsFromJobId: "p", sortOrder: 1,
+          workers: [worker("c", { commissionType: "FIXED", commissionValue: "10000" })] }),
+      ],
+    });
+    const p = rowsOf(jobs, "p");
+    expect(p.map((r) => r.amount)).toEqual([45_000, 45_000]); // 50.000 − 5.000
+    expect(p[0].flatDeduction).toBe(5000);
+    expect(rowsOf(jobs, "h")[0].amount).toBe(10_000);
+  });
+
+  test("qtyOverrides menggantikan workQty tersimpan", () => {
+    const jobs = calcCategoryItem({
+      subtotal: 3_000_000, itemQty: 180,
+      jobs: [job("pasang", { workers: [worker("a", { workQty: 60 })] })],
+      qtyOverrides: { a: 180 },
+    });
+    expect(rowsOf(jobs, "pasang")[0].amount).toBe(300_000);
+  });
+
+  test("staf tanpa rule komisi = 0 dan hasRule false", () => {
+    const jobs = calcCategoryItem({
+      subtotal: 1_000_000, itemQty: 1,
+      jobs: [job("x", { splitMode: "EQUAL",
+        workers: [worker("a", { commissionType: null, commissionValue: null, commissionRuleId: null })] })],
+    });
+    expect(rowsOf(jobs, "x")[0]).toMatchObject({ amount: 0, hasRule: false });
+  });
+
+  test("base per staf mengikuti itemBase (commissionBase rule), potongan helper tetap berlaku", () => {
+    const jobs = calcCategoryItem({
+      subtotal: 1_000_000, itemQty: 1,
+      jobs: [
+        job("p", { splitMode: "EQUAL", workers: [
+          worker("a", { itemBase: 1_110_000 }), // mis. sesudah pajak
+          worker("b"),                          // fallback subtotal
+        ] }),
+        job("h", { deductsFromJobId: "p", pricePerUnit: 10_000, sortOrder: 1,
+          workers: [worker("c", { workQty: 1 })] }), // helper persen → potong base 10.000
+      ],
+    });
+    const [a, b] = rowsOf(jobs, "p");
+    expect(a.remainingBase).toBe(1_100_000);
+    expect(a.amount).toBe(55_000);   // 1.100.000 × 1/2 × 10%
+    expect(b.remainingBase).toBe(990_000);
+    expect(b.amount).toBe(49_500);   // 990.000 × 1/2 × 10%
+  });
+
+  test("hasil diurutkan menurut sortOrder", () => {
+    const jobs = calcCategoryItem({
+      subtotal: 100, itemQty: 1,
+      jobs: [job("b", { sortOrder: 2 }), job("a", { sortOrder: 1 })],
+    });
+    expect(jobs.map((j) => j.commissionJobId)).toEqual(["a", "b"]);
+  });
+});
 
 // ── Test 1: Split per helai (workRatio) ───────────────────────────────
 describe("split per helai — workRatio", () => {

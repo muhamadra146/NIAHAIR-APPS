@@ -1,4 +1,4 @@
-const { object, string, array, boolean, optional, pipe, minLength, number, minValue, picklist } = require("valibot");
+const { object, string, array, boolean, optional, pipe, minLength, number, minValue, maxValue, picklist, record } = require("valibot");
 
 const itemSchema = object({
   itemId:          pipe(string(), minLength(1, "itemId is required")),
@@ -43,4 +43,22 @@ const updateInvoiceSchema = object({
   inclusiveTax: optional(boolean()),
 });
 
-module.exports = { createInvoiceSchema, applyDepositSchema, updateInvoiceSchema };
+// ── Kalkulator komisi ─────────────────────────────────────────────────
+// key = treatmentJobAssignmentId
+// Batas atas mengikuti kolom TreatmentJobAssignment.workQty Decimal(10,2)
+const qtyOverridesSchema    = optional(record(string(), pipe(number(), minValue(0, "qty tidak boleh negatif"), maxValue(99_999_999, "qty terlalu besar"))));
+const amountOverridesSchema = optional(record(string(), pipe(number(), minValue(0, "komisi tidak boleh negatif"))));
+
+const calculateCommissionSchema = object({
+  qtyOverrides: qtyOverridesSchema,
+});
+
+const finalizeCommissionSchema = object({
+  qtyOverrides:    qtyOverridesSchema,
+  amountOverrides: amountOverridesSchema,
+});
+
+module.exports = {
+  createInvoiceSchema, applyDepositSchema, updateInvoiceSchema,
+  calculateCommissionSchema, finalizeCommissionSchema,
+};

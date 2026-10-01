@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X, Loader2, NotebookPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCreateConsultationNote, useConsultationNotes } from "@/features/consultation/hooks";
@@ -230,7 +231,8 @@ export function ConsultationNoteModal({ invoiceId, invoiceNo, customerName, cust
 
   // ── Render ────────────────────────────────────────────────────────
 
-  return (
+  // Portal ke body agar backdrop menutupi seluruh layar
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -482,6 +484,7 @@ export function ConsultationNoteModal({ invoiceId, invoiceNo, customerName, cust
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -4306,6 +4306,42 @@ Rule lama tidak dihapus.
 
 ---
 
+# 7.11a Model : CommissionJob
+
+Purpose
+
+Job yang dapat dikerjakan dalam satu Commission Category (contoh: pasang rambut, color, cuci rambut) beserta cara hitung komisinya.
+
+Fields
+
+commissionCategoryId
+
+name
+
+jobKey
+
+sortOrder
+
+isActive
+
+deductsFromJobId — kosong = Job Utama; diisi = Job Helper
+
+pricePerUnit — harga per unit Job Helper
+
+unit — label satuan (helai, kepala, sesi); tampilan saja
+
+splitMode — `BY_QTY` | `EQUAL` | `FULL` (default `BY_QTY`)
+
+defaultQty — `ITEM_QTY` | `ONE` (default `ITEM_QTY`)
+
+staffCountMax — batas jumlah staf untuk rate dinamis (Home Service)
+
+Business Rules
+
+Lihat 02_BUSINESS_RULES.md COM-006 s/d COM-013.
+
+---
+
 # 7.12 Model : Payroll
 
 Purpose

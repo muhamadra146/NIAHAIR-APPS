@@ -153,6 +153,7 @@ module.exports = {
   jobAssignmentsController,
   submitJobAssignmentsController,
   commissionWorksheetController,
+  calculateCommissionController,
   finalizeCommissionController,
 };
 
@@ -188,10 +189,24 @@ async function commissionWorksheetController(req, res, next) {
   }
 }
 
+// Preview kalkulasi dengan koreksi qty (tidak menyimpan apa pun)
+async function calculateCommissionController(req, res, next) {
+  try {
+    const result = await getCommissionWorksheet(req.params.id, { qtyOverrides: req.body.qtyOverrides });
+    return success(res, result, "Commission calculated");
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function finalizeCommissionController(req, res, next) {
   try {
-    const { rows } = req.body;
-    const result = await finalizeCommissionFromCalculator(req.params.id, rows);
+    const { qtyOverrides, amountOverrides } = req.body;
+    const result = await finalizeCommissionFromCalculator(
+      req.params.id,
+      { qtyOverrides, amountOverrides },
+      { userId: req.user.id, roleCode: req.user.roleCode },
+    );
     return success(res, result, `${result.created} komisi berhasil disimpan`);
   } catch (err) {
     next(err);

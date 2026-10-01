@@ -32,6 +32,11 @@ export interface UpdateCommissionCategoryInput {
 
 // ── Commission Job ────────────────────────────────────────────────────────────
 
+/** Cara bagi komisi job primary antar staf */
+export type CommissionSplitMode  = "BY_QTY" | "EQUAL" | "FULL";
+/** Qty default saat job dicentang di Input Job */
+export type CommissionDefaultQty = "ITEM_QTY" | "ONE";
+
 export interface CommissionJob {
   id:                   string;
   commissionCategoryId: string;
@@ -42,7 +47,9 @@ export interface CommissionJob {
   // Chain deduction — null = job utama (primary), diisi = helper job
   deductsFromJobId:     string | null;
   pricePerUnit:         string | null;  // Decimal as string from API; harga/unit untuk PERCENTAGE helper
-  unit:                 string;         // satuan: "helai", "sesi", "cm", dll.
+  unit:                 string;         // satuan (label): "helai", "sesi", "kepala", dll.
+  splitMode:            CommissionSplitMode;
+  defaultQty:           CommissionDefaultQty;
   // staffCountMax: batas jumlah staff untuk rate dinamis (HS).
   // null = berlaku ketika jumlah staff melebihi semua job yang punya staffCountMax.
   staffCountMax:        number | null;
@@ -58,6 +65,8 @@ export interface CreateCommissionJobInput {
   deductsFromJobId?:  string | null;
   pricePerUnit?:      number | null;
   unit?:              string;
+  splitMode?:         CommissionSplitMode;
+  defaultQty?:        CommissionDefaultQty;
   staffCountMax?:     number | null;  // batas staff untuk HS dynamic rate
 }
 
@@ -68,6 +77,8 @@ export interface UpdateCommissionJobInput {
   deductsFromJobId?:  string | null;
   pricePerUnit?:      number | null;
   unit?:              string;
+  splitMode?:         CommissionSplitMode;
+  defaultQty?:        CommissionDefaultQty;
   staffCountMax?:     number | null;  // batas staff untuk HS dynamic rate
 }
 
@@ -159,81 +170,6 @@ export interface UpdateItemCommissionInput {
   commissionCategoryId: string | null;
 }
 
-// ── Service Job Slots ─────────────────────────────────────────────────────────
-
-export type CommissionMode = "FIXED_RATE" | "WORK_QTY";
-export type SlotType       = "PERCENTAGE" | "FLAT";
-
-export interface ServiceJobSlot {
-  id:             string;
-  itemId:         string;
-  slotKey:        string;
-  label:          string;
-  commissionRate: string;       // Decimal as string from backend
-  commissionMode: CommissionMode;
-  // Role-based fields (null = slot lama, backward compat)
-  roleId?:        string | null;
-  isMainJob?:     boolean;
-  slotType?:      SlotType;
-  isRequired:     boolean;
-  sortOrder:      number;
-  isActive:       boolean;
-  createdAt:      string;
-  updatedAt:      string;
-}
-
-export interface CreateServiceJobSlotInput {
-  slotKey:         string;
-  label:           string;
-  commissionRate:  number;
-  commissionMode?: CommissionMode;
-  // Role-based fields (optional)
-  roleId?:         string | null;
-  isMainJob?:      boolean;
-  slotType?:       SlotType;
-  isRequired?:     boolean;
-  sortOrder?:      number;
-}
-
-export interface UpdateServiceJobSlotInput {
-  slotKey?:        string;
-  label?:          string;
-  commissionRate?: number;
-  commissionMode?: CommissionMode;
-  roleId?:         string | null;
-  isMainJob?:      boolean;
-  slotType?:       SlotType;
-  isRequired?:     boolean;
-  sortOrder?:      number;
-  isActive?:       boolean;
-}
-
-// ── Service Job Roles ─────────────────────────────────────────────────────────
-
-export interface ServiceJobRole {
-  id:             string;
-  itemId:         string;
-  roleName:       string;
-  commissionRate: string;   // Decimal as string from backend
-  sortOrder:      number;
-  isActive:       boolean;
-  createdAt:      string;
-  updatedAt:      string;
-  slots?:         ServiceJobSlot[];
-}
-
-export interface CreateServiceJobRoleInput {
-  roleName:       string;
-  commissionRate: number;
-  sortOrder?:     number;
-}
-
-export interface UpdateServiceJobRoleInput {
-  roleName?:       string;
-  commissionRate?: number;
-  sortOrder?:      number;
-  isActive?:       boolean;
-}
 export type CommissionType   = "PERCENTAGE" | "FIXED";
 export type CommissionBase   =
   | "BEFORE_DISCOUNT_BEFORE_TAX"
@@ -296,6 +232,18 @@ export interface Commission {
   employee:             CommissionEmployee | null;
   invoiceItem:          CommissionInvoiceItem | null;
   invoice:              CommissionInvoiceSummary | null;  // ringkasan invoice
+  serviceItem?:         { id: string; name: string } | null;
+  // Job kategori-job — untuk rincian perhitungan (null untuk sistem lama)
+  treatmentJobAssignment?: {
+    commissionJob: {
+      id:               string;
+      name:             string;
+      unit:             string;
+      splitMode:        CommissionSplitMode;
+      deductsFromJobId: string | null;
+      pricePerUnit:     string | null;
+    } | null;
+  } | null;
 }
 
 export interface CommissionListParams {

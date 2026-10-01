@@ -305,7 +305,8 @@ export const sidebarNav: NavItem[] = [
     label:         "Attendance",
     href:          "/attendance",
     icon:          ClipboardList,
-    roles:         [...MANAGEMENT_ROLES, "OFFICE", "FINANCE"],
+    // Semua role: self check-in; SUPER_ADMIN/OWNER hanya monitor tim (lihat TeamPage)
+    roles:         ALL_ROLES,
     viewOnlyRoles: ["FINANCE"],
     group:         "Kehadiran",
   },

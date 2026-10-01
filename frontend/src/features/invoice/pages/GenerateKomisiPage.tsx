@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import {
@@ -196,18 +197,12 @@ function JobAssignmentModal({
       .map((ti) => ({ ti, session })),
   );
 
-  const hasOldSystem = inv.treatmentSessions.some((s) =>
-    s.treatmentItems.some(
-      (ti) =>
-        (ti.item.commissionCategory?.jobs?.length ?? 0) === 0 &&
-        ti.item.serviceJobRoles.length > 0,
-    ),
-  );
-
   // Apakah ada minimal 1 job yang dicek (untuk validasi tombol simpan)
   const hasAnyChecked = Object.values(jobCheckMap).some(Boolean);
 
-  return (
+  // Portal ke body agar backdrop menutupi seluruh layar (termasuk sidebar & header),
+  // tidak terkurung oleh ancestor yang memiliki transform/animasi.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -243,7 +238,7 @@ function JobAssignmentModal({
 
         {/* ── Body ────────────────────────────────────────────────── */}
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
-          {jobItems.length === 0 && !hasOldSystem && (
+          {jobItems.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
               <AlertCircle className="h-8 w-8" />
               <p className="text-sm">Invoice ini belum dikonfigurasi komisi.</p>
@@ -256,10 +251,12 @@ function JobAssignmentModal({
               ? session.appointment.staffs.map((s) => s.employee)
               : allEmployees;
 
-            // Hitung total helai dari qty × conversionSnapshot
-            const totalHelai = Math.round(
+            // Qty item dalam satuan konversi (qty × conversionSnapshot, mis. 1 TEBAL × 180 = 180 helai)
+            const itemQtyConverted = Math.round(
               Number(ti.qty ?? 0) * Number(ti.conversionSnapshot ?? 1),
             );
+            // Info qty item hanya relevan jika ada job yang qty default-nya dari qty item
+            const itemQtyJob = jobs.find((j) => j.defaultQty === "ITEM_QTY");
 
             return (
               <div key={ti.id} className="rounded-xl border border-border overflow-hidden">
@@ -279,11 +276,11 @@ function JobAssignmentModal({
                         {ti.item.commissionCategory.name}
                       </span>
                     )}
-                    {totalHelai > 0 && (
+                    {itemQtyJob && itemQtyConverted > 0 && (
                       <>
                         <span className="text-xs text-muted-foreground">·</span>
                         <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                          {totalHelai} helai
+                          {itemQtyConverted} {itemQtyJob.unit || "helai"}
                           {ti.unit ? ` (${Number(ti.qty ?? 0)} ${ti.unit.name})` : ""}
                         </span>
                       </>
@@ -311,6 +308,7 @@ function JobAssignmentModal({
                           const isFlatJob =
                             job.deductsFromJobId !== null &&
                             (job.pricePerUnit === null || job.pricePerUnit === "0");
+                          const unitLabel = job.unit || "helai";
 
                           return (
                             <div key={job.id} className="flex items-center gap-3">
@@ -329,14 +327,14 @@ function JobAssignmentModal({
                                   onChange={(e) => {
                                     if (e.target.checked) {
                                       setJobCheckMap((prev) => ({ ...prev, [key]: true }));
-                                      // Auto-fill helai = qty × conversionSnapshot (mis: 1 TEBAL × 180 = 180 helai)
+                                      // Auto-fill qty sesuai pengaturan job (Qty default):
+                                      //  · ITEM_QTY → qty × conversionSnapshot (mis: 1 TEBAL × 180 = 180 helai)
+                                      //  · ONE      → 1 (per kepala / per sesi)
                                       if (!isFlatJob) {
-                                        const helai = Math.round(
-                                          Number(ti.qty ?? 0) * Number(ti.conversionSnapshot ?? 1),
-                                        );
-                                        if (helai > 0) {
+                                        const defaultQty = job.defaultQty === "ONE" ? 1 : itemQtyConverted;
+                                        if (defaultQty > 0) {
                                           setWorkQtyMap((prev) =>
-                                            prev[key] !== undefined ? prev : { ...prev, [key]: helai },
+                                            prev[key] !== undefined ? prev : { ...prev, [key]: defaultQty },
                                           );
                                         }
                                       }
@@ -392,7 +390,7 @@ function JobAssignmentModal({
                                       className="w-20 h-7 rounded-lg border border-input bg-background px-2 text-right text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                                     />
                                   )}
-                                  <span className="text-xs text-muted-foreground">helai</span>
+                                  <span className="text-xs text-muted-foreground">{unitLabel}</span>
                                 </div>
                               )}
                             </div>
@@ -406,15 +404,6 @@ function JobAssignmentModal({
             );
           })}
 
-          {/* Old system notice */}
-          {hasOldSystem && (
-            <div className="flex items-start gap-2 rounded-xl border border-border px-4 py-3 text-xs text-muted-foreground">
-              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-              <span>
-                Beberapa item masih menggunakan sistem komisi lama (Service Job Role) — tidak ditampilkan di sini.
-              </span>
-            </div>
-          )}
         </div>
 
         {/* ── Footer ──────────────────────────────────────────────── */}
@@ -427,7 +416,7 @@ function JobAssignmentModal({
           <div className="border-t border-border px-5 py-4 flex items-center justify-between gap-3">
             <p className="text-xs text-muted-foreground">
               {hasAnyChecked
-                ? "Centang job dan isi jumlah helai untuk setiap staf"
+                ? "Centang job dan isi jumlah pengerjaan untuk setiap staf"
                 : "Belum ada job yang dicek"}
             </p>
             <div className="flex items-center gap-2 shrink-0">
@@ -448,7 +437,8 @@ function JobAssignmentModal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

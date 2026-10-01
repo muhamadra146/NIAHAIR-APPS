@@ -8,9 +8,10 @@ import { Badge }           from "@/components/ui/badge";
 import { Button }          from "@/components/ui/button";
 import { Skeleton }        from "@/components/ui/skeleton";
 import { useAuthStore }    from "@/stores/authStore";
-import { useCommissions }  from "../hooks";
+import { useMyCommissions } from "../hooks";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { CommissionStatus } from "../types";
+import type { Commission, CommissionStatus } from "../types";
+import { StoredCommissionBreakdown } from "../components/CommissionBreakdown";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,17 @@ const STATUS_CFG: Record<CommissionStatus, { label: string; cls: string }> = {
   PAID:     { label: "Dibayar",    cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
 };
 
+/** Nama job + item layanan (sistem kategori-job) */
+function JobLabel({ commission: c }: { commission: Commission }) {
+  const job = c.treatmentJobAssignment?.commissionJob;
+  if (!job && !c.serviceItem) return null;
+  return (
+    <p className="text-xs font-medium text-slate-700">
+      {[job?.name, c.serviceItem?.name].filter(Boolean).join(" · ")}
+    </p>
+  );
+}
+
 function StatusBadge({ status }: { status: CommissionStatus }) {
   const { label, cls } = STATUS_CFG[status];
   return <Badge variant="outline" className={`text-xs rounded-lg ${cls}`}>{label}</Badge>;
@@ -31,18 +43,17 @@ function StatusBadge({ status }: { status: CommissionStatus }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function MyCommissionPage() {
-  const { user, branchId } = useAuthStore();
-  const employeeId = user?.employeeId ?? "";
+  const { branchId } = useAuthStore();
 
   const [page, setPage]     = useState(1);
   const [startDate, setStart] = useState("");
   const [endDate, setEnd]     = useState("");
   const [status, setStatus]   = useState<CommissionStatus | "">("");
 
-  const { data, isLoading } = useCommissions({
+  // employeeId diambil backend dari user login (GET /commissions/my)
+  const { data, isLoading } = useMyCommissions({
     page,
     limit:      20,
-    employeeId: employeeId || undefined,
     branchId:   branchId   || undefined,
     startDate:  startDate  || undefined,
     endDate:    endDate    || undefined,
@@ -56,9 +67,8 @@ export function MyCommissionPage() {
 
   // ── Summary totals from current page ─────────────────────────────────────
   // For accurate totals across ALL pages, we fetch a separate summary-all query
-  const { data: allData } = useCommissions({
+  const { data: allData } = useMyCommissions({
     limit:      1000,
-    employeeId: employeeId || undefined,
     branchId:   branchId   || undefined,
     startDate:  startDate  || undefined,
     endDate:    endDate    || undefined,
@@ -176,8 +186,10 @@ export function MyCommissionPage() {
                 {commissions.map((c) => (
                   <div key={c.id} className="px-4 py-3.5 flex items-start justify-between gap-3 hover:bg-slate-50 transition-colors">
                     <div className="min-w-0">
-                      <p className="text-xs text-slate-400 font-mono">{c.invoiceId.slice(-8).toUpperCase()}</p>
+                      <p className="text-xs text-slate-400 font-mono">{c.invoice?.invoiceNo ?? c.invoiceId.slice(-8).toUpperCase()}</p>
                       <p className="text-sm font-medium text-slate-700 mt-0.5">{formatDate(c.createdAt)}</p>
+                      <JobLabel commission={c} />
+                      <StoredCommissionBreakdown commission={c} className="mt-1" />
                       <div className="mt-1.5"><StatusBadge status={c.status} /></div>
                     </div>
                     <div className="text-right shrink-0">
@@ -195,6 +207,7 @@ export function MyCommissionPage() {
                     <tr className="border-b border-slate-200 bg-slate-50">
                       <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Tanggal</th>
                       <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Invoice</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Pengerjaan &amp; Perhitungan</th>
                       <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
                       <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Komisi</th>
                       <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Dibayar</th>
@@ -210,8 +223,12 @@ export function MyCommissionPage() {
                             to={`/invoices/${c.invoiceId}`}
                             className="font-mono text-xs text-primary hover:underline"
                           >
-                            {c.invoiceId.slice(-10).toUpperCase()}
+                            {c.invoice?.invoiceNo ?? c.invoiceId.slice(-10).toUpperCase()}
                           </Link>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <JobLabel commission={c} />
+                          <StoredCommissionBreakdown commission={c} className="mt-1" />
                         </td>
                         <td className="px-5 py-3.5"><StatusBadge status={c.status} /></td>
                         <td className="px-5 py-3.5 text-right font-bold tabular-nums text-emerald-700 whitespace-nowrap">

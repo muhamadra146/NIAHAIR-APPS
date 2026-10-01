@@ -22,7 +22,8 @@ import {
   fetchCommissionJobs, createCommissionJob,
   updateCommissionJob, deleteCommissionJob,
 } from "../api";
-import type { CommissionJob } from "../types";
+import type { CommissionJob, CommissionSplitMode, CommissionDefaultQty } from "../types";
+import { SPLIT_MODE_LABEL, SPLIT_MODE_HINT, DEFAULT_QTY_LABEL } from "../commissionBreakdown";
 
 interface Props {
   categoryId:   string;
@@ -34,6 +35,49 @@ const sanitizeKey = (s: string) =>
 
 const selectCls =
   "h-6 rounded border border-input bg-background px-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+
+/** Pengaturan cara hitung job: satuan (label), cara bagi (primary), qty default */
+function JobCalcFields({
+  isHelper, unit, onUnit, splitMode, onSplitMode, defaultQty, onDefaultQty,
+}: {
+  isHelper:     boolean;
+  unit:         string;
+  onUnit:       (v: string) => void;
+  splitMode:    CommissionSplitMode;
+  onSplitMode:  (v: CommissionSplitMode) => void;
+  defaultQty:   CommissionDefaultQty;
+  onDefaultQty: (v: CommissionDefaultQty) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] text-muted-foreground w-20 shrink-0">Satuan:</span>
+        <Input value={unit} onChange={e => onUnit(e.target.value)} className="h-6 text-xs w-24" placeholder="helai" />
+        <span className="text-[10px] text-muted-foreground">label saja (helai, kepala, sesi, …)</span>
+      </div>
+      {!isHelper && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] text-muted-foreground w-20 shrink-0">Cara bagi:</span>
+          <select value={splitMode} onChange={e => onSplitMode(e.target.value as CommissionSplitMode)} className={`${selectCls} w-40`}>
+            {(Object.keys(SPLIT_MODE_LABEL) as CommissionSplitMode[]).map(m => (
+              <option key={m} value={m}>{SPLIT_MODE_LABEL[m]}</option>
+            ))}
+          </select>
+          <span className="text-[10px] text-muted-foreground">{SPLIT_MODE_HINT[splitMode]}</span>
+        </div>
+      )}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] text-muted-foreground w-20 shrink-0">Qty default:</span>
+        <select value={defaultQty} onChange={e => onDefaultQty(e.target.value as CommissionDefaultQty)} className={`${selectCls} w-40`}>
+          {(Object.keys(DEFAULT_QTY_LABEL) as CommissionDefaultQty[]).map(q => (
+            <option key={q} value={q}>{DEFAULT_QTY_LABEL[q]}</option>
+          ))}
+        </select>
+        <span className="text-[10px] text-muted-foreground">isi otomatis saat staf mencentang job di Input Job</span>
+      </div>
+    </div>
+  );
+}
 
 export function CommissionJobPanel({ categoryId, categoryName }: Props) {
   const qc   = useQueryClient();
@@ -47,6 +91,8 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
   const [editPrice,        setEditPrice]        = useState("");      // pricePerUnit atau ""
   const [editUnit,         setEditUnit]         = useState("helai"); // satuan unit
   const [editStaffCountMax, setEditStaffCountMax] = useState("");    // staffCountMax atau ""
+  const [editSplitMode,  setEditSplitMode]  = useState<CommissionSplitMode>("BY_QTY");
+  const [editDefaultQty, setEditDefaultQty] = useState<CommissionDefaultQty>("ITEM_QTY");
 
   const { data: jobs = [], isLoading } = useQuery({
     queryKey:  ["commission-jobs", categoryId],
@@ -82,11 +128,13 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
   function resetEdit() {
     setEditId(null); setEditName(""); setEditKey(""); setEditSort("0");
     setEditDeductsFrom(""); setEditPrice(""); setEditUnit("helai"); setEditStaffCountMax("");
+    setEditSplitMode("BY_QTY"); setEditDefaultQty("ITEM_QTY");
   }
 
   function startNew() {
     setEditId("new"); setEditName(""); setEditKey(""); setEditSort(String(jobs.length));
     setEditDeductsFrom(""); setEditPrice(""); setEditUnit("helai"); setEditStaffCountMax("");
+    setEditSplitMode("BY_QTY"); setEditDefaultQty("ITEM_QTY");
   }
 
   function startEdit(job: CommissionJob) {
@@ -98,6 +146,8 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
     setEditPrice(job.pricePerUnit ? String(Number(job.pricePerUnit)) : "");
     setEditUnit(job.unit || "helai");
     setEditStaffCountMax(job.staffCountMax != null ? String(job.staffCountMax) : "");
+    setEditSplitMode(job.splitMode ?? "BY_QTY");
+    setEditDefaultQty(job.defaultQty ?? "ITEM_QTY");
   }
 
   function saveNew() {
@@ -110,6 +160,8 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
       pricePerUnit:     editPrice ? parseFloat(editPrice) : null,
       unit:             editUnit.trim() || "helai",
       staffCountMax:    editStaffCountMax ? parseInt(editStaffCountMax, 10) : null,
+      splitMode:        editSplitMode,
+      defaultQty:       editDefaultQty,
     });
   }
 
@@ -123,6 +175,8 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
       pricePerUnit:     editPrice ? parseFloat(editPrice) : null,
       unit:             editUnit.trim() || "helai",
       staffCountMax:    editStaffCountMax ? parseInt(editStaffCountMax, 10) : null,
+      splitMode:        editSplitMode,
+      defaultQty:       editDefaultQty,
     });
   }
 
@@ -200,16 +254,17 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
                                 className="h-6 text-xs w-20"
                                 placeholder="harga"
                               />
-                              <span className="text-[10px] text-muted-foreground">/</span>
-                              <Input
-                                value={editUnit}
-                                onChange={e => setEditUnit(e.target.value)}
-                                className="h-6 text-xs w-16"
-                                placeholder="helai"
-                              />
+                              <span className="text-[10px] text-muted-foreground">/ {editUnit || "helai"}</span>
                             </>
                           )}
                         </div>
+                        {/* Row: satuan + cara bagi + qty default (semua job) */}
+                  <JobCalcFields
+                    isHelper={!!editDeductsFrom}
+                    unit={editUnit} onUnit={setEditUnit}
+                    splitMode={editSplitMode} onSplitMode={setEditSplitMode}
+                    defaultQty={editDefaultQty} onDefaultQty={setEditDefaultQty}
+                  />
                         {/* Row 3: staffCountMax (HS dynamic rate) */}
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] text-muted-foreground w-20 shrink-0">Maks. Staff:</span>
@@ -242,6 +297,17 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
                             </span>
                             <span className="font-mono text-[10px] text-muted-foreground">{job.jobKey}</span>
                             <Badge variant="outline" className="text-[9px] px-1 py-0">{job.sortOrder}</Badge>
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 text-violet-600 border-violet-300">
+                              per {job.unit || "helai"}
+                            </Badge>
+                            {!job.deductsFromJobId && (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 text-blue-600 border-blue-300">
+                                {SPLIT_MODE_LABEL[job.splitMode ?? "BY_QTY"]}
+                              </Badge>
+                            )}
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 text-muted-foreground">
+                              qty default: {DEFAULT_QTY_LABEL[job.defaultQty ?? "ITEM_QTY"]}
+                            </Badge>
                             {!job.isActive && (
                               <Badge variant="secondary" className="text-[9px] px-1 py-0">Nonaktif</Badge>
                             )}
@@ -341,16 +407,17 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
                           className="h-6 text-xs w-20"
                           placeholder="harga"
                         />
-                        <span className="text-[10px] text-muted-foreground">/</span>
-                        <Input
-                          value={editUnit}
-                          onChange={e => setEditUnit(e.target.value)}
-                          className="h-6 text-xs w-16"
-                          placeholder="helai"
-                        />
+                        <span className="text-[10px] text-muted-foreground">/ {editUnit || "helai"}</span>
                       </>
                     )}
                   </div>
+                  {/* Row: satuan + cara bagi + qty default (semua job) */}
+                  <JobCalcFields
+                    isHelper={!!editDeductsFrom}
+                    unit={editUnit} onUnit={setEditUnit}
+                    splitMode={editSplitMode} onSplitMode={setEditSplitMode}
+                    defaultQty={editDefaultQty} onDefaultQty={setEditDefaultQty}
+                  />
                   {/* Row 3: staffCountMax (HS dynamic rate) */}
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-muted-foreground w-20 shrink-0">Maks. Staff:</span>

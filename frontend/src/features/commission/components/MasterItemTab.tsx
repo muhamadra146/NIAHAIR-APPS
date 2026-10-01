@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Pencil, Check, X, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Search, Pencil, Check, X, Loader2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/lib/toast";
 import { fetchMasterItems, updateItemCommission, fetchCommissionCategories } from "../api";
 import type { MasterItem } from "../types";
-import { ServiceJobRolePanel } from "./ServiceJobRolePanel";
 
 type TypeFilter = "" | "SERVICE" | "INVENTORY";
 
@@ -25,17 +24,8 @@ export function MasterItemTab() {
   const [search, setSearch]   = useState("");
   const [dSearch, setDSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [editId, setEditId]   = useState<string | null>(null);
   const [selectedCatId, setSelectedCatId] = useState<string>("");
-
-  function toggleExpand(id: string) {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
 
   function handleSearch(e: React.ChangeEvent<HTMLInputElement>) {
     setSearch(e.target.value);
@@ -127,7 +117,6 @@ export function MasterItemTab() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  <th className="w-8 px-2 py-3" />
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Kode</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Nama</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tipe</th>
@@ -136,23 +125,8 @@ export function MasterItemTab() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => {
-                  const isExpanded = expandedIds.has(item.id);
-                  return (
-                    <>
+                {items.map((item) => (
                       <tr key={item.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                        <td className="px-2 py-2.5 text-center">
-                          <button
-                            onClick={() => toggleExpand(item.id)}
-                            className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                            title={isExpanded ? "Tutup job slot" : "Kelola job slot komisi"}
-                          >
-                            {isExpanded
-                              ? <ChevronDown className="h-4 w-4" />
-                              : <ChevronRight className="h-4 w-4" />
-                            }
-                          </button>
-                        </td>
                         <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.itemCode}</td>
                         <td className="px-4 py-2.5 font-medium">{item.name}</td>
                         <td className="px-4 py-2.5">
@@ -196,17 +170,7 @@ export function MasterItemTab() {
                           )}
                         </td>
                       </tr>
-                      {/* Job Slot Panel — hanya render saat expanded */}
-                      {isExpanded && (
-                        <tr key={`${item.id}-slots`} className="border-b border-border/30">
-                          <td colSpan={6} className="p-0">
-                            <ServiceJobRolePanel itemId={item.id} itemName={item.name} />
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  );
-                })}
+                ))}
               </tbody>
             </table>
           </div>

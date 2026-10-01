@@ -99,6 +99,8 @@ export const router = createBrowserRouter([
           { path: "/my-schedule",    element: <MySchedulePage /> },
           // Koreksi Kehadiran: self-service untuk semua role (sidebar: ALL_ROLES)
           { path: "/attendance-corrections", element: <CorrectionPage /> },
+          // Attendance: self check-in untuk semua role; monitor tim untuk admin (lihat TeamPage)
+          { path: "/attendance",             element: <TeamPage /> },
 
           // ── STAFF_OPERASIONAL + CASHIER (self-service komisi) ─────
           {
@@ -113,6 +115,8 @@ export const router = createBrowserRouter([
             element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","CASHIER","STAFF_OPERASIONAL","OFFICE","FINANCE"]} />,
             children: [
               { path: "/booking-harian",          element: <DailyBoardPage /> },
+              // Detail booking: STAFF_OPERASIONAL hanya lihat (read-only di AppointmentDetailPage)
+              { path: "/appointments/:id",        element: <AppointmentDetailPage /> },
               { path: "/consultation-notes",      element: <ConsultationListPage /> },
               { path: "/consultation-notes/new",  element: <ConsultationFormPage /> },
               { path: "/consultation-notes/:id/edit", element: <ConsultationFormPage /> },
@@ -134,7 +138,6 @@ export const router = createBrowserRouter([
             element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","CASHIER","OFFICE","FINANCE"]} />,
             children: [
               { path: "/appointments",         element: <AppointmentListPage /> },
-              { path: "/appointments/:id",     element: <AppointmentDetailPage /> },
               { path: "/complaints",           element: <ComplaintPage /> },
               { path: "/deposits",             element: <DepositListPage /> },
               { path: "/deposits/:id",         element: <DepositDetailPage /> },
@@ -159,7 +162,6 @@ export const router = createBrowserRouter([
               { path: "/employees",          element: <EmployeeListPage /> },
               { path: "/employees/:id",      element: <EmployeeDetailPage /> },
               { path: "/schedule",           element: <SchedulePage /> },
-              { path: "/attendance",         element: <TeamPage /> },
               { path: "/attendance-report",  element: <AttendanceReportPage /> },
             ],
           },

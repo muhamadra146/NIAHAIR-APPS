@@ -4,7 +4,10 @@ const authorize     = require("../../middlewares/role.middleware");
 const validate      = require("../../middlewares/validate.middleware");
 const requireBranch = require("../../middlewares/branch.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
-const { createInvoiceSchema, applyDepositSchema, updateInvoiceSchema } = require("./invoice.validation");
+const {
+  createInvoiceSchema, applyDepositSchema, updateInvoiceSchema,
+  calculateCommissionSchema, finalizeCommissionSchema,
+} = require("./invoice.validation");
 const {
   getAllController,
   getByIdController,
@@ -22,6 +25,7 @@ const {
   jobAssignmentsController,
   submitJobAssignmentsController,
   commissionWorksheetController,
+  calculateCommissionController,
   finalizeCommissionController,
 } = require("./invoice.controller");
 
@@ -48,7 +52,8 @@ router.post("/:id/setup-treatment",     authenticate, setupTreatmentController);
 router.post("/:id/generate-commission",      authenticate, authorize(...KOMISI_GEN_ROLES), generateCommissionController);
 router.post("/:id/submit-job-assignments",   authenticate, authorize(...DAILY_ASSIGN_ROLES), submitJobAssignmentsController);
 router.get( "/:id/commission-worksheet",     authenticate, authorize(...DAILY_ASSIGN_ROLES), commissionWorksheetController);
-router.post("/:id/finalize-commission",      authenticate, authorize(...DAILY_ASSIGN_ROLES), finalizeCommissionController);
+router.post("/:id/commission-worksheet/calculate", authenticate, authorize(...DAILY_ASSIGN_ROLES), validate(calculateCommissionSchema), calculateCommissionController);
+router.post("/:id/finalize-commission",      authenticate, authorize(...DAILY_ASSIGN_ROLES), validate(finalizeCommissionSchema), finalizeCommissionController);
 router.post("/:id/skip-commission",     authenticate, authorize(...MANAGER_ROLES), skipCommissionController);
 router.post("/:id/reset-commission-skip", authenticate, authorize(...MANAGER_ROLES), resetCommissionSkipController);
 
