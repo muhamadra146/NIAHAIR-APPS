@@ -24,8 +24,6 @@ import {
 import { createDeposit, createDepositPayment, applyDeposit } from "../api";
 import type { InvoiceStatus } from "../types";
 import { isOpenInvoice } from "../types";
-import { fetchCommissions } from "@/features/commission/api";
-import { TreatmentAssignmentSection } from "../components/TreatmentAssignmentSection";
 import { CreateInvoiceDialog } from "../components/CreateInvoiceDialog";
 
 const STATUS_LABEL: Record<InvoiceStatus, string> = {
@@ -64,14 +62,6 @@ export function InvoiceDetailPage() {
   const qc = useQueryClient();
 
   const canDeletePayment = user ? CAN_DELETE_PAYMENT.includes(user.roleCode) : false;
-
-  const { data: commissionsData } = useQuery({
-    queryKey:  ["commissions", "invoice", id],
-    queryFn:   () => fetchCommissions({ invoiceId: id!, limit: 1 }),
-    enabled:   !!id,
-    staleTime: 0,
-  });
-  const hasExistingCommission = (commissionsData?.meta?.total ?? 0) > 0;
 
   if (isLoading) {
     return (
@@ -265,20 +255,6 @@ export function InvoiceDetailPage() {
             </CardContent>
           </Card>
         )}
-
-        {/* Treatment assignment & commission */}
-        <Card>
-          <CardHeader className="pb-2 pt-4">
-            <CardTitle className="text-sm font-semibold">Assignment Pekerjaan</CardTitle>
-          </CardHeader>
-          <CardContent className="pb-4">
-            <TreatmentAssignmentSection
-              invoiceId={id!}
-              invoiceStatus={invoice.status}
-              hasExistingCommission={hasExistingCommission}
-            />
-          </CardContent>
-        </Card>
       </div>
 
       {/* Add Payment Dialog */}
