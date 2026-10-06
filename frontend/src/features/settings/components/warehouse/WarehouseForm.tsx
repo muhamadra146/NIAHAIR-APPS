@@ -74,7 +74,7 @@ export function WarehouseForm({ open, onOpenChange, onSubmit, isPending, warehou
             <div className="space-y-4">
               {/* Branch mapping */}
               <div className="space-y-1.5">
-                <Label>Branch</Label>
+                <Label>Cabang</Label>
                 <select
                   {...register("branchId")}
                   className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -107,10 +107,10 @@ export function WarehouseForm({ open, onOpenChange, onSubmit, isPending, warehou
           <DialogFooter className="shrink-0 border-t border-border px-4 py-4 sm:px-6">
             <Button type="button" variant="outline" className="flex-1 sm:flex-none"
               onClick={() => onOpenChange(false)} disabled={isPending}>
-              Cancel
+              Batal
             </Button>
             <Button type="submit" className="flex-1 sm:flex-none" disabled={isPending}>
-              {isPending ? "Saving…" : "Save"}
+              {isPending ? "Menyimpan…" : "Simpan"}
             </Button>
           </DialogFooter>
         </form>

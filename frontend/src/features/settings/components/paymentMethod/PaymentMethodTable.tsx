@@ -28,7 +28,7 @@ function MobileCardList({ methods, onEdit, onDelete }: { methods: PaymentMethod[
             <p className="text-xs text-muted-foreground font-mono">{m.code}</p>
             {m.cashAccount && <p className="text-xs text-muted-foreground">{m.cashAccount.name}</p>}
             <Badge variant={m.isActive ? "success" : "secondary"} className="mt-1 text-xs">
-              {m.isActive ? "Active" : "Inactive"}
+              {m.isActive ? "Aktif" : "Nonaktif"}
             </Badge>
           </div>
           <div className="flex gap-1">
@@ -47,11 +47,11 @@ function DesktopTable({ methods, onEdit, onDelete }: { methods: PaymentMethod[];
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border bg-muted/50">
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Code</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Kode</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Nama</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Cash Account</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actions</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Aksi</th>
           </tr>
         </thead>
         <tbody>
@@ -60,7 +60,7 @@ function DesktopTable({ methods, onEdit, onDelete }: { methods: PaymentMethod[];
               <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{m.code}</td>
               <td className="px-4 py-3 font-medium">{m.name}</td>
               <td className="px-4 py-3 text-muted-foreground">{m.cashAccount?.name ?? "—"}</td>
-              <td className="px-4 py-3"><Badge variant={m.isActive ? "success" : "secondary"}>{m.isActive ? "Active" : "Inactive"}</Badge></td>
+              <td className="px-4 py-3"><Badge variant={m.isActive ? "success" : "secondary"}>{m.isActive ? "Aktif" : "Nonaktif"}</Badge></td>
               <td className="px-4 py-3">
                 <div className="flex gap-1">
                   <Button variant="ghost" size="icon" onClick={() => onDelete(m)}><Trash2 className="h-4 w-4 text-destructive" /></Button>

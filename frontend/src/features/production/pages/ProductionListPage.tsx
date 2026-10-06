@@ -96,7 +96,7 @@ export function ProductionListPage() {
 
   return (
     <PageContainer
-      title="Production"
+      title="Produksi"
       subtitle="Kelola production order — bahan baku menjadi finished goods"
       action={
         <Button size="sm" className="gap-2" onClick={() => navigate("/production/new")}>

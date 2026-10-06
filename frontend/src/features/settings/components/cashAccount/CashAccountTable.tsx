@@ -47,7 +47,7 @@ function MobileCardList({ accounts, onEdit, onDelete }: { accounts: CashAccount[
                 <p className="text-xs text-muted-foreground">Accurate: {a.accurateAccountNo}</p>
               )}
               <Badge variant={a.isActive ? "success" : "secondary"} className="mt-1 text-xs">
-                {a.isActive ? "Active" : "Inactive"}
+                {a.isActive ? "Aktif" : "Nonaktif"}
               </Badge>
             </div>
             <div className="flex gap-1">
@@ -74,9 +74,9 @@ function DesktopTable({ accounts, onEdit, onDelete }: { accounts: CashAccount[];
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border bg-muted/50">
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Code</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Kode</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Nama</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Accurate Account No</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">No. Akun Accurate</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Aksi</th>
           </tr>
@@ -94,7 +94,7 @@ function DesktopTable({ accounts, onEdit, onDelete }: { accounts: CashAccount[];
                   </div>
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{a.accurateAccountNo ?? "—"}</td>
-                <td className="px-4 py-3"><Badge variant={a.isActive ? "success" : "secondary"}>{a.isActive ? "Active" : "Inactive"}</Badge></td>
+                <td className="px-4 py-3"><Badge variant={a.isActive ? "success" : "secondary"}>{a.isActive ? "Aktif" : "Nonaktif"}</Badge></td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1">
                     <Button

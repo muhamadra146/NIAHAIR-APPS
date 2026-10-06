@@ -114,11 +114,11 @@ function EmployeeTab() {
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold">Manage Employee Roles</h2>
-            <p className="text-sm text-muted-foreground">Job titles used for HR and scheduling</p>
+            <h2 className="text-base font-semibold">Kelola Role Karyawan</h2>
+            <p className="text-sm text-muted-foreground">Jabatan untuk HR dan penjadwalan</p>
           </div>
           <Button size="sm" variant="outline" onClick={openCreateRole}>
-            <Plus className="mr-2 h-4 w-4" />New Role
+            <Plus className="mr-2 h-4 w-4" />Role Baru
           </Button>
         </div>
 
@@ -226,7 +226,7 @@ function UserTab() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-slate-500" />
-            <span className="text-sm font-semibold text-slate-800">User Accounts</span>
+            <span className="text-sm font-semibold text-slate-800">Akun User</span>
             {userMeta && (
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
                 {userMeta.total} user
@@ -256,7 +256,7 @@ function UserTab() {
               ))}
             </select>
             <Button size="sm" className="h-8 text-xs gap-1.5" onClick={openCreate}>
-              <Plus className="h-3.5 w-3.5" />New User
+              <Plus className="h-3.5 w-3.5" />User Baru
             </Button>
           </div>
         </div>
@@ -393,8 +393,8 @@ function BranchTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold">Branches</h2>
-          <p className="text-sm text-muted-foreground">Salon locations</p>
+          <h2 className="text-base font-semibold">Cabang</h2>
+          <p className="text-sm text-muted-foreground">Lokasi salon</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -411,7 +411,7 @@ function BranchTab() {
             Sync Accurate
           </Button>
           <Button size="sm" onClick={openCreate}>
-            <Plus className="mr-2 h-4 w-4" />New Branch
+            <Plus className="mr-2 h-4 w-4" />Cabang Baru
           </Button>
         </div>
       </div>
@@ -626,7 +626,7 @@ function CashAccountSubTab() {
           onClick={() => setShowInactive((v) => !v)}
           className="text-xs text-muted-foreground hover:text-foreground underline"
         >
-          {showInactive ? "Sembunyikan inactive" : `Tampilkan ${inactiveCount} akun inactive`}
+          {showInactive ? "Sembunyikan nonaktif" : `Tampilkan ${inactiveCount} akun nonaktif`}
         </button>
       )}
 
@@ -926,9 +926,9 @@ function WarehouseTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold">Warehouses</h2>
+          <h2 className="text-base font-semibold">Gudang</h2>
           <p className="text-sm text-muted-foreground">
-            {whMeta ? `${whMeta.total} total` : "Synced from Accurate Online"}
+            {whMeta ? `${whMeta.total} total` : "Disinkronkan dari Accurate Online"}
           </p>
         </div>
         <Button
@@ -936,7 +936,7 @@ function WarehouseTab() {
           onClick={handleSync}
           disabled={syncMut.isPending}
         >
-          {syncMut.isPending ? "Syncingâ€¦" : "Sync from Accurate"}
+          {syncMut.isPending ? "Syncingâ€¦" : "Sync dari Accurate"}
         </Button>
       </div>
 

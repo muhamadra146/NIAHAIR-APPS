@@ -92,7 +92,7 @@ export function AppointmentStatusDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="status-notes">Notes</Label>
+            <Label htmlFor="status-notes">Catatan</Label>
             <textarea
               id="status-notes"
               {...register("notes")}
@@ -104,10 +104,10 @@ export function AppointmentStatusDialog({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-              Cancel
+              Batal
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Updating…" : "Update Status"}
+              {isPending ? "Memperbarui…" : "Update Status"}
             </Button>
           </DialogFooter>
         </form>

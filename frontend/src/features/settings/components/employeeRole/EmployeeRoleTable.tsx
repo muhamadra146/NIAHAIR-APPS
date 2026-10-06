@@ -28,9 +28,9 @@ export function EmployeeRoleTable({ roles, isLoading, onEdit, onDelete }: Props)
     <table className="w-full text-sm">
       <thead>
         <tr className="border-b border-border bg-muted/50">
-          <th className="px-3 py-2 text-left font-medium text-muted-foreground">Code</th>
-          <th className="px-3 py-2 text-left font-medium text-muted-foreground">Name</th>
-          <th className="px-3 py-2 text-right font-medium text-muted-foreground">Actions</th>
+          <th className="px-3 py-2 text-left font-medium text-muted-foreground">Kode</th>
+          <th className="px-3 py-2 text-left font-medium text-muted-foreground">Nama</th>
+          <th className="px-3 py-2 text-right font-medium text-muted-foreground">Aksi</th>
         </tr>
       </thead>
       <tbody>

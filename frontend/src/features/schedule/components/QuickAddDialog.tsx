@@ -70,7 +70,7 @@ export function QuickAddDialog({
           <div className="space-y-4 py-1">
             {/* Employee selector */}
             <div className="space-y-1.5">
-              <Label htmlFor="qa-employee">Employee</Label>
+              <Label htmlFor="qa-employee">Karyawan</Label>
               <select
                 id="qa-employee"
                 value={selectedId}
@@ -138,7 +138,7 @@ export function QuickAddDialog({
             onClick={() => onOpenChange(false)}
             disabled={isPending}
           >
-            Cancel
+            Batal
           </Button>
         </DialogFooter>
       </DialogContent>

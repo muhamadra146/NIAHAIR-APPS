@@ -62,7 +62,7 @@ export function BranchForm({ open, onOpenChange, onSubmit, isPending, defaultVal
         )}
       >
         <DialogHeader className="shrink-0 border-b border-border px-4 py-4 sm:px-6">
-          <DialogTitle>{defaultValues ? "Edit Branch" : "New Branch"}</DialogTitle>
+          <DialogTitle>{defaultValues ? "Edit Cabang" : "Cabang Baru"}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-1 flex-col overflow-hidden">
@@ -72,29 +72,29 @@ export function BranchForm({ open, onOpenChange, onSubmit, isPending, defaultVal
             )}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Code <span className="text-destructive">*</span></Label>
+                <Label>Kode <span className="text-destructive">*</span></Label>
                 <Input {...register("code")} placeholder="JKT-01" />
                 {errors.code && <p className="text-xs text-destructive">{errors.code.message}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label>Name <span className="text-destructive">*</span></Label>
+                <Label>Nama <span className="text-destructive">*</span></Label>
                 <Input {...register("name")} placeholder="NIAHAIR Cipete" />
                 {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
               </div>
               <div className="sm:col-span-2 space-y-1.5">
-                <Label>Address</Label>
-                <Input {...register("address")} placeholder="Street address" />
+                <Label>Alamat</Label>
+                <Input {...register("address")} placeholder="Alamat lengkap" />
               </div>
               <div className="space-y-1.5">
-                <Label>City</Label>
+                <Label>Kota</Label>
                 <Input {...register("city")} placeholder="Jakarta" />
               </div>
               <div className="space-y-1.5">
-                <Label>Province</Label>
+                <Label>Provinsi</Label>
                 <Input {...register("province")} placeholder="DKI Jakarta" />
               </div>
               <div className="sm:col-span-2 space-y-1.5">
-                <Label>Phone</Label>
+                <Label>Telepon</Label>
                 <Input {...register("phone")} placeholder="02112345678" inputMode="tel" />
               </div>
 
@@ -123,10 +123,10 @@ export function BranchForm({ open, onOpenChange, onSubmit, isPending, defaultVal
           <DialogFooter className="shrink-0 border-t border-border px-4 py-4 sm:px-6">
             <Button type="button" variant="outline" className="flex-1 sm:flex-none"
               onClick={() => onOpenChange(false)} disabled={isPending}>
-              Cancel
+              Batal
             </Button>
             <Button type="submit" className="flex-1 sm:flex-none" disabled={isPending}>
-              {isPending ? "Saving…" : "Save"}
+              {isPending ? "Menyimpan…" : "Simpan"}
             </Button>
           </DialogFooter>
         </form>

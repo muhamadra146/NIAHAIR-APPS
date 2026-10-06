@@ -81,7 +81,7 @@ export function EmployeeForm({ open, onOpenChange, onSubmit, isPending, defaultV
     setValue("branchIds", next);
   }
 
-  const title = defaultValues ? "Edit Employee" : "New Employee";
+  const title = defaultValues ? "Edit Karyawan" : "Karyawan Baru";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -107,14 +107,14 @@ export function EmployeeForm({ open, onOpenChange, onSubmit, isPending, defaultV
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {/* Name */}
               <div className="sm:col-span-2 space-y-1.5">
-                <Label htmlFor="emp-name">Name <span className="text-destructive">*</span></Label>
-                <Input id="emp-name" {...register("name")} placeholder="Full name" />
+                <Label htmlFor="emp-name">Nama <span className="text-destructive">*</span></Label>
+                <Input id="emp-name" {...register("name")} placeholder="Nama lengkap" />
                 {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
               </div>
 
               {/* Employee Code — auto-generated, read-only */}
               <div className="space-y-1.5">
-                <Label htmlFor="emp-code">Employee Code</Label>
+                <Label htmlFor="emp-code">Kode Karyawan</Label>
                 <Input
                   id="emp-code"
                   {...register("employeeCode")}
@@ -122,12 +122,12 @@ export function EmployeeForm({ open, onOpenChange, onSubmit, isPending, defaultV
                   disabled
                   className="bg-muted text-muted-foreground"
                 />
-                <p className="text-xs text-muted-foreground">Auto-generated. Cannot be changed.</p>
+                <p className="text-xs text-muted-foreground">Dibuat otomatis, tidak bisa diubah.</p>
               </div>
 
               {/* Phone */}
               <div className="space-y-1.5">
-                <Label htmlFor="emp-phone">Phone</Label>
+                <Label htmlFor="emp-phone">Telepon</Label>
                 <Input id="emp-phone" {...register("phone")} placeholder="08123456789" inputMode="tel" />
               </div>
 
@@ -140,7 +140,7 @@ export function EmployeeForm({ open, onOpenChange, onSubmit, isPending, defaultV
 
               {/* Employee Role */}
               <div className="sm:col-span-2 space-y-1.5">
-                <Label htmlFor="emp-role">Employee Role <span className="text-destructive">*</span></Label>
+                <Label htmlFor="emp-role">Role Karyawan <span className="text-destructive">*</span></Label>
                 <select
                   id="emp-role"
                   {...register("roleId")}
@@ -157,7 +157,7 @@ export function EmployeeForm({ open, onOpenChange, onSubmit, isPending, defaultV
               {/* Home Branch */}
               {branches.length > 0 && (
                 <div className="sm:col-span-2 space-y-1.5">
-                  <Label htmlFor="emp-home-branch">Home Branch</Label>
+                  <Label htmlFor="emp-home-branch">Cabang Utama</Label>
                   <select
                     id="emp-home-branch"
                     {...register("homeBranchId")}
@@ -183,7 +183,7 @@ export function EmployeeForm({ open, onOpenChange, onSubmit, isPending, defaultV
               {/* Branch Access */}
               {branches.length > 0 && (
                 <div className="sm:col-span-2 space-y-2">
-                  <Label>Can Work At</Label>
+                  <Label>Bisa Bekerja Di</Label>
                   <div className="rounded-md border border-input p-3 space-y-2">
                     {branches.map((branch) => {
                       const checked = selectedBranchIds.includes(branch.id);
@@ -212,10 +212,10 @@ export function EmployeeForm({ open, onOpenChange, onSubmit, isPending, defaultV
           <DialogFooter className="shrink-0 border-t border-border px-4 py-4 sm:px-6">
             <Button type="button" variant="outline" className="flex-1 sm:flex-none"
               onClick={() => onOpenChange(false)} disabled={isPending}>
-              Cancel
+              Batal
             </Button>
             <Button type="submit" className="flex-1 sm:flex-none" disabled={isPending}>
-              {isPending ? "Saving…" : "Save"}
+              {isPending ? "Menyimpan…" : "Simpan"}
             </Button>
           </DialogFooter>
         </form>

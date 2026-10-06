@@ -27,7 +27,7 @@ function LoadingState() {
   return <div className="space-y-3 p-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
 }
 function EmptyState() {
-  return <div className="py-12 text-center text-sm text-muted-foreground">No branches found.</div>;
+  return <div className="py-12 text-center text-sm text-muted-foreground">Belum ada cabang.</div>;
 }
 
 function MobileCardList({ branches, onEdit, onDelete }: Omit<Props, "isLoading">) {
@@ -85,12 +85,12 @@ function DesktopTable({ branches, onEdit, onDelete }: Omit<Props, "isLoading">) 
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border bg-muted/50">
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Code</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">City</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Phone</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Kode</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Nama</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Kota</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Telepon</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Accurate</th>
-            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
+            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Aksi</th>
           </tr>
         </thead>
         <tbody>

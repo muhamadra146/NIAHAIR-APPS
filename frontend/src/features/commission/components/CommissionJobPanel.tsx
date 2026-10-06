@@ -75,7 +75,7 @@ function JobCalcFields({
             <option key={q} value={q}>{DEFAULT_QTY_LABEL[q]}</option>
           ))}
         </select>
-        <span className="text-[10px] text-muted-foreground">isi otomatis saat staf mencentang job di Input Job</span>
+        <span className="text-[10px] text-muted-foreground">isi otomatis saat staf mencentang job di Input Pekerjaan</span>
       </div>
     </div>
   );

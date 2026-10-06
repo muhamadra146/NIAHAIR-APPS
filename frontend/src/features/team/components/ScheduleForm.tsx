@@ -114,7 +114,7 @@ export function ScheduleForm({
             {/* Employee — create mode */}
             {!isEdit && (
               <div className="relative space-y-1.5">
-                <Label>Employee <span className="text-destructive">*</span></Label>
+                <Label>Karyawan <span className="text-destructive">*</span></Label>
                 <Input
                   value={empSearch}
                   onChange={(e) => handleEmpSearch(e.target.value)}
@@ -156,14 +156,14 @@ export function ScheduleForm({
             {/* Edit mode — show employee name read-only */}
             {isEdit && (
               <div className="space-y-1.5">
-                <Label>Employee</Label>
+                <Label>Karyawan</Label>
                 <Input value={defaultValues?.employee?.name ?? ""} readOnly disabled className="bg-muted" />
               </div>
             )}
 
             {/* Date */}
             <div className="space-y-1.5">
-              <Label>Date <span className="text-destructive">*</span></Label>
+              <Label>Tanggal <span className="text-destructive">*</span></Label>
               <Input
                 type="date"
                 {...register("scheduleDate")}
@@ -178,7 +178,7 @@ export function ScheduleForm({
 
             {/* Schedule Type */}
             <div className="space-y-1.5">
-              <Label>Type <span className="text-destructive">*</span></Label>
+              <Label>Tipe <span className="text-destructive">*</span></Label>
               <select
                 {...register("scheduleType")}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -205,7 +205,7 @@ export function ScheduleForm({
 
             {/* Notes */}
             <div className="space-y-1.5">
-              <Label>Notes</Label>
+              <Label>Catatan</Label>
               <Input {...register("notes")} placeholder="Optional notes" />
             </div>
           </div>
@@ -213,10 +213,10 @@ export function ScheduleForm({
           <DialogFooter className="shrink-0 border-t border-border px-4 py-4 sm:px-6">
             <Button type="button" variant="outline" className="flex-1 sm:flex-none"
               onClick={() => onOpenChange(false)} disabled={isPending}>
-              Cancel
+              Batal
             </Button>
             <Button type="submit" className="flex-1 sm:flex-none" disabled={isPending}>
-              {isPending ? "Saving…" : "Save"}
+              {isPending ? "Menyimpan…" : "Simpan"}
             </Button>
           </DialogFooter>
         </form>

@@ -116,12 +116,12 @@ function DesktopTable({ employees, onEdit, onDelete }: Omit<Props, "isLoading">)
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border bg-muted/50">
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Code</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Kode</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Nama</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Role</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Home Branch</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Access Branches</th>
-            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Cabang Utama</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Akses Cabang</th>
+            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Aksi</th>
           </tr>
         </thead>
         <tbody>

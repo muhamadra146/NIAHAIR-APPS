@@ -168,7 +168,7 @@ export function FinanceDashboardPage() {
 
   return (
     <PageContainer
-      title="Finance Dashboard"
+      title="Dashboard Keuangan"
       subtitle={
         data
           ? periodLabel(params.startDate, params.endDate)

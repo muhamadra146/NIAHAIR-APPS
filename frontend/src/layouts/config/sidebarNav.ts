@@ -71,7 +71,7 @@ export const sidebarNav: NavItem[] = [
   },
 
   {
-    label: "Finance Dashboard",
+    label: "Dashboard Keuangan",
     href:  "/finance",
     icon:  BarChart3,
     roles: [...ADMIN_ROLES, "MANAGER", "FINANCE"],
@@ -127,7 +127,7 @@ export const sidebarNav: NavItem[] = [
     roles: POS_ROLES,
     group: "Operasional",
     children: [
-      { label: "Invoices",           href: "/invoices",          roles: POS_ROLES },
+      { label: "Daftar Invoice",           href: "/invoices",          roles: POS_ROLES },
       { label: "Pembayaran Invoice", href: "/invoice-payments",  roles: POS_ROLES },
     ],
   },
@@ -142,7 +142,7 @@ export const sidebarNav: NavItem[] = [
   },
 
   {
-    label:         "Komplain Client",
+    label:         "Komplain Klien",
     href:          "/complaints",
     icon:          AlertCircle,
     roles:         [...POS_ROLES, "OFFICE", "FINANCE"],
@@ -152,7 +152,7 @@ export const sidebarNav: NavItem[] = [
 
   // ── Keuangan ──────────────────────────────────────────────────────────────
   {
-    label:         "Commissions",
+    label:         "Komisi",
     href:          "/commissions",
     icon:          BadgeDollarSign,
     roles:         [...ADMIN_ROLES, "MANAGER", "FINANCE"],
@@ -161,7 +161,7 @@ export const sidebarNav: NavItem[] = [
   },
 
   {
-    label: "Input Job",
+    label: "Input Pekerjaan",
     href:  "/generate-komisi",
     icon:  Sparkles,
     roles: [...ADMIN_ROLES, "FINANCE", "STAFF_OPERASIONAL"],
@@ -178,7 +178,7 @@ export const sidebarNav: NavItem[] = [
   },
 
   {
-    label: "Payroll",
+    label: "Penggajian",
     href:  "/payroll",
     icon:  DollarSign,
     roles: [...ADMIN_ROLES, "FINANCE"],
@@ -195,7 +195,7 @@ export const sidebarNav: NavItem[] = [
 
   // ── Data ──────────────────────────────────────────────────────────────────
   {
-    label:         "Customers",
+    label:         "Pelanggan",
     href:          "/customers",
     icon:          Users,
     roles:         [...POS_ROLES, "OFFICE", "FINANCE"],
@@ -212,7 +212,7 @@ export const sidebarNav: NavItem[] = [
   },
 
   {
-    label:         "Employees",
+    label:         "Karyawan",
     href:          "/employees",
     icon:          UserCog,
     roles:         [...MANAGEMENT_ROLES, "OFFICE", "FINANCE"],
@@ -221,7 +221,7 @@ export const sidebarNav: NavItem[] = [
   },
 
   {
-    label:         "Inventory",
+    label:         "Stok Barang",
     href:          "/inventory",
     icon:          Package,
     roles:         [...MANAGEMENT_ROLES, "INVENTORY", "OFFICE", "FINANCE"],
@@ -272,7 +272,7 @@ export const sidebarNav: NavItem[] = [
   },
 
   {
-    label: "Production",
+    label: "Produksi",
     href:  "/production",
     icon:  Cog,
     roles: [...MANAGEMENT_ROLES, "INVENTORY"],
@@ -281,7 +281,7 @@ export const sidebarNav: NavItem[] = [
 
   // ── Kehadiran ─────────────────────────────────────────────────────────────
   {
-    label:         "Schedule",
+    label:         "Jadwal Karyawan",
     href:          "/schedule",
     icon:          CalendarRange,
     roles:         [...MANAGEMENT_ROLES, "OFFICE", "FINANCE"],
@@ -298,7 +298,7 @@ export const sidebarNav: NavItem[] = [
   },
 
   {
-    label:         "Attendance",
+    label:         "Absensi",
     href:          "/attendance",
     icon:          ClipboardList,
     // Semua role: self check-in; SUPER_ADMIN/OWNER hanya monitor tim (lihat TeamPage)
@@ -352,7 +352,7 @@ export const sidebarNav: NavItem[] = [
 
   // ── Lainnya ───────────────────────────────────────────────────────────────
   {
-    label: "Reports",
+    label: "Laporan",
     href:  "/reports",
     icon:  BarChart3,
     roles: [...ADMIN_ROLES, "MANAGER", "INVENTORY", "OFFICE", "FINANCE"],
@@ -360,7 +360,7 @@ export const sidebarNav: NavItem[] = [
   },
 
   {
-    label: "Settings",
+    label: "Pengaturan",
     href:  "/settings",
     icon:  Settings,
     roles: ADMIN_ROLES,

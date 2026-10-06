@@ -574,7 +574,7 @@ export function AppointmentCreateForm({ open, onOpenChange, onSubmit, isPending,
 
           <DialogFooter className="shrink-0 border-t border-border px-4 py-4 sm:px-6">
             <Button type="button" variant="outline" className="flex-1 sm:flex-none" onClick={() => onOpenChange(false)} disabled={isPending}>
-              Cancel
+              Batal
             </Button>
             <Button type="submit" className="flex-1 sm:flex-none" disabled={isPending}>
               {isPending ? "Menyimpan…" : "Simpan Booking"}
@@ -814,7 +814,7 @@ export function AppointmentUpdateForm({ open, onOpenChange, onSubmit, isPending,
 
           <DialogFooter className="shrink-0 border-t border-border px-4 py-4 sm:px-6">
             <Button type="button" variant="outline" className="flex-1 sm:flex-none" onClick={() => onOpenChange(false)} disabled={isPending}>
-              Cancel
+              Batal
             </Button>
             <Button type="submit" className="flex-1 sm:flex-none" disabled={isPending}>
               {isPending ? "Menyimpan…" : "Simpan Perubahan"}

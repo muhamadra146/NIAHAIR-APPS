@@ -68,7 +68,7 @@ function MobileCardList({ users, onEdit, onResetPw, onDelete }: Omit<Props, "isL
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <RoleBadge code={u.role.code} name={u.role.name} />
                 <Badge variant={u.isActive ? "success" : "secondary"} className="text-xs">
-                  {u.isActive ? "Active" : "Inactive"}
+                  {u.isActive ? "Aktif" : "Nonaktif"}
                 </Badge>
               </div>
             </div>
@@ -123,10 +123,10 @@ function DesktopTable({ users, onEdit, onResetPw, onDelete }: Omit<Props, "isLoa
           <tr className="border-b border-slate-200 bg-slate-50/70">
             <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Email</th>
             <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Username</th>
-            <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Employee</th>
-            <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">User Role</th>
+            <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Karyawan</th>
+            <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Role User</th>
             <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
-            <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
+            <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Aksi</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -145,7 +145,7 @@ function DesktopTable({ users, onEdit, onResetPw, onDelete }: Omit<Props, "isLoa
               </td>
               <td className="px-5 py-4">
                 <Badge variant={u.isActive ? "success" : "secondary"}>
-                  {u.isActive ? "Active" : "Inactive"}
+                  {u.isActive ? "Aktif" : "Nonaktif"}
                 </Badge>
               </td>
               <td className="px-5 py-4 text-right">

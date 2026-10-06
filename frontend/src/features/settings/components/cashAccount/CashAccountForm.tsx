@@ -80,11 +80,11 @@ export function CashAccountForm({ open, onOpenChange, onSubmit, isPending, defau
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label>Accurate Account ID</Label>
+                  <Label>ID Akun Accurate</Label>
                   <Input {...register("accurateAccountId")} inputMode="numeric" placeholder="12345" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Accurate Account No</Label>
+                  <Label>No. Akun Accurate</Label>
                   <Input {...register("accurateAccountNo")} placeholder="1-110001" />
                 </div>
               </div>

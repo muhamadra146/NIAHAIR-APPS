@@ -6,8 +6,8 @@ export function AccuratePanel() {
   return (
     <Tabs defaultValue="master-sync">
       <TabsList>
-        <TabsTrigger value="master-sync">Master Sync</TabsTrigger>
-        <TabsTrigger value="sync-queue">Sync Queue</TabsTrigger>
+        <TabsTrigger value="master-sync">Sync Master</TabsTrigger>
+        <TabsTrigger value="sync-queue">Antrian Sync</TabsTrigger>
       </TabsList>
 
       <TabsContent value="master-sync" className="mt-6">

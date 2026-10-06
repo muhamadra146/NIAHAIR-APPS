@@ -63,12 +63,12 @@ export function PaymentMethodForm({ open, onOpenChange, onSubmit, isPending, def
             )}
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label>Code <span className="text-destructive">*</span></Label>
+                <Label>Kode <span className="text-destructive">*</span></Label>
                 <Input {...register("code")} placeholder="CASH" />
                 {errors.code && <p className="text-xs text-destructive">{errors.code.message}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label>Name <span className="text-destructive">*</span></Label>
+                <Label>Nama <span className="text-destructive">*</span></Label>
                 <Input {...register("name")} placeholder="Cash" />
                 {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
               </div>
@@ -89,10 +89,10 @@ export function PaymentMethodForm({ open, onOpenChange, onSubmit, isPending, def
           <DialogFooter className="shrink-0 border-t border-border px-4 py-4 sm:px-6">
             <Button type="button" variant="outline" className="flex-1 sm:flex-none"
               onClick={() => onOpenChange(false)} disabled={isPending}>
-              Cancel
+              Batal
             </Button>
             <Button type="submit" className="flex-1 sm:flex-none" disabled={isPending}>
-              {isPending ? "Saving…" : "Save"}
+              {isPending ? "Menyimpan…" : "Simpan"}
             </Button>
           </DialogFooter>
         </form>

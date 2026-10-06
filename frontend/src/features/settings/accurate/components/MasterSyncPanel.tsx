@@ -14,33 +14,33 @@ interface SyncCardDef {
 const SYNC_CARDS: SyncCardDef[] = [
   {
     entity:      "CUSTOMER",
-    title:       "Customer Sync",
-    description: "Pull all active customers from Accurate Online into the app.",
+    title:       "Sync Customer",
+    description: "Tarik semua customer aktif dari Accurate Online ke aplikasi.",
   },
   {
     entity:      "ITEM_CATEGORY",
-    title:       "Item Category Sync",
-    description: "Pull item categories from Accurate Online. Sync this before Item Sync.",
+    title:       "Sync Kategori Item",
+    description: "Tarik kategori item dari Accurate Online. Jalankan sebelum Sync Item.",
   },
   {
     entity:      "ITEM",
-    title:       "Item Sync",
-    description: "Sync products and service items from Accurate Online.",
+    title:       "Sync Item",
+    description: "Sync produk dan jasa dari Accurate Online.",
   },
   {
     entity:      "UNIT",
-    title:       "Unit Sync",
-    description: "Sync units of measure from Accurate Online.",
+    title:       "Sync Satuan",
+    description: "Sync satuan dari Accurate Online.",
   },
   {
     entity:      "WAREHOUSE",
-    title:       "Warehouse Sync",
-    description: "Pull warehouse locations from Accurate Online.",
+    title:       "Sync Gudang",
+    description: "Tarik daftar gudang dari Accurate Online.",
   },
   {
     entity:      "INVENTORY",
-    title:       "Inventory Sync",
-    description: "Pull current stock balances from Accurate Online.",
+    title:       "Sync Stok",
+    description: "Tarik saldo stok terkini dari Accurate Online.",
   },
 ];
 
@@ -60,10 +60,10 @@ function SyncCard({ entity, title, description }: SyncCardDef) {
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-sm font-semibold">{title}</CardTitle>
           {state === "success" && (
-            <Badge variant="success" className="shrink-0">Synced</Badge>
+            <Badge variant="success" className="shrink-0">Berhasil</Badge>
           )}
           {state === "error" && (
-            <Badge variant="error" className="shrink-0">Failed</Badge>
+            <Badge variant="error" className="shrink-0">Gagal</Badge>
           )}
         </div>
         <CardDescription className="text-xs">{description}</CardDescription>
@@ -100,9 +100,9 @@ function SyncCard({ entity, title, description }: SyncCardDef) {
           <RefreshCw
             className={`mr-2 h-3.5 w-3.5 ${state === "loading" ? "animate-spin" : ""}`}
           />
-          {state === "loading" ? "Syncing…"
-            : state === "error"   ? "Retry Sync"
-            : "Sync Now"}
+          {state === "loading" ? "Menyinkronkan…"
+            : state === "error"   ? "Coba Lagi"
+            : "Sync Sekarang"}
         </Button>
       </CardContent>
     </Card>
@@ -113,9 +113,9 @@ export function MasterSyncPanel() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold">Master Sync</h2>
+        <h2 className="text-base font-semibold">Sync Master</h2>
         <p className="text-sm text-muted-foreground">
-          Manually trigger data sync from Accurate Online to the app.
+          Tarik data dari Accurate Online ke aplikasi secara manual.
         </p>
       </div>
 

@@ -103,7 +103,7 @@ export function UserForm({ open, onOpenChange, onSubmit, isPending, defaultValue
         )}
       >
         <DialogHeader className="shrink-0 border-b border-border px-4 py-4 sm:px-6">
-          <DialogTitle>{isEdit ? "Edit User Account" : "New User Account"}</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit Akun User" : "Akun User Baru"}</DialogTitle>
         </DialogHeader>
 
         <form
@@ -118,7 +118,7 @@ export function UserForm({ open, onOpenChange, onSubmit, isPending, defaultValue
               {/* Employee select — create mode only */}
               {!isEdit && (
                 <div className="space-y-1.5 relative">
-                  <Label>Employee <span className="text-destructive">*</span></Label>
+                  <Label>Karyawan <span className="text-destructive">*</span></Label>
                   <Input
                     value={empSearch}
                     onChange={(e) => handleEmpSearch(e.target.value)}
@@ -219,7 +219,7 @@ export function UserForm({ open, onOpenChange, onSubmit, isPending, defaultValue
 
               {/* User Role */}
               <div className="space-y-1.5">
-                <Label>User Role <span className="text-destructive">*</span></Label>
+                <Label>Role User <span className="text-destructive">*</span></Label>
                 <select
                   {...(isEdit ? editForm.register("userRoleId") : createForm.register("userRoleId"))}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -241,10 +241,10 @@ export function UserForm({ open, onOpenChange, onSubmit, isPending, defaultValue
           <DialogFooter className="shrink-0 border-t border-border px-4 py-4 sm:px-6">
             <Button type="button" variant="outline" className="flex-1 sm:flex-none"
               onClick={() => onOpenChange(false)} disabled={isPending}>
-              Cancel
+              Batal
             </Button>
             <Button type="submit" className="flex-1 sm:flex-none" disabled={isPending}>
-              {isPending ? "Saving…" : "Save"}
+              {isPending ? "Menyimpan…" : "Simpan"}
             </Button>
           </DialogFooter>
         </form>
@@ -291,10 +291,10 @@ export function ResetPasswordDialog({ open, onOpenChange, onSubmit, isPending, e
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-              Cancel
+              Batal
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Saving…" : "Reset"}
+              {isPending ? "Menyimpan…" : "Reset"}
             </Button>
           </DialogFooter>
         </form>

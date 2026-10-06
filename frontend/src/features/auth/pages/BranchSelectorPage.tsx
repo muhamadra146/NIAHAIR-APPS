@@ -86,7 +86,7 @@ export function BranchSelectorPage() {
 
             {isSwitching && (
               <Button variant="ghost" className="w-full" onClick={() => navigate(-1)}>
-                Cancel
+                Batal
               </Button>
             )}
           </>

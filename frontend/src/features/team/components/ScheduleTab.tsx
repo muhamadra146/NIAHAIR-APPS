@@ -128,19 +128,19 @@ export function ScheduleTab() {
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Employee</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Karyawan</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tanggal</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tipe</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Start</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">End</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Notes</th>
-              <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Catatan</th>
+              <th className="px-4 py-3 text-right font-medium text-muted-foreground">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Loading…</td>
+                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Memuat…</td>
               </tr>
             ) : schedules.length === 0 ? (
               <tr>
@@ -184,7 +184,7 @@ export function ScheduleTab() {
       {/* ── Mobile Cards ──────────────────────────────────────────── */}
       <div className="space-y-3 md:hidden">
         {isLoading ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">Memuat…</p>
         ) : schedules.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No schedules found.</p>
         ) : schedules.map((s) => (

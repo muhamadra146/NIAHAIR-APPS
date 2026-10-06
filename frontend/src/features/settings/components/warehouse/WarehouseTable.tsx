@@ -89,7 +89,7 @@ function MobileCardList({ warehouses, onEdit, onDelete }: Omit<Props, "isLoading
               : <Badge variant="outline" className="text-xs text-muted-foreground">No branch</Badge>
             }
             <Badge variant={w.isActive ? "default" : "secondary"} className="text-xs">
-              {w.isActive ? "Active" : "Inactive"}
+              {w.isActive ? "Aktif" : "Nonaktif"}
             </Badge>
           </div>
           <p className="mt-1.5 text-xs text-muted-foreground">
@@ -109,12 +109,12 @@ function DesktopTable({ warehouses, onEdit, onDelete }: Omit<Props, "isLoading">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border bg-muted/50">
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Nama</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Accurate ID</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Branch</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Cabang</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Last Sync</th>
-            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Sync Terakhir</th>
+            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Aksi</th>
           </tr>
         </thead>
         <tbody>
@@ -132,7 +132,7 @@ function DesktopTable({ warehouses, onEdit, onDelete }: Omit<Props, "isLoading">
               </td>
               <td className="px-4 py-3">
                 <Badge variant={w.isActive ? "default" : "secondary"}>
-                  {w.isActive ? "Active" : "Inactive"}
+                  {w.isActive ? "Aktif" : "Nonaktif"}
                 </Badge>
               </td>
               <td className="px-4 py-3 text-muted-foreground">{formatSync(w.lastSyncAt)}</td>

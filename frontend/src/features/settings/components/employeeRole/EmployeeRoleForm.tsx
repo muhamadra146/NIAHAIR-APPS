@@ -38,7 +38,7 @@ export function EmployeeRoleForm({ open, onOpenChange, onSubmit, isPending, defa
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>{defaultValues ? "Edit Role" : "New Role"}</DialogTitle>
+          <DialogTitle>{defaultValues ? "Edit Role" : "Role Baru"}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -47,23 +47,23 @@ export function EmployeeRoleForm({ open, onOpenChange, onSubmit, isPending, defa
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="role-code">Code <span className="text-destructive">*</span></Label>
+            <Label htmlFor="role-code">Kode <span className="text-destructive">*</span></Label>
             <Input id="role-code" {...register("code")} placeholder="STYLIST" />
             {errors.code && <p className="text-xs text-destructive">{errors.code.message}</p>}
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="role-name">Name <span className="text-destructive">*</span></Label>
+            <Label htmlFor="role-name">Nama <span className="text-destructive">*</span></Label>
             <Input id="role-name" {...register("name")} placeholder="Stylist" />
             {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
           </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-              Cancel
+              Batal
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Saving…" : "Save"}
+              {isPending ? "Menyimpan…" : "Simpan"}
             </Button>
           </DialogFooter>
         </form>

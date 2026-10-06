@@ -208,9 +208,9 @@ export function SyncQueuePanel() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold">Sync Queue</h2>
+        <h2 className="text-base font-semibold">Antrian Sync</h2>
         <p className="text-sm text-muted-foreground">
-          {meta ? `${meta.total} total jobs` : "Background sync jobs and their status"}
+          {meta ? `${meta.total} antrian` : "Antrian sync ke Accurate dan statusnya"}
         </p>
       </div>
 

@@ -204,7 +204,7 @@ export function CustomerDetailPage() {
                       </Badge>
                     )}
                     {!customer.isActive && (
-                      <Badge variant="secondary">Inactive</Badge>
+                      <Badge variant="secondary">Nonaktif</Badge>
                     )}
                   </div>
                 </div>
