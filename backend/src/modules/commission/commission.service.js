@@ -635,16 +635,28 @@ const regenerateCommission = (invoiceId) =>
 // Override TIDAK diizinkan jika status = PAID. Pembatalan PAID butuh proses
 // tersendiri (reversal) yang belum diimplementasi.
 
+/** Komisi yang sudah tercatat di slip payroll tidak boleh diubah/dihapus (slip & komisi harus sama) */
+const assertNotInPayroll = (commissions) => {
+  if (commissions.some((c) => c.payrollId)) {
+    throw new AppError(
+      "Komisi sudah tercatat di payroll. Hapus payroll tersebut dulu agar komisi dilepas, lalu ubah komisinya.",
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
+};
+
 const overrideCommission = async (id, { commissionAmount, userId, notes }) => {
   const commission = await findById(id);
   if (!commission) throw new AppError("Komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (!canOverride(commission.status)) {
     throw new AppError(
-      `Cannot override: commission status is ${commission.status}. Hanya PENDING/APPROVED yang bisa di-override.`,
+      `Komisi berstatus ${commission.status} tidak bisa di-override. Hanya PENDING/APPROVED yang bisa di-override.`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
+
+  assertNotInPayroll([commission]);
 
   if (Number(commissionAmount) < 0) {
     throw new AppError("commissionAmount tidak boleh negatif", StatusCodes.BAD_REQUEST);
@@ -671,6 +683,7 @@ const deleteCommission = async (id, roleCode) => {
 
   // SUPER_ADMIN: hapus SEMUA komisi invoice agar status kembali ke "belum generate"
   if (isSuperAdmin) {
+    assertNotInPayroll(await findAllByInvoice(commission.invoiceId));
     const { count } = await deleteAllByInvoice(commission.invoiceId);
     return { invoiceId: commission.invoiceId, deleted: count, message: "Semua komisi invoice ini berhasil direset" };
   }
