@@ -5,7 +5,7 @@ const { paginate, paginationMeta } = require("../../utils/pagination");
 const { resolveOrderBy } = require("../../utils/sort");
 const { wibDateStr } = require("../../utils/date");
 const { buildWorkPeriod, DEFAULT_PAY_DAY } = require("../../utils/payPeriod");
-const { computeMealAllowance, computeTransportAllowance, countUnscheduledDays, PRESENT_STATUSES } = require("./payroll.calc");
+const { computeMealAllowance, computeTransportAllowance, computeProration, computeAlphaDays, countUnscheduledDays, PRESENT_STATUSES } = require("./payroll.calc");
 const repo            = require("./payroll.repository");
 const { createSyncJob } = require("../syncQueue/syncQueue.service");
 
@@ -42,8 +42,12 @@ const buildPeriod = (yearMonth) => {
 // ── Generate payroll items from raw data ──────────────────────────────────────
 // Home Service tidak dihitung di payroll: dibayar lewat komisi kategori HS
 // (job Home Service + tarif bawaan per jumlah staf), lihat COM-013 & COM-016.
-const buildItems = (salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts = [], approvedLatePermissions = [], holidays = [], omsetBonusTiers = [], branchOmset = 0, periodStart = null, periodEnd = null) => {
+const buildItems = (salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts = [], approvedLatePermissions = [], holidays = [], omsetBonusTiers = [], branchOmset = 0, periodStart = null, periodEnd = null, employment = null) => {
   const s = salarySetting;
+  // Tanggal masuk / resign karyawan (PAY-001: masuk/keluar di tengah periode)
+  const hireDate   = employment?.hireDate   ?? null;
+  const resignDate = employment?.resignDate ?? null;
+  const hasPeriod  = Boolean(periodStart && periodEnd);
 
   // Holiday date set for O(1) lookup
   const holidaySet = new Set(
@@ -62,8 +66,17 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
 
   // Present days = attendance with actual check-in (PRESENT/LATE/EARLY_LEAVE/HALF_DAY)
   const presentDays = attendances.filter((a) => PRESENT_STATUSES.includes(a.status)).length;
-  // Potongan Absen (alpha) tetap dari hari WORKING terjadwal tanpa kehadiran
-  const absentDays  = Math.max(workingDays - presentDays, 0);
+  // Potongan Absen (PAY-019): hanya alpha — hari kerja tanpa absensi hadir; OFF, libur nasional,
+  // Cuti/Izin/Sakit dan hari di luar masa kerja tidak dihitung
+  const absentDays  = hasPeriod
+    ? computeAlphaDays({ periodStart, periodEnd, schedules, attendances, holidays, hireDate, resignDate })
+    : Math.max(workingDays - presentDays, 0);
+
+  // Gaji pokok proporsional bila masuk/keluar di tengah periode (PAY-001)
+  const proration = hasPeriod
+    ? computeProration({ periodStart, periodEnd, schedules, hireDate, resignDate })
+    : { prorated: false };
+  const baseSalaryAmount = proration.prorated ? D(s.baseSalary).mul(proration.factor) : D(s.baseSalary);
 
   // Sum minutes
   const totalEarlyLeaveMinutes = attendances.reduce((acc, a) => acc + (a.earlyLeaveMinutes ?? 0), 0);
@@ -84,8 +97,8 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   }, 0);
 
   // Transport (PAY-018): pembagi = hari periode − hari OFF; tiap hari tidak hadir dipotong tarif harian
-  const transport = periodStart && periodEnd
-    ? computeTransportAllowance({ monthlyAmount: s.transportAllowance, periodStart, periodEnd, schedules, attendances, holidays })
+  const transport = hasPeriod
+    ? computeTransportAllowance({ monthlyAmount: s.transportAllowance, periodStart, periodEnd, schedules, attendances, holidays, hireDate, resignDate })
     : { amount: D(s.transportAllowance), absentDays: 0, divisor: 0, dailyRate: D(0) };
   const transportAmount = transport.amount;
 
@@ -127,10 +140,14 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   };
 
   // INCOME
-  addItem("INCOME", "gaji",            "Gaji Pokok",                      s.baseSalary);
+  if (proration.prorated) {
+    addItem("INCOME", "gaji", `Gaji Pokok (${proration.employedWorkDays}/${proration.divisor} hari kerja)`, baseSalaryAmount, proration.employedWorkDays, D(s.baseSalary).div(D(proration.divisor)));
+  } else {
+    addItem("INCOME", "gaji",            "Gaji Pokok",                      baseSalaryAmount);
+  }
   addItem("INCOME", "makan",           meal.halfDays > 0 ? `Uang Makan (${meal.fullDays} penuh, ${meal.halfDays} setengah hari)` : "Uang Makan", meal.amount, meal.units, s.mealAllowancePerDay);
   addItem("INCOME", "tunjangan",       "Tunjangan",                       s.tunjangan ?? 0);
-  addItem("INCOME", "transport",       transport.absentDays > 0 ? `Tunjangan Transport (potong ${transport.absentDays} hari tidak hadir)` : "Tunjangan Transport", transportAmount, transport.divisor ? transport.divisor - transport.absentDays : null, transport.divisor ? transport.dailyRate : null);
+  addItem("INCOME", "transport",       transport.absentDays > 0 ? `Tunjangan Transport (potong ${transport.absentDays} hari tidak hadir)` : "Tunjangan Transport", transportAmount, transport.divisor ? (transport.employedWorkDays ?? transport.divisor) - transport.absentDays : null, transport.divisor ? transport.dailyRate : null);
   addItem("INCOME", "komisi",          "Komisi",                          totalCommission);
   addItem("INCOME", "lembur",          "Lembur",                          overtimeAmount, totalOvertimeMinutes, D(s.overtimeRatePerHour).div(D(60)));
   addItem("INCOME", "libur_kerja",     "Kerja di Hari Libur",             holidayWorkAmount, holidayWorkingDays, s.holidayRatePerDay ?? 0);
@@ -184,7 +201,7 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
 
   return {
     items, grossIncome, totalDeductions, netSalary,
-    meta: { workingDays, presentDays, absentDays, holidayWorkingDays, transportAbsentDays: transport.absentDays, transportDivisor: transport.divisor, mealUnits: meal.units },
+    meta: { workingDays, presentDays, absentDays, holidayWorkingDays, transportAbsentDays: transport.absentDays, transportDivisor: transport.divisor, mealUnits: meal.units, prorated: Boolean(proration.prorated) },
   };
 };
 
@@ -304,14 +321,14 @@ const generate = async ({ employeeId, branchId, yearMonth, payDay, periodStart: 
   const { conflict, warnings } = await checkPeriodContinuity(employeeId, periodStart, periodEnd);
   if (conflict) throw new AppError(conflict, StatusCodes.CONFLICT);
 
-  const { salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset } =
+  const { salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, employment } =
     await repo.getGenerationData(employeeId, branchId, periodStart, periodEnd);
 
   if (!salarySetting)
     throw new AppError("Pengaturan gaji aktif untuk karyawan ini belum ada. Atur di Settings → Gaji Karyawan.", StatusCodes.BAD_REQUEST);
 
   const { items, grossIncome, totalDeductions, netSalary } =
-    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, periodStart, periodEnd);
+    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, periodStart, periodEnd, employment);
 
   const payroll = await prisma.$transaction(async (tx) => {
    const created = await tx.payroll.create({
@@ -357,14 +374,14 @@ const recalculate = async (id, userId) => {
   if (existing.status !== "DRAFT")
     throw new AppError("Hanya payroll DRAFT yang bisa dihitung ulang", StatusCodes.BAD_REQUEST);
 
-  const { salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset } =
+  const { salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, employment } =
     await repo.getGenerationData(existing.employeeId, existing.branchId, existing.periodStart, existing.periodEnd, id);
 
   if (!salarySetting)
     throw new AppError("Pengaturan gaji aktif untuk karyawan ini belum ada", StatusCodes.BAD_REQUEST);
 
   const { items, grossIncome, totalDeductions, netSalary } =
-    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, existing.periodStart, existing.periodEnd);
+    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, existing.periodStart, existing.periodEnd, employment);
 
   const commissionIds = commissions.map((c) => c.id);
   // Item, komisi terhubung, dan total disimpan dalam satu transaksi agar selalu konsisten

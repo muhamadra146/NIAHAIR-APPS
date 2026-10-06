@@ -153,3 +153,56 @@ describe("helpers", () => {
     })).toBe(3);
   });
 });
+
+describe("masuk/keluar di tengah periode (PAY-001) dan alpha (PAY-019)", () => {
+  const { computeProration, computeAlphaDays } = require("./payroll.calc");
+  const OCT = { periodStart: day("2026-10-01"), periodEnd: day("2026-10-31") };
+  const off = [5, 12, 19, 26]; // 4 hari OFF → 27 hari kerja
+
+  test("contoh: masuk 15 Okt → gaji pokok 15/27", () => {
+    const schedules = monthSchedules(2026, 10, 31, off);
+    const r = computeProration({ ...OCT, schedules, hireDate: day("2026-10-15") });
+    expect(r.prorated).toBe(true);
+    expect(r.divisor).toBe(27);
+    expect(r.employedWorkDays).toBe(15); // 15–31 Okt = 17 hari − OFF 19 & 26
+    expect(Math.round(3000000 * Number(r.factor))).toBe(1666667);
+  });
+
+  test("bekerja penuh → tidak proporsional", () => {
+    const schedules = monthSchedules(2026, 10, 31, off);
+    const r = computeProration({ ...OCT, schedules, hireDate: day("2025-01-01") });
+    expect(r.prorated).toBe(false);
+  });
+
+  test("resign 10 Okt → hanya hari kerja s/d 10 Okt", () => {
+    const schedules = monthSchedules(2026, 10, 31, off);
+    const r = computeProration({ ...OCT, schedules, resignDate: day("2026-10-10") });
+    expect(r.employedWorkDays).toBe(9); // 1–10 Okt minus OFF 5
+  });
+
+  test("transport: hari sebelum masuk tidak dipotong sebagai tidak hadir, tapi dibayar proporsional", () => {
+    const schedules = monthSchedules(2026, 10, 31, off);
+    const attendances = presentAll(schedules).filter((a) => a.workDate >= day("2026-10-15"));
+    const r = computeTransportAllowance({
+      monthlyAmount: 540000, ...OCT, schedules, attendances, holidays: [], hireDate: day("2026-10-15"),
+    });
+    expect(r.absentDays).toBe(0);
+    expect(Number(r.amount)).toBeCloseTo((540000 / 27) * 15, 2);
+  });
+
+  test("alpha: hanya hari kerja tanpa absen; cuti/izin/sakit, OFF, libur nasional tidak dihitung", () => {
+    const schedules = monthSchedules(2026, 10, 31, off);
+    schedules[1].status = "LEAVE"; // 2 Okt cuti
+    schedules[2].status = "SAKIT"; // 3 Okt sakit
+    schedules[3].status = "IZIN";  // 4 Okt izin
+    // tidak hadir: 2,3,4 (excused), 6 (alpha), 7 (libur nasional)
+    const attendances = presentAll(schedules, ["2026-10-06", "2026-10-07"]);
+    const n = computeAlphaDays({ ...OCT, schedules, attendances, holidays: [{ date: day("2026-10-07") }] });
+    expect(n).toBe(1);
+  });
+
+  test("alpha: hari sebelum tanggal masuk tidak dihitung", () => {
+    const n = computeAlphaDays({ ...OCT, schedules: [], attendances: [], holidays: [], hireDate: day("2026-10-30") });
+    expect(n).toBe(2); // 30 & 31 Okt tanpa jadwal & tanpa absen
+  });
+});

@@ -31,6 +31,21 @@ const toMinutes = (hhmm) => {
 /** Jadwal libur: status OFF atau shift tanpa jam (mis. shift "Day Off") */
 const isOffSchedule = (sc) => sc.status === "OFF" || (sc.shift && !sc.shift.startTime);
 
+const offDateSet = (dates, schedules) => {
+  const inPeriod = new Set(dates);
+  return new Set(schedules.filter(isOffSchedule).map((sc) => dateKey(sc.workDate)).filter((d) => inPeriod.has(d)));
+};
+
+const presentDateSet = (attendances) =>
+  new Set(attendances.filter((a) => PRESENT_STATUSES.includes(a.status)).map((a) => dateKey(a.workDate)));
+
+/** Tanggal periode selama karyawan bekerja: mulai tanggal masuk, s/d tanggal resign (inklusif) */
+const employedDates = (dates, hireDate, resignDate) => {
+  const from = hireDate   ? dateKey(hireDate)   : null;
+  const to   = resignDate ? dateKey(resignDate) : null;
+  return dates.filter((d) => (!from || d >= from) && (!to || d <= to));
+};
+
 /** Durasi shift (jam) dari jadwal; shift melewati tengah malam ditangani. null bila tidak diketahui */
 const shiftHours = (sc) => {
   const start = toMinutes(sc?.shift?.startTime);
@@ -77,22 +92,55 @@ const computeMealAllowance = ({ ratePerDay, attendances, schedules }) => {
  *                      → cuti, sakit, izin tidak masuk, alpha dipotong; libur nasional tidak
  *   hari tanpa jadwal dianggap hari kerja (jadwal harus diisi lengkap)
  */
-const computeTransportAllowance = ({ monthlyAmount, periodStart, periodEnd, schedules, attendances, holidays }) => {
+const computeTransportAllowance = ({ monthlyAmount, periodStart, periodEnd, schedules, attendances, holidays, hireDate = null, resignDate = null }) => {
   const dates      = periodDates(periodStart, periodEnd);
-  const inPeriod   = new Set(dates);
-  const offDates   = new Set(schedules.filter(isOffSchedule).map((sc) => dateKey(sc.workDate)).filter((d) => inPeriod.has(d)));
+  const offDates   = offDateSet(dates, schedules);
   const holidaySet = new Set(holidays.map((h) => dateKey(h.date)));
-  const present    = new Set(attendances.filter((a) => PRESENT_STATUSES.includes(a.status)).map((a) => dateKey(a.workDate)));
+  const present    = presentDateSet(attendances);
+  const employed   = employedDates(dates, hireDate, resignDate);
 
-  const divisor = dates.length - offDates.size;
-  const absentDays = dates.filter((d) => !offDates.has(d) && !holidaySet.has(d) && !present.has(d)).length;
+  const divisor          = dates.length - offDates.size;
+  const employedWorkDays = employed.filter((d) => !offDates.has(d)).length;
+  const absentDays = employed.filter((d) => !offDates.has(d) && !holidaySet.has(d) && !present.has(d)).length;
 
   if (divisor <= 0) {
-    return { amount: D(monthlyAmount), divisor: 0, dailyRate: D(0), absentDays: 0, offDays: offDates.size, periodDays: dates.length };
+    return { amount: D(monthlyAmount), divisor: 0, dailyRate: D(0), absentDays: 0, offDays: offDates.size, periodDays: dates.length, employedWorkDays: 0 };
   }
   const dailyRate = D(monthlyAmount).div(D(divisor));
-  const amount    = Prisma.Decimal.max(D(0), D(monthlyAmount).minus(dailyRate.mul(D(absentDays))));
-  return { amount, divisor, dailyRate, absentDays, offDays: offDates.size, periodDays: dates.length };
+  // Masuk/keluar di tengah periode (PAY-001): hanya hari kerja selama bekerja yang dibayar
+  const base   = employedWorkDays === divisor ? D(monthlyAmount) : dailyRate.mul(D(employedWorkDays));
+  const amount = Prisma.Decimal.max(D(0), base.minus(dailyRate.mul(D(absentDays))));
+  return { amount, divisor, dailyRate, absentDays, offDays: offDates.size, periodDays: dates.length, employedWorkDays };
+};
+
+/**
+ * Proporsi hari kerja untuk karyawan yang masuk/keluar di tengah periode (PAY-001).
+ *   factor = hari kerja selama bekerja ÷ hari kerja periode   (hari kerja = hari − OFF, sama dengan pembagi transport)
+ *   contoh: periode 31 hari, OFF 4, masuk tanggal 15 → 15 ÷ 27
+ */
+const computeProration = ({ periodStart, periodEnd, schedules, hireDate = null, resignDate = null }) => {
+  const dates    = periodDates(periodStart, periodEnd);
+  const offDates = offDateSet(dates, schedules);
+  const divisor  = dates.length - offDates.size;
+  const employedWorkDays = employedDates(dates, hireDate, resignDate).filter((d) => !offDates.has(d)).length;
+  const prorated = employedWorkDays !== divisor;
+  const factor   = divisor > 0 ? D(employedWorkDays).div(D(divisor)) : D(1);
+  return { factor, prorated, divisor, employedWorkDays };
+};
+
+/**
+ * Hari alpha untuk Potongan Absen (PAY-019): hari kerja selama bekerja yang tidak ada absensi hadir.
+ *   tidak dihitung: OFF, libur nasional, Cuti/Izin/Sakit (status jadwal LEAVE/IZIN/SAKIT)
+ *   hari tanpa jadwal dihitung hari kerja (sama dengan transport)
+ */
+const computeAlphaDays = ({ periodStart, periodEnd, schedules, attendances, holidays, hireDate = null, resignDate = null }) => {
+  const dates      = periodDates(periodStart, periodEnd);
+  const offDates   = offDateSet(dates, schedules);
+  const excused    = new Set(schedules.filter((sc) => ["LEAVE", "IZIN", "SAKIT"].includes(sc.status)).map((sc) => dateKey(sc.workDate)));
+  const holidaySet = new Set(holidays.map((h) => dateKey(h.date)));
+  const present    = presentDateSet(attendances);
+  return employedDates(dates, hireDate, resignDate)
+    .filter((d) => !offDates.has(d) && !excused.has(d) && !holidaySet.has(d) && !present.has(d)).length;
 };
 
 /** Hari dalam periode yang belum punya jadwal (untuk peringatan sebelum generate) */
@@ -107,5 +155,7 @@ module.exports = {
   shiftHours,
   computeMealAllowance,
   computeTransportAllowance,
+  computeProration,
+  computeAlphaDays,
   countUnscheduledDays,
 };

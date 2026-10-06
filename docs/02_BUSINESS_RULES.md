@@ -4808,6 +4808,18 @@ PROCESSING
 
 CLOSED
 
+
+### Masuk / Keluar di Tengah Periode
+
+Karyawan yang mulai bekerja (Tanggal Masuk) atau resign di tengah periode dibayar sesuai hari kerja selama bekerja.
+
+Hari kerja = hari periode − hari libur (OFF) di jadwal (sama dengan pembagi transport).
+
+- Gaji pokok = gaji pokok ÷ hari kerja periode × hari kerja sejak masuk (s/d tanggal resign).
+- Tunjangan transport dihitung dengan cara yang sama; hari sebelum masuk / sesudah resign tidak dihitung tidak hadir.
+- BPJS tetap dari gaji pokok penuh.
+
+Contoh: periode 1–31 Okt, OFF 4 hari (27 hari kerja), masuk 15 Okt (15 hari kerja) → gaji pokok 3.000.000 ÷ 27 × 15 = 1.666.667.
 ---
 
 # PAY-002
@@ -5114,6 +5126,14 @@ Penalty.
 Manual Adjustment.
 
 Semua Deduction wajib memiliki Reason.
+
+### Potongan Absen (alpha)
+
+Potongan Absen = hari alpha × potongan absen per hari di Setting Gaji.
+
+Hari alpha = hari kerja dalam masa kerja tanpa absensi hadir. Tidak dihitung alpha: hari libur (OFF), libur nasional, Cuti / Izin / Sakit (status jadwal), dan hari sebelum tanggal masuk / sesudah tanggal resign. Hari tanpa jadwal dihitung hari kerja (sama dengan transport, PAY-018).
+
+Cuti, sakit, dan izin tidak masuk tidak kena Potongan Absen (sudah memengaruhi transport dan uang makan).
 
 ---
 

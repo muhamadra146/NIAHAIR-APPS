@@ -168,7 +168,13 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd, p
 
   const branchOmset = Number(branchOmsetAggregate._sum?.grandTotal ?? 0);
 
-  return { salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset };
+  // Tanggal masuk / resign untuk gaji proporsional (PAY-001)
+  const employment = await prisma.employee.findUnique({
+    where:  { id: employeeId },
+    select: { hireDate: true, resignDate: true },
+  });
+
+  return { salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, employment };
 };
 
 const findByEmployee = ({ skip, take, where }) =>
