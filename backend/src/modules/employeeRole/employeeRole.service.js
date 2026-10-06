@@ -32,24 +32,24 @@ const getAll = async ({ page, limit, search, isActive }) => {
 
 const getById = async (id) => {
   const role = await findById(id);
-  if (!role) throw new AppError("Employee role not found", StatusCodes.NOT_FOUND);
+  if (!role) throw new AppError("Role karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
   return role;
 };
 
 const createEmployeeRole = async (body) => {
   const existing = await findByCode(body.code);
-  if (existing) throw new AppError("Employee role code already exists", StatusCodes.CONFLICT);
+  if (existing) throw new AppError("Kode role karyawan sudah digunakan", StatusCodes.CONFLICT);
 
   return create(body);
 };
 
 const updateEmployeeRole = async (id, body) => {
   const role = await findById(id);
-  if (!role) throw new AppError("Employee role not found", StatusCodes.NOT_FOUND);
+  if (!role) throw new AppError("Role karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (body.code && body.code !== role.code) {
     const existing = await findByCode(body.code);
-    if (existing) throw new AppError("Employee role code already exists", StatusCodes.CONFLICT);
+    if (existing) throw new AppError("Kode role karyawan sudah digunakan", StatusCodes.CONFLICT);
   }
 
   return update(id, body);
@@ -57,7 +57,7 @@ const updateEmployeeRole = async (id, body) => {
 
 const deleteEmployeeRole = async (id) => {
   const role = await findById(id);
-  if (!role) throw new AppError("Employee role not found", StatusCodes.NOT_FOUND);
+  if (!role) throw new AppError("Role karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const inUse = await countEmployees(id);
   if (inUse > 0)

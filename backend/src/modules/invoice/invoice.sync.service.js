@@ -15,7 +15,7 @@ const syncInvoiceToAccurate = async (invoiceId) => {
   logger.info(`[invoice sync] start invoiceId=${invoiceId}`);
 
   const invoice = await findInvoiceForSync(invoiceId);
-  if (!invoice) throw new Error(`Invoice not found: ${invoiceId}`);
+  if (!invoice) throw new Error(`Invoice tidak ditemukan: ${invoiceId}`);
 
   const isUpdate = !!invoice.accurateInvoiceId;
 

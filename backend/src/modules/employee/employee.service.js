@@ -96,7 +96,7 @@ const getAll = async ({ page, limit, search, isActive, branchId, sortBy }) => {
 
 const getById = async (id) => {
   const employee = await findById(id);
-  if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+  if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
   return employee;
 };
 
@@ -104,18 +104,18 @@ const getNextCode = async () => generateNextCode();
 
 const createEmployee = async (body) => {
   const role = await findRoleById(body.roleId);
-  if (!role) throw new AppError("Employee role not found", StatusCodes.NOT_FOUND);
+  if (!role) throw new AppError("Role karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (!body.employeeCode) {
     body.employeeCode = await generateNextCode();
   } else {
     const existing = await findByEmployeeCode(body.employeeCode);
-    if (existing) throw new AppError("Employee code already exists", StatusCodes.CONFLICT);
+    if (existing) throw new AppError("Kode karyawan sudah digunakan", StatusCodes.CONFLICT);
   }
 
   if (body.email) {
     const existing = await findByEmail(body.email);
-    if (existing) throw new AppError("Email already exists", StatusCodes.CONFLICT);
+    if (existing) throw new AppError("Email sudah digunakan", StatusCodes.CONFLICT);
   }
 
   if (body.hireDate)   body.hireDate   = new Date(body.hireDate);
@@ -135,21 +135,21 @@ const createEmployee = async (body) => {
 
 const updateEmployee = async (id, body) => {
   const employee = await findById(id);
-  if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+  if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (body.roleId && body.roleId !== employee.roleId) {
     const role = await findRoleById(body.roleId);
-    if (!role) throw new AppError("Employee role not found", StatusCodes.NOT_FOUND);
+    if (!role) throw new AppError("Role karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
   }
 
   if (body.employeeCode && body.employeeCode !== employee.employeeCode) {
     const existing = await findByEmployeeCode(body.employeeCode);
-    if (existing) throw new AppError("Employee code already exists", StatusCodes.CONFLICT);
+    if (existing) throw new AppError("Kode karyawan sudah digunakan", StatusCodes.CONFLICT);
   }
 
   if (body.email && body.email !== employee.email) {
     const existing = await findByEmail(body.email);
-    if (existing) throw new AppError("Email already exists", StatusCodes.CONFLICT);
+    if (existing) throw new AppError("Email sudah digunakan", StatusCodes.CONFLICT);
   }
 
   if (body.hireDate)   body.hireDate   = new Date(body.hireDate);
@@ -161,13 +161,13 @@ const updateEmployee = async (id, body) => {
 
 const updateEmployeeBranches = async (id, branchIds) => {
   const employee = await findById(id);
-  if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+  if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
   return updateBranches(id, branchIds);
 };
 
 const uploadEmployeeFiles = async (id, { ktpFileUrl, ktpFilePublicId, contractFileUrl, contractFilePublicId }) => {
   const employee = await findById(id);
-  if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+  if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
   const data = {};
   if (ktpFileUrl) {
     await deleteCloudinaryFile(employee.ktpFilePublicId, employee.ktpFileUrl);
@@ -184,14 +184,14 @@ const uploadEmployeeFiles = async (id, { ktpFileUrl, ktpFilePublicId, contractFi
 
 const deactivateEmployee = async (id) => {
   const employee = await findById(id);
-  if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+  if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
   if (!employee.isActive) throw new AppError("Karyawan sudah nonaktif", StatusCodes.UNPROCESSABLE_ENTITY);
   return softDelete(id);
 };
 
 const deleteEmployee = async (id) => {
   const employee = await findById(id);
-  if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+  if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
   await Promise.all([
     deleteCloudinaryFile(employee.ktpFilePublicId, employee.ktpFileUrl),
     deleteCloudinaryFile(employee.contractFilePublicId, employee.contractFileUrl),

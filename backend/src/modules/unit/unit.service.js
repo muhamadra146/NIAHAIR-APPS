@@ -25,7 +25,7 @@ const getAll = async ({ page, limit, search, isActive }) => {
 
 const getById = async (id) => {
   const unit = await findById(id);
-  if (!unit) throw new AppError("Unit not found", StatusCodes.NOT_FOUND);
+  if (!unit) throw new AppError("Satuan tidak ditemukan", StatusCodes.NOT_FOUND);
   return unit;
 };
 

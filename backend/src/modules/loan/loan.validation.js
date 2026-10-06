@@ -18,7 +18,7 @@ const updateLoanSchema = object({
 });
 
 const addRepaymentSchema = object({
-  amount:    pipe(number(), minValue(0.01, "Amount must be > 0")),
+  amount:    pipe(number(), minValue(0.01, "Nominal harus lebih dari 0")),
   paidAt:    pipe(string(), minLength(1, "Paid date is required")),
   notes:     optional(string()),
   payrollId: optional(string()),

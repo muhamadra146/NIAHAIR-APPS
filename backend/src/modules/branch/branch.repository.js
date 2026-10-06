@@ -54,7 +54,7 @@ const getAccurateBranchId = async (branchId) => {
   });
 
   if (!branch) {
-    throw new AppError(`Branch not found: ${branchId}`, StatusCodes.NOT_FOUND);
+    throw new AppError(`Cabang tidak ditemukan: ${branchId}`, StatusCodes.NOT_FOUND);
   }
 
   if (!branch.accurateBranchId) {

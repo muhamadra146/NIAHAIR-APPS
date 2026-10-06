@@ -74,7 +74,7 @@ const bulkUpsert = async ({ branchId, schedules }) => {
   if (shiftIds.length) {
     const found = await prisma.shift.findMany({ where: { id: { in: shiftIds } }, select: { id: true } });
     if (found.length !== shiftIds.length)
-      throw new AppError("One or more shiftId values are invalid", StatusCodes.BAD_REQUEST);
+      throw new AppError("Ada shift yang tidak valid", StatusCodes.BAD_REQUEST);
   }
 
   let updated = 0;

@@ -154,7 +154,7 @@ const syncPayrollToAccurate = async (payrollId) => {
   logger.info(`[payroll sync] start payrollId=${payrollId}`);
 
   const payroll = await findPayrollForSync(payrollId);
-  if (!payroll) throw new Error(`Payroll not found: ${payrollId}`);
+  if (!payroll) throw new Error(`Payroll tidak ditemukan: ${payrollId}`);
 
   // ── Idempotency guard ────────────────────────────────────────────────
   if (payroll.accurateJournalId) {

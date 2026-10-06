@@ -21,7 +21,7 @@ const listPaymentMethods = async ({ page, limit, isActive }) => {
 
 const getPaymentMethodById = async (id) => {
   const pm = await findById(id);
-  if (!pm) throw new AppError("Payment method not found", StatusCodes.NOT_FOUND);
+  if (!pm) throw new AppError("Metode pembayaran tidak ditemukan", StatusCodes.NOT_FOUND);
   return pm;
 };
 
@@ -29,7 +29,7 @@ const createPaymentMethod = async (body) => {
   const code = body.code.toUpperCase();
 
   const existing = await findByCode(code);
-  if (existing) throw new AppError("Payment method code already exists", StatusCodes.CONFLICT);
+  if (existing) throw new AppError("Kode metode pembayaran sudah digunakan", StatusCodes.CONFLICT);
 
   return create({
     code,
@@ -40,7 +40,7 @@ const createPaymentMethod = async (body) => {
 
 const updatePaymentMethod = async (id, body) => {
   const pm = await findById(id);
-  if (!pm) throw new AppError("Payment method not found", StatusCodes.NOT_FOUND);
+  if (!pm) throw new AppError("Metode pembayaran tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const data = {};
   if (body.name          !== undefined) data.name          = body.name;
@@ -51,13 +51,13 @@ const updatePaymentMethod = async (id, body) => {
     const code = body.code.toUpperCase();
     const existing = await findByCode(code);
     if (existing && existing.id !== id) {
-      throw new AppError("Payment method code already exists", StatusCodes.CONFLICT);
+      throw new AppError("Kode metode pembayaran sudah digunakan", StatusCodes.CONFLICT);
     }
     data.code = code;
   }
 
   if (Object.keys(data).length === 0) {
-    throw new AppError("No updatable fields provided", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Tidak ada data yang diubah", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
   return update(id, data);
@@ -65,7 +65,7 @@ const updatePaymentMethod = async (id, body) => {
 
 const deletePaymentMethod = async (id) => {
   const pm = await findById(id);
-  if (!pm) throw new AppError("Payment method not found", StatusCodes.NOT_FOUND);
+  if (!pm) throw new AppError("Metode pembayaran tidak ditemukan", StatusCodes.NOT_FOUND);
   return update(id, { isActive: false });
 };
 

@@ -68,7 +68,7 @@ const sanitizeKey = (s) =>
 
 const listJobs = async (categoryId, { all = false, page, limit } = {}) => {
   const cat = await prisma.commissionCategory.findUnique({ where: { id: categoryId }, select: { id: true } });
-  if (!cat) throw new AppError("Commission category not found", StatusCodes.NOT_FOUND);
+  if (!cat) throw new AppError("Kategori komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const includeInactive = all === "true" || all === true;
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -83,7 +83,7 @@ const listJobs = async (categoryId, { all = false, page, limit } = {}) => {
 
 const createJob = async (categoryId, body) => {
   const cat = await prisma.commissionCategory.findUnique({ where: { id: categoryId }, select: { id: true } });
-  if (!cat) throw new AppError("Commission category not found", StatusCodes.NOT_FOUND);
+  if (!cat) throw new AppError("Kategori komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const { name, jobKey: rawKey, sortOrder = 0, deductsFromJobId, pricePerUnit, unit, splitMode, defaultQty } = body;
   const jobKey = rawKey ? sanitizeKey(rawKey) : sanitizeKey(name);
@@ -125,7 +125,7 @@ const createJob = async (categoryId, body) => {
 const updateJob = async (categoryId, id, body) => {
   const job = await repo.findById(id);
   if (!job || job.commissionCategoryId !== categoryId) {
-    throw new AppError("Commission job not found", StatusCodes.NOT_FOUND);
+    throw new AppError("Job komisi tidak ditemukan", StatusCodes.NOT_FOUND);
   }
 
   const data = {};
@@ -164,7 +164,7 @@ const updateJob = async (categoryId, id, body) => {
 const deleteJob = async (categoryId, id) => {
   const job = await repo.findById(id);
   if (!job || job.commissionCategoryId !== categoryId) {
-    throw new AppError("Commission job not found", StatusCodes.NOT_FOUND);
+    throw new AppError("Job komisi tidak ditemukan", StatusCodes.NOT_FOUND);
   }
 
   const [ruleCount, assignCount] = await Promise.all([

@@ -18,7 +18,7 @@ const { syncInvoiceToAccurate } = require("../invoice/invoice.sync.service");
 
 const getBySession = async (sessionId, { page, limit } = {}) => {
   const session = await findSessionById(sessionId);
-  if (!session) throw new AppError("Treatment session not found", StatusCodes.NOT_FOUND);
+  if (!session) throw new AppError("Sesi treatment tidak ditemukan", StatusCodes.NOT_FOUND);
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
   const [data, total] = await Promise.all([
     findBySession(sessionId, { skip, take }),
@@ -35,7 +35,7 @@ const getBySession = async (sessionId, { page, limit } = {}) => {
  */
 const bulkSave = async (sessionId, rows) => {
   const session = await findSessionById(sessionId);
-  if (!session) throw new AppError("Treatment session not found", StatusCodes.NOT_FOUND);
+  if (!session) throw new AppError("Sesi treatment tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const results = [];
 

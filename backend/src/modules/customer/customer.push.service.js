@@ -27,7 +27,7 @@ const pushCustomerToAccurate = async (customerId) => {
   logger.info(`[accurate customer sync] start customerId=${customerId}`);
 
   const customer = await findById(customerId);
-  if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
+  if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (customer.accurateCustomerId) {
     return { alreadySynced: true, accurateCustomerId: customer.accurateCustomerId };

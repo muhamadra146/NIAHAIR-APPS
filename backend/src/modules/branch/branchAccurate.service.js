@@ -157,7 +157,7 @@ const syncBranchesFromAccurate = async () => {
 
 const mapBranchToAccurate = async (localBranchId, accurateBranchId) => {
   const branch = await prisma.branch.findUnique({ where: { id: localBranchId } });
-  if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
+  if (!branch) throw new AppError("Cabang tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // Guard: accurateBranchId must not be already used by another local branch
   const conflict = await prisma.branch.findUnique({

@@ -77,7 +77,7 @@ const listDeposits = async ({ page, limit, customerId, appointmentId, status, br
 
 const getDepositById = async (id) => {
   const deposit = await findById(id);
-  if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
+  if (!deposit) throw new AppError("Deposit tidak ditemukan", StatusCodes.NOT_FOUND);
   return withComputed(deposit);
 };
 
@@ -85,11 +85,11 @@ const getDepositById = async (id) => {
 
 const createDeposit = async ({ customerId, appointmentId, amount, notes, paidAt, branchId, createdByEmployeeId }) => {
   const customer = await findCustomerById(customerId);
-  if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
+  if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (appointmentId) {
     const appointment = await findAppointmentById(appointmentId);
-    if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+    if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
     if (appointment.customerId !== customerId) {
       throw new AppError(
         "Appointment does not belong to the specified customer",
@@ -122,7 +122,7 @@ const createDeposit = async ({ customerId, appointmentId, amount, notes, paidAt,
 
 const refundDeposit = async (id) => {
   const deposit = await findById(id);
-  if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
+  if (!deposit) throw new AppError("Deposit tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const refundable = ["PAID", "PARTIAL_USED"];
   if (!refundable.includes(deposit.status)) {
@@ -140,7 +140,7 @@ const refundDeposit = async (id) => {
 
 const cancelDeposit = async (id) => {
   const deposit = await findById(id);
-  if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
+  if (!deposit) throw new AppError("Deposit tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const cancellable = ["PENDING", "UNPAID", "PAID"];
   if (!cancellable.includes(deposit.status)) {
@@ -165,14 +165,14 @@ const cancelDeposit = async (id) => {
 
 const editDeposit = async (id, { notes, amount }) => {
   const deposit = await findById(id);
-  if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
+  if (!deposit) throw new AppError("Deposit tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const data = {};
   if (notes !== undefined) data.notes = notes ?? null;
 
   if (amount !== undefined) {
     if (deposit.status !== "UNPAID") {
-      throw new AppError("Cannot change amount after deposit has been paid", StatusCodes.UNPROCESSABLE_ENTITY);
+      throw new AppError("Nominal tidak bisa diubah setelah deposit dibayar", StatusCodes.UNPROCESSABLE_ENTITY);
     }
     if (D(amount).lte(D("0"))) {
       throw new AppError("Amount harus lebih dari 0", StatusCodes.UNPROCESSABLE_ENTITY);
@@ -194,7 +194,7 @@ const editDeposit = async (id, { notes, amount }) => {
 
 const deleteDeposit = async (id) => {
   const deposit = await findById(id);
-  if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
+  if (!deposit) throw new AppError("Deposit tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (deposit.invoiceDeposits?.length > 0) {
     throw new AppError(
@@ -231,10 +231,10 @@ const deleteDeposit = async (id) => {
 
 const linkAppointmentToDeposit = async (id, appointmentId) => {
   const deposit = await findById(id);
-  if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
+  if (!deposit) throw new AppError("Deposit tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const appointment = await findAppointmentById(appointmentId);
-  if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+  if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (appointment.customerId !== deposit.customerId) {
     throw new AppError(
@@ -272,7 +272,7 @@ const getDepositSummary = async ({ branchId } = {}) => {
 
 const resyncDeposit = async (id) => {
   const deposit = await findById(id);
-  if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
+  if (!deposit) throw new AppError("Deposit tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (deposit.accurateDepositId) {
     await updateDepositInAccurate(id);

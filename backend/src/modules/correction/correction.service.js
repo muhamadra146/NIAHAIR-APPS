@@ -25,13 +25,13 @@ const getMy = async ({ employeeId, page, limit, status }) => {
 
 const getById = async (id) => {
   const cr = await repo.findById(id);
-  if (!cr) throw new AppError("Correction request not found", StatusCodes.NOT_FOUND);
+  if (!cr) throw new AppError("Pengajuan koreksi tidak ditemukan", StatusCodes.NOT_FOUND);
   return cr;
 };
 
 const create = async (employeeId, branchId, { staffScheduleId, attendanceId, requestedCheckIn, requestedCheckOut, reason, branchId: bodyBranchId }) => {
   const resolvedBranchId = branchId ?? bodyBranchId;
-  if (!employeeId)       throw new AppError("Employee not found for this user", StatusCodes.BAD_REQUEST);
+  if (!employeeId)       throw new AppError("Data karyawan untuk user ini tidak ditemukan", StatusCodes.BAD_REQUEST);
   if (!resolvedBranchId) throw new AppError("branchId is required", StatusCodes.BAD_REQUEST);
   if (!staffScheduleId)  throw new AppError("staffScheduleId is required", StatusCodes.BAD_REQUEST);
   if (!reason)           throw new AppError("reason is required", StatusCodes.BAD_REQUEST);
@@ -52,10 +52,10 @@ const create = async (employeeId, branchId, { staffScheduleId, attendanceId, req
 
 const review = async (id, reviewerId, { status, reviewNote }) => {
   const cr = await repo.findById(id);
-  if (!cr) throw new AppError("Correction request not found", StatusCodes.NOT_FOUND);
-  if (cr.status !== "PENDING") throw new AppError("Only PENDING requests can be reviewed", StatusCodes.BAD_REQUEST);
+  if (!cr) throw new AppError("Pengajuan koreksi tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (cr.status !== "PENDING") throw new AppError("Hanya pengajuan berstatus PENDING yang bisa diproses", StatusCodes.BAD_REQUEST);
   if (!["APPROVED", "REJECTED"].includes(status))
-    throw new AppError("status must be APPROVED or REJECTED", StatusCodes.BAD_REQUEST);
+    throw new AppError("Status harus APPROVED atau REJECTED", StatusCodes.BAD_REQUEST);
 
   const updated = await repo.update(id, {
     status,

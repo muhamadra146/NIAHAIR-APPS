@@ -23,7 +23,7 @@ const createSyncJob = async ({ entityType, entityId, direction, payload }) => {
 
 const retrySync = async (id) => {
   const job = await findById(id);
-  if (!job) throw new AppError("Sync job not found", StatusCodes.NOT_FOUND);
+  if (!job) throw new AppError("Antrian sync tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (job.status === "PENDING" || job.status === "PROCESSING") {
     throw new AppError(

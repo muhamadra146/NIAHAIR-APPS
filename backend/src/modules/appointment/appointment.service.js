@@ -103,7 +103,7 @@ const listAppointments = async ({ page, limit, customerId, branchId, status, sta
 
 const getAppointmentById = async (id) => {
   const appointment = await findById(id);
-  if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+  if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
   return appointment;
 };
 
@@ -139,10 +139,10 @@ const createAppointment = async (body, userId, createdByEmployeeId = null) => {
   } = body;
 
   const customer = await findCustomerById(customerId);
-  if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
+  if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const branch = await findBranchById(branchId);
-  if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
+  if (!branch) throw new AppError("Cabang tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const bookingNo = await buildBookingNo();
 
@@ -189,10 +189,10 @@ const createAppointment = async (body, userId, createdByEmployeeId = null) => {
 
 const updateAppointmentById = async (id, body, userId) => {
   const appointment = await findById(id);
-  if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+  if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (appointment.status === "CANCELLED") {
-    throw new AppError("Cannot modify a cancelled appointment", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Booking yang sudah dibatalkan tidak bisa diubah", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
   const { visitDate, startTime, endTime, type, homeServiceAddress, notes, estimatedTotal, staffsBySlot } = body;
@@ -227,7 +227,7 @@ const updateAppointmentById = async (id, body, userId) => {
 
 const changeAppointmentStatus = async (id, body, userId) => {
   const appointment = await findById(id);
-  if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+  if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const { status: newStatus, notes, cancelReason } = body;
   const currentStatus = appointment.status;
@@ -289,7 +289,7 @@ const changeAppointmentStatus = async (id, body, userId) => {
 
 const rescheduleAppointment = async (id, body, userId) => {
   const appointment = await findById(id);
-  if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+  if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (["COMPLETED", "CANCELLED"].includes(appointment.status)) {
     throw new AppError(
@@ -311,7 +311,7 @@ const rescheduleAppointment = async (id, body, userId) => {
 
 const updateRescheduleById = async (appointmentId, historyId, body) => {
   const appointment = await findById(appointmentId);
-  if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+  if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (["COMPLETED", "CANCELLED"].includes(appointment.status)) {
     throw new AppError(
@@ -322,7 +322,7 @@ const updateRescheduleById = async (appointmentId, historyId, body) => {
 
   // Pastikan history ada dan milik appointment ini
   const history = (appointment.rescheduleHistories ?? []).find((h) => h.id === historyId);
-  if (!history) throw new AppError("Reschedule history not found", StatusCodes.NOT_FOUND);
+  if (!history) throw new AppError("Riwayat reschedule tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const { visitDate, startTime, endTime, reason } = body;
   const newVisitDate = new Date(visitDate);
@@ -341,7 +341,7 @@ const updateRescheduleById = async (appointmentId, historyId, body) => {
 
 const deleteAppointmentById = async (id) => {
   const appointment = await findById(id);
-  if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+  if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // Hapus foto dari Cloudinary sebelum delete DB (best-effort, tidak membatalkan delete jika gagal)
   const photos = await prisma.appointmentPhoto.findMany({

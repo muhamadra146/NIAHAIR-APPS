@@ -25,7 +25,7 @@ const calcMaxWork = (treatmentItem) =>
 
 const getByItem = async (treatmentItemId, { page, limit } = {}) => {
   const item = await findTreatmentItemById(treatmentItemId);
-  if (!item) throw new AppError("Treatment item not found", StatusCodes.NOT_FOUND);
+  if (!item) throw new AppError("Item treatment tidak ditemukan", StatusCodes.NOT_FOUND);
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
   const [data, total] = await Promise.all([
     findByItem(treatmentItemId, { skip, take }),
@@ -36,7 +36,7 @@ const getByItem = async (treatmentItemId, { page, limit } = {}) => {
 
 const getById = async (id) => {
   const assignment = await findById(id);
-  if (!assignment) throw new AppError("Assignment not found", StatusCodes.NOT_FOUND);
+  if (!assignment) throw new AppError("Penugasan tidak ditemukan", StatusCodes.NOT_FOUND);
   return assignment;
 };
 
@@ -45,13 +45,13 @@ const createAssignment = async (treatmentItemId, body) => {
 
   // 1 — treatment item must exist
   const treatmentItem = await findTreatmentItemById(treatmentItemId);
-  if (!treatmentItem) throw new AppError("Treatment item not found", StatusCodes.NOT_FOUND);
+  if (!treatmentItem) throw new AppError("Item treatment tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // 2 — employee must exist and be active
   const employee = await findEmployeeById(employeeId);
-  if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+  if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
   if (!employee.isActive) {
-    throw new AppError("Employee is not active", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Karyawan tidak aktif", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
   const isService = treatmentItem.item?.itemType === "SERVICE";
@@ -104,7 +104,7 @@ const createAssignment = async (treatmentItemId, body) => {
 
 const updateAssignment = async (id, body) => {
   const assignment = await findById(id);
-  if (!assignment) throw new AppError("Assignment not found", StatusCodes.NOT_FOUND);
+  if (!assignment) throw new AppError("Penugasan tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const { slotKey, workQty, notes } = body;
 
@@ -135,7 +135,7 @@ const updateAssignment = async (id, body) => {
 
 const deleteAssignment = async (id) => {
   const assignment = await findById(id);
-  if (!assignment) throw new AppError("Assignment not found", StatusCodes.NOT_FOUND);
+  if (!assignment) throw new AppError("Penugasan tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const isService       = assignment.treatmentItem?.item?.itemType === "SERVICE";
   const treatmentItemId = assignment.treatmentItem?.id;

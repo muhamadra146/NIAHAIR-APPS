@@ -184,13 +184,13 @@ const getMyCommissionSummary = async (employeeId, { yearMonth } = {}) => {
 };
 const getCommissionById = async (id) => {
   const commission = await findById(id);
-  if (!commission) throw new AppError("Commission not found", StatusCodes.NOT_FOUND);
+  if (!commission) throw new AppError("Komisi tidak ditemukan", StatusCodes.NOT_FOUND);
   return commission;
 };
 
 const approveCommission = async (id, userId) => {
   const commission = await findById(id);
-  if (!commission) throw new AppError("Commission not found", StatusCodes.NOT_FOUND);
+  if (!commission) throw new AppError("Komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (commission.status !== "PENDING") {
     throw new AppError(
@@ -204,7 +204,7 @@ const approveCommission = async (id, userId) => {
 
 const markCommissionPaid = async (id, userId) => {
   const commission = await findById(id);
-  if (!commission) throw new AppError("Commission not found", StatusCodes.NOT_FOUND);
+  if (!commission) throw new AppError("Komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (commission.status !== "APPROVED") {
     throw new AppError(
@@ -542,7 +542,7 @@ async function _buildRows(invoice, tx) {
 const generateCommission = (invoiceId) =>
   withTransaction(async (tx) => {
     const invoice = await findInvoiceForGeneration(invoiceId, tx);
-    if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+    if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
 
     if (invoice.status !== "PAID") {
       throw new AppError(
@@ -578,7 +578,7 @@ const generateCommission = (invoiceId) =>
 const regenerateCommission = (invoiceId) =>
   withTransaction(async (tx) => {
     const invoice = await findInvoiceForGeneration(invoiceId, tx);
-    if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+    if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
 
     // Ambil semua komisi existing di dalam tx — hindari race condition dengan deletePendingByInvoice
     const allExisting = await findAllByInvoice(invoiceId, tx);
@@ -637,7 +637,7 @@ const regenerateCommission = (invoiceId) =>
 
 const overrideCommission = async (id, { commissionAmount, userId, notes }) => {
   const commission = await findById(id);
-  if (!commission) throw new AppError("Commission not found", StatusCodes.NOT_FOUND);
+  if (!commission) throw new AppError("Komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (!canOverride(commission.status)) {
     throw new AppError(

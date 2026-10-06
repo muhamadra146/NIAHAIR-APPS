@@ -33,7 +33,7 @@ const assign = async ({ employeeId, leaveTypeId, year, totalDays }) => {
     throw new AppError("employeeId, leaveTypeId, year, totalDays are required", StatusCodes.BAD_REQUEST);
 
   const lt = await leaveTypeRepo.findById(leaveTypeId);
-  if (!lt) throw new AppError("Leave type not found", StatusCodes.NOT_FOUND);
+  if (!lt) throw new AppError("Jenis cuti tidak ditemukan", StatusCodes.NOT_FOUND);
 
   return repo.upsert(employeeId, leaveTypeId, Number(year), Number(totalDays));
 };

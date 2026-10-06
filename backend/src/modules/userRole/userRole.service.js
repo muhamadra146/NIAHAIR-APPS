@@ -17,7 +17,7 @@ const getAll = async ({ page, limit, isActive }) => {
 
 const getById = async (id) => {
   const role = await findById(id);
-  if (!role) throw new AppError("User role not found", StatusCodes.NOT_FOUND);
+  if (!role) throw new AppError("Role user tidak ditemukan", StatusCodes.NOT_FOUND);
   return role;
 };
 
@@ -25,14 +25,14 @@ const createUserRole = async ({ code, name }) => {
   const upperCode = code.toUpperCase();
 
   const existing = await findByCode(upperCode);
-  if (existing) throw new AppError("User role code already exists", StatusCodes.CONFLICT);
+  if (existing) throw new AppError("Kode role user sudah digunakan", StatusCodes.CONFLICT);
 
   return create({ code: upperCode, name, isActive: true });
 };
 
 const updateUserRole = async (id, body) => {
   const role = await findById(id);
-  if (!role) throw new AppError("User role not found", StatusCodes.NOT_FOUND);
+  if (!role) throw new AppError("Role user tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // Prevent code mutation — only name and isActive are editable
   const { code: _ignored, ...safeBody } = body;
@@ -41,9 +41,9 @@ const updateUserRole = async (id, body) => {
 
 const deactivateUserRole = async (id) => {
   const role = await findById(id);
-  if (!role) throw new AppError("User role not found", StatusCodes.NOT_FOUND);
+  if (!role) throw new AppError("Role user tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  if (!role.isActive) throw new AppError("User role is already inactive", StatusCodes.UNPROCESSABLE_ENTITY);
+  if (!role.isActive) throw new AppError("Role user sudah nonaktif", StatusCodes.UNPROCESSABLE_ENTITY);
 
   return deactivate(id);
 };

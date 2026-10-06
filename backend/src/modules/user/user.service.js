@@ -44,7 +44,7 @@ const getById = async (id, requestingUserId, requestingRoleCode) => {
     throw new AppError("Forbidden", StatusCodes.FORBIDDEN);
   }
   const user = await findById(id);
-  if (!user) throw new AppError("User not found", StatusCodes.NOT_FOUND);
+  if (!user) throw new AppError("User tidak ditemukan", StatusCodes.NOT_FOUND);
   return user;
 };
 
@@ -55,16 +55,16 @@ const createUser = async ({ username, email, password, userRoleId, employeeId })
   if (existingUsername) throw new AppError("Username sudah digunakan", StatusCodes.CONFLICT);
 
   const existing = await findByEmail(email);
-  if (existing) throw new AppError("Email already exists", StatusCodes.CONFLICT);
+  if (existing) throw new AppError("Email sudah digunakan", StatusCodes.CONFLICT);
 
   const role = await findUserRoleById(userRoleId);
-  if (!role) throw new AppError("User role not found", StatusCodes.NOT_FOUND);
+  if (!role) throw new AppError("Role user tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const employee = await findEmployeeById(employeeId);
-  if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+  if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const taken = await findByEmployeeId(employeeId);
-  if (taken) throw new AppError("Employee already has a user account", StatusCodes.CONFLICT);
+  if (taken) throw new AppError("Karyawan ini sudah punya akun user", StatusCodes.CONFLICT);
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   return create({ username, email, passwordHash, userRoleId, employeeId });
@@ -74,7 +74,7 @@ const createUser = async ({ username, email, password, userRoleId, employeeId })
 
 const updateUser = async (id, body) => {
   const user = await findById(id);
-  if (!user) throw new AppError("User not found", StatusCodes.NOT_FOUND);
+  if (!user) throw new AppError("User tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (body.username !== undefined && body.username !== user.username) {
     const taken = await findByUsername(body.username);
@@ -83,16 +83,16 @@ const updateUser = async (id, body) => {
 
   if (body.roleId) {
     const role = await findUserRoleById(body.roleId);
-    if (!role) throw new AppError("User role not found", StatusCodes.NOT_FOUND);
+    if (!role) throw new AppError("Role user tidak ditemukan", StatusCodes.NOT_FOUND);
   }
 
   if (body.employeeId !== undefined && body.employeeId !== user.employeeId) {
     if (body.employeeId !== null) {
       const employee = await findEmployeeById(body.employeeId);
-      if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+      if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
 
       const taken = await findByEmployeeId(body.employeeId);
-      if (taken) throw new AppError("Employee already has a user account", StatusCodes.CONFLICT);
+      if (taken) throw new AppError("Karyawan ini sudah punya akun user", StatusCodes.CONFLICT);
     }
   }
 
@@ -103,7 +103,7 @@ const updateUser = async (id, body) => {
 
 const resetPassword = async (id, { password }) => {
   const user = await findById(id);
-  if (!user) throw new AppError("User not found", StatusCodes.NOT_FOUND);
+  if (!user) throw new AppError("User tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   await updatePassword(id, passwordHash);
@@ -114,7 +114,7 @@ const resetPassword = async (id, { password }) => {
 
 const changeOwnPassword = async (id, { currentPassword, newPassword }) => {
   const user = await findByIdWithPassword(id);
-  if (!user) throw new AppError("User not found", StatusCodes.NOT_FOUND);
+  if (!user) throw new AppError("User tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const match = await bcrypt.compare(currentPassword, user.passwordHash);
   if (!match) throw new AppError("Password lama tidak sesuai", StatusCodes.UNAUTHORIZED);
@@ -128,9 +128,9 @@ const changeOwnPassword = async (id, { currentPassword, newPassword }) => {
 
 const deactivateUser = async (id) => {
   const user = await findById(id);
-  if (!user) throw new AppError("User not found", StatusCodes.NOT_FOUND);
+  if (!user) throw new AppError("User tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  if (!user.isActive) throw new AppError("User is already inactive", StatusCodes.UNPROCESSABLE_ENTITY);
+  if (!user.isActive) throw new AppError("User sudah nonaktif", StatusCodes.UNPROCESSABLE_ENTITY);
 
   return deactivate(id);
 };
@@ -143,7 +143,7 @@ const deleteUser = async (id, requestingUserId) => {
   }
 
   const user = await findById(id);
-  if (!user) throw new AppError("User not found", StatusCodes.NOT_FOUND);
+  if (!user) throw new AppError("User tidak ditemukan", StatusCodes.NOT_FOUND);
 
   await deleteById(id);
   return { id, message: "User berhasil dihapus" };

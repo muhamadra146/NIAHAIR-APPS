@@ -19,7 +19,7 @@ const getByEmployee = async (employeeId) => repo.findByEmployee(employeeId);
 
 const getById = async (id) => {
   const loan = await repo.findById(id);
-  if (!loan) throw new AppError("Loan not found", StatusCodes.NOT_FOUND);
+  if (!loan) throw new AppError("Kasbon tidak ditemukan", StatusCodes.NOT_FOUND);
   return loan;
 };
 
@@ -50,9 +50,9 @@ const createLoan = async (body) => {
 
 const updateLoan = async (id, body) => {
   const existing = await repo.findById(id);
-  if (!existing) throw new AppError("Loan not found", StatusCodes.NOT_FOUND);
+  if (!existing) throw new AppError("Kasbon tidak ditemukan", StatusCodes.NOT_FOUND);
   if (existing.status !== "ACTIVE")
-    throw new AppError("Only ACTIVE loans can be updated", StatusCodes.BAD_REQUEST);
+    throw new AppError("Hanya kasbon aktif yang bisa diubah", StatusCodes.BAD_REQUEST);
 
   const data = {};
   if (body.monthlyDeduction !== undefined) data.monthlyDeduction = body.monthlyDeduction;
@@ -66,29 +66,29 @@ const updateLoan = async (id, body) => {
 
 const cancelLoan = async (id) => {
   const existing = await repo.findById(id);
-  if (!existing) throw new AppError("Loan not found", StatusCodes.NOT_FOUND);
+  if (!existing) throw new AppError("Kasbon tidak ditemukan", StatusCodes.NOT_FOUND);
   if (existing.status !== "ACTIVE")
-    throw new AppError("Only ACTIVE loans can be cancelled", StatusCodes.BAD_REQUEST);
+    throw new AppError("Hanya kasbon aktif yang bisa dibatalkan", StatusCodes.BAD_REQUEST);
   return repo.update(id, { status: "CANCELLED" });
 };
 
 const addRepayment = async (loanId, body) => {
   const loan = await repo.findById(loanId);
-  if (!loan) throw new AppError("Loan not found", StatusCodes.NOT_FOUND);
+  if (!loan) throw new AppError("Kasbon tidak ditemukan", StatusCodes.NOT_FOUND);
   if (loan.status !== "ACTIVE")
-    throw new AppError("Loan is not active", StatusCodes.BAD_REQUEST);
+    throw new AppError("Kasbon tidak aktif", StatusCodes.BAD_REQUEST);
 
   const amount = Number(body.amount);
-  if (amount <= 0) throw new AppError("Amount must be > 0", StatusCodes.BAD_REQUEST);
+  if (amount <= 0) throw new AppError("Nominal harus lebih dari 0", StatusCodes.BAD_REQUEST);
   if (amount > Number(loan.remainingAmount))
-    throw new AppError("Amount exceeds remaining balance", StatusCodes.BAD_REQUEST);
+    throw new AppError("Nominal melebihi sisa kasbon", StatusCodes.BAD_REQUEST);
 
   return repo.addRepayment(loanId, amount, new Date(body.paidAt), body.notes, body.payrollId);
 };
 
 const getRepayments = async (loanId) => {
   const loan = await repo.findById(loanId);
-  if (!loan) throw new AppError("Loan not found", StatusCodes.NOT_FOUND);
+  if (!loan) throw new AppError("Kasbon tidak ditemukan", StatusCodes.NOT_FOUND);
   return repo.findRepaymentsByLoan(loanId);
 };
 
@@ -102,7 +102,7 @@ const getMyLoans = async (employeeId) => {
 const getMyLoanById = async (id, employeeId) => {
   if (!employeeId) throw new AppError("User tidak memiliki data karyawan", StatusCodes.FORBIDDEN);
   const loan = await repo.findById(id);
-  if (!loan) throw new AppError("Loan not found", StatusCodes.NOT_FOUND);
+  if (!loan) throw new AppError("Kasbon tidak ditemukan", StatusCodes.NOT_FOUND);
   if (loan.employeeId !== employeeId)
     throw new AppError("Akses ditolak", StatusCodes.FORBIDDEN);
   return loan;
@@ -110,7 +110,7 @@ const getMyLoanById = async (id, employeeId) => {
 
 const deleteLoan = async (id) => {
   const loan = await repo.findById(id);
-  if (!loan) throw new AppError("Loan not found", StatusCodes.NOT_FOUND);
+  if (!loan) throw new AppError("Kasbon tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // Bug fix #3: cek repayment sebelum delete agar tidak crash FK constraint
   if (loan.repayments && loan.repayments.length > 0) {

@@ -52,19 +52,19 @@ const getAll = async ({ page, limit, search, employeeId, commissionCategoryId, i
 
 const getById = async (id) => {
   const rule = await findById(id);
-  if (!rule) throw new AppError("Commission rule not found", StatusCodes.NOT_FOUND);
+  if (!rule) throw new AppError("Aturan komisi tidak ditemukan", StatusCodes.NOT_FOUND);
   return rule;
 };
 
 const createCommissionRule = async (body) => {
   const employee = await findEmployeeById(body.employeeId);
-  if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+  if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const category = await findCommissionCategoryById(body.commissionCategoryId);
-  if (!category) throw new AppError("Commission category not found", StatusCodes.NOT_FOUND);
+  if (!category) throw new AppError("Kategori komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (body.commissionType === "PERCENTAGE" && body.commissionValue > 100) {
-    throw new AppError("Percentage commission cannot exceed 100", StatusCodes.BAD_REQUEST);
+    throw new AppError("Komisi persen tidak boleh lebih dari 100", StatusCodes.BAD_REQUEST);
   }
 
   const slotKey        = body.slotKey        ?? null;
@@ -94,22 +94,22 @@ const createCommissionRule = async (body) => {
 
 const updateCommissionRule = async (id, body) => {
   const rule = await findById(id);
-  if (!rule) throw new AppError("Commission rule not found", StatusCodes.NOT_FOUND);
+  if (!rule) throw new AppError("Aturan komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (body.employeeId && body.employeeId !== rule.employeeId) {
     const employee = await findEmployeeById(body.employeeId);
-    if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+    if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
   }
 
   if (body.commissionCategoryId && body.commissionCategoryId !== rule.commissionCategoryId) {
     const category = await findCommissionCategoryById(body.commissionCategoryId);
-    if (!category) throw new AppError("Commission category not found", StatusCodes.NOT_FOUND);
+    if (!category) throw new AppError("Kategori komisi tidak ditemukan", StatusCodes.NOT_FOUND);
   }
 
   if (body.commissionValue !== undefined) {
     const type = body.commissionType || rule.commissionType;
     if (type === "PERCENTAGE" && body.commissionValue > 100) {
-      throw new AppError("Percentage commission cannot exceed 100", StatusCodes.BAD_REQUEST);
+      throw new AppError("Komisi persen tidak boleh lebih dari 100", StatusCodes.BAD_REQUEST);
     }
   }
 
@@ -122,7 +122,7 @@ const updateCommissionRule = async (id, body) => {
 
 const deleteCommissionRule = async (id) => {
   const rule = await findById(id);
-  if (!rule) throw new AppError("Commission rule not found", StatusCodes.NOT_FOUND);
+  if (!rule) throw new AppError("Aturan komisi tidak ditemukan", StatusCodes.NOT_FOUND);
   await deleteById(id);
 };
 

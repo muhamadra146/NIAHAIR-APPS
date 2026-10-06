@@ -13,7 +13,7 @@ const syncDepositToAccurate = async (depositId) => {
 
   const deposit = await findDepositForSync(depositId);
 
-  if (!deposit) throw new Error(`Deposit not found: ${depositId}`);
+  if (!deposit) throw new Error(`Deposit tidak ditemukan: ${depositId}`);
 
   // Idempotency — skip if already synced to Accurate
   if (deposit.accurateDepositId) {

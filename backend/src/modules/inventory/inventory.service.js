@@ -116,7 +116,7 @@ const generateSaleMovement = async (invoiceId, createdBy) => {
 
   return prisma.$transaction(async (tx) => {
     const invoice = await findInvoiceForSaleMovement(invoiceId);
-    if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+    if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
 
     // Warehouse hanya dibutuhkan untuk INVENTORY items — resolve sekali saat pertama kali diperlukan
     let warehouse = null;
@@ -222,7 +222,7 @@ const generateServiceMovement = async (treatmentSessionId, createdByEmployeeId) 
 
   return prisma.$transaction(async (tx) => {
     const session = await findTreatmentSessionForServiceMovement(treatmentSessionId);
-    if (!session) throw new AppError("Treatment session not found", StatusCodes.NOT_FOUND);
+    if (!session) throw new AppError("Sesi treatment tidak ditemukan", StatusCodes.NOT_FOUND);
 
     const warehouse = await findWarehouseByBranchId(session.branchId);
     if (!warehouse) {

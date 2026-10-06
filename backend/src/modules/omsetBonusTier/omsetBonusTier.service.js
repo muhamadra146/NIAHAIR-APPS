@@ -7,14 +7,14 @@ const repo            = require("./omsetBonusTier.repository");
 const getByEmployee = async (employeeId) => {
   // Validate employee exists
   const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } });
-  if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+  if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
   return repo.findByEmployee(employeeId);
 };
 
 // ── Create tier ──────────────────────────────────────────────────────────────
 const create = async (employeeId, body) => {
   const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } });
-  if (!employee) throw new AppError("Employee not found", StatusCodes.NOT_FOUND);
+  if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (Number(body.minimumOmset) < 0)
     throw new AppError("minimumOmset harus >= 0", StatusCodes.BAD_REQUEST);
@@ -32,7 +32,7 @@ const create = async (employeeId, body) => {
 // ── Update tier ──────────────────────────────────────────────────────────────
 const update = async (id, body) => {
   const tier = await repo.findById(id);
-  if (!tier) throw new AppError("Omset bonus tier not found", StatusCodes.NOT_FOUND);
+  if (!tier) throw new AppError("Tingkat bonus omset tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const data = {};
   if (body.minimumOmset !== undefined) {
@@ -53,7 +53,7 @@ const update = async (id, body) => {
 // ── Delete tier ──────────────────────────────────────────────────────────────
 const remove = async (id) => {
   const tier = await repo.findById(id);
-  if (!tier) throw new AppError("Omset bonus tier not found", StatusCodes.NOT_FOUND);
+  if (!tier) throw new AppError("Tingkat bonus omset tidak ditemukan", StatusCodes.NOT_FOUND);
   await repo.remove(id);
 };
 

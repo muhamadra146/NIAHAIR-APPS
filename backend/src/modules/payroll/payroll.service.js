@@ -216,7 +216,7 @@ const getAll = async ({ page = 1, limit = 20, employeeId, branchId, status, year
 
 const getById = async (id) => {
   const payroll = await repo.findById(id);
-  if (!payroll) throw new AppError("Payroll not found", StatusCodes.NOT_FOUND);
+  if (!payroll) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
   return payroll;
 };
 
@@ -349,9 +349,9 @@ const generate = async ({ employeeId, branchId, yearMonth, payDay, periodStart: 
 
 const recalculate = async (id, userId) => {
   const existing = await repo.findById(id);
-  if (!existing) throw new AppError("Payroll not found", StatusCodes.NOT_FOUND);
+  if (!existing) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
   if (existing.status !== "DRAFT")
-    throw new AppError("Only DRAFT payrolls can be recalculated", StatusCodes.BAD_REQUEST);
+    throw new AppError("Hanya payroll DRAFT yang bisa dihitung ulang", StatusCodes.BAD_REQUEST);
 
   const { salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset } =
     await repo.getGenerationData(existing.employeeId, existing.branchId, existing.periodStart, existing.periodEnd, id);
@@ -388,25 +388,25 @@ const recalculate = async (id, userId) => {
 
 const submitForApproval = async (id, userId) => {
   const existing = await repo.findById(id);
-  if (!existing) throw new AppError("Payroll not found", StatusCodes.NOT_FOUND);
+  if (!existing) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
   if (existing.status !== "DRAFT")
-    throw new AppError("Only DRAFT payrolls can be submitted", StatusCodes.BAD_REQUEST);
+    throw new AppError("Hanya payroll DRAFT yang bisa diajukan", StatusCodes.BAD_REQUEST);
   return repo.update(id, { status: "PENDING_APPROVAL", submittedBy: userId ?? null, submittedAt: new Date() });
 };
 
 const approve = async (id, approvedBy) => {
   const existing = await repo.findById(id);
-  if (!existing) throw new AppError("Payroll not found", StatusCodes.NOT_FOUND);
+  if (!existing) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
   if (existing.status !== "PENDING_APPROVAL")
-    throw new AppError("Payroll is not pending approval", StatusCodes.BAD_REQUEST);
+    throw new AppError("Payroll tidak sedang menunggu persetujuan", StatusCodes.BAD_REQUEST);
   return repo.update(id, { status: "APPROVED", approvedBy, approvedAt: new Date() });
 };
 
 const markAsPaid = async (id, paidBy) => {
   const existing = await repo.findById(id);
-  if (!existing) throw new AppError("Payroll not found", StatusCodes.NOT_FOUND);
+  if (!existing) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
   if (existing.status !== "APPROVED")
-    throw new AppError("Only APPROVED payrolls can be marked as paid", StatusCodes.BAD_REQUEST);
+    throw new AppError("Hanya payroll APPROVED yang bisa ditandai dibayar", StatusCodes.BAD_REQUEST);
 
   // Bug fix #4: kumpulkan loan yang baru PAID_OFF di dalam tx, sync setelah tx
 
@@ -455,14 +455,14 @@ const markAsPaid = async (id, paidBy) => {
 
 const updateNotes = async (id, notes) => {
   const existing = await repo.findById(id);
-  if (!existing) throw new AppError("Payroll not found", StatusCodes.NOT_FOUND);
+  if (!existing) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
   return repo.update(id, { notes });
 };
 
 // ── Employee self-service ─────────────────────────────────────────────────────
 
 const getMy = async ({ employeeId, page = 1, limit = 20, year }) => {
-  if (!employeeId) throw new AppError("Employee not found for this user", StatusCodes.BAD_REQUEST);
+  if (!employeeId) throw new AppError("Data karyawan untuk user ini tidak ditemukan", StatusCodes.BAD_REQUEST);
   const { skip, take } = paginate(page, limit);
   const where = { employeeId, status: { in: ["APPROVED", "PAID"] } };
 
@@ -594,7 +594,7 @@ const bulkGenerate = async ({ branchId, payDay, yearMonth, notes }, createdBy) =
 
 const deletePayroll = async (id) => {
   const payroll = await repo.findById(id);
-  if (!payroll) throw new AppError("Payroll not found", StatusCodes.NOT_FOUND);
+  if (!payroll) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
 
   await prisma.$transaction(async (tx) => {
     // Jika PAID: revert komisi → APPROVED dan balik kasbon

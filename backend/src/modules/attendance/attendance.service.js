@@ -158,7 +158,7 @@ const checkIn = async ({ staffScheduleId, latitude, longitude, photoUrl, notes }
     where:   { id: staffScheduleId },
     include: { shift: true },
   });
-  if (!schedule) throw new AppError("Schedule not found", StatusCodes.NOT_FOUND);
+  if (!schedule) throw new AppError("Jadwal tidak ditemukan", StatusCodes.NOT_FOUND);
 
   await checkGeofence(schedule.branchId, schedule.employeeId, latitude, longitude);
 
@@ -231,7 +231,7 @@ const manualSet = async ({ staffScheduleId, status, checkInAt, checkOutAt, notes
     where:   { id: staffScheduleId },
     include: { shift: true },
   });
-  if (!schedule) throw new AppError("Schedule not found", StatusCodes.NOT_FOUND);
+  if (!schedule) throw new AppError("Jadwal tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const checkIn  = checkInAt  ? new Date(checkInAt)  : null;
   const checkOut = checkOutAt ? new Date(checkOutAt) : null;
@@ -332,7 +332,7 @@ const getReport = async ({ branchId, startDate, endDate, employeeId }) => {
 
   const start = toDateOnly(startDate);
   const end   = toDateOnly(endDate);
-  if (end < start) throw new AppError("endDate must be after startDate", StatusCodes.BAD_REQUEST);
+  if (end < start) throw new AppError("Tanggal selesai harus setelah tanggal mulai", StatusCodes.BAD_REQUEST);
 
   const schedules = await repo.getReportData({ branchId, startDate: start, endDate: end, employeeId });
 

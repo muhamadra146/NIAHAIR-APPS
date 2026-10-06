@@ -22,14 +22,14 @@ const listPhotos = async (appointmentId, { page, limit } = {}) => {
 
 const addPhoto = async ({ appointmentId, url, publicId, type = "REFERENCE", notes }) => {
   const appt = await findAppointmentById(appointmentId);
-  if (!appt) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+  if (!appt) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
 
   return create({ appointmentId, url, publicId, type, notes: notes ?? null });
 };
 
 const deletePhoto = async (id) => {
   const photo = await findById(id);
-  if (!photo) throw new AppError("Photo not found", StatusCodes.NOT_FOUND);
+  if (!photo) throw new AppError("Foto tidak ditemukan", StatusCodes.NOT_FOUND);
 
   await cloudinary.uploader.destroy(photo.publicId);
   return remove(photo.id);

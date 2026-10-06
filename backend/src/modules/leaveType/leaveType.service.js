@@ -15,7 +15,7 @@ const getAll = async ({ page, limit, includeInactive } = {}) => {
 
 const getById = async (id) => {
   const t = await repo.findById(id);
-  if (!t) throw new AppError("Leave type not found", StatusCodes.NOT_FOUND);
+  if (!t) throw new AppError("Jenis cuti tidak ditemukan", StatusCodes.NOT_FOUND);
   return t;
 };
 
@@ -23,7 +23,7 @@ const VALID_QUOTA_TYPES = ["ANNUAL", "EVENT_BASED", "LIFETIME"];
 
 const create = async ({ code, name, quotaType = "ANNUAL", maxDaysPerYear = 12, isPaid = true, unusedDayPayoutRate = 0 }) => {
   const existing = await repo.findByCode(code.toUpperCase());
-  if (existing) throw new AppError("Leave type code already exists", StatusCodes.CONFLICT);
+  if (existing) throw new AppError("Kode jenis cuti sudah digunakan", StatusCodes.CONFLICT);
   if (!VALID_QUOTA_TYPES.includes(quotaType))
     throw new AppError("quotaType tidak valid", StatusCodes.BAD_REQUEST);
   return repo.create({ code: code.toUpperCase(), name, quotaType, maxDaysPerYear, isPaid, unusedDayPayoutRate });

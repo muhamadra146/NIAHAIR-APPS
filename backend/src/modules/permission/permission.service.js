@@ -21,7 +21,7 @@ const getAll = async ({ page = 1, limit = 20, employeeId, branchId, status }) =>
 };
 
 const getMy = async ({ employeeId, page = 1, limit = 20, status }) => {
-  if (!employeeId) throw new AppError("Employee not found", StatusCodes.BAD_REQUEST);
+  if (!employeeId) throw new AppError("Karyawan tidak ditemukan", StatusCodes.BAD_REQUEST);
   const { skip, take } = paginate(page, limit);
   const where = { employeeId };
   if (status) where.status = status;
@@ -36,7 +36,7 @@ const getById = async (id) => {
 };
 
 const create = async (employeeId, branchId, { type, date, reason, notes, estimatedArrival }) => {
-  if (!employeeId) throw new AppError("Employee not found", StatusCodes.BAD_REQUEST);
+  if (!employeeId) throw new AppError("Karyawan tidak ditemukan", StatusCodes.BAD_REQUEST);
 
   const permType = type ?? "ABSENCE";
   const permDate = toDateOnly(date);

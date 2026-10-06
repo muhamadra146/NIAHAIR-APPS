@@ -82,7 +82,7 @@ const getMy = async ({ employeeId, page, limit, status, sortBy }) => {
 
 const getById = async (id) => {
   const leave = await repo.findById(id);
-  if (!leave) throw new AppError("Leave not found", StatusCodes.NOT_FOUND);
+  if (!leave) throw new AppError("Cuti tidak ditemukan", StatusCodes.NOT_FOUND);
   return leave;
 };
 
@@ -92,11 +92,11 @@ const calcTotalDays = (start, end) => {
 };
 
 const createLeave = async (employeeId, { startDate, endDate, reason, leaveTypeId }) => {
-  if (!employeeId) throw new AppError("Employee not found for this user", StatusCodes.BAD_REQUEST);
+  if (!employeeId) throw new AppError("Data karyawan untuk user ini tidak ditemukan", StatusCodes.BAD_REQUEST);
 
   const start     = toDate(startDate);
   const end       = toDate(endDate);
-  if (end < start) throw new AppError("End date must be after start date", StatusCodes.BAD_REQUEST);
+  if (end < start) throw new AppError("Tanggal selesai harus setelah tanggal mulai", StatusCodes.BAD_REQUEST);
 
   const totalDays = calcTotalDays(start, end);
 
@@ -138,8 +138,8 @@ const createLeave = async (employeeId, { startDate, endDate, reason, leaveTypeId
 
 const approve = async (id, approvedBy) => {
   const leave = await repo.findById(id);
-  if (!leave) throw new AppError("Leave not found", StatusCodes.NOT_FOUND);
-  if (leave.status !== "PENDING") throw new AppError("Only PENDING leaves can be approved", StatusCodes.BAD_REQUEST);
+  if (!leave) throw new AppError("Cuti tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (leave.status !== "PENDING") throw new AppError("Hanya cuti berstatus PENDING yang bisa disetujui", StatusCodes.BAD_REQUEST);
 
   const branchId = leave.employee?.homeBranch?.id ?? null;
 
@@ -160,16 +160,16 @@ const approve = async (id, approvedBy) => {
 
 const reject = async (id, approvedBy) => {
   const leave = await repo.findById(id);
-  if (!leave) throw new AppError("Leave not found", StatusCodes.NOT_FOUND);
-  if (leave.status !== "PENDING") throw new AppError("Only PENDING leaves can be rejected", StatusCodes.BAD_REQUEST);
+  if (!leave) throw new AppError("Cuti tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (leave.status !== "PENDING") throw new AppError("Hanya cuti berstatus PENDING yang bisa ditolak", StatusCodes.BAD_REQUEST);
   return repo.update(id, { status: "REJECTED", approvedBy, approvedAt: new Date() });
 };
 
 const cancel = async (id, employeeId) => {
   const leave = await repo.findById(id);
-  if (!leave) throw new AppError("Leave not found", StatusCodes.NOT_FOUND);
+  if (!leave) throw new AppError("Cuti tidak ditemukan", StatusCodes.NOT_FOUND);
   if (leave.employeeId !== employeeId) throw new AppError("Forbidden", StatusCodes.FORBIDDEN);
-  if (leave.status !== "PENDING") throw new AppError("Only PENDING leaves can be cancelled", StatusCodes.BAD_REQUEST);
+  if (leave.status !== "PENDING") throw new AppError("Hanya cuti berstatus PENDING yang bisa dibatalkan", StatusCodes.BAD_REQUEST);
   return repo.update(id, { status: "CANCELLED" });
 };
 

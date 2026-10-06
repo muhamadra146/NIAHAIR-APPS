@@ -21,7 +21,7 @@ const getAll = async ({ year, page, limit } = {}) => {
 
 const getById = async (id) => {
   const holiday = await repo.findById(id);
-  if (!holiday) throw new AppError("Holiday not found", StatusCodes.NOT_FOUND);
+  if (!holiday) throw new AppError("Hari libur tidak ditemukan", StatusCodes.NOT_FOUND);
   return holiday;
 };
 
@@ -34,7 +34,7 @@ const create = async ({ date, name }) => {
 
 const update = async (id, { date, name }) => {
   const holiday = await repo.findById(id);
-  if (!holiday) throw new AppError("Holiday not found", StatusCodes.NOT_FOUND);
+  if (!holiday) throw new AppError("Hari libur tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const data = {};
   if (name !== undefined) data.name = name;
@@ -51,7 +51,7 @@ const update = async (id, { date, name }) => {
 
 const remove = async (id) => {
   const holiday = await repo.findById(id);
-  if (!holiday) throw new AppError("Holiday not found", StatusCodes.NOT_FOUND);
+  if (!holiday) throw new AppError("Hari libur tidak ditemukan", StatusCodes.NOT_FOUND);
   await repo.remove(id);
   return { deleted: true };
 };

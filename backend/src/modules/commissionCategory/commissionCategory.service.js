@@ -28,13 +28,13 @@ const getAll = async ({ page, limit, search, isActive }) => {
 
 const getById = async (id) => {
   const category = await findById(id);
-  if (!category) throw new AppError("Commission category not found", StatusCodes.NOT_FOUND);
+  if (!category) throw new AppError("Kategori komisi tidak ditemukan", StatusCodes.NOT_FOUND);
   return category;
 };
 
 const createCommissionCategory = async (body) => {
   const existing = await findByCode(body.code);
-  if (existing) throw new AppError("Commission category code already exists", StatusCodes.CONFLICT);
+  if (existing) throw new AppError("Kode kategori komisi sudah digunakan", StatusCodes.CONFLICT);
 
   return create({
     code:     body.code,
@@ -45,11 +45,11 @@ const createCommissionCategory = async (body) => {
 
 const updateCommissionCategory = async (id, body) => {
   const category = await findById(id);
-  if (!category) throw new AppError("Commission category not found", StatusCodes.NOT_FOUND);
+  if (!category) throw new AppError("Kategori komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (body.code && body.code !== category.code) {
     const existing = await findByCode(body.code);
-    if (existing) throw new AppError("Commission category code already exists", StatusCodes.CONFLICT);
+    if (existing) throw new AppError("Kode kategori komisi sudah digunakan", StatusCodes.CONFLICT);
   }
 
   return update(id, body);
@@ -57,7 +57,7 @@ const updateCommissionCategory = async (id, body) => {
 
 const deleteCommissionCategory = async (id) => {
   const category = await findById(id);
-  if (!category) throw new AppError("Commission category not found", StatusCodes.NOT_FOUND);
+  if (!category) throw new AppError("Kategori komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const rulesCount = await countRulesByCategory(id);
   if (rulesCount > 0) {

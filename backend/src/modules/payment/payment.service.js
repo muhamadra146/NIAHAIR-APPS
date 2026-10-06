@@ -63,10 +63,10 @@ const listPayments = async ({ page, limit, invoiceId, paymentMethodId, branchId,
 
 const deletePayment = async (id, userId) => {
   const payment = await findById(id);
-  if (!payment) throw new AppError("Payment not found", StatusCodes.NOT_FOUND);
+  if (!payment) throw new AppError("Pembayaran tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const invoice = await findInvoiceForDelete(payment.invoiceId);
-  if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+  if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (invoice._count.commissions > 0) {
     throw new AppError(
@@ -116,7 +116,7 @@ const getPaymentSummary = async ({ startDate, endDate, paymentMethodId, branchId
 
 const getPaymentById = async (id) => {
   const payment = await findById(id);
-  if (!payment) throw new AppError("Payment not found", StatusCodes.NOT_FOUND);
+  if (!payment) throw new AppError("Pembayaran tidak ditemukan", StatusCodes.NOT_FOUND);
   return payment;
 };
 
@@ -131,13 +131,13 @@ const createPayment = async (
   }
 
   const invoice = await findInvoiceForPayment(invoiceId);
-  if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+  if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (invoice.status === "CANCELLED") {
-    throw new AppError("Cannot pay a cancelled invoice", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Invoice yang sudah dibatalkan tidak bisa dibayar", StatusCodes.UNPROCESSABLE_ENTITY);
   }
   if (invoice.status === "PAID") {
-    throw new AppError("Invoice is already fully paid", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Invoice sudah lunas", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
   // Branch must match invoice — prevents cross-branch payment
@@ -149,9 +149,9 @@ const createPayment = async (
   }
 
   const paymentMethod = await findPaymentMethodById(paymentMethodId);
-  if (!paymentMethod) throw new AppError("Payment method not found", StatusCodes.NOT_FOUND);
+  if (!paymentMethod) throw new AppError("Metode pembayaran tidak ditemukan", StatusCodes.NOT_FOUND);
   if (!paymentMethod.isActive) {
-    throw new AppError("Payment method is not active", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Metode pembayaran tidak aktif", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
   const paymentNo = await buildPaymentNo();

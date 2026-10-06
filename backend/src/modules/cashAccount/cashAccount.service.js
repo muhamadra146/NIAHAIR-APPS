@@ -21,7 +21,7 @@ const listCashAccounts = async ({ page, limit, isActive }) => {
 
 const getCashAccountById = async (id) => {
   const account = await findById(id);
-  if (!account) throw new AppError("Cash account not found", StatusCodes.NOT_FOUND);
+  if (!account) throw new AppError("Akun kas tidak ditemukan", StatusCodes.NOT_FOUND);
   return account;
 };
 
@@ -29,7 +29,7 @@ const createCashAccount = async (body) => {
   const code = body.code.toUpperCase();
 
   const existing = await findByCode(code);
-  if (existing) throw new AppError("Cash account code already exists", StatusCodes.CONFLICT);
+  if (existing) throw new AppError("Kode akun kas sudah digunakan", StatusCodes.CONFLICT);
 
   return create({
     code,
@@ -41,7 +41,7 @@ const createCashAccount = async (body) => {
 
 const updateCashAccount = async (id, body) => {
   const account = await findById(id);
-  if (!account) throw new AppError("Cash account not found", StatusCodes.NOT_FOUND);
+  if (!account) throw new AppError("Akun kas tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const data = {};
   if (body.name              !== undefined) data.name              = body.name;
@@ -50,7 +50,7 @@ const updateCashAccount = async (id, body) => {
   if (body.isActive          !== undefined) data.isActive          = body.isActive;
 
   if (Object.keys(data).length === 0) {
-    throw new AppError("No updatable fields provided", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Tidak ada data yang diubah", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
   return update(id, data);
@@ -59,7 +59,7 @@ const updateCashAccount = async (id, body) => {
 // Hard delete — blocked if used by active payment methods
 const deleteCashAccount = async (id) => {
   const account = await findById(id);
-  if (!account) throw new AppError("Cash account not found", StatusCodes.NOT_FOUND);
+  if (!account) throw new AppError("Akun kas tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (account.paymentMethods && account.paymentMethods.length > 0) {
     const names = account.paymentMethods.map((m) => m.name).join(", ");

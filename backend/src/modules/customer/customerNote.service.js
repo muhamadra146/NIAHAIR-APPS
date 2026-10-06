@@ -8,13 +8,13 @@ const CAN_MANAGE_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER"];
 
 const getNotes = async (customerId, { skip, take } = {}) => {
   const customer = await findCustomer(customerId);
-  if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
+  if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
   return findAllByCustomer(customerId, { skip, take });
 };
 
 const createNote = async (customerId, body, createdByName) => {
   const customer = await findCustomer(customerId);
-  if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
+  if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
 
   return create({
     customerId,

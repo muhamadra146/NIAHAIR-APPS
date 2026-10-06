@@ -22,13 +22,13 @@ const getAll = async ({ isActive, page, limit } = {}) => {
 
 const getById = async (id) => {
   const [shift, isUsed] = await Promise.all([repo.findById(id), repo.isShiftUsed(id)]);
-  if (!shift) throw new AppError("Shift not found", StatusCodes.NOT_FOUND);
+  if (!shift) throw new AppError("Shift tidak ditemukan", StatusCodes.NOT_FOUND);
   return { ...shift, isUsed };
 };
 
 const createShift = async (body) => {
   const existing = await repo.findByCode(body.code);
-  if (existing) throw new AppError("Shift code already exists", StatusCodes.CONFLICT);
+  if (existing) throw new AppError("Kode shift sudah digunakan", StatusCodes.CONFLICT);
   const shift = await repo.create({
     code:      body.code,
     name:      body.name,
@@ -42,7 +42,7 @@ const createShift = async (body) => {
 
 const updateShift = async (id, body) => {
   const shift = await repo.findById(id);
-  if (!shift) throw new AppError("Shift not found", StatusCodes.NOT_FOUND);
+  if (!shift) throw new AppError("Shift tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const isUsed = await repo.isShiftUsed(id);
 
@@ -60,7 +60,7 @@ const updateShift = async (id, body) => {
 
   if (!isUsed && body.code && body.code !== shift.code) {
     const dup = await repo.findByCode(body.code);
-    if (dup) throw new AppError("Shift code already exists", StatusCodes.CONFLICT);
+    if (dup) throw new AppError("Kode shift sudah digunakan", StatusCodes.CONFLICT);
   }
 
   const data = {};
@@ -82,7 +82,7 @@ const updateShift = async (id, body) => {
 
 const deleteShift = async (id) => {
   const shift = await repo.findById(id);
-  if (!shift) throw new AppError("Shift not found", StatusCodes.NOT_FOUND);
+  if (!shift) throw new AppError("Shift tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const isUsed = await repo.isShiftUsed(id);
   if (isUsed) {

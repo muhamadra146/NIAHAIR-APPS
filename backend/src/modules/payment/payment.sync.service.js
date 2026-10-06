@@ -12,7 +12,7 @@ const syncPaymentToAccurate = async (paymentId) => {
   logger.info(`[payment sync] start paymentId=${paymentId}`);
 
   const payment = await findPaymentForSync(paymentId);
-  if (!payment) throw new Error(`Payment not found: ${paymentId}`);
+  if (!payment) throw new Error(`Pembayaran tidak ditemukan: ${paymentId}`);
 
   // Idempotency — skip if already pushed to Accurate
   if (payment.accurateReceiptId) {

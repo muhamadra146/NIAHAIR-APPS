@@ -16,7 +16,7 @@ const {
 
 const getBySession = async (sessionId, { page, limit } = {}) => {
   const session = await findSessionById(sessionId);
-  if (!session) throw new AppError("Treatment session not found", StatusCodes.NOT_FOUND);
+  if (!session) throw new AppError("Sesi treatment tidak ditemukan", StatusCodes.NOT_FOUND);
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
   const [data, total] = await Promise.all([
     findBySession(sessionId, { skip, take }),
@@ -27,7 +27,7 @@ const getBySession = async (sessionId, { page, limit } = {}) => {
 
 const getById = async (id) => {
   const item = await findById(id);
-  if (!item) throw new AppError("Treatment item not found", StatusCodes.NOT_FOUND);
+  if (!item) throw new AppError("Item treatment tidak ditemukan", StatusCodes.NOT_FOUND);
   return item;
 };
 
@@ -36,11 +36,11 @@ const createTreatmentItem = async (sessionId, body) => {
 
   // 1 — session must exist
   const session = await findSessionById(sessionId);
-  if (!session) throw new AppError("Treatment session not found", StatusCodes.NOT_FOUND);
+  if (!session) throw new AppError("Sesi treatment tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // 2 — item must exist
   const item = await findItemById(itemId);
-  if (!item) throw new AppError("Item not found", StatusCodes.NOT_FOUND);
+  if (!item) throw new AppError("Item tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // 3 — unit must be registered for this item; provides conversionFactor
   const itemUnit = await findItemUnit(itemId, unitId);
@@ -75,7 +75,7 @@ const createTreatmentItem = async (sessionId, body) => {
 
 const updateTreatmentItem = async (id, body) => {
   const item = await findById(id);
-  if (!item) throw new AppError("Treatment item not found", StatusCodes.NOT_FOUND);
+  if (!item) throw new AppError("Item treatment tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // Snapshots are never updated — only qty and notes are mutable.
   const data = {};
@@ -87,7 +87,7 @@ const updateTreatmentItem = async (id, body) => {
 
 const deleteTreatmentItem = async (id) => {
   const item = await findById(id);
-  if (!item) throw new AppError("Treatment item not found", StatusCodes.NOT_FOUND);
+  if (!item) throw new AppError("Item treatment tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // Guard: cannot delete if employees are already assigned
   if (item._count.assignments > 0) {

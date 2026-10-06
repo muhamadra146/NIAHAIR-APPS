@@ -78,7 +78,7 @@ const getAll = async ({ page, limit, search, isActive, syncStatus, sortBy, membe
 
 const getById = async (id) => {
   const customer = await findById(id);
-  if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
+  if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
   return customer;
 };
 
@@ -134,7 +134,7 @@ const createCustomer = async (body) => {
 
 const updateCustomer = async (id, body) => {
   const customer = await findById(id);
-  if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
+  if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // CRM-005: Phone uniqueness check on update
   if (body.mobilePhone && body.mobilePhone !== customer.mobilePhone) {

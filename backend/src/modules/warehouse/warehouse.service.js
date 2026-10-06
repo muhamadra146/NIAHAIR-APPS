@@ -28,7 +28,7 @@ const listWarehouses = async ({ page, limit, branchId, isActive }) => {
 
 const getWarehouseById = async (id) => {
   const warehouse = await findById(id);
-  if (!warehouse) throw new AppError("Warehouse not found", StatusCodes.NOT_FOUND);
+  if (!warehouse) throw new AppError("Gudang tidak ditemukan", StatusCodes.NOT_FOUND);
   return warehouse;
 };
 
@@ -40,17 +40,17 @@ const syncWarehouses = () => syncWarehousesFromAccurate();
 
 const updateWarehouseBranchMapping = async (id, { branchId }) => {
   const warehouse = await findById(id);
-  if (!warehouse) throw new AppError("Warehouse not found", StatusCodes.NOT_FOUND);
+  if (!warehouse) throw new AppError("Gudang tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const branch = await findBranchById(branchId);
-  if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
+  if (!branch) throw new AppError("Cabang tidak ditemukan", StatusCodes.NOT_FOUND);
 
   return updateBranchMapping(id, branchId);
 };
 
 const removeWarehouseBranchMapping = async (id) => {
   const warehouse = await findById(id);
-  if (!warehouse) throw new AppError("Warehouse not found", StatusCodes.NOT_FOUND);
+  if (!warehouse) throw new AppError("Gudang tidak ditemukan", StatusCodes.NOT_FOUND);
   return updateBranchMapping(id, null);
 };
 
@@ -58,14 +58,14 @@ const removeWarehouseBranchMapping = async (id) => {
 
 const updateWarehouseMapping = async (id, { accurateWarehouseId }) => {
   const warehouse = await findById(id);
-  if (!warehouse) throw new AppError("Warehouse not found", StatusCodes.NOT_FOUND);
+  if (!warehouse) throw new AppError("Gudang tidak ditemukan", StatusCodes.NOT_FOUND);
 
   return updateAccurateMapping(id, accurateWarehouseId);
 };
 
 const deleteWarehouse = async (id) => {
   const warehouse = await findById(id);
-  if (!warehouse) throw new AppError("Warehouse not found", StatusCodes.NOT_FOUND);
+  if (!warehouse) throw new AppError("Gudang tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // Guard: cek relasi sebelum hard delete
   const [inventoryCount, transferCount, purchaseCount] = await Promise.all([

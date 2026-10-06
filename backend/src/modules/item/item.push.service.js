@@ -11,7 +11,7 @@ const ACCURATE_ITEM_SAVE = "/item/save.do";
 // TODO: move to background sync job
 const pushItemToAccurate = async (itemId) => {
   const item = await findById(itemId);
-  if (!item) throw new AppError("Item not found", StatusCodes.NOT_FOUND);
+  if (!item) throw new AppError("Item tidak ditemukan", StatusCodes.NOT_FOUND);
 
   logger.info("START PUSH ITEM TO ACCURATE", item.id);
 

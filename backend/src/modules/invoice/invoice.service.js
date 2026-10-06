@@ -82,7 +82,7 @@ const listInvoices = async ({ page, limit, customerId, branchId, status, appoint
 
 const getInvoiceById = async (id) => {
   const invoice = await findById(id);
-  if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+  if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
   return invoice;
 };
 
@@ -109,10 +109,10 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   const bodyMembershipDiscount = membershipDiscountOverride ? D(body.membershipDiscountTotal ?? 0) : null;
 
   const customer = await findCustomerById(customerId);
-  if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
+  if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const branch = await findBranchById(branchId);
-  if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
+  if (!branch) throw new AppError("Cabang tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // Always fetch active membership — needed to determine discountType for grandTotal adjustment
   // even when override is present. The loop guard (!membershipDiscountOverride) prevents
@@ -151,7 +151,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
     const isMaterial = line.isMaterial === true;
 
     const item = await findItemById(line.itemId);
-    if (!item) throw new AppError(`Item not found: ${line.itemId}`, StatusCodes.NOT_FOUND);
+    if (!item) throw new AppError(`Item tidak ditemukan: ${line.itemId}`, StatusCodes.NOT_FOUND);
 
     const itemUnit = await findItemUnit({ itemId: line.itemId, unitId: line.unitId });
     if (!itemUnit) {
@@ -283,7 +283,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
     for (const { depositId, amount } of deposits) {
       const deposit = depositRecords.find((d) => d.id === depositId);
       if (!deposit) {
-        throw new AppError(`Deposit not found: ${depositId}`, StatusCodes.NOT_FOUND);
+        throw new AppError(`Deposit tidak ditemukan: ${depositId}`, StatusCodes.NOT_FOUND);
       }
 
       const usable = ["PAID", "PARTIAL_USED"];
@@ -448,12 +448,12 @@ const resetTreatmentSessionItems = async (invoiceId) => {
 
 const updateInvoice = async (id, body, userId) => {
   const existing = await findById(id);
-  if (!existing) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+  if (!existing) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
   if (existing.status === "CANCELLED") {
-    throw new AppError("Cannot edit a cancelled invoice", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Invoice yang sudah dibatalkan tidak bisa diubah", StatusCodes.UNPROCESSABLE_ENTITY);
   }
   if (existing.status === "PAID") {
-    throw new AppError("Cannot edit a paid invoice", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Invoice yang sudah lunas tidak bisa diubah", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
   // Block edit if commissions already generated
@@ -489,7 +489,7 @@ const updateInvoice = async (id, body, userId) => {
     const isMaterial = line.isMaterial === true;
 
     const item = await findItemById(line.itemId);
-    if (!item) throw new AppError(`Item not found: ${line.itemId}`, StatusCodes.NOT_FOUND);
+    if (!item) throw new AppError(`Item tidak ditemukan: ${line.itemId}`, StatusCodes.NOT_FOUND);
 
     const itemUnit = await findItemUnit({ itemId: line.itemId, unitId: line.unitId });
     if (!itemUnit) {
@@ -651,7 +651,7 @@ const updateInvoice = async (id, body, userId) => {
 
 const applyDepositToInvoice = async (invoiceId, { depositId, amount }, userId) => {
   const invoice = await findInvoiceForDepositApply(invoiceId);
-  if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+  if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (["PAID", "CANCELLED"].includes(invoice.status)) {
     throw new AppError(
@@ -661,7 +661,7 @@ const applyDepositToInvoice = async (invoiceId, { depositId, amount }, userId) =
   }
 
   const deposit = await findDepositForApply(depositId);
-  if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
+  if (!deposit) throw new AppError("Deposit tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const usable = ["PAID", "PARTIAL_USED"];
   if (!usable.includes(deposit.status)) {
@@ -689,7 +689,7 @@ const applyDepositToInvoice = async (invoiceId, { depositId, amount }, userId) =
   const amountToApply     = D(amount);
 
   if (amountToApply.lte(D("0"))) {
-    throw new AppError("Amount must be greater than 0", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Nominal harus lebih dari 0", StatusCodes.UNPROCESSABLE_ENTITY);
   }
   if (amountToApply.gt(depositRemaining)) {
     throw new AppError(
@@ -765,7 +765,7 @@ const setupTreatmentSession = async (invoiceId) => {
     },
   });
 
-  if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+  if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // ── Cari session yang sudah ada ──────────────────────────────────────
   // Prioritas: cari via appointmentId (dibuat saat IN_PROGRESS), lalu via invoiceId
@@ -869,13 +869,13 @@ const setupTreatmentSession = async (invoiceId) => {
 
 const cancelInvoice = async (id, userId) => {
   const invoice = await findById(id);
-  if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+  if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (invoice.status === "PAID") {
-    throw new AppError("Cannot cancel a paid invoice", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Invoice yang sudah lunas tidak bisa dibatalkan", StatusCodes.UNPROCESSABLE_ENTITY);
   }
   if (invoice.status === "CANCELLED") {
-    throw new AppError("Invoice is already cancelled", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Invoice sudah dibatalkan", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
   await reverseInvoiceSaleMovements(invoice.invoiceNo);
@@ -884,7 +884,7 @@ const cancelInvoice = async (id, userId) => {
 
 const deleteInvoice = async (id) => {
   const invoice = await findById(id);
-  if (!invoice) throw new AppError("Invoice not found", StatusCodes.NOT_FOUND);
+  if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (invoice.status === "PAID") {
     throw new AppError("Invoice yang sudah lunas tidak dapat dihapus", StatusCodes.UNPROCESSABLE_ENTITY);

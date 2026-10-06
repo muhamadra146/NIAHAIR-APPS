@@ -34,7 +34,7 @@ const pushPurchaseReturnToAccurate = async (returnId) => {
     },
   });
 
-  if (!ret) throw new AppError("Purchase return not found", StatusCodes.NOT_FOUND);
+  if (!ret) throw new AppError("Retur pembelian tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // Idempotency
   if (ret.accuratePurchaseReturnId) {

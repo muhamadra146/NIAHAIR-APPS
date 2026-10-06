@@ -50,7 +50,7 @@ const getAll = async ({ page, limit, customerId, branchId, invoiceId, startDate,
 
 const getById = async (id) => {
   const session = await findById(id);
-  if (!session) throw new AppError("Treatment session not found", StatusCodes.NOT_FOUND);
+  if (!session) throw new AppError("Sesi treatment tidak ditemukan", StatusCodes.NOT_FOUND);
   return session;
 };
 
@@ -58,14 +58,14 @@ const createSession = async (body) => {
   const { customerId, branchId, appointmentId, startedAt, notes } = body;
 
   const customer = await findCustomerById(customerId);
-  if (!customer) throw new AppError("Customer not found", StatusCodes.NOT_FOUND);
+  if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const branch = await findBranchById(branchId);
-  if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
+  if (!branch) throw new AppError("Cabang tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (appointmentId) {
     const appointment = await findAppointmentById(appointmentId);
-    if (!appointment) throw new AppError("Appointment not found", StatusCodes.NOT_FOUND);
+    if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
   }
 
   const data = {
@@ -81,7 +81,7 @@ const createSession = async (body) => {
 
 const updateSession = async (id, body) => {
   const session = await findById(id);
-  if (!session) throw new AppError("Treatment session not found", StatusCodes.NOT_FOUND);
+  if (!session) throw new AppError("Sesi treatment tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const { completedAt, notes } = body;
 

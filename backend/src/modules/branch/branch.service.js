@@ -33,24 +33,24 @@ const getAll = async ({ page, limit, search, isActive }) => {
 
 const getById = async (id) => {
   const branch = await findById(id);
-  if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
+  if (!branch) throw new AppError("Cabang tidak ditemukan", StatusCodes.NOT_FOUND);
   return branch;
 };
 
 const createBranch = async (body) => {
   const existing = await findByCode(body.code);
-  if (existing) throw new AppError("Branch code already exists", StatusCodes.CONFLICT);
+  if (existing) throw new AppError("Kode cabang sudah digunakan", StatusCodes.CONFLICT);
 
   return create(body);
 };
 
 const updateBranch = async (id, body) => {
   const branch = await findById(id);
-  if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
+  if (!branch) throw new AppError("Cabang tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (body.code && body.code !== branch.code) {
     const existing = await findByCode(body.code);
-    if (existing) throw new AppError("Branch code already exists", StatusCodes.CONFLICT);
+    if (existing) throw new AppError("Kode cabang sudah digunakan", StatusCodes.CONFLICT);
   }
 
   return update(id, body);
@@ -58,7 +58,7 @@ const updateBranch = async (id, body) => {
 
 const deleteBranch = async (id) => {
   const branch = await findById(id);
-  if (!branch) throw new AppError("Branch not found", StatusCodes.NOT_FOUND);
+  if (!branch) throw new AppError("Cabang tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // Guard: karyawan aktif
   const empCount = await countActiveEmployees(id);

@@ -62,7 +62,7 @@ const listDepositPayments = async ({ page, limit, depositId, paymentMethodId, br
 
 const getDepositPaymentById = async (id) => {
   const dp = await findById(id);
-  if (!dp) throw new AppError("Deposit payment not found", StatusCodes.NOT_FOUND);
+  if (!dp) throw new AppError("Pembayaran deposit tidak ditemukan", StatusCodes.NOT_FOUND);
   return dp;
 };
 
@@ -72,7 +72,7 @@ const getPaymentsByDeposit = async (depositId) => findByDepositId(depositId);
 
 const createDepositPayment = async ({ depositId, paymentMethodId, paidAt: paidAtInput, referenceNo, notes, transferProofUrl, transferProofPublicId }) => {
   const deposit = await findDepositForPayment(depositId);
-  if (!deposit) throw new AppError("Deposit not found", StatusCodes.NOT_FOUND);
+  if (!deposit) throw new AppError("Deposit tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // Only UNPAID deposits can receive a payment
   const blocked = ["PAID", "PARTIAL_USED", "USED", "CANCELLED", "REFUNDED"];
@@ -84,9 +84,9 @@ const createDepositPayment = async ({ depositId, paymentMethodId, paidAt: paidAt
   }
 
   const paymentMethod = await findPaymentMethodById(paymentMethodId);
-  if (!paymentMethod) throw new AppError("Payment method not found", StatusCodes.NOT_FOUND);
+  if (!paymentMethod) throw new AppError("Metode pembayaran tidak ditemukan", StatusCodes.NOT_FOUND);
   if (!paymentMethod.isActive) {
-    throw new AppError("Payment method is not active", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Metode pembayaran tidak aktif", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
   const paymentNo = await buildPaymentNo();
@@ -122,7 +122,7 @@ const createDepositPayment = async ({ depositId, paymentMethodId, paidAt: paidAt
 
 const deleteDepositPayment = async (id) => {
   const dp = await findById(id);
-  if (!dp) throw new AppError("Deposit payment not found", StatusCodes.NOT_FOUND);
+  if (!dp) throw new AppError("Pembayaran deposit tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // Best-effort: hapus dari Accurate jika sudah di-sync
   if (dp.accurateReceiptId) {
@@ -182,7 +182,7 @@ const getDepositPaymentSummary = async ({ startDate, endDate, paymentMethodId, b
 
 const resyncDepositPayment = async (id) => {
   const dp = await findById(id);
-  if (!dp) throw new AppError("Deposit payment not found", StatusCodes.NOT_FOUND);
+  if (!dp) throw new AppError("Pembayaran deposit tidak ditemukan", StatusCodes.NOT_FOUND);
   if (dp.accurateReceiptId) return { skipped: true, reason: "Already synced to Accurate" };
   await createSyncJob({ entityType: "DEPOSIT_PAYMENT", entityId: id, direction: "APP_TO_ACCURATE" });
   return { queued: true };

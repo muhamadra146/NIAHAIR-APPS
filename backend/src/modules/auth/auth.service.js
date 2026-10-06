@@ -55,12 +55,12 @@ const login = async ({ identifier, password }) => {
     : await findUserByUsername(identifier);
 
   if (!user || !user.isActive) {
-    throw new AppError("Invalid credentials", StatusCodes.UNAUTHORIZED);
+    throw new AppError("Email atau password salah", StatusCodes.UNAUTHORIZED);
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
-    throw new AppError("Invalid credentials", StatusCodes.UNAUTHORIZED);
+    throw new AppError("Email atau password salah", StatusCodes.UNAUTHORIZED);
   }
 
   const payload = {
@@ -155,7 +155,7 @@ const getMe = async (userId) => {
   const user = await findUserById(userId);
 
   if (!user || !user.isActive) {
-    throw new AppError("User not found", StatusCodes.NOT_FOUND);
+    throw new AppError("User tidak ditemukan", StatusCodes.NOT_FOUND);
   }
 
   return {

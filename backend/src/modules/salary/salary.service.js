@@ -14,7 +14,7 @@ const getActive = async (employeeId) => {
 
 const getById = async (id) => {
   const setting = await repo.findById(id);
-  if (!setting) throw new AppError("Salary setting not found", StatusCodes.NOT_FOUND);
+  if (!setting) throw new AppError("Setting gaji tidak ditemukan", StatusCodes.NOT_FOUND);
   return setting;
 };
 
@@ -54,7 +54,7 @@ const createSetting = async (body) => {
 
 const updateSetting = async (id, body) => {
   const existing = await repo.findById(id);
-  if (!existing) throw new AppError("Salary setting not found", StatusCodes.NOT_FOUND);
+  if (!existing) throw new AppError("Setting gaji tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const data = {};
   const fields = [

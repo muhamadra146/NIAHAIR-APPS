@@ -48,13 +48,13 @@ const getAll = async ({ page, limit, search, isActive, itemType, sortBy }) => {
 
 const getById = async (id) => {
   const item = await findById(id);
-  if (!item) throw new AppError("Item not found", StatusCodes.NOT_FOUND);
+  if (!item) throw new AppError("Item tidak ditemukan", StatusCodes.NOT_FOUND);
   return item;
 };
 
 const createItem = async (body) => {
   const existing = await findByItemCode(body.itemCode);
-  if (existing) throw new AppError("Item code already exists", StatusCodes.CONFLICT);
+  if (existing) throw new AppError("Kode item sudah digunakan", StatusCodes.CONFLICT);
 
   const item = await create(body);
 
@@ -65,16 +65,16 @@ const createItem = async (body) => {
 
 const updateItem = async (id, body) => {
   const item = await findById(id);
-  if (!item) throw new AppError("Item not found", StatusCodes.NOT_FOUND);
+  if (!item) throw new AppError("Item tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (body.itemCode && body.itemCode !== item.itemCode) {
     const existing = await findByItemCode(body.itemCode);
-    if (existing) throw new AppError("Item code already exists", StatusCodes.CONFLICT);
+    if (existing) throw new AppError("Kode item sudah digunakan", StatusCodes.CONFLICT);
   }
 
   if (body.commissionCategoryId !== undefined && body.commissionCategoryId !== null) {
     const category = await findCommissionCategoryById(body.commissionCategoryId);
-    if (!category) throw new AppError("Commission category not found", StatusCodes.NOT_FOUND);
+    if (!category) throw new AppError("Kategori komisi tidak ditemukan", StatusCodes.NOT_FOUND);
   }
 
   return update(id, body);
@@ -82,7 +82,7 @@ const updateItem = async (id, body) => {
 
 const getServiceMaterials = async (serviceItemId) => {
   const item = await findById(serviceItemId);
-  if (!item) throw new AppError("Item not found", StatusCodes.NOT_FOUND);
+  if (!item) throw new AppError("Item tidak ditemukan", StatusCodes.NOT_FOUND);
   return findServiceMaterials(serviceItemId);
 };
 
