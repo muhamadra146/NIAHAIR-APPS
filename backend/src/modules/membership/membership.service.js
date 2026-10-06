@@ -17,14 +17,23 @@ const getById = async (id) => {
   return m;
 };
 
+/** Diskon persen maksimal 100% */
+const assertDiscount = (discountType, discountValue) => {
+  if (discountType === "PERCENTAGE" && Number(discountValue) > 100) {
+    throw new AppError("Diskon persen tidak boleh lebih dari 100%", StatusCodes.BAD_REQUEST);
+  }
+};
+
 const create = async (body) => {
   const { name, price, durationDays, discountType, discountValue } = body;
+  assertDiscount(discountType, discountValue);
   return repo.create({ name, price, durationDays, discountType, discountValue });
 };
 
 const update = async (id, body) => {
-  await getById(id);
+  const existing = await getById(id);
   const { name, price, durationDays, discountType, discountValue } = body;
+  assertDiscount(discountType ?? existing.discountType, discountValue ?? existing.discountValue);
   const data = {};
   if (name          !== undefined) data.name          = name;
   if (price         !== undefined) data.price         = price;

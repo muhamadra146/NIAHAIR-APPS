@@ -67,6 +67,9 @@ const membershipSchema = z.object({
   durationDays:  z.coerce.number().min(1, "Minimal 1 hari"),
   discountType:  z.enum(["PERCENTAGE", "FIXED_AMOUNT"]),
   discountValue: z.coerce.number().min(0, "Nilai diskon tidak boleh negatif"),
+}).refine((v) => v.discountType !== "PERCENTAGE" || v.discountValue <= 100, {
+  message: "Diskon persen tidak boleh lebih dari 100%",
+  path:    ["discountValue"],
 });
 
 type MembershipForm = z.infer<typeof membershipSchema>;
