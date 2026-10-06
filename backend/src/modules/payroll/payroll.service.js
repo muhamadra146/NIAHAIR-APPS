@@ -77,6 +77,7 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
     ? computeProration({ periodStart, periodEnd, schedules, hireDate, resignDate })
     : { prorated: false };
   const baseSalaryAmount = proration.prorated ? D(s.baseSalary).mul(proration.factor) : D(s.baseSalary);
+  const tunjanganAmount  = proration.prorated ? D(s.tunjangan ?? 0).mul(proration.factor) : D(s.tunjangan ?? 0);
 
   // Sum minutes
   const totalEarlyLeaveMinutes = attendances.reduce((acc, a) => acc + (a.earlyLeaveMinutes ?? 0), 0);
@@ -146,7 +147,11 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
     addItem("INCOME", "gaji",            "Gaji Pokok",                      baseSalaryAmount);
   }
   addItem("INCOME", "makan",           meal.halfDays > 0 ? `Uang Makan (${meal.fullDays} penuh, ${meal.halfDays} setengah hari)` : "Uang Makan", meal.amount, meal.units, s.mealAllowancePerDay);
-  addItem("INCOME", "tunjangan",       "Tunjangan",                       s.tunjangan ?? 0);
+  if (proration.prorated) {
+    addItem("INCOME", "tunjangan", `Tunjangan (${proration.employedWorkDays}/${proration.divisor} hari kerja)`, tunjanganAmount, proration.employedWorkDays, D(s.tunjangan ?? 0).div(D(proration.divisor)));
+  } else {
+    addItem("INCOME", "tunjangan",       "Tunjangan",                       tunjanganAmount);
+  }
   addItem("INCOME", "transport",       transport.absentDays > 0 ? `Tunjangan Transport (potong ${transport.absentDays} hari tidak hadir)` : "Tunjangan Transport", transportAmount, transport.divisor ? (transport.employedWorkDays ?? transport.divisor) - transport.absentDays : null, transport.divisor ? transport.dailyRate : null);
   addItem("INCOME", "komisi",          "Komisi",                          totalCommission);
   addItem("INCOME", "lembur",          "Lembur",                          overtimeAmount, totalOvertimeMinutes, D(s.overtimeRatePerHour).div(D(60)));

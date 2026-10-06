@@ -4816,6 +4816,7 @@ Karyawan yang mulai bekerja (Tanggal Masuk) atau resign di tengah periode dibaya
 Hari kerja = hari periode − hari libur (OFF) di jadwal (sama dengan pembagi transport).
 
 - Gaji pokok = gaji pokok ÷ hari kerja periode × hari kerja sejak masuk (s/d tanggal resign).
+- Tunjangan (tetap bulanan) dihitung dengan cara yang sama.
 - Tunjangan transport dihitung dengan cara yang sama; hari sebelum masuk / sesudah resign tidak dihitung tidak hadir.
 - BPJS tetap dari gaji pokok penuh.
 
