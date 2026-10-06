@@ -539,7 +539,7 @@ export function CommissionListPage() {
               {/* Date range — grouped */}
               <div className="flex items-center gap-0 rounded-lg border border-input bg-background shadow-sm overflow-hidden">
                 <div className="flex items-center gap-2 px-3 py-2">
-                  <span className="text-xs text-muted-foreground shrink-0">Dari</span>
+                  <span className="text-xs text-muted-foreground shrink-0" title="Komisi PENDING memakai tanggal dibuat">Disetujui dari</span>
                   <input type="date" value={startDate} onChange={(e) => { setStart(e.target.value); setPage(1); }} className="text-sm bg-transparent focus:outline-none" />
                 </div>
                 <span className="text-muted-foreground text-xs px-1 select-none border-x border-input bg-muted/30 py-2">s/d</span>

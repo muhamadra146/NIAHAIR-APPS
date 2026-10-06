@@ -61,10 +61,16 @@ const listCommissions = async ({
   if (invoiceId)  where.invoiceId  = invoiceId;
   if (branchId)   where.invoice    = { branchId };
 
+  // Filter tanggal = tanggal disetujui (approvedAt), sama dengan payroll & Komisi Saya (COM-017).
+  // Komisi yang belum disetujui (PENDING) memakai tanggal dibuat.
   if (startDate || endDate) {
-    where.createdAt = {};
-    if (startDate) where.createdAt.gte = wibDayStart(startDate);
-    if (endDate)   where.createdAt.lte = wibDayEnd(endDate);
+    const range = {};
+    if (startDate) range.gte = wibDayStart(startDate);
+    if (endDate)   range.lte = wibDayEnd(endDate);
+    where.AND = [
+      ...(where.AND ?? []),
+      { OR: [{ approvedAt: range }, { approvedAt: null, createdAt: range }] },
+    ];
   }
 
   const [commissions, total] = await Promise.all([
