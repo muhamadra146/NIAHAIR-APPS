@@ -271,7 +271,7 @@ export interface EmployeeListParams   { page?: number; limit?: number; search?: 
 export interface EmployeeRoleListParams { page?: number; limit?: number; search?: string }
 export interface UserListParams       { page?: number; limit?: number; search?: string; branchId?: string }
 export interface BranchListParams     { page?: number; limit?: number }
-export interface PaymentMethodListParams { page?: number; limit?: number }
+export interface PaymentMethodListParams { page?: number; limit?: number; isActive?: boolean }
 export interface CashAccountListParams   { page?: number; limit?: number }
 export interface WarehouseListParams     { page?: number; limit?: number; branchId?: string; isActive?: boolean }
 
@@ -283,6 +283,8 @@ export interface CreateEmployeeInput {
   phone?:        string;
   email?:        string;
   homeBranchId?: string | null;
+  ktpFile?:      File | null;
+  contractFile?: File | null;
 }
 export type UpdateEmployeeInput = Partial<CreateEmployeeInput> & { isActive?: boolean };
 export interface UpdateEmployeeBranchesInput { branchIds: string[] }

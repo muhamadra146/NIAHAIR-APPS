@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { fetchAllBranches } from "@/features/settings/api/branch.api";
 import { useEmployeeRoles, useNextEmployeeCode } from "../hooks";
 import { createEmployeeSchema, updateEmployeeSchema } from "../schemas/employee.schema";
-import type { CreateEmployeeFormValues, UpdateEmployeeFormValues } from "../schemas/employee.schema";
+import type { CreateEmployeeFormValues, UpdateEmployeeFormValues, UpdateEmployeeFormInput } from "../schemas/employee.schema";
 import type { Employee } from "../types";
 
 // ── Create ────────────────────────────────────────────────────────────────────
@@ -33,8 +33,8 @@ export function EmployeeCreateForm({ open, onOpenChange, onSubmit, isPending, er
   const [ktpFile,      setKtpFile]      = useState<File | null>(null);
   const [contractFile, setContractFile] = useState<File | null>(null);
 
-  const form = useForm<CreateEmployeeFormValues>({
-    resolver: zodResolver(createEmployeeSchema),
+  const form = useForm<UpdateEmployeeFormInput, unknown, CreateEmployeeFormValues>({
+    resolver: zodResolver<UpdateEmployeeFormInput, unknown, CreateEmployeeFormValues>(createEmployeeSchema),
     defaultValues: {
       name: "", roleId: "", employeeCode: "", phone: "", email: "",
       hireDate: "", birthDate: "", address: "", emergencyContact: "",
@@ -98,7 +98,7 @@ export function EmployeeUpdateForm({ open, onOpenChange, onSubmit, isPending, er
   const [ktpFile,      setKtpFile]      = useState<File | null>(null);
   const [contractFile, setContractFile] = useState<File | null>(null);
 
-  const form = useForm<UpdateEmployeeFormValues>({
+  const form = useForm<UpdateEmployeeFormInput, unknown, UpdateEmployeeFormValues>({
     resolver: zodResolver(updateEmployeeSchema),
     defaultValues: employeeToForm(employee),
   });
@@ -171,7 +171,7 @@ function EmployeeFormFields({
   existingKtpUrl,
   existingContractUrl,
 }: {
-  form:      UseFormReturn<CreateEmployeeFormValues | UpdateEmployeeFormValues>;
+  form:      UseFormReturn<UpdateEmployeeFormInput, unknown, CreateEmployeeFormValues | UpdateEmployeeFormValues>;
   roles:     EmployeeRole[];
   branches:  Branch[];
   nextCode?: string;

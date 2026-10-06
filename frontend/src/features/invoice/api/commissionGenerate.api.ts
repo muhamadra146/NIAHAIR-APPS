@@ -70,6 +70,10 @@ export interface JobAssignmentInvoice {
   treatmentSessions: JobAssignmentSession[];
   commissions: { id: string; status: string }[];
   _count:      { commissions: number };
+  /** COM-014: Catatan Klien wajib ada sebelum Input Job */
+  consultationNote: { id: string } | null;
+  /** Invoice pertama pelanggan → form Catatan Klien lengkap; selain itu form ringkas */
+  isNewClient:      boolean;
 }
 
 export interface SubmitJobAssignmentsPayload {
@@ -183,7 +187,8 @@ export interface WorksheetRow {
   commissionType:           "PERCENTAGE" | "FIXED" | null;
   commissionValue:          string | null;   // "10" = 10% atau nominal Rp (FIXED)
   commissionBase:           string | null;
-  hasRule:                  boolean;         // false = staf belum punya rule komisi
+  hasRule:                  boolean;         // false = staf belum punya tarif (rule maupun tarif job)
+  rateSource?:              "RULE" | "JOB" | null; // RULE = rule karyawan, JOB = tarif bawaan job
   itemBase:                 number;          // base item menurut commissionBase rule staf
   remainingBase?:           number;          // primary: base item staf − potongan base helper
   workQty:                  number;

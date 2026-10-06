@@ -23,7 +23,7 @@ const pushPurchaseReturnToAccurate = async (returnId) => {
         include: {
           item: {
             select: {
-              id: true, name: true, sku: true, itemType: true,
+              id: true, name: true, itemCode: true, itemType: true,
               accurateItemId: true,
               defaultUnit: { select: { id: true, name: true, accurateUnitId: true } },
             },

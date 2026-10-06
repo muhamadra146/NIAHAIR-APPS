@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Warehouse } from "../../types";
+import { WIB_TZ } from "@/lib/utils";
 
 interface Props {
   warehouses: Warehouse[];
@@ -14,7 +15,7 @@ interface Props {
 
 function formatSync(lastSyncAt: string | null) {
   if (!lastSyncAt) return "—";
-  return new Date(lastSyncAt).toLocaleDateString("id-ID", {
+  return new Date(lastSyncAt).toLocaleDateString("id-ID", { timeZone: WIB_TZ,
     day: "2-digit", month: "short", year: "numeric",
   });
 }

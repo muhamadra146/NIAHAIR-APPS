@@ -22,7 +22,9 @@ import {
   fetchCommissionJobs, createCommissionJob,
   updateCommissionJob, deleteCommissionJob,
 } from "../api";
-import type { CommissionJob, CommissionSplitMode, CommissionDefaultQty } from "../types";
+import type {
+  CommissionJob, CommissionSplitMode, CommissionDefaultQty, CommissionType, CommissionJobRateTierInput,
+} from "../types";
 import { SPLIT_MODE_LABEL, SPLIT_MODE_HINT, DEFAULT_QTY_LABEL } from "../commissionBreakdown";
 
 interface Props {
@@ -79,6 +81,111 @@ function JobCalcFields({
   );
 }
 
+/** Baris tingkatan di form; maxStaff "" = "lebih dari itu" */
+interface TierDraft { maxStaff: string; value: string }
+
+const fmtRate = (type: CommissionType, v: string | number) =>
+  type === "PERCENTAGE" ? `${Number(v)}%` : `Rp ${Number(v).toLocaleString("id-ID")}`;
+
+/** Ringkasan tarif bawaan job untuk baris tampilan; null = job tanpa tarif bawaan */
+function rateSummary(job: CommissionJob): string | null {
+  const type = job.defaultCommissionType;
+  if (!type) return null;
+  const tiers = [...(job.rateTiers ?? [])].sort((a, b) =>
+    (a.maxStaff ?? Infinity) - (b.maxStaff ?? Infinity));
+  const parts = tiers.map(t =>
+    `${t.maxStaff != null ? `≤ ${t.maxStaff} staf` : "lebih"}: ${fmtRate(type, t.value)}`);
+  if (job.defaultCommissionValue != null && !tiers.some(t => t.maxStaff == null)) {
+    parts.push(`${tiers.length ? "lainnya" : "semua staf"}: ${fmtRate(type, job.defaultCommissionValue)}`);
+  }
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/** Tarif bawaan job + tingkatan jumlah staf (untuk staf tanpa rule sendiri, COM-013) */
+function JobRateFields({
+  type, onType, value, onValue, tiers, onTiers,
+}: {
+  type:     CommissionType | "";
+  onType:   (v: CommissionType | "") => void;
+  value:    string;
+  onValue:  (v: string) => void;
+  tiers:    TierDraft[];
+  onTiers:  (v: TierDraft[]) => void;
+}) {
+  const unitLabel = type === "PERCENTAGE" ? "%" : "Rp";
+  const setTier = (i: number, patch: Partial<TierDraft>) =>
+    onTiers(tiers.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] text-muted-foreground w-20 shrink-0">Tarif bawaan:</span>
+        <select value={type} onChange={e => onType(e.target.value as CommissionType | "")} className={`${selectCls} w-28`}>
+          <option value="">— Tidak ada —</option>
+          <option value="FIXED">Nominal (Rp)</option>
+          <option value="PERCENTAGE">Persen (%)</option>
+        </select>
+        {type && (
+          <>
+            <span className="text-[10px] text-muted-foreground">{unitLabel}</span>
+            <Input
+              type="number" min={0}
+              value={value}
+              onChange={e => onValue(e.target.value)}
+              className="h-6 text-xs w-24"
+              placeholder={tiers.length ? "opsional" : "nilai"}
+            />
+          </>
+        )}
+        <span className="text-[10px] text-muted-foreground">
+          berlaku untuk semua staf yang tidak punya rule sendiri
+        </span>
+      </div>
+      {type && (
+        <div className="flex gap-2">
+          <span className="text-[10px] text-muted-foreground w-20 shrink-0 pt-1">Per jumlah staf:</span>
+          <div className="space-y-1">
+            {tiers.map((t, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <span className="text-[10px] text-muted-foreground">sampai</span>
+                <Input
+                  type="number" min={1}
+                  value={t.maxStaff}
+                  onChange={e => setTier(i, { maxStaff: e.target.value })}
+                  className="h-6 text-xs w-20"
+                  placeholder="lebih"
+                />
+                <span className="text-[10px] text-muted-foreground">staf → {unitLabel}</span>
+                <Input
+                  type="number" min={0}
+                  value={t.value}
+                  onChange={e => setTier(i, { value: e.target.value })}
+                  className="h-6 text-xs w-24"
+                />
+                <Button
+                  size="sm" variant="ghost" className="h-5 px-1 text-destructive hover:text-destructive"
+                  onClick={() => onTiers(tiers.filter((_, idx) => idx !== i))}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+            <Button
+              size="sm" variant="outline" className="h-5 gap-1 text-[10px] px-1.5"
+              onClick={() => onTiers([...tiers, { maxStaff: "", value: "" }])}
+            >
+              <Plus className="h-3 w-3" /> Tingkatan
+            </Button>
+            <p className="text-[10px] text-muted-foreground">
+              Opsional. Jumlah staf dihitung per invoice di kategori ini; kosongkan "sampai" = lebih dari itu.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CommissionJobPanel({ categoryId, categoryName }: Props) {
   const qc   = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -90,9 +197,11 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
   const [editDeductsFrom,  setEditDeductsFrom]  = useState("");      // commissionJobId atau ""
   const [editPrice,        setEditPrice]        = useState("");      // pricePerUnit atau ""
   const [editUnit,         setEditUnit]         = useState("helai"); // satuan unit
-  const [editStaffCountMax, setEditStaffCountMax] = useState("");    // staffCountMax atau ""
   const [editSplitMode,  setEditSplitMode]  = useState<CommissionSplitMode>("BY_QTY");
   const [editDefaultQty, setEditDefaultQty] = useState<CommissionDefaultQty>("ITEM_QTY");
+  const [editRateType,   setEditRateType]   = useState<CommissionType | "">("");
+  const [editRateValue,  setEditRateValue]  = useState("");
+  const [editTiers,      setEditTiers]      = useState<TierDraft[]>([]);
 
   const { data: jobs = [], isLoading } = useQuery({
     queryKey:  ["commission-jobs", categoryId],
@@ -125,16 +234,40 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
 
   const isMutating = createMut.isPending || updateMut.isPending || deleteMut.isPending;
 
+  function resetRate() {
+    setEditRateType(""); setEditRateValue(""); setEditTiers([]);
+  }
+
   function resetEdit() {
     setEditId(null); setEditName(""); setEditKey(""); setEditSort("0");
-    setEditDeductsFrom(""); setEditPrice(""); setEditUnit("helai"); setEditStaffCountMax("");
+    setEditDeductsFrom(""); setEditPrice(""); setEditUnit("helai");
     setEditSplitMode("BY_QTY"); setEditDefaultQty("ITEM_QTY");
+    resetRate();
   }
 
   function startNew() {
     setEditId("new"); setEditName(""); setEditKey(""); setEditSort(String(jobs.length));
-    setEditDeductsFrom(""); setEditPrice(""); setEditUnit("helai"); setEditStaffCountMax("");
+    setEditDeductsFrom(""); setEditPrice(""); setEditUnit("helai");
     setEditSplitMode("BY_QTY"); setEditDefaultQty("ITEM_QTY");
+    resetRate();
+  }
+
+  /** Payload tarif bawaan; null = input tidak valid (toast sudah ditampilkan) */
+  function buildRatePayload() {
+    if (!editRateType) {
+      return { defaultCommissionType: null, defaultCommissionValue: null, rateTiers: [] as CommissionJobRateTierInput[] };
+    }
+    const rows = editTiers.filter(t => t.maxStaff !== "" || t.value !== "");
+    if (rows.some(t => t.value === "")) { toast.error("Isi tarif untuk setiap tingkatan"); return null; }
+    if (!editRateValue && rows.length === 0) { toast.error("Isi nilai tarif bawaan atau tambah tingkatan"); return null; }
+    return {
+      defaultCommissionType:  editRateType,
+      defaultCommissionValue: editRateValue ? parseFloat(editRateValue) : null,
+      rateTiers: rows.map(t => ({
+        maxStaff: t.maxStaff ? parseInt(t.maxStaff, 10) : null,
+        value:    parseFloat(t.value),
+      })),
+    };
   }
 
   function startEdit(job: CommissionJob) {
@@ -145,21 +278,28 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
     setEditDeductsFrom(job.deductsFromJobId ?? "");
     setEditPrice(job.pricePerUnit ? String(Number(job.pricePerUnit)) : "");
     setEditUnit(job.unit || "helai");
-    setEditStaffCountMax(job.staffCountMax != null ? String(job.staffCountMax) : "");
     setEditSplitMode(job.splitMode ?? "BY_QTY");
     setEditDefaultQty(job.defaultQty ?? "ITEM_QTY");
+    setEditRateType(job.defaultCommissionType ?? "");
+    setEditRateValue(job.defaultCommissionValue != null ? String(Number(job.defaultCommissionValue)) : "");
+    setEditTiers((job.rateTiers ?? []).map(t => ({
+      maxStaff: t.maxStaff != null ? String(t.maxStaff) : "",
+      value:    String(Number(t.value)),
+    })));
   }
 
   function saveNew() {
     if (!editName.trim()) { toast.error("Nama job wajib diisi"); return; }
+    const rate = buildRatePayload();
+    if (!rate) return;
     createMut.mutate({
+      ...rate,
       name:             editName.trim(),
       jobKey:           editKey || sanitizeKey(editName),
       sortOrder:        Number(editSort) || 0,
       deductsFromJobId: editDeductsFrom || null,
       pricePerUnit:     editPrice ? parseFloat(editPrice) : null,
       unit:             editUnit.trim() || "helai",
-      staffCountMax:    editStaffCountMax ? parseInt(editStaffCountMax, 10) : null,
       splitMode:        editSplitMode,
       defaultQty:       editDefaultQty,
     });
@@ -167,14 +307,16 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
 
   function saveEdit(id: string) {
     if (!editName.trim()) { toast.error("Nama job wajib diisi"); return; }
+    const rate = buildRatePayload();
+    if (!rate) return;
     updateMut.mutate({
       id,
+      ...rate,
       name:             editName.trim(),
       sortOrder:        Number(editSort) || 0,
       deductsFromJobId: editDeductsFrom || null,
       pricePerUnit:     editPrice ? parseFloat(editPrice) : null,
       unit:             editUnit.trim() || "helai",
-      staffCountMax:    editStaffCountMax ? parseInt(editStaffCountMax, 10) : null,
       splitMode:        editSplitMode,
       defaultQty:       editDefaultQty,
     });
@@ -265,18 +407,11 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
                     splitMode={editSplitMode} onSplitMode={setEditSplitMode}
                     defaultQty={editDefaultQty} onDefaultQty={setEditDefaultQty}
                   />
-                        {/* Row 3: staffCountMax (HS dynamic rate) */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-muted-foreground w-20 shrink-0">Maks. Staff:</span>
-                          <Input
-                            type="number" min={1}
-                            value={editStaffCountMax}
-                            onChange={e => setEditStaffCountMax(e.target.value)}
-                            className="h-6 text-xs w-16"
-                            placeholder="—"
-                          />
-                          <span className="text-[10px] text-muted-foreground">orang (kosong = tidak ada batas)</span>
-                        </div>
+                        <JobRateFields
+                          type={editRateType} onType={setEditRateType}
+                          value={editRateValue} onValue={setEditRateValue}
+                          tiers={editTiers} onTiers={setEditTiers}
+                        />
                         {/* Actions */}
                         <div className="flex gap-1.5">
                           <Button size="sm" className="h-6 px-2" disabled={isMutating} onClick={() => saveEdit(job.id)}>
@@ -325,11 +460,9 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
                               )}
                             </div>
                           )}
-                          {job.staffCountMax != null && (
-                            <div className="mt-0.5">
-                              <Badge variant="outline" className="text-[9px] px-1 py-0 text-blue-600 border-blue-300">
-                                ≤ {job.staffCountMax} staff
-                              </Badge>
+                          {rateSummary(job) && (
+                            <div className="mt-0.5 text-[10px] text-emerald-600">
+                              Tarif bawaan — {rateSummary(job)}
                             </div>
                           )}
                         </div>
@@ -418,18 +551,11 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
                     splitMode={editSplitMode} onSplitMode={setEditSplitMode}
                     defaultQty={editDefaultQty} onDefaultQty={setEditDefaultQty}
                   />
-                  {/* Row 3: staffCountMax (HS dynamic rate) */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-muted-foreground w-20 shrink-0">Maks. Staff:</span>
-                    <Input
-                      type="number" min={1}
-                      value={editStaffCountMax}
-                      onChange={e => setEditStaffCountMax(e.target.value)}
-                      className="h-6 text-xs w-16"
-                      placeholder="—"
-                    />
-                    <span className="text-[10px] text-muted-foreground">orang (kosong = tidak ada batas)</span>
-                  </div>
+                  <JobRateFields
+                    type={editRateType} onType={setEditRateType}
+                    value={editRateValue} onValue={setEditRateValue}
+                    tiers={editTiers} onTiers={setEditTiers}
+                  />
                   {/* Actions */}
                   <div className="flex gap-1.5">
                     <Button size="sm" className="h-6 px-2" disabled={isMutating} onClick={saveNew}>
@@ -449,6 +575,7 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
               <p className="text-[10px] text-muted-foreground mt-2">
                 ✦ Jobs ini muncul di halaman Generate Komisi — staff centang job yang mereka kerjakan.
                 Job "Potong dari" otomatis mengurangi base/komisi job utama di kalkulator.
+                Tarif bawaan dipakai untuk staf tanpa rule; rule per karyawan hanya untuk pengecualian.
               </p>
             </>
           )}

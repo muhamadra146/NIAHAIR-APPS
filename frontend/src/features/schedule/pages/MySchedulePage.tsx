@@ -9,21 +9,17 @@ import { Button }        from "@/components/ui/button";
 import { useAuthStore }  from "@/stores/authStore";
 import { useMySchedules } from "../hooks";
 import type { MyScheduleItem } from "../types";
+import { wibDateParts, toWibDateStr, WIB_TZ } from "@/lib/utils";
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
 function getMonday(date: Date): Date {
-  // Use LOCAL weekday — getUTCDay() returns the wrong day for WIB users
-  // between midnight and 07:00 (UTC is still the previous day)
-  const day = date.getDay(); // 0 = Sun, 1 = Mon, ...
+  // Pakai tanggal kalender WIB (bukan UTC / zona device). Untuk input UTC-midnight
+  // (tanggal murni) hasilnya tanggal yang sama. Kembalian = UTC midnight tanggal Senin.
+  const { year, month, day: dom } = wibDateParts(date);
+  const day = new Date(Date.UTC(year, month - 1, dom)).getUTCDay(); // 0 = Sun, 1 = Mon, ...
   const diff = day === 0 ? -6 : 1 - day;
-  const monday = new Date(date);
-  monday.setDate(monday.getDate() + diff); // local date arithmetic
-  // Convert back to UTC midnight so toISODate() (.toISOString()) gives correct YYYY-MM-DD
-  const y = monday.getFullYear();
-  const m = String(monday.getMonth() + 1).padStart(2, "0");
-  const d = String(monday.getDate()).padStart(2, "0");
-  return new Date(`${y}-${m}-${d}T00:00:00.000Z`);
+  return new Date(Date.UTC(year, month - 1, dom + diff));
 }
 
 function toISODate(d: Date): string {
@@ -39,16 +35,16 @@ function addDays(date: Date, n: number): Date {
 function formatDate(dateStr: string): { full: string; short: string; day: string } {
   const d = new Date(dateStr);
   return {
-    full:  d.toLocaleDateString("id-ID", { weekday: "long",  day: "numeric", month: "long", year: "numeric" }),
-    short: d.toLocaleDateString("id-ID", { day: "numeric",  month: "short" }),
-    day:   d.toLocaleDateString("id-ID", { weekday: "short" }).toUpperCase(),
+    full:  d.toLocaleDateString("id-ID", { weekday: "long",  day: "numeric", month: "long", year: "numeric", timeZone: WIB_TZ }),
+    short: d.toLocaleDateString("id-ID", { day: "numeric",  month: "short", timeZone: WIB_TZ }),
+    day:   d.toLocaleDateString("id-ID", { weekday: "short", timeZone: WIB_TZ }).toUpperCase(),
   };
 }
 
 function formatTime(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: WIB_TZ });
 }
 
 function formatWeekRange(startDate: string): string {
@@ -58,15 +54,8 @@ function formatWeekRange(startDate: string): string {
 }
 
 function isToday(dateStr: string): boolean {
-  // Use local date components so "today" matches the device's timezone (WIB, etc.)
-  // dateStr is "YYYY-MM-DD"; today is constructed from local Date to match
-  const today = new Date();
-  const todayStr = [
-    today.getFullYear(),
-    String(today.getMonth() + 1).padStart(2, "0"),
-    String(today.getDate()).padStart(2, "0"),
-  ].join("-");
-  return todayStr === dateStr;
+  // dateStr is "YYYY-MM-DD"; "hari ini" menurut kalender WIB
+  return toWibDateStr() === dateStr;
 }
 
 // ── Status display helpers ─────────────────────────────────────────────────────

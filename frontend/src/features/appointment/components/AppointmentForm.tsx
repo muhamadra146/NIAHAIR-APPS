@@ -13,13 +13,15 @@ import { useAuthStore } from "@/stores/authStore";
 import { fetchCustomers } from "@/features/customer/api/customer.api";
 import { fetchAvailableStaff } from "@/features/schedule/api/staffSchedule.api";
 import { fetchDeposits } from "@/features/invoice/api";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, toWibTimeStr } from "@/lib/utils";
 import type { Deposit } from "@/features/invoice/types";
 import {
   createAppointmentSchema,
   updateAppointmentSchema,
   type CreateAppointmentFormValues,
   type UpdateAppointmentFormValues,
+  type CreateAppointmentFormInput,
+  type UpdateAppointmentFormInput,
 } from "../schemas/appointment.schema";
 import {
   fetchAppointmentPhotos,
@@ -28,7 +30,7 @@ import {
   type AppointmentPhoto,
   type AppointmentPhotoType,
 } from "../api/appointment.api";
-import type { Appointment } from "../types";
+import type { Appointment, AvailableStaff } from "../types";
 import {
   StaffSlotSelector,
   EMPTY_SLOTS,
@@ -68,7 +70,7 @@ function CustomerSearchField({
   const [open, setOpen]               = useState(false);
   const [loading, setLoading]         = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (!value) setDisplayName("");
@@ -162,7 +164,7 @@ export function AppointmentCreateForm({ open, onOpenChange, onSubmit, isPending,
   const {
     control, register, handleSubmit, reset, setValue, watch,
     formState: { errors },
-  } = useForm<CreateAppointmentFormValues>({
+  } = useForm<CreateAppointmentFormInput, unknown, CreateAppointmentFormValues>({
     resolver: zodResolver(createAppointmentSchema),
     defaultValues: {
       customerId:         "",
@@ -598,12 +600,12 @@ interface UpdateFormProps {
 function toTimeInput(isoString: string): string {
   const d = new Date(isoString);
   if (isNaN(d.getTime())) return "";
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return toWibTimeStr(d);
 }
 
 export function AppointmentUpdateForm({ open, onOpenChange, onSubmit, isPending, defaultValues, error }: UpdateFormProps) {
   const { register, handleSubmit, reset, watch, setValue, formState: { errors } } =
-    useForm<UpdateAppointmentFormValues>({ resolver: zodResolver(updateAppointmentSchema) });
+    useForm<UpdateAppointmentFormInput, unknown, UpdateAppointmentFormValues>({ resolver: zodResolver(updateAppointmentSchema) });
 
   const apptType = watch("type");
 
@@ -660,7 +662,7 @@ export function AppointmentUpdateForm({ open, onOpenChange, onSubmit, isPending,
   }: {
     label:   string;
     photos:  AppointmentPhoto[];
-    fileRef: React.RefObject<HTMLInputElement>;
+    fileRef: React.RefObject<HTMLInputElement | null>;
     type:    AppointmentPhotoType;
   }) {
     return (

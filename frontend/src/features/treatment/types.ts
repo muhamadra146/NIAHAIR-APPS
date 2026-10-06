@@ -200,7 +200,7 @@ export interface MaterialUsageRow {
 }
 
 export interface BulkSaveMaterialUsageRow {
-  id:              string | null;
+  id?:             string;
   treatmentItemId: string;
   materialItemId:  string;
   unitId:          string;

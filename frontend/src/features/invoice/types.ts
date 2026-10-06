@@ -1,4 +1,8 @@
-export type InvoiceStatus = "UNPAID" | "PAID" | "CANCELLED";
+// PARTIAL = sudah ada uang masuk (deposit/pembayaran), masih ada sisa tagihan (FIN-015)
+export type InvoiceStatus = "UNPAID" | "PARTIAL" | "PAID" | "CANCELLED";
+
+/** Invoice yang masih punya sisa tagihan (bisa dibayar / masih bisa diedit) */
+export const isOpenInvoice = (status: string) => status === "UNPAID" || status === "PARTIAL";
 export type DepositStatus = "PENDING" | "UNPAID" | "PARTIAL" | "PAID" | "PARTIAL_USED" | "USED" | "REFUNDED" | "CANCELLED";
 
 export interface InvoiceCustomer {

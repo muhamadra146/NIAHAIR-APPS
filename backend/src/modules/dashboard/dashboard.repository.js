@@ -1,15 +1,28 @@
 'use strict';
 
 const prisma           = require("../../config/prisma");
+const { wibDayStart, wibDayEnd, toDateOnly } = require("../../utils/date");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Kolom timestamp → batas hari WIB
 function dateWhere(field, startDate, endDate) {
   const f = {};
-  if (startDate) f.gte = new Date(startDate);
-  if (endDate)   f.lte = new Date(endDate + "T23:59:59.999Z");
+  if (startDate) f.gte = wibDayStart(startDate);
+  if (endDate)   f.lte = wibDayEnd(endDate);
   return Object.keys(f).length ? { [field]: f } : {};
 }
+
+// Kolom @db.Date → 00:00 UTC dari tanggal WIB
+function dateOnlyWhere(field, startDate, endDate) {
+  const f = {};
+  if (startDate) f.gte = toDateOnly(startDate);
+  if (endDate)   f.lte = toDateOnly(endDate);
+  return Object.keys(f).length ? { [field]: f } : {};
+}
+
+// Tanggal kalender WIB dari kolom TIMESTAMP (disimpan UTC tanpa zona)
+const wibDateSql = (col) => `DATE(("${col}" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jakarta')`;
 
 // ── Revenue (dari Invoice) ────────────────────────────────────────────────────
 
@@ -123,7 +136,7 @@ const getPayrollSummary = async ({ branchId, startDate, endDate }) => {
   const where = {
     status: "PAID",
     ...(branchId ? { branchId } : {}),
-    ...dateWhere("periodStart", startDate, endDate),
+    ...dateOnlyWhere("periodStart", startDate, endDate),
   };
 
   const agg = await prisma.payroll.aggregate({
@@ -156,17 +169,17 @@ const getDailyTrend = async ({ branchId, startDate, endDate }) => {
   let   ri            = 1;
 
   if (branchId) { revConditions.push(`"branchId" = $${ri++}`); revValues.push(branchId); }
-  if (startDate){ revConditions.push(`"invoiceDate" >= $${ri++}`); revValues.push(new Date(startDate)); }
-  if (endDate)  { revConditions.push(`"invoiceDate" <= $${ri++}`); revValues.push(new Date(endDate + "T23:59:59.999Z")); }
+  if (startDate){ revConditions.push(`"invoiceDate" >= $${ri++}`); revValues.push(wibDayStart(startDate)); }
+  if (endDate)  { revConditions.push(`"invoiceDate" <= $${ri++}`); revValues.push(wibDayEnd(endDate)); }
 
   const revRows = await prisma.$queryRawUnsafe(
     `SELECT
-       DATE("invoiceDate")   AS date,
+       ${wibDateSql("invoiceDate")} AS date,
        COUNT(*)::int         AS invoice_count,
        SUM("grandTotal")     AS revenue
      FROM invoices
      WHERE ${revConditions.join(" AND ")}
-     GROUP BY DATE("invoiceDate")
+     GROUP BY ${wibDateSql("invoiceDate")}
      ORDER BY date ASC`,
     ...revValues,
   );
@@ -177,17 +190,17 @@ const getDailyTrend = async ({ branchId, startDate, endDate }) => {
   let   pi            = 1;
 
   if (branchId) { payConditions.push(`"branchId" = $${pi++}`); payValues.push(branchId); }
-  if (startDate){ payConditions.push(`"paymentDate" >= $${pi++}`); payValues.push(new Date(startDate)); }
-  if (endDate)  { payConditions.push(`"paymentDate" <= $${pi++}`); payValues.push(new Date(endDate + "T23:59:59.999Z")); }
+  if (startDate){ payConditions.push(`"paymentDate" >= $${pi++}`); payValues.push(wibDayStart(startDate)); }
+  if (endDate)  { payConditions.push(`"paymentDate" <= $${pi++}`); payValues.push(wibDayEnd(endDate)); }
 
   const payRows = await prisma.$queryRawUnsafe(
     `SELECT
-       DATE("paymentDate")  AS date,
+       ${wibDateSql("paymentDate")} AS date,
        COUNT(*)::int        AS payment_count,
        SUM(amount)          AS cash_received
      FROM payments
      ${payConditions.length ? `WHERE ${payConditions.join(" AND ")}` : ""}
-     GROUP BY DATE("paymentDate")
+     GROUP BY ${wibDateSql("paymentDate")}
      ORDER BY date ASC`,
     ...payValues,
   );

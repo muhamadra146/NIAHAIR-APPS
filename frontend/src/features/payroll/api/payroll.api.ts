@@ -1,6 +1,6 @@
 import { api } from "@/lib/axios";
 import type { ApiResponse, PaginatedResponse } from "@/types/api";
-import type { Payroll, GeneratePayrollInput, PayrollListParams, BpjsReportResult, BpjsReportParams, BulkGenerateInput, BulkGenerateResult } from "../types";
+import type { Payroll, GeneratePayrollInput, PayrollListParams, BpjsReportResult, BpjsReportParams, BulkGenerateInput, BulkGenerateResult, PayrollPeriodPreview, PayrollPeriodPreviewParams } from "../types";
 
 export const deletePayroll = async (id: string): Promise<void> => {
   await api.delete(`/payroll/${id}`);
@@ -13,6 +13,11 @@ export const fetchPayrolls = async (params: PayrollListParams = {}): Promise<Pag
 
 export const fetchPayroll = async (id: string): Promise<Payroll> => {
   const { data } = await api.get<ApiResponse<Payroll>>(`/payroll/${id}`);
+  return data.data;
+};
+
+export const previewPayrollPeriod = async (params: PayrollPeriodPreviewParams): Promise<PayrollPeriodPreview> => {
+  const { data } = await api.get<ApiResponse<PayrollPeriodPreview>>("/payroll/period-preview", { params });
   return data.data;
 };
 

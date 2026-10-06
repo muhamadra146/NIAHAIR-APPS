@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { usePurchaseInvoice, useCancelPurchaseInvoice, useDeletePurchaseInvoice } from "../hooks";
+import { WIB_TZ } from "@/lib/utils";
 
 const fmt = (v: string | number) => `Rp ${Number(v).toLocaleString("id-ID")}`;
 
@@ -50,6 +51,8 @@ export function PurchaseDetailPage() {
   const { user } = useAuthStore();
   // B7: cancel & delete hanya SUPER_ADMIN / OWNER
   const canCancelDelete = user?.roleCode === "SUPER_ADMIN" || user?.roleCode === "OWNER";
+  // Sesuai backend purchaseReturn WRITE_ROLES
+  const canReturn = ["SUPER_ADMIN", "OWNER", "MANAGER", "INVENTORY"].includes(user?.roleCode ?? "");
 
   const { data: invoice, isLoading } = usePurchaseInvoice(id!);
   const cancelMutation = useCancelPurchaseInvoice();
@@ -76,7 +79,7 @@ export function PurchaseDetailPage() {
     );
   }
 
-  const dateStr = new Date(invoice.invoiceDate).toLocaleDateString("id-ID", {
+  const dateStr = new Date(invoice.invoiceDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ,
     day: "2-digit", month: "long", year: "numeric",
   });
 
@@ -152,6 +155,13 @@ export function PurchaseDetailPage() {
                   <p className="text-xs text-muted-foreground">Syarat Pembayaran: {invoice.paymentTerms}</p>
                 )}
               </div>
+
+              {canReturn && invoice.status === "POSTED" && (
+                <Button size="sm" variant="outline" className="h-8 text-xs shrink-0"
+                  onClick={() => navigate(`/purchase-returns/new?invoiceId=${invoice.id}`)}>
+                  Buat Retur
+                </Button>
+              )}
 
               {/* Action buttons — hanya SUPER_ADMIN / OWNER */}
               {canCancelDelete && (
@@ -263,7 +273,7 @@ export function PurchaseDetailPage() {
                   <div>
                     <p className="text-xs text-muted-foreground mb-0.5">Tanggal Faktur Pajak</p>
                     <p className="font-medium">
-                      {new Date(invoice.taxInvoiceDate).toLocaleDateString("id-ID", {
+                      {new Date(invoice.taxInvoiceDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ,
                         day: "2-digit", month: "long", year: "numeric",
                       })}
                     </p>

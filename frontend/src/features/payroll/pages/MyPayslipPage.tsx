@@ -6,7 +6,9 @@ import { PageContainer }             from "@/components/layout/PageContainer";
 import { Skeleton }                  from "@/components/ui/skeleton";
 import { Button }                    from "@/components/ui/button";
 import { useMyPayrolls }             from "../hooks";
-import type { Payroll, PayrollStatus, PayrollItem } from "../types";
+import type { Payroll, PayrollStatus } from "../types";
+import { WIB_TZ, wibDateParts, toWibDateStr } from "@/lib/utils";
+import { payrollMonthLabel, payrollRangeLabel } from "../period";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -14,14 +16,14 @@ const fmtRp = (n: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
 
 const fmtDate = (iso: string) =>
-  new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+  new Date(iso).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "numeric", month: "long", year: "numeric" });
 
+// Nama gaji = bulan kerja (COM-017); rentang ditampilkan bila periode bukan 1 bulan kalender penuh
 const fmtPeriod = (start: string, end: string) => {
-  const s = new Date(start);
-  const e = new Date(end);
-  const sameMonth = s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth();
-  if (sameMonth) return s.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
-  return `${s.toLocaleDateString("id-ID", { day: "numeric", month: "short" })} – ${e.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}`;
+  const fullMonth = toWibDateStr(new Date(start)).slice(8) === "01" &&
+    toWibDateStr(new Date(start)).slice(0, 7) === toWibDateStr(new Date(end)).slice(0, 7);
+  const label = `Gaji ${payrollMonthLabel(start)}`;
+  return fullMonth ? label : `${label} (${payrollRangeLabel(start, end)})`;
 };
 
 const STATUS_CFG: Record<PayrollStatus, { label: string; className: string; icon: typeof Banknote }> = {
@@ -46,7 +48,7 @@ function printPayslip(p: Payroll) {
   const fmt = (n: number) =>
     new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
   const fmtDt = (iso: string) =>
-    new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+    new Date(iso).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "numeric", month: "long", year: "numeric" });
   const period  = fmtPeriod(p.periodStart, p.periodEnd);
   const incomes = p.items.filter(i => i.type === "INCOME");
   const deducts = p.items.filter(i => i.type === "DEDUCTION");
@@ -173,7 +175,7 @@ body{font-family:Arial,sans-serif;font-size:13px;color:#111;background:#f8fafc;-
     <div class="net-val">${fmt(Number(p.netSalary))}</div>
   </div>
 
-  <div class="footer">Status: ${statusLabel} &nbsp;·&nbsp; Dicetak pada ${new Date().toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric"})}</div>
+  <div class="footer">Status: ${statusLabel} &nbsp;·&nbsp; Dicetak pada ${new Date().toLocaleDateString("id-ID",{ timeZone: WIB_TZ, day:"numeric",month:"long",year:"numeric"})}</div>
 </div>
 </body></html>`;
 
@@ -346,7 +348,7 @@ function PayslipDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
                 <div className="min-w-0">
                   <p className="text-xs text-slate-700 truncate">{c.treatmentName ?? "Komisi"}</p>
                   <p className="text-[10px] text-slate-400 mt-0.5">
-                    {new Date(c.approvedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                    {new Date(c.approvedAt).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "numeric", month: "short", year: "numeric" })}
                   </p>
                 </div>
                 <span className="shrink-0 text-xs font-semibold tabular-nums text-emerald-700">
@@ -363,7 +365,7 @@ function PayslipDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_YEAR = wibDateParts().year;
 const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i);
 
 export function MyPayslipPage() {

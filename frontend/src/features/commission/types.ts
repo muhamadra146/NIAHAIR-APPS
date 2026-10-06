@@ -50,10 +50,11 @@ export interface CommissionJob {
   unit:                 string;         // satuan (label): "helai", "sesi", "kepala", dll.
   splitMode:            CommissionSplitMode;
   defaultQty:           CommissionDefaultQty;
-  // staffCountMax: batas jumlah staff untuk rate dinamis (HS).
-  // null = berlaku ketika jumlah staff melebihi semua job yang punya staffCountMax.
-  staffCountMax:        number | null;
-  deductsFrom?:         { id: string; name: string } | null;
+  // Tarif bawaan job — dipakai untuk staf yang tidak punya rule sendiri (COM-013).
+  defaultCommissionType:  CommissionType | null;
+  defaultCommissionValue: string | null;      // Decimal as string
+  rateTiers:              CommissionJobRateTier[];
+  deductsFrom?:        { id: string; name: string } | null;
   createdAt:            string;
   updatedAt:            string;
 }
@@ -67,7 +68,9 @@ export interface CreateCommissionJobInput {
   unit?:              string;
   splitMode?:         CommissionSplitMode;
   defaultQty?:        CommissionDefaultQty;
-  staffCountMax?:     number | null;  // batas staff untuk HS dynamic rate
+  defaultCommissionType?:  CommissionType | null;
+  defaultCommissionValue?: number | null;
+  rateTiers?:              CommissionJobRateTierInput[];
 }
 
 export interface UpdateCommissionJobInput {
@@ -79,7 +82,21 @@ export interface UpdateCommissionJobInput {
   unit?:              string;
   splitMode?:         CommissionSplitMode;
   defaultQty?:        CommissionDefaultQty;
-  staffCountMax?:     number | null;  // batas staff untuk HS dynamic rate
+  defaultCommissionType?:  CommissionType | null;
+  defaultCommissionValue?: number | null;
+  rateTiers?:              CommissionJobRateTierInput[];
+}
+
+/** Tingkatan tarif berdasarkan jumlah staf; maxStaff null = "lebih dari itu" */
+export interface CommissionJobRateTier {
+  id:       string;
+  maxStaff: number | null;
+  value:    string;
+}
+
+export interface CommissionJobRateTierInput {
+  maxStaff: number | null;
+  value:    number;
 }
 
 // ── Commission Rule ───────────────────────────────────────────────────────────
@@ -255,4 +272,25 @@ export interface CommissionListParams {
   status?:     CommissionStatus | string;
   startDate?:  string;
   endDate?:    string;
+  /** Komisi Saya: bulan kerja YYYY-MM (nama gaji) — aturan periode sama dengan payroll (COM-017) */
+  yearMonth?:  string;
+}
+
+export interface CommissionBucket { count: number; amount: number }
+
+/** GET /commissions/my/summary — ringkasan per periode gaji (COM-017) */
+export interface MyCommissionSummary {
+  period: {
+    yearMonth:     string;  // bulan kerja = nama gaji ("Gaji Oktober")
+    payDay:        number;
+    periodStart:   string;  // awal periode kerja
+    periodEnd:     string;  // akhir periode kerja
+    payDate:       string;  // tanggal gajian
+    payrollStatus: string | null; // slip gaji periode ini (null = belum dibuat)
+  };
+  pending: CommissionBucket;  // menunggu persetujuan (belum punya periode)
+  ready:   CommissionBucket & { carryOver: CommissionBucket }; // akan dibayar di gaji ini (carryOver = sisa periode lalu)
+  paid:    CommissionBucket;  // tercatat di slip gaji ini, sudah dibayar
+  total:   CommissionBucket;  // pending + ready + paid
+  queued:  CommissionBucket;  // slip ini sudah dibuat: disetujui tapi belum masuk slip mana pun → ikut gaji berikutnya
 }

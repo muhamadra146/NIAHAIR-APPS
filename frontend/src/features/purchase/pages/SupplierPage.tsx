@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useSuppliers, useSyncSuppliers } from "../hooks";
 import type { Supplier } from "../types";
+import { WIB_TZ } from "@/lib/utils";
 
 export function SupplierPage() {
   const roleCode = useAuthStore((s) => s.user?.roleCode);
@@ -212,7 +213,7 @@ function SupplierRow({ supplier: s }: { supplier: Supplier }) {
       </td>
       <td className="px-4 py-3 text-xs text-muted-foreground">
         {s.lastSyncAt
-          ? new Date(s.lastSyncAt).toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+          ? new Date(s.lastSyncAt).toLocaleString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
           : "—"}
       </td>
     </tr>
@@ -271,7 +272,7 @@ function SupplierCard({ supplier: s }: { supplier: Supplier }) {
           )}
           {s.lastSyncAt && (
             <p className="text-xs text-muted-foreground">
-              Sync: {new Date(s.lastSyncAt).toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+              Sync: {new Date(s.lastSyncAt).toLocaleString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "short", year: "numeric" })}
             </p>
           )}
         </div>

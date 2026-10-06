@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useHolidays, useCreateHoliday, useUpdateHoliday, useDeleteHoliday } from "../../hooks";
 import type { Holiday } from "../../types";
+import { WIB_TZ, wibDateParts } from "@/lib/utils";
 
 function apiErr(err: unknown) {
   if (err && typeof err === "object" && "response" in err) {
@@ -16,9 +17,9 @@ function apiErr(err: unknown) {
 }
 
 const fmtDate = (d: string) =>
-  new Date(d).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
+  new Date(d).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "long", year: "numeric" });
 
-const currentYear = new Date().getFullYear();
+const currentYear = wibDateParts().year;
 const YEARS = [currentYear - 1, currentYear, currentYear + 1];
 
 interface FormState { date: string; name: string }

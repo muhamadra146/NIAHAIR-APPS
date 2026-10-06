@@ -1,9 +1,12 @@
 'use strict';
 
 jest.mock('./correction.repository');
+// review(APPROVED) applies corrected times via attendance.manualSet — mock it so no DB is touched
+jest.mock('../attendance/attendance.service', () => ({ manualSet: jest.fn() }));
 
-const repo = require('./correction.repository');
-const svc  = require('./correction.service');
+const repo          = require('./correction.repository');
+const attendanceSvc = require('../attendance/attendance.service');
+const svc           = require('./correction.service');
 
 const CORRECTION = {
   id: 'cr1', status: 'PENDING',
@@ -142,6 +145,7 @@ describe('review', () => {
   test('approves PENDING correction', async () => {
     repo.findById.mockResolvedValue(CORRECTION);
     repo.update.mockResolvedValue({ ...CORRECTION, status: 'APPROVED', reviewedBy: 'mgr1' });
+    attendanceSvc.manualSet.mockResolvedValue({});
 
     const result = await svc.review('cr1', 'mgr1', { status: 'APPROVED', reviewNote: 'OK' });
     expect(repo.update).toHaveBeenCalledWith('cr1', expect.objectContaining({
@@ -149,6 +153,11 @@ describe('review', () => {
       reviewedBy: 'mgr1',
       reviewedAt: expect.any(Date),
     }));
+    expect(attendanceSvc.manualSet).toHaveBeenCalledWith({
+      staffScheduleId: 'ss1',
+      checkInAt:  '2024-06-01T08:00:00.000Z',
+      checkOutAt: undefined,
+    });
     expect(result.status).toBe('APPROVED');
   });
 
@@ -158,5 +167,6 @@ describe('review', () => {
 
     await svc.review('cr1', 'mgr1', { status: 'REJECTED', reviewNote: 'Not valid' });
     expect(repo.update).toHaveBeenCalledWith('cr1', expect.objectContaining({ status: 'REJECTED' }));
+    expect(attendanceSvc.manualSet).not.toHaveBeenCalled();
   });
 });

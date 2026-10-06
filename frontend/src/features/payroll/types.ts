@@ -51,6 +51,27 @@ export interface Payroll {
   branch: { id: string; code: string; name: string };
   items:  PayrollItem[];
   commissionBreakdown?: CommissionBreakdownItem[];
+  /** Hanya pada respons generate: celah periode dari payroll sebelumnya */
+  warnings?: string[];
+}
+
+/** GET /payroll/period-preview — periode sebelum generate (COM-017) */
+export interface PayrollPeriodPreview {
+  yearMonth:   string | null;  // bulan kerja = nama gaji (null pada mode rentang)
+  payDay:      number | null;
+  periodStart: string;
+  periodEnd:   string;
+  payDate:     string | null;
+  conflict:    string | null;  // tumpang tindih → generate ditolak
+  warnings:    string[];       // celah dari payroll sebelumnya
+}
+
+export interface PayrollPeriodPreviewParams {
+  employeeId?:  string;
+  payDay?:      number;
+  yearMonth?:   string;
+  periodStart?: string;
+  periodEnd?:   string;
 }
 
 export interface GeneratePayrollInput {
@@ -132,5 +153,6 @@ export interface BulkGenerateResult {
     status:       "created" | "error";
     message?:     string;
     payrollId?:   string;
+    warnings?:    string[];
   }>;
 }

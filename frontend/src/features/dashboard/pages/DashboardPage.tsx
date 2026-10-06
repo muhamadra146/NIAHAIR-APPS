@@ -10,7 +10,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAuthStore } from "@/stores/authStore";
-import { formatCurrency } from "@/lib/utils";
+import {
+  formatCurrency, toWibDateStr, toWibTimeStr, wibMonthRange, addDaysToDateStr, WIB_TZ,
+} from "@/lib/utils";
 import { useSummaryReport } from "@/features/report/hooks";
 import { useAppointments } from "@/features/appointment/hooks";
 import { useLoans }        from "@/features/loan/hooks";
@@ -18,18 +20,15 @@ import { useDepositSummary } from "@/features/invoice/hooks";
 
 // ── Date helpers (module-level, stable per page load) ────────────────────────
 const _now      = new Date();
-const todayStr  = _now.toISOString().slice(0, 10);
+const todayStr  = toWibDateStr(_now);
 
-function getMondayStr(d: Date): string {
-  const c   = new Date(d);
-  const day = c.getDay(); // 0 = Sun
-  c.setDate(c.getDate() - (day === 0 ? 6 : day - 1));
-  return c.toISOString().slice(0, 10);
+function getMondayStr(dateStr: string): string {
+  const day = new Date(`${dateStr}T00:00:00Z`).getUTCDay(); // 0 = Sun (tanggal murni)
+  return addDaysToDateStr(dateStr, -(day === 0 ? 6 : day - 1));
 }
 
-const firstDayStr = new Date(_now.getFullYear(), _now.getMonth(), 1).toISOString().slice(0, 10);
-const lastDayStr  = new Date(_now.getFullYear(), _now.getMonth() + 1, 0).toISOString().slice(0, 10);
-const mondayStr   = getMondayStr(_now);
+const { start: firstDayStr, end: lastDayStr } = wibMonthRange();
+const mondayStr   = getMondayStr(todayStr);
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const APPT_STATUS: Record<string, { label: string; color: string }> = {
@@ -71,6 +70,10 @@ const KPI_CONFIG = [
   { icon: Users,           label: "Kasbon Aktif",        href: "/loans"        },
 ] as const;
 
+// Sesuai hak akses backend: /reports/summary dan /loans
+const REPORT_ROLES    = ["SUPER_ADMIN", "OWNER", "MANAGER", "INVENTORY", "OFFICE", "FINANCE"];
+const LOAN_VIEW_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "FINANCE"];
+
 // STAFF_OPERASIONAL → tampilkan dashboard sederhana (view-only)
 const STAFF_ONLY_ROLES = ["STAFF_OPERASIONAL"] as const;
 
@@ -90,22 +93,27 @@ export function DashboardPage() {
     month: { startDate: firstDayStr, endDate: lastDayStr  },
   };
 
+  // Data hanya diminta jika role punya akses endpoint-nya (hindari 403)
+  const roleCode   = user?.roleCode ?? "";
+  const canReport  = REPORT_ROLES.includes(roleCode);
+  const canLoans   = LOAN_VIEW_ROLES.includes(roleCode);
+
   // ── Data hooks ──────────────────────────────────────────────────────────────
   const { data: summary,      isLoading } = useSummaryReport({
     branchId: branchId ?? undefined,
     ...periodDates[period],
-  });
+  }, canReport);
 
   // Today summary always loaded independently for the "Ringkasan Hari Ini" row
   const { data: todaySummary, isLoading: todayLoading } = useSummaryReport({
     branchId:  branchId ?? undefined,
     startDate: todayStr,
     endDate:   todayStr,
-  });
+  }, canReport);
 
   const { data: depositSum  } = useDepositSummary({ branchId: branchId ?? undefined });
   const { data: todayAppts  } = useAppointments({ startDate: todayStr, endDate: todayStr, limit: 6 });
-  const { data: activeLoans } = useLoans({ status: "ACTIVE", limit: 5 });
+  const { data: activeLoans } = useLoans({ status: "ACTIVE", limit: 5 }, canLoans);
 
   // ── Derived values ──────────────────────────────────────────────────────────
   const todayApptList  = todayAppts?.appointments ?? [];
@@ -135,7 +143,7 @@ export function DashboardPage() {
 
   // Greeting
   const greeting = (() => {
-    const h = _now.getHours();
+    const h = Number(toWibTimeStr(_now).slice(0, 2));
     if (h < 12) return "Selamat pagi";
     if (h < 15) return "Selamat siang";
     if (h < 18) return "Selamat sore";
@@ -147,7 +155,7 @@ export function DashboardPage() {
     ? "Hari Ini"
     : period === "week"
       ? `Minggu Ini`
-      : _now.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+      : _now.toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: WIB_TZ });
 
   // Today's appointment status breakdown
   const todayByStatus      = todaySummary?.appointments?.byStatus ?? {};
@@ -163,7 +171,7 @@ export function DashboardPage() {
         <div className="animate-fade-in delay-0 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-widest">
-              {_now.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+              {_now.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: WIB_TZ })}
             </p>
             <h1 className="text-2xl font-semibold tracking-tight">
               {greeting},{" "}
@@ -307,7 +315,7 @@ export function DashboardPage() {
             ) : (
               todayApptList.map((appt, i) => {
                 const st   = APPT_STATUS[appt.status] ?? { label: appt.status, color: "text-muted-foreground" };
-                const time = new Date(appt.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+                const time = new Date(appt.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: WIB_TZ });
                 return (
                   <Link
                     key={appt.id}

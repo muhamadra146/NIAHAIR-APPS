@@ -1,23 +1,24 @@
 import { useState, useEffect } from "react";
 import {
-  LogIn, LogOut, Clock, Calendar, ChevronLeft, ChevronRight,
-  AlertCircle, CheckCircle2, Timer, UserCheck, UserX,
+  LogIn, LogOut, Calendar, ChevronLeft, ChevronRight,
+  AlertCircle, CheckCircle2,
 } from "lucide-react";
 import { Button }   from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMyToday, useMyAttendance, useCheckIn, useCheckOut } from "../hooks";
 import type { AttendanceStatus } from "../types";
+import { WIB_TZ, toWibTimeStr, wibDateParts } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtTime(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("id-ID", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" });
 }
 
 function fmtDateShort(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
+  return new Date(iso).toLocaleDateString("id-ID", { timeZone: WIB_TZ, weekday: "short", day: "numeric", month: "short" });
 }
 
 // For live session (today card) — falls back to now if no checkout
@@ -90,10 +91,10 @@ function HeroCheckInCard() {
   const [geoError, setGeoError]         = useState(false);
   const [geofenceMsg, setGeofenceMsg]   = useState<string | null>(null);
 
-  const timeStr = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  const timeStr = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: WIB_TZ });
   const secStr  = `:${String(now.getSeconds()).padStart(2, "0")}`;
   const dateStr = now.toLocaleDateString("id-ID", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
+    weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: WIB_TZ,
   });
 
   if (isLoading) return <Skeleton className="h-80 w-full rounded-2xl" />;
@@ -107,7 +108,7 @@ function HeroCheckInCard() {
   // Shift progress bar
   const shiftStartMin = timeToMins(shift?.startTime);
   const shiftEndMin   = timeToMins(shift?.endTime);
-  const nowMin        = now.getHours() * 60 + now.getMinutes();
+  const nowMin        = timeToMins(toWibTimeStr(now)); // menit sejak 00:00 WIB
   const shiftDur      = shiftEndMin - shiftStartMin;
   const elapsed       = shiftDur > 0 ? Math.max(0, Math.min(nowMin - shiftStartMin, shiftDur)) : 0;
   const progressPct   = shiftDur > 0 ? Math.round((elapsed / shiftDur) * 100) : 0;
@@ -376,9 +377,9 @@ function MonthlyStats({ month, year }: { month: number; year: number }) {
 // ── History Table ─────────────────────────────────────────────────────────────
 
 function HistoryTable() {
-  const now = new Date();
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year,  setYear]  = useState(now.getFullYear());
+  const now = wibDateParts();
+  const [month, setMonth] = useState(now.month);
+  const [year,  setYear]  = useState(now.year);
 
   const { data, isLoading } = useMyAttendance({ month, year, limit: 31 });
   const records = data?.data ?? [];
@@ -388,14 +389,14 @@ function HistoryTable() {
     else setMonth(m => m - 1);
   }
   function nextMonth() {
-    const isCurrent = year === now.getFullYear() && month === now.getMonth() + 1;
+    const isCurrent = year === now.year && month === now.month;
     if (isCurrent) return;
     if (month === 12) { setMonth(1); setYear(y => y + 1); }
     else setMonth(m => m + 1);
   }
 
   const monthLabel     = new Date(year, month - 1, 1).toLocaleDateString("id-ID", { month: "long", year: "numeric" });
-  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
+  const isCurrentMonth = year === now.year && month === now.month;
 
   return (
     <div className="space-y-3">

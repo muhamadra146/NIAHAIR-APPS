@@ -36,13 +36,10 @@ import { MyLoanPage }                 from "@/features/loan/pages/MyLoanPage";
 import { MyLoanDetailPage }           from "@/features/loan/pages/MyLoanDetailPage";
 import { ConsultationListPage }       from "@/features/consultation/pages/ConsultationListPage";
 import { ConsultationFormPage }       from "@/features/consultation/pages/ConsultationFormPage";
-import { LeavePage }                  from "@/features/leave/pages/LeavePage";
 import { MyPayslipPage }             from "@/features/payroll/pages/MyPayslipPage";
 import { BpjsReportPage }           from "@/features/payroll/pages/BpjsReportPage";
-import { CorrectionPage }            from "@/features/attendance/pages/CorrectionPage";
+import { PengajuanPage }             from "@/features/attendance/pages/PengajuanPage";
 import { ComplaintPage }             from "@/features/complaint/pages/ComplaintPage";
-import { PermissionPage }            from "@/features/attendance/pages/PermissionPage";
-import { SickLeavePage }             from "@/features/attendance/pages/SickLeavePage";
 import { GenerateKomisiPage }           from "@/features/invoice/pages/GenerateKomisiPage";
 import CommissionCalculatorPage        from "@/features/invoice/pages/CommissionCalculatorPage";
 import { PurchasePage }              from "@/features/purchase/pages/PurchasePage";
@@ -60,11 +57,6 @@ import { PurchaseReturnDetailPage }  from "@/features/purchaseReturn/pages/Purch
 import { PurchaseReturnFormPage }    from "@/features/purchaseReturn/pages/PurchaseReturnFormPage";
 import { FinanceDashboardPage }      from "@/features/dashboard/pages/FinanceDashboardPage";
 import { AttendanceReportPage }     from "@/features/team/pages/AttendanceReportPage";
-
-// ── Role Groups (mirrors sidebarNav.ts) ─────────────────────────────────────
-const ADMIN_ROLES        = ["SUPER_ADMIN", "OWNER"]                                     as const;
-const MANAGEMENT_ROLES   = ["SUPER_ADMIN", "OWNER", "MANAGER"]                          as const;
-const POS_ROLES          = ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER"]               as const;
 
 export const router = createBrowserRouter([
   // ── Public routes ──────────────────────────────────────────────────────
@@ -89,16 +81,18 @@ export const router = createBrowserRouter([
 
           // ── ALL ROLES ────────────────────────────────────────────────
           { path: "/dashboard",   element: <DashboardPage /> },
-          { path: "/leaves",      element: <LeavePage /> },
-          { path: "/permissions", element: <PermissionPage /> },
-          { path: "/sick-leaves", element: <SickLeavePage /> },
+          // Pengajuan: Cuti/Izin/Sakit + Koreksi Jam Kerja dalam satu halaman (semua role)
+          { path: "/pengajuan",   element: <PengajuanPage /> },
+          // Alamat lama → tab yang sesuai di halaman Pengajuan
+          { path: "/leaves",      element: <Navigate to="/pengajuan?tab=cuti-izin&jenis=cuti" replace /> },
+          { path: "/permissions", element: <Navigate to="/pengajuan?tab=cuti-izin&jenis=izin" replace /> },
+          { path: "/sick-leaves", element: <Navigate to="/pengajuan?tab=cuti-izin&jenis=sakit" replace /> },
           { path: "/my-payslip",  element: <MyPayslipPage /> },
           { path: "/my-kasbon",      element: <MyLoanPage /> },
           { path: "/my-kasbon/:id",  element: <MyLoanDetailPage /> },
           // Jadwal Saya: self-service untuk semua role
           { path: "/my-schedule",    element: <MySchedulePage /> },
-          // Koreksi Kehadiran: self-service untuk semua role (sidebar: ALL_ROLES)
-          { path: "/attendance-corrections", element: <CorrectionPage /> },
+          { path: "/attendance-corrections", element: <Navigate to="/pengajuan?tab=koreksi" replace /> },
           // Attendance: self check-in untuk semua role; monitor tim untuk admin (lihat TeamPage)
           { path: "/attendance",             element: <TeamPage /> },
 
@@ -200,9 +194,10 @@ export const router = createBrowserRouter([
             ],
           },
 
-          // ── Data: Membership — semua role bisa lihat, write dibatasi di page
+          // ── Data: Membership — hanya SUPER_ADMIN, OWNER, MANAGER
+          //    (role lain tetap membaca data membership lewat API untuk diskon invoice & filter pelanggan)
           {
-            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","CASHIER","STAFF_OPERASIONAL","INVENTORY","OFFICE","FINANCE"]} />,
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER"]} />,
             children: [
               { path: "/memberships", element: <MembershipPage /> },
             ],
@@ -232,6 +227,13 @@ export const router = createBrowserRouter([
             element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","FINANCE","STAFF_OPERASIONAL"]} />,
             children: [
               { path: "/generate-komisi",                element: <GenerateKomisiPage /> },
+            ],
+          },
+
+          // ── Kalkulator Komisi — SUPER_ADMIN, OWNER, FINANCE (staf tidak boleh menghitung sendiri)
+          {
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","FINANCE"]} />,
+            children: [
               { path: "/generate-komisi/:id/calculator", element: <CommissionCalculatorPage /> },
             ],
           },

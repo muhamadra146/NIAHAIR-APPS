@@ -1,6 +1,7 @@
 import React from "react";
 import { Plus, X } from "lucide-react";
-import type { RosterData, ScheduleCell, RosterEmployee, ScheduleStatus } from "../types";
+import type { RosterData, ScheduleCell, RosterEmployee } from "../types";
+import { WIB_TZ } from "@/lib/utils";
 
 interface Props {
   data:         RosterData;
@@ -98,11 +99,11 @@ function CellPill({
 }
 
 function dayLabel(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("id-ID", { weekday: "short", day: "numeric" });
+  return new Date(dateStr).toLocaleDateString("id-ID", { timeZone: WIB_TZ, weekday: "short", day: "numeric" });
 }
 
 export function MobileRosterView({ data, isViewOnly = false, onCellClick, onUnassign }: Props) {
-  const { dates, rows } = data;
+  const { rows } = data;
 
   if (rows.length === 0) {
     return (

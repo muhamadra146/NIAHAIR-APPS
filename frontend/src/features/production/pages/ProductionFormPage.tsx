@@ -18,6 +18,7 @@ import type {
   CreateProductionItemInput,
   CreateProductionMaterialInput,
 } from "../types";
+import { toWibDateStr } from "@/lib/utils";
 
 // ── Local form types ──────────────────────────────────────────────────────────
 
@@ -46,7 +47,7 @@ interface FormValues {
   materials:       MaterialRow[];
 }
 
-const today = new Date().toISOString().slice(0, 10);
+const today = toWibDateStr();
 
 const EMPTY_ITEM: ItemRow     = { itemId: "", unitId: "", plannedQuantity: "", costAllocationPercentage: "" };
 const EMPTY_MAT:  MaterialRow = { itemId: "", warehouseId: "", unitId: "", plannedQuantity: "" };
@@ -59,7 +60,7 @@ export function ProductionFormPage() {
   const createOrder  = useCreateProductionOrder();
 
   const { data: branchData } = useAllBranches();
-  const branches = branchData?.data ?? (branchData as any) ?? [];
+  const branches = branchData ?? [];
 
   const {
     control, register, watch, handleSubmit, setValue,

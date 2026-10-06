@@ -13,12 +13,14 @@ import {
 } from "./api";
 import type { LoanListParams, CreateLoanInput, UpdateLoanInput, AddRepaymentInput } from "./types";
 
-export function useLoans(params: LoanListParams = {}) {
+// enabled=false untuk role tanpa akses daftar kasbon (backend: SA, OWNER, MANAGER, FINANCE)
+export function useLoans(params: LoanListParams = {}, enabled = true) {
   return useQuery({
     queryKey:       ["loans", params],
     queryFn:        () => fetchLoans(params),
     staleTime:      0,
     refetchOnMount: true,
+    enabled,
   });
 }
 

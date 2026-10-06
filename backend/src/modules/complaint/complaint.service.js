@@ -2,6 +2,7 @@ const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const { wibDayStart, wibDayEnd }   = require("../../utils/date");
 const prisma          = require("../../config/prisma");
 const repo            = require("./complaint.repository");
 
@@ -101,12 +102,8 @@ const getAll = async ({ page = 1, limit = 20, branchId, status, employeeId, seve
   // Date range filter (createdAt)
   if (startDate || endDate) {
     where.createdAt = {};
-    if (startDate) where.createdAt.gte = new Date(startDate);
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      where.createdAt.lte = end;
-    }
+    if (startDate) where.createdAt.gte = wibDayStart(startDate);
+    if (endDate)   where.createdAt.lte = wibDayEnd(endDate);
   }
 
   const [rows, total] = await Promise.all([repo.findAll({ skip, take, where }), repo.count(where)]);

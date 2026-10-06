@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Plus, CheckCircle, XCircle, AlertTriangle, CalendarDays, Clock } from "lucide-react";
+import { CheckCircle, XCircle, AlertTriangle, Clock } from "lucide-react";
 import { EmptyState }    from "@/components/common/EmptyState";
-import { PageContainer } from "@/components/layout/PageContainer";
 import { Button }        from "@/components/ui/button";
 import { Input }         from "@/components/ui/input";
 import { Label }         from "@/components/ui/label";
@@ -15,6 +14,7 @@ import {
   useCreatePermission, useApprovePermission, useRejectPermission, useCancelPermission,
 } from "../hooks";
 import type { PermissionRequest, PermissionType } from "../types";
+import { WIB_TZ, toWibDateStr } from "@/lib/utils";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ const ADMIN_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"];
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString("id-ID", {
+  return new Date(d).toLocaleDateString("id-ID", { timeZone: WIB_TZ,
     weekday: "short", day: "2-digit", month: "short", year: "numeric",
   });
 }
@@ -132,7 +132,7 @@ function ReviewDialog({ perm, onClose }: { perm: PermissionRequest; onClose: () 
 // ── Create dialog (employee) ──────────────────────────────────────────────────
 
 function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const today = new Date().toISOString().split("T")[0];
+  const today = toWibDateStr();
   const [type,             setType            ] = useState<PermissionType>("ABSENCE");
   const [date,             setDate            ] = useState(today);
   const [estimatedArrival, setEstimatedArrival] = useState("");
@@ -299,7 +299,7 @@ function PermissionCard({
         </div>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        Cabang: {perm.branch.name} · Diajukan {new Date(perm.createdAt).toLocaleDateString("id-ID")}
+        Cabang: {perm.branch.name} · Diajukan {new Date(perm.createdAt).toLocaleDateString("id-ID", { timeZone: WIB_TZ })}
       </p>
     </div>
   );
@@ -307,16 +307,15 @@ function PermissionCard({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export function PermissionPage() {
+/** Panel pengajuan — dipakai di halaman Pengajuan. Dialog "Ajukan" dikontrol parent. */
+export function PermissionPanel({ createOpen, onCreateClose }: { createOpen: boolean; onCreateClose: () => void }) {
   const { user } = useAuthStore();
   const isAdmin  = ADMIN_ROLES.includes(user?.role?.code ?? "");
-
-  const [createOpen,   setCreateOpen ] = useState(false);
   const [reviewing,    setReviewing  ] = useState<PermissionRequest | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
 
-  const myQuery  = useMyPermissions({ status: (statusFilter as PermissionRequest["status"]) || undefined });
-  const allQuery = usePermissions({ status: (statusFilter as PermissionRequest["status"]) || undefined });
+  const myQuery  = useMyPermissions({ status: (statusFilter as PermissionRequest["status"]) || undefined }, !isAdmin);
+  const allQuery = usePermissions({ status: (statusFilter as PermissionRequest["status"]) || undefined }, isAdmin);
   const query    = isAdmin ? allQuery : myQuery;
   const items    = query.data?.data ?? [];
 
@@ -328,18 +327,7 @@ export function PermissionPage() {
   }
 
   return (
-    <PageContainer
-      className="max-w-3xl"
-      title="Pengajuan Izin"
-      subtitle={isAdmin ? "Kelola izin ketidakhadiran karyawan" : "Ajukan dan pantau izin kamu"}
-      action={
-        !isAdmin ? (
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Ajukan Izin
-          </Button>
-        ) : undefined
-      }
-    >
+    <>
       <div className="space-y-5">
 
         {/* Pending warning (admin) */}
@@ -381,7 +369,7 @@ export function PermissionPage() {
                 ? "Tidak ada pengajuan dengan status ini"
                 : isAdmin
                   ? "Belum ada pengajuan izin dari karyawan"
-                  : 'Tekan "Ajukan Izin" untuk mulai'
+                  : 'Tekan "Ajukan" lalu pilih Izin untuk mulai'
             }
           />
         ) : (
@@ -400,10 +388,10 @@ export function PermissionPage() {
       </div>
 
       {/* Dialogs */}
-      <CreateDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateDialog open={createOpen} onClose={() => onCreateClose()} />
       {reviewing && (
         <ReviewDialog perm={reviewing} onClose={() => setReviewing(null)} />
       )}
-    </PageContainer>
+    </>
   );
 }

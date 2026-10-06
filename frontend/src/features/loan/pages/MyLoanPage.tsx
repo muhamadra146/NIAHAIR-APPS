@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Banknote, CheckCircle2, Clock } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, wibDateParts, dateStrFromParts, WIB_TZ } from "@/lib/utils";
 import { fetchMyLoans } from "../api";
 import type { Loan } from "../types";
 
@@ -116,9 +116,9 @@ function calcEstCompletion(loan: Loan): string | null {
   const monthly   = Number(loan.monthlyDeduction);
   if (monthly <= 0 || remaining <= 0) return null;
   const monthsLeft = Math.ceil(remaining / monthly);
-  const now   = new Date();
-  const estEnd = new Date(now.getFullYear(), now.getMonth() + monthsLeft, 1);
-  const label  = estEnd.toLocaleDateString("id-ID", { month: "short", year: "numeric" });
+  const now    = wibDateParts();
+  const estEnd = new Date(dateStrFromParts(now.year, now.month + monthsLeft, 1));
+  const label  = estEnd.toLocaleDateString("id-ID", { month: "short", year: "numeric", timeZone: WIB_TZ });
   return `~${monthsLeft} bulan lagi · Est. selesai ${label}`;
 }
 

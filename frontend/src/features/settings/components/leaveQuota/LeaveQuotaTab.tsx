@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { useLeaveQuotas, useAssignLeaveQuota, useLeaveTypes, useEmployees } from "../../hooks";
 import type { AssignQuotaInput } from "../../types";
+import { wibDateParts } from "@/lib/utils";
 
 const SEL = "h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
@@ -20,7 +21,7 @@ function apiErr(err: unknown) {
   return err instanceof Error ? err.message : "Terjadi kesalahan";
 }
 
-const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_YEAR = wibDateParts().year;
 const YEAR_OPTIONS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1];
 
 export function LeaveQuotaTab() {

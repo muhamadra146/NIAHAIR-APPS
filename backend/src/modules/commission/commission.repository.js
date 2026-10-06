@@ -1,4 +1,5 @@
 const prisma = require("../../config/prisma");
+const { toDateOnly, wibDayStart, wibDayEnd } = require("../../utils/date");
 
 // ── Transaction helper ────────────────────────────────────────────────
 
@@ -10,7 +11,10 @@ const withTransaction = (fn) => prisma.$transaction(fn);
 const JOB_CALC_SELECT = {
   id: true, name: true, jobKey: true, sortOrder: true, isActive: true,
   deductsFromJobId: true, pricePerUnit: true, unit: true,
-  splitMode: true, defaultQty: true, staffCountMax: true,
+  splitMode: true, defaultQty: true,
+  // Tarif bawaan job + tingkatan jumlah staf (dipakai jika staf tidak punya rule sendiri)
+  defaultCommissionType: true, defaultCommissionValue: true,
+  rateTiers: { select: { maxStaff: true, value: true } },
 };
 
 // ── Include shape for management reads ───────────────────────────────
@@ -62,6 +66,25 @@ const findAll = ({ skip, take, where, orderBy }) =>
   });
 
 const count = (where) => prisma.commission.count({ where });
+
+// Jumlah & nominal komisi per status (ringkasan Komisi Saya)
+const sumByStatus = (where) =>
+  prisma.commission.groupBy({
+    by:    ["status"],
+    where,
+    _sum:  { commissionAmount: true },
+    _count: { _all: true },
+  });
+
+const findEmployeePayDay = async (employeeId) =>
+  (await prisma.employee.findUnique({ where: { id: employeeId }, select: { payDay: true } }))?.payDay ?? null;
+
+// Payroll karyawan untuk periode gaji tsb (bila sudah dibuat)
+const findPayrollForPeriod = (employeeId, periodStart, periodEnd) =>
+  prisma.payroll.findFirst({
+    where:  { employeeId, periodStart: { lte: periodEnd }, periodEnd: { gte: periodStart } },
+    select: { id: true, status: true, periodStart: true, periodEnd: true },
+  });
 
 const findById = (id) =>
   prisma.commission.findUnique({ where: { id }, include: INCLUDE });
@@ -184,10 +207,11 @@ const findActiveRuleForGeneration = async (
     employeeId,
     commissionCategoryId,
     isActive:      true,
-    effectiveDate: { lte: invoiceDate },
+    // Berlaku pada tanggal invoice menurut kalender WIB
+    effectiveDate: { lte: wibDayEnd(invoiceDate) },
     OR: [
       { endDate: null },
-      { endDate: { gte: invoiceDate } },
+      { endDate: { gte: wibDayStart(invoiceDate) } },
     ],
   };
 
@@ -270,26 +294,13 @@ const overrideOne = (id, { commissionAmount, overrideBy, overrideNotes }) =>
     include: INCLUDE,
   });
 
-// Cek apakah ada payroll APPROVED/PAID yang periode-nya mencakup approvedAt dari komisi-komisi ini.
-// Digunakan sebelum regenerate untuk memastikan tidak ada komisi yang sudah masuk payroll final.
+// Payroll APPROVED/PAID yang memuat komisi-komisi ini (lewat payrollId — pasti, bukan tebakan tanggal).
+// Dipakai sebelum regenerate: komisi yang sudah masuk payroll final tidak boleh diubah.
 const findPayrollsContainingCommissions = (commissions, tx) => {
-  const client = tx ?? prisma;
-  const approved = commissions.filter((c) => c.approvedAt);
-  if (approved.length === 0) return [];
-
-  // Ambil semua kombinasi unik employeeId + approvedAt
-  const employeeIds = [...new Set(approved.map((c) => c.employeeId))];
-  const dates       = approved.map((c) => c.approvedAt);
-  const minDate     = new Date(Math.min(...dates.map((d) => new Date(d).getTime())));
-  const maxDate     = new Date(Math.max(...dates.map((d) => new Date(d).getTime())));
-
-  return client.payroll.findMany({
-    where: {
-      employeeId: { in: employeeIds },
-      status:     { in: ["APPROVED", "PAID"] },
-      periodStart: { lte: maxDate },
-      periodEnd:   { gte: minDate },
-    },
+  const payrollIds = [...new Set(commissions.map((c) => c.payrollId).filter(Boolean))];
+  if (payrollIds.length === 0) return [];
+  return (tx ?? prisma).payroll.findMany({
+    where:  { id: { in: payrollIds }, status: { in: ["APPROVED", "PAID"] } },
     select: { id: true, employeeId: true, status: true, periodStart: true, periodEnd: true },
   });
 };
@@ -299,6 +310,9 @@ module.exports = {
   // management
   findAll,
   count,
+  sumByStatus,
+  findEmployeePayDay,
+  findPayrollForPeriod,
   findById,
   approveOne,
   markPaidOne,

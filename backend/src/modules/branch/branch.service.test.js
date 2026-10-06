@@ -1,6 +1,22 @@
 'use strict';
 
 jest.mock('./branch.repository');
+jest.mock('../../config/prisma', () => {
+  const countModel = () => ({ count: jest.fn() });
+  return {
+    invoice: countModel(),
+    appointment: countModel(),
+    attendance: countModel(),
+    branchCommissionRule: countModel(),
+    staffSchedule: countModel(),
+    deposit: countModel(),
+    payment: countModel(),
+    payroll: countModel(),
+    itemPrice: countModel(),
+  };
+});
+
+const prisma = require('../../config/prisma');
 
 const repo = require('./branch.repository');
 const svc  = require('./branch.service');
@@ -101,13 +117,39 @@ describe('deleteBranch', () => {
     await expect(svc.deleteBranch('b1')).rejects.toMatchObject({ statusCode: 409 });
   });
 
-  test('soft deletes branch when no active employees', async () => {
+  const mockRelatedCounts = (overrides = {}) => {
+    for (const model of ['invoice', 'appointment', 'attendance', 'branchCommissionRule',
+      'staffSchedule', 'deposit', 'payment', 'payroll', 'itemPrice']) {
+      prisma[model].count.mockResolvedValue(overrides[model] ?? 0);
+    }
+  };
+
+  test('throws 409 when branch has assigned warehouses', async () => {
     repo.findById.mockResolvedValue(BRANCH);
     repo.countActiveEmployees.mockResolvedValue(0);
-    repo.softDelete.mockResolvedValue({ ...BRANCH, isActive: false });
+    repo.countAssignedWarehouses.mockResolvedValue(2);
+    await expect(svc.deleteBranch('b1')).rejects.toMatchObject({ statusCode: 409 });
+    expect(repo.hardDelete).not.toHaveBeenCalled();
+  });
+
+  test('throws 409 when branch still has related invoices', async () => {
+    repo.findById.mockResolvedValue(BRANCH);
+    repo.countActiveEmployees.mockResolvedValue(0);
+    repo.countAssignedWarehouses.mockResolvedValue(0);
+    mockRelatedCounts({ invoice: 5 });
+    await expect(svc.deleteBranch('b1')).rejects.toMatchObject({ statusCode: 409 });
+    expect(repo.hardDelete).not.toHaveBeenCalled();
+  });
+
+  test('hard deletes branch when no employees, warehouses or related records', async () => {
+    repo.findById.mockResolvedValue(BRANCH);
+    repo.countActiveEmployees.mockResolvedValue(0);
+    repo.countAssignedWarehouses.mockResolvedValue(0);
+    mockRelatedCounts();
+    repo.hardDelete.mockResolvedValue(BRANCH);
 
     const result = await svc.deleteBranch('b1');
-    expect(repo.softDelete).toHaveBeenCalledWith('b1');
-    expect(result.isActive).toBe(false);
+    expect(repo.hardDelete).toHaveBeenCalledWith('b1');
+    expect(result).toEqual(BRANCH);
   });
 });

@@ -11,6 +11,7 @@ import { fetchInvoiceItems, type ItemSearchResult } from "@/features/invoice/api
 import { useSuppliers, useCreatePurchaseInvoice } from "../hooks";
 import { fetchLastPurchasePrice } from "../api";
 import type { CreatePurchaseItemInput } from "../types";
+import { toWibDateStr } from "@/lib/utils";
 
 const fmt = (v: string | number) => `Rp ${Number(v).toLocaleString("id-ID")}`;
 
@@ -43,7 +44,7 @@ export function CreatePurchaseInvoiceDialog({ open, onClose }: Props) {
   const [supplierId,        setSupplier]   = useState("");
   const [supplierDiscount,  setSupplierDiscount] = useState<number>(0); // diskon default dari supplier
   const [warehouseId,       setWarehouse]  = useState("");
-  const [invoiceDate,       setDate]       = useState(new Date().toISOString().slice(0, 10));
+  const [invoiceDate,       setDate]       = useState(toWibDateStr());
   const [supplierInvoiceNo, setSupplierNo] = useState("");
   const [paymentTerms,      setPayTerms]   = useState("");
   const [notes,             setNotes]      = useState("");
@@ -58,7 +59,7 @@ export function CreatePurchaseInvoiceDialog({ open, onClose }: Props) {
 
   function resetForm() {
     setSupplier(""); setSupplierDiscount(0); setWarehouse("");
-    setDate(new Date().toISOString().slice(0, 10));
+    setDate(toWibDateStr());
     setSupplierNo(""); setPayTerms(""); setNotes(""); setLines([]);
     setTaxable(false); setInclusive(false);
     setTaxDate(""); setTaxNo(""); // U2: reset ke kosong

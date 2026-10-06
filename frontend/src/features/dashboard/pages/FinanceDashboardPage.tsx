@@ -1,3 +1,4 @@
+import { toWibDateStr, wibDateParts, wibMonthRange, addDaysToDateStr, WIB_TZ } from "@/lib/utils";
 import { useState, useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -22,21 +23,17 @@ const IDR = (n: number) =>
   }).format(n);
 
 function getDefaultRange() {
-  const now   = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const fmt   = (d: Date) => d.toISOString().slice(0, 10);
-  return { startDate: fmt(start), endDate: fmt(now) };
+  return { startDate: wibMonthRange().start, endDate: toWibDateStr() };
 }
 
 function periodLabel(startDate: string, endDate: string) {
-  const opts: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric" };
+  const opts: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric", timeZone: WIB_TZ };
   const fmt = (d: string) => new Date(d).toLocaleDateString("id-ID", opts);
   return `${fmt(startDate)} – ${fmt(endDate)}`;
 }
 
 function formatShortDate(dateStr: string) {
-  const d = new Date(dateStr);
-  return `${d.getDate()} ${d.toLocaleString("id-ID", { month: "short" })}`;
+  return new Date(dateStr).toLocaleDateString("id-ID", { day: "numeric", month: "short", timeZone: WIB_TZ });
 }
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
@@ -128,29 +125,23 @@ const SHORTCUTS = [
   {
     label: "7 hari",
     getValue: () => {
-      const now = new Date();
-      const start = new Date(now); start.setDate(now.getDate() - 6);
-      const fmt = (d: Date) => d.toISOString().slice(0, 10);
-      return { startDate: fmt(start), endDate: fmt(now) };
+      const today = toWibDateStr();
+      return { startDate: addDaysToDateStr(today, -6), endDate: today };
     },
   },
   {
     label: "30 hari",
     getValue: () => {
-      const now = new Date();
-      const start = new Date(now); start.setDate(now.getDate() - 29);
-      const fmt = (d: Date) => d.toISOString().slice(0, 10);
-      return { startDate: fmt(start), endDate: fmt(now) };
+      const today = toWibDateStr();
+      return { startDate: addDaysToDateStr(today, -29), endDate: today };
     },
   },
   {
     label: "Bulan lalu",
     getValue: () => {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const end   = new Date(now.getFullYear(), now.getMonth(), 0);
-      const fmt = (d: Date) => d.toISOString().slice(0, 10);
-      return { startDate: fmt(start), endDate: fmt(end) };
+      const { year, month } = wibDateParts();
+      const { start, end } = wibMonthRange(year, month - 1);
+      return { startDate: start, endDate: end };
     },
   },
 ];

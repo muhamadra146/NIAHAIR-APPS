@@ -114,7 +114,8 @@ describe('createCommissionRule', () => {
 
     await createCommissionRule(body);
 
-    expect(repo.findDuplicate).toHaveBeenCalledWith('e1', 'cc1', null, '2025-01-01');
+    // argumen ke-5 = commissionJobId (null jika tidak diisi)
+    expect(repo.findDuplicate).toHaveBeenCalledWith('e1', 'cc1', null, '2025-01-01', null);
   });
 });
 

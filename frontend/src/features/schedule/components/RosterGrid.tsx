@@ -3,6 +3,7 @@ import { Plus, X } from "lucide-react";
 import type { RosterData, ScheduleCell, RosterEmployee, Shift, ScheduleStatus } from "../types";
 import { ShiftCellDialog } from "./ShiftCellDialog";
 import { QuickAddDialog }  from "./QuickAddDialog";
+import { WIB_TZ } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -31,8 +32,8 @@ function shiftHours(startTime: string, endTime: string): number {
 function formatDayHeader(dateStr: string): { day: string; num: string } {
   const d = new Date(dateStr);
   return {
-    day: d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
-    num: String(d.getDate()),
+    day: d.toLocaleDateString("en-US", { weekday: "short", timeZone: WIB_TZ }).toUpperCase(),
+    num: d.toLocaleDateString("en-US", { day: "numeric", timeZone: WIB_TZ }),
   };
 }
 

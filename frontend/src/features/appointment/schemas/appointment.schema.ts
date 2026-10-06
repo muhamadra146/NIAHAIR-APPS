@@ -48,3 +48,5 @@ export type ServiceLineFormValues       = z.infer<typeof serviceLineSchema>;
 export type CreateAppointmentFormValues = z.infer<typeof createAppointmentSchema>;
 export type UpdateAppointmentFormValues = z.infer<typeof updateAppointmentSchema>;
 export type ChangeStatusFormValues      = z.infer<typeof changeStatusSchema>;
+export type CreateAppointmentFormInput  = z.input<typeof createAppointmentSchema>;
+export type UpdateAppointmentFormInput  = z.input<typeof updateAppointmentSchema>;

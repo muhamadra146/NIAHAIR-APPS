@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import {
   ChevronLeft, ChevronRight, CheckCircle2, Clock, Ban,
   AlertCircle, ExternalLink, RefreshCw, Lock, X, Loader2, ClipboardList,
-  Search, Calendar,
+  Search, Calendar, NotebookPen,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button }        from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { Skeleton }      from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast }         from "@/lib/toast";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, toWibDateStr, addDaysToDateStr, WIB_TZ } from "@/lib/utils";
 import { useAuthStore }  from "@/stores/authStore";
 import { useEmployees }  from "@/features/employee/hooks";
 import {
@@ -21,8 +21,7 @@ import {
   submitJobAssignments,
   type JobAssignmentInvoice,
 } from "@/features/invoice/api/commissionGenerate.api";
-import { fetchConsultationNoteByInvoice } from "@/features/consultation/api";
-import { ConsultationNoteModal } from "@/features/invoice/components/ConsultationNoteModal";
+import { uniqueStaffEmployees } from "@/features/appointment/staff";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -59,18 +58,16 @@ type WorkQtyMap  = Record<string, number | "">;
 // ── Date helpers ──────────────────────────────────────────────────────
 
 function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  return toWibDateStr();
 }
 
 function shiftDate(dateStr: string, days: number): string {
-  const d = new Date(dateStr + "T12:00:00");
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return addDaysToDateStr(dateStr, days);
 }
 
 function formatDateLabel(dateStr: string): string {
-  return new Date(dateStr + "T12:00:00").toLocaleDateString("id-ID", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  return new Date(dateStr).toLocaleDateString("id-ID", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: WIB_TZ,
   });
 }
 
@@ -81,13 +78,11 @@ function JobAssignmentModal({
   allEmployees,
   onClose,
   onSuccess,
-  onNoteNeeded,
 }: {
   inv:           JobAssignmentInvoice;
   allEmployees:  { id: string; name: string; employeeCode: string }[];
   onClose:       () => void;
   onSuccess:     () => void;
-  onNoteNeeded:  (inv: JobAssignmentInvoice) => void;
 }) {
   const status = getInvoiceStatus(inv);
   const locked = status === "approved" || status === "paid";
@@ -147,7 +142,7 @@ function JobAssignmentModal({
           if (categoryJobs.length === 0) return [];
 
           const staffList = session.appointment
-            ? session.appointment.staffs.map((s) => s.employee)
+            ? uniqueStaffEmployees(session.appointment.staffs)
             : allEmployees;
 
           return staffList.flatMap((emp) =>
@@ -173,15 +168,6 @@ function JobAssignmentModal({
       toast.success("Pengerjaan berhasil disimpan");
       onSuccess();
       onClose();
-      // Cek apakah invoice ini sudah punya catatan klien.
-      // Jika belum → tampilkan ConsultationNoteModal sebagai langkah wajib.
-      void fetchConsultationNoteByInvoice(inv.id)
-        .then((note) => {
-          if (!note) onNoteNeeded(inv);
-        })
-        .catch(() => {
-          // Jika pengecekan gagal, jangan blokir alur komisi
-        });
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -199,6 +185,35 @@ function JobAssignmentModal({
 
   // Apakah ada minimal 1 job yang dicek (untuk validasi tombol simpan)
   const hasAnyChecked = Object.values(jobCheckMap).some(Boolean);
+
+  // ── Batas qty (COM-015) ─────────────────────────────────────────────
+  // Job utama yang dibagi proporsional qty: total qty tim per item ≤ qty item di invoice
+  // (sama dengan validasi "Max" di Kalkulator; backend juga menolak jika melebihi).
+  const isQtyLimited = (job: { deductsFromJobId: string | null; splitMode?: string }) =>
+    !job.deductsFromJobId && (job.splitMode ?? "BY_QTY") === "BY_QTY";
+  const staffListFor = (session: (typeof jobItems)[number]["session"]) =>
+    session.appointment ? uniqueStaffEmployees(session.appointment.staffs) : allEmployees;
+  const itemQtyOf = (ti: (typeof jobItems)[number]["ti"]) =>
+    Math.round(Number(ti.qty ?? 0) * Number(ti.conversionSnapshot ?? 1));
+  // Total qty yang dicentang untuk satu job di satu item (opsional: kecuali satu staf)
+  const jobTotalQty = (tiId: string, jobId: string, staff: { id: string }[], exceptEmpId?: string) =>
+    staff.reduce((sum, e) => {
+      if (e.id === exceptEmpId) return sum;
+      const k = `${inv.id}::${tiId}::${e.id}::${jobId}`;
+      const q = workQtyMap[k];
+      return jobCheckMap[k] && typeof q === "number" ? sum + q : sum;
+    }, 0);
+
+  const qtyViolations = jobItems.flatMap(({ ti, session }) => {
+    const max = itemQtyOf(ti);
+    if (max <= 0) return [];
+    const staff = staffListFor(session);
+    return ti.item.commissionCategory!.jobs
+      .filter(isQtyLimited)
+      .map((job) => ({ tiId: ti.id, itemName: ti.item.name, job, total: jobTotalQty(ti.id, job.id, staff), max }))
+      .filter((v) => v.total > v.max);
+  });
+  const hasQtyViolation = qtyViolations.length > 0;
 
   // Portal ke body agar backdrop menutupi seluruh layar (termasuk sidebar & header),
   // tidak terkurung oleh ancestor yang memiliki transform/animasi.
@@ -248,7 +263,7 @@ function JobAssignmentModal({
           {jobItems.map(({ ti, session }) => {
             const jobs      = ti.item.commissionCategory!.jobs;
             const staffList = session.appointment
-              ? session.appointment.staffs.map((s) => s.employee)
+              ? uniqueStaffEmployees(session.appointment.staffs)
               : allEmployees;
 
             // Qty item dalam satuan konversi (qty × conversionSnapshot, mis. 1 TEBAL × 180 = 180 helai)
@@ -309,6 +324,7 @@ function JobAssignmentModal({
                             job.deductsFromJobId !== null &&
                             (job.pricePerUnit === null || job.pricePerUnit === "0");
                           const unitLabel = job.unit || "helai";
+                          const overLimit = qtyViolations.some((v) => v.tiId === ti.id && v.job.id === job.id);
 
                           return (
                             <div key={job.id} className="flex items-center gap-3">
@@ -331,7 +347,11 @@ function JobAssignmentModal({
                                       //  · ITEM_QTY → qty × conversionSnapshot (mis: 1 TEBAL × 180 = 180 helai)
                                       //  · ONE      → 1 (per kepala / per sesi)
                                       if (!isFlatJob) {
-                                        const defaultQty = job.defaultQty === "ONE" ? 1 : itemQtyConverted;
+                                        // Job proporsional: isi SISA qty item (dikurangi staf lain), bukan qty penuh
+                                        const remaining = Math.max(0, itemQtyConverted - jobTotalQty(ti.id, job.id, staffList, emp.id));
+                                        const defaultQty = job.defaultQty === "ONE"
+                                          ? 1
+                                          : isQtyLimited(job) ? remaining : itemQtyConverted;
                                         if (defaultQty > 0) {
                                           setWorkQtyMap((prev) =>
                                             prev[key] !== undefined ? prev : { ...prev, [key]: defaultQty },
@@ -387,7 +407,9 @@ function JobAssignmentModal({
                                           [key]: isNaN(v) ? "" : v,
                                         }));
                                       }}
-                                      className="w-20 h-7 rounded-lg border border-input bg-background px-2 text-right text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                                      className={`w-20 h-7 rounded-lg border bg-background px-2 text-right text-sm focus:outline-none focus:ring-1 ${
+                                        overLimit ? "border-red-400 focus:ring-red-400" : "border-input focus:ring-ring"
+                                      }`}
                                     />
                                   )}
                                   <span className="text-xs text-muted-foreground">{unitLabel}</span>
@@ -400,6 +422,14 @@ function JobAssignmentModal({
                     </div>
                   ))}
                 </div>
+
+                {/* Peringatan batas qty (COM-015) */}
+                {qtyViolations.filter((v) => v.tiId === ti.id).map((v) => (
+                  <div key={v.job.id} className="flex items-center gap-1.5 border-t border-red-200 bg-red-50 px-4 py-2 text-xs text-red-600 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    Total {v.job.name} ({v.total} {v.job.unit || "helai"}) melebihi qty invoice ({v.max} {v.job.unit || "helai"})
+                  </div>
+                ))}
               </div>
             );
           })}
@@ -414,10 +444,12 @@ function JobAssignmentModal({
           </div>
         ) : (
           <div className="border-t border-border px-5 py-4 flex items-center justify-between gap-3">
-            <p className="text-xs text-muted-foreground">
-              {hasAnyChecked
-                ? "Centang job dan isi jumlah pengerjaan untuk setiap staf"
-                : "Belum ada job yang dicek"}
+            <p className={`text-xs ${hasQtyViolation ? "text-red-600" : "text-muted-foreground"}`}>
+              {hasQtyViolation
+                ? "Total pengerjaan tim melebihi qty invoice — sesuaikan jumlahnya"
+                : hasAnyChecked
+                  ? "Centang job dan isi jumlah pengerjaan untuk setiap staf"
+                  : "Belum ada job yang dicek"}
             </p>
             <div className="flex items-center gap-2 shrink-0">
               <Button variant="outline" size="sm" onClick={onClose} disabled={submitMut.isPending}>
@@ -425,7 +457,7 @@ function JobAssignmentModal({
               </Button>
               <Button
                 size="sm"
-                disabled={!hasAnyChecked || submitMut.isPending}
+                disabled={!hasAnyChecked || hasQtyViolation || submitMut.isPending}
                 onClick={() => submitMut.mutate()}
               >
                 {submitMut.isPending
@@ -445,8 +477,8 @@ function JobAssignmentModal({
 // ── Days ago badge ────────────────────────────────────────────────────
 
 function DaysAgoBadge({ dateStr }: { dateStr: string }) {
-  const dateOnly = dateStr.slice(0, 10);
-  const days = Math.floor((Date.now() - new Date(dateOnly + "T12:00:00").getTime()) / 86_400_000);
+  // selisih hari kalender WIB
+  const days = Math.round((Date.parse(toWibDateStr()) - Date.parse(toWibDateStr(new Date(dateStr)))) / 86_400_000);
   if (days === 0) return <span className="text-xs text-muted-foreground">Hari ini</span>;
   if (days === 1) return <span className="text-xs text-amber-600 font-medium">Kemarin</span>;
   if (days <= 3)  return <span className="text-xs text-amber-600 font-medium">{days} hari lalu</span>;
@@ -465,23 +497,33 @@ function hasJobItems(inv: JobAssignmentInvoice): boolean {
 
 export function GenerateKomisiPage() {
   const qc = useQueryClient();
-  const { branchId } = useAuthStore();
+  const { branchId, user } = useAuthStore();
+  // Halaman detail invoice hanya untuk role POS (lihat router: /invoices/:id)
+  const canOpenInvoice = ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER"].includes(user?.roleCode ?? "");
 
   const [tab,             setTab]             = useState<"pending" | "tanggal">("pending");
   const [pendingSearch,   setPendingSearch]   = useState("");
   const [date,            setDate]            = useState(todayStr);
   const [dateSearch,      setDateSearch]      = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<JobAssignmentInvoice | null>(null);
-  const [noteInvoice,     setNoteInvoice]     = useState<JobAssignmentInvoice | null>(null);
+  const navigate = useNavigate();
+
+  // COM-014: Catatan Klien diisi di halaman Catatan Klien, lalu kembali ke Input Job
+  function openNotePage(inv: JobAssignmentInvoice) {
+    const params = new URLSearchParams({
+      invoiceId: inv.id,
+      newClient: String(inv.isNewClient),
+      returnTo:  "/generate-komisi",
+    });
+    navigate(`/consultation-notes/new?${params.toString()}`);
+  }
 
   const isToday   = date === todayStr();
   const dateLabel = isToday ? "Hari Ini" : formatDateLabel(date);
 
   // Tab "Belum Diisi" — 90 hari ke belakang
   const ninetyDaysAgo = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 90);
-    return d.toISOString().slice(0, 10);
+    return addDaysToDateStr(toWibDateStr(), -90);
   }, []);
 
   const { data: pendingInvoices = [], isLoading: loadingPending } = useQuery({
@@ -544,19 +586,25 @@ export function GenerateKomisiPage() {
     const status = getInvoiceStatus(inv);
     const cfg    = STATUS_CFG[status];
     const canFill = hasJobItems(inv);
+    // COM-014: Catatan Klien wajib diisi sebelum Input Job (selama komisi belum disetujui)
+    const isLockedStatus = status === "approved" || status === "paid";
+    const needsNote      = canFill && !inv.consultationNote && !isLockedStatus;
+    const openRow        = () => (needsNote ? openNotePage(inv) : setSelectedInvoice(inv));
 
     return (
       <tr
         className={`hover:bg-muted/20 transition-colors group ${canFill && !showIsiButton ? "cursor-pointer" : ""}`}
-        onClick={() => { if (canFill && !showIsiButton) setSelectedInvoice(inv); }}
+        onClick={() => { if (canFill && !showIsiButton) openRow(); }}
       >
         <td className="px-4 py-3">
           <div className="flex items-center gap-1.5">
             <span className="font-medium font-mono text-foreground">{inv.invoiceNo}</span>
-            <Link to={`/invoices/${inv.id}`} onClick={(e) => e.stopPropagation()}
-              className="text-muted-foreground hover:text-primary">
-              <ExternalLink className="h-3 w-3" />
-            </Link>
+            {canOpenInvoice && (
+              <Link to={`/invoices/${inv.id}`} onClick={(e) => e.stopPropagation()}
+                className="text-muted-foreground hover:text-primary">
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            )}
           </div>
           <div className="text-xs text-muted-foreground tabular-nums">{formatCurrency(inv.grandTotal)}</div>
         </td>
@@ -576,16 +624,21 @@ export function GenerateKomisiPage() {
           </span>
         </td>
         <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-          {showIsiButton ? (
-            canFill ? (
+          {!canFill ? (
+            showIsiButton && <span className="text-xs text-muted-foreground">Tidak ada job</span>
+          ) : needsNote ? (
+            // Catatan Klien belum ada → harus diisi dulu sebelum pengerjaan
+            <Button size="sm" variant="outline"
+              className="h-7 px-2.5 text-xs gap-1 border-amber-300 text-amber-700 hover:bg-amber-50"
+              onClick={() => openNotePage(inv)}>
+              <NotebookPen className="h-3.5 w-3.5" /> Isi Catatan Klien
+            </Button>
+          ) : status === "belum" ? (
+            showIsiButton ? (
               <Button size="sm" className="h-7 px-2.5 text-xs" onClick={() => setSelectedInvoice(inv)}>
                 Isi Sekarang
               </Button>
             ) : (
-              <span className="text-xs text-muted-foreground">Tidak ada job</span>
-            )
-          ) : (
-            canFill && (
               <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1"
                   onClick={() => setSelectedInvoice(inv)}>
@@ -593,6 +646,19 @@ export function GenerateKomisiPage() {
                 </Button>
               </div>
             )
+          ) : status === "terisi" || status === "pending" ? (
+            // Pengerjaan sudah disimpan → hanya bisa direvisi di sini.
+            // Kalkulasi komisi dilakukan admin/finance dari halaman Komisi, bukan oleh staf.
+            <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs"
+              onClick={() => setSelectedInvoice(inv)}>
+              Edit
+            </Button>
+          ) : (
+            // Disetujui / dibayar: hanya lihat
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1"
+              onClick={() => setSelectedInvoice(inv)}>
+              Lihat <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
           )}
         </td>
       </tr>
@@ -783,21 +849,9 @@ export function GenerateKomisiPage() {
           allEmployees={allEmployees}
           onClose={() => setSelectedInvoice(null)}
           onSuccess={handleSuccess}
-          onNoteNeeded={(inv) => setNoteInvoice(inv)}
         />
       )}
 
-      {/* ── Consultation Note Modal ──────────────────────────────── */}
-      {noteInvoice && (
-        <ConsultationNoteModal
-          invoiceId={noteInvoice.id}
-          invoiceNo={noteInvoice.invoiceNo}
-          customerName={noteInvoice.customer.name}
-          customerId={noteInvoice.customer.id}
-          onClose={() => setNoteInvoice(null)}
-          onSuccess={() => { void qc.invalidateQueries({ queryKey: ["consultation-notes"] }); }}
-        />
-      )}
     </PageContainer>
   );
 }

@@ -1,6 +1,7 @@
 ﻿const logger = require('../../utils/logger');
 const { accurateRequest }                                               = require("../accurate/accurate.client");
 const { findPayrollForSync, findGlMappings, markPayrollSynced }         = require("./payroll.sync.repository");
+const { wibDateStr }                                                    = require("../../utils/date");
 
 // ── Accurate endpoint ─────────────────────────────────────────────────
 
@@ -193,10 +194,8 @@ const syncPayrollToAccurate = async (payrollId) => {
   const periodLabel = new Date(payroll.periodEnd).toLocaleDateString("id-ID", {
     month: "long", year: "numeric",
   });
-  const transDate = (payroll.paidAt ?? payroll.periodEnd instanceof Date
-    ? payroll.paidAt ?? payroll.periodEnd
-    : new Date(payroll.paidAt ?? payroll.periodEnd)
-  ).toISOString().split("T")[0];
+  // Tanggal transaksi menurut kalender WIB (paidAt = timestamp, periodEnd = @db.Date)
+  const transDate = wibDateStr(payroll.paidAt ?? payroll.periodEnd);
 
   const payload = {
     branchId:    payroll.branch.accurateBranchId,

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { employeeSchema, type EmployeeFormValues } from "../../schemas/employee.schema";
+import { employeeSchema, type EmployeeFormValues, type EmployeeFormInput } from "../../schemas/employee.schema";
 import { useAllEmployeeRoles, useAllBranches } from "../../hooks";
 import type { Employee } from "../../types";
 
@@ -38,7 +38,7 @@ export function EmployeeForm({ open, onOpenChange, onSubmit, isPending, defaultV
     watch,
     setValue,
     formState: { errors },
-  } = useForm<EmployeeFormValues>({
+  } = useForm<EmployeeFormInput, unknown, EmployeeFormValues>({
     resolver: zodResolver(employeeSchema),
     defaultValues: {
       name:         defaultValues?.name ?? "",

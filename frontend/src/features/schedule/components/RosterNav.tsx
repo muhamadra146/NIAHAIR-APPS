@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, CalendarDays, Copy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ViewMode } from "../types";
+import { WIB_TZ } from "@/lib/utils";
 
 interface Props {
   startDate:        string;
@@ -15,14 +16,14 @@ interface Props {
 
 function monthLabel(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  return d.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: WIB_TZ });
 }
 
 function weekLabel(startDate: string, days: number): string {
   const start = new Date(startDate);
   const end   = new Date(startDate);
   end.setUTCDate(end.getUTCDate() + days - 1);
-  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", timeZone: WIB_TZ };
   return `${start.toLocaleDateString("en-US", opts)} – ${end.toLocaleDateString("en-US", { ...opts, year: "numeric" })}`;
 }
 

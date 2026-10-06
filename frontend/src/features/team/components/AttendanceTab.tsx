@@ -9,11 +9,12 @@ import { useAuthStore } from "@/stores/authStore";
 import { useDailyRoster, useCheckIn, useCheckOut, useManualSetAttendance } from "../hooks";
 import { toast } from "@/lib/toast";
 import type { RosterAttendanceRow, AttendanceStatus, ManualSetInput } from "../types";
+import { WIB_TZ, toWibDateStr, toWibTimeStr } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const fmtTime = (iso: string | null | undefined) =>
-  iso ? new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "—";
+  iso ? new Date(iso).toLocaleTimeString("id-ID", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" }) : "—";
 
 const STATUS_CONFIG: Record<AttendanceStatus, { label: string; className: string }> = {
   PRESENT:     { label: "Hadir",         className: "bg-emerald-100 text-emerald-700 border-emerald-200" },
@@ -66,12 +67,11 @@ interface ManualDialogProps {
 
 const toTimeInput = (iso: string | null | undefined): string => {
   if (!iso) return "";
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return toWibTimeStr(iso);
 };
 
 function ManualDialog({ open, row, date, isPending, onSave, onClose }: ManualDialogProps) {
-  const now = new Date().toTimeString().slice(0, 5);
+  const now = toWibTimeStr(new Date());
   const [status,    setStatus]    = useState<AttendanceStatus>("PRESENT");
   const [checkInAt,  setCheckIn]  = useState(now);
   const [checkOutAt, setCheckOut] = useState("");
@@ -99,8 +99,8 @@ function ManualDialog({ open, row, date, isPending, onSave, onClose }: ManualDia
     onSave({
       staffScheduleId: row.scheduleId,
       status,
-      checkInAt:  checkInAt  ? `${workDate}T${checkInAt}:00.000Z`  : undefined,
-      checkOutAt: checkOutAt ? `${workDate}T${checkOutAt}:00.000Z` : undefined,
+      checkInAt:  checkInAt  ? `${workDate}T${checkInAt}:00+07:00`  : undefined,
+      checkOutAt: checkOutAt ? `${workDate}T${checkOutAt}:00+07:00` : undefined,
       notes:      notes || undefined,
     });
   };
@@ -183,7 +183,7 @@ function StatsBar({ rows }: { rows: RosterAttendanceRow[] }) {
 
 export function AttendanceTab({ readOnly = false }: { readOnly?: boolean } = {}) {
   const { branchId } = useAuthStore();
-  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(() => toWibDateStr());
   const [manualRow, setManualRow] = useState<RosterAttendanceRow | null>(null);
 
   const { data: rows = [], isLoading, isError, refetch } = useDailyRoster(branchId ?? "", date);

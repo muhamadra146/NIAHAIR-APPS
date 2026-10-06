@@ -2,6 +2,7 @@ const { success } = require("../../common/responses/apiResponse");
 const {
   listCommissions,
   listMyCommissions,
+  getMyCommissionSummary,
   getCommissionById,
   approveCommission,
   markCommissionPaid,
@@ -23,6 +24,16 @@ const getMyController = async (req, res, next) => {
   try {
     const result = await listMyCommissions(req.user.employeeId, req.query);
     return success(res, result, "My commissions fetched");
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Ringkasan Komisi Saya per periode gaji (?yearMonth=YYYY-MM = bulan gajian)
+const getMySummaryController = async (req, res, next) => {
+  try {
+    const result = await getMyCommissionSummary(req.user.employeeId, req.query);
+    return success(res, result, "My commission summary fetched");
   } catch (err) {
     next(err);
   }
@@ -90,6 +101,7 @@ const deleteController = async (req, res, next) => {
 module.exports = {
   getAllController,
   getMyController,
+  getMySummaryController,
   getByIdController,
   approveController,
   payController,

@@ -1,6 +1,7 @@
 'use strict';
 
 jest.mock('./payroll.repository');
+jest.mock('../syncQueue/syncQueue.service', () => ({ createSyncJob: jest.fn() }));
 jest.mock('../../config/prisma', () => ({
   payroll: { create: jest.fn() },
   $transaction: jest.fn((fn) => fn({
@@ -13,6 +14,7 @@ jest.mock('../../config/prisma', () => ({
 const repo   = require('./payroll.repository');
 const prisma = require('../../config/prisma');
 const svc    = require('./payroll.service');
+const { createSyncJob } = require('../syncQueue/syncQueue.service');
 
 const PAYROLL_DRAFT = {
   id: 'pr1', status: 'DRAFT',
@@ -54,6 +56,7 @@ describe('getById', () => {
 // ── generate ───────────────────────────────────────────────────────────
 
 describe('generate', () => {
+  const commissionLink = jest.fn();
   const SALARY_SETTING = {
     baseSalary: 5000000,
     mealAllowance: 0, transportAllowance: 0, overtimeRate: 0,
@@ -69,17 +72,35 @@ describe('generate', () => {
       attendances:              [],
       commissions:              [],
       activeLoans:              [],
-      hsAppointments:           [],
       unusedLeavePayouts:       [],
       approvedLatePermissions:  [],
       holidays:                 [],
     });
+    repo.findPreviousPayroll.mockResolvedValue(null);
+    // Jadwal lengkap untuk periode yang diminta (tanpa peringatan jadwal belum lengkap)
+    repo.findScheduleDates.mockImplementation(async (_e, start, end) => {
+      const out = [];
+      for (let t = new Date(start).getTime(); t <= new Date(end).getTime(); t += 86400000) out.push({ workDate: new Date(t) });
+      return out;
+    });
+    repo.findEmployeePayDay.mockResolvedValue(1);
     prisma.payroll.create.mockResolvedValue({ ...PAYROLL_DRAFT, items: [] });
+    commissionLink.mockResolvedValue({ count: 0 });
+    prisma.$transaction.mockImplementation((fn) => fn({
+      payroll:    { create: prisma.payroll.create },
+      commission: { updateMany: commissionLink },
+    }));
   });
 
   test('throws 400 when neither yearMonth nor periodStart+periodEnd provided', async () => {
     await expect(svc.generate({ employeeId: 'e1', branchId: 'b1' }, 'u1'))
       .rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  test('jadwal belum lengkap → peringatan', async () => {
+    repo.findScheduleDates.mockResolvedValue([]);
+    const result = await svc.generate({ employeeId: 'e1', branchId: 'b1', yearMonth: '2024-06' }, 'u1');
+    expect(result.warnings.some((w) => /Jadwal belum lengkap: 30 hari/.test(w))).toBe(true);
   });
 
   test('throws 409 when overlapping payroll exists', async () => {
@@ -91,7 +112,7 @@ describe('generate', () => {
   test('throws 400 when no active salary setting', async () => {
     repo.getGenerationData.mockResolvedValue({
       salarySetting: null, schedules: [], attendances: [], commissions: [],
-      activeLoans: [], hsAppointments: [], unusedLeavePayouts: [],
+      activeLoans: [], unusedLeavePayouts: [],
       approvedLatePermissions: [], holidays: [],
     });
     await expect(svc.generate({ employeeId: 'e1', branchId: 'b1', yearMonth: '2024-06' }, 'u1'))
@@ -104,6 +125,44 @@ describe('generate', () => {
       expect.objectContaining({ data: expect.objectContaining({ status: 'DRAFT' }) })
     );
     expect(result).toBeDefined();
+    expect(result.warnings).toEqual([]);
+  });
+
+  // Nama gaji = bulan kerja; periode dari tanggal gajian karyawan (COM-017)
+  test('mode bulan memakai tanggal gajian karyawan (payDay 7 → 7 Jun – 6 Jul)', async () => {
+    repo.findEmployeePayDay.mockResolvedValue(7);
+    await svc.generate({ employeeId: 'e1', branchId: 'b1', yearMonth: '2024-06' }, 'u1');
+    const data = prisma.payroll.create.mock.calls[0][0].data;
+    expect(data.periodStart.toISOString().slice(0, 10)).toBe('2024-06-07');
+    expect(data.periodEnd.toISOString().slice(0, 10)).toBe('2024-07-06');
+  });
+
+  test('komisi di slip dicatat ke payroll ini (payrollId) dalam transaksi yang sama', async () => {
+    repo.getGenerationData.mockResolvedValue({
+      salarySetting: SALARY_SETTING, schedules: [], attendances: [],
+      commissions: [{ id: 'c1', commissionAmount: 50000 }, { id: 'c2', commissionAmount: 5000 }],
+      activeLoans: [], unusedLeavePayouts: [], approvedLatePermissions: [], holidays: [],
+    });
+    await svc.generate({ employeeId: 'e1', branchId: 'b1', yearMonth: '2024-06' }, 'u1');
+    expect(commissionLink).toHaveBeenCalledWith({
+      where: { id: { in: ['c1', 'c2'] }, payrollId: null },
+      data:  { payrollId: PAYROLL_DRAFT.id },
+    });
+  });
+
+  test('celah dari payroll sebelumnya → peringatan (tanggal gajian diubah)', async () => {
+    repo.findPreviousPayroll.mockResolvedValue({
+      id: 'old', periodStart: new Date('2024-04-01'), periodEnd: new Date('2024-04-30'),
+    });
+    const result = await svc.generate({ employeeId: 'e1', branchId: 'b1', yearMonth: '2024-06' }, 'u1');
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toMatch(/celah/);
+  });
+
+  test('tumpang tindih → 409 dengan saran Rentang Tanggal', async () => {
+    repo.findOverlapping.mockResolvedValue(PAYROLL_DRAFT);
+    await expect(svc.generate({ employeeId: 'e1', branchId: 'b1', yearMonth: '2024-06' }, 'u1'))
+      .rejects.toMatchObject({ statusCode: 409, message: expect.stringMatching(/Rentang Tanggal/) });
   });
 });
 
@@ -170,12 +229,24 @@ describe('markAsPaid', () => {
     repo.findById
       .mockResolvedValueOnce(approved)                              // first: status check
       .mockResolvedValueOnce({ ...approved, status: 'PAID' });     // second: return result
+    const commissionUpdateMany = jest.fn().mockResolvedValue({ count: 0 });
     prisma.$transaction.mockImplementation((fn) =>
-      fn({ payroll: { update: jest.fn() }, loan: { findMany: jest.fn().mockResolvedValue([]) }, loanRepayment: { create: jest.fn() } })
+      fn({
+        payroll:       { update: jest.fn() },
+        commission:    { updateMany: commissionUpdateMany },
+        loan:          { findMany: jest.fn().mockResolvedValue([]) },
+        loanRepayment: { create: jest.fn() },
+      })
     );
 
     const result = await svc.markAsPaid('pr1', 'u1');
     expect(prisma.$transaction).toHaveBeenCalled();
+    // tepat komisi yang tercatat di slip ini ditandai PAID (bukan tebakan tanggal)
+    expect(commissionUpdateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { payrollId: 'pr1', status: 'APPROVED' },
+    }));
+    // payroll PAID → antre sync Jurnal Umum ke Accurate
+    expect(createSyncJob).toHaveBeenCalledWith(expect.objectContaining({ entityType: 'PAYROLL', entityId: 'pr1' }));
     expect(result.status).toBe('PAID');
   });
 });

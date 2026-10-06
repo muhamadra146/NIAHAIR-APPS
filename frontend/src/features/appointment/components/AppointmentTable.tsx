@@ -11,7 +11,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { formatDate } from "@/lib/utils";
+import { formatDate, WIB_TZ } from "@/lib/utils";
 import { AppointmentStatusBadge } from "./AppointmentStatusBadge";
 import { useDeleteAppointment } from "../hooks";
 import { useAuthStore } from "@/stores/authStore";
@@ -183,9 +183,9 @@ function DesktopTable({ appointments, canDelete }: { appointments: Appointment[]
                 <td className="px-5 py-3.5 text-slate-500 text-sm">{a.branch.name}</td>
                 <td className="px-5 py-3.5 text-slate-500 text-sm whitespace-nowrap">{formatDate(a.visitDate)}</td>
                 <td className="px-5 py-3.5 text-xs text-slate-400 whitespace-nowrap tabular-nums">
-                  {new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                  {new Date(a.startTime).toLocaleTimeString("id-ID", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" })}
                   {" – "}
-                  {new Date(a.endTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                  {new Date(a.endTime).toLocaleTimeString("id-ID", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" })}
                 </td>
                 <td className="px-5 py-3.5">
                   <AppointmentStatusBadge status={a.status} />

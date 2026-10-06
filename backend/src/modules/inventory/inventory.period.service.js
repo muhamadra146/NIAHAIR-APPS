@@ -2,13 +2,13 @@ const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const repo  = require("./inventory.period.repository");
 const prisma = require("../../config/prisma");
+const { wibParts } = require("../../utils/date");
 
 // Guard: throws 422 if the period for a given date is CLOSED.
 // Called before any movement creation to enforce the closing rule.
 const validatePeriodOpen = async (date) => {
-  const d     = date instanceof Date ? date : new Date(date);
-  const year  = d.getUTCFullYear();
-  const month = d.getUTCMonth() + 1;
+  // Periode ditentukan oleh bulan kalender WIB
+  const { year, month } = wibParts(date instanceof Date ? date : new Date(date));
 
   const period = await repo.findPeriod(year, month);
   if (period && period.status === "CLOSED") {

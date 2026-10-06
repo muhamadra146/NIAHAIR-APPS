@@ -49,3 +49,5 @@ export const salarySettingSchema = z.object({
 export type CreateEmployeeFormValues = z.infer<typeof createEmployeeSchema>;
 export type UpdateEmployeeFormValues = z.infer<typeof updateEmployeeSchema>;
 export type SalarySettingFormValues  = z.infer<typeof salarySettingSchema>;
+export type UpdateEmployeeFormInput  = z.input<typeof updateEmployeeSchema>;
+export type SalarySettingFormInput   = z.input<typeof salarySettingSchema>;

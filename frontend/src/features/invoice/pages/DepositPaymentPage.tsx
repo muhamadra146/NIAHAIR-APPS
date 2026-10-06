@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, toWibDateStr } from "@/lib/utils";
 import { fetchPaymentMethods } from "@/features/settings/api/paymentMethod.api";
 import { useDeposit, useCreateDepositPayment, useDepositPayments } from "../hooks";
 
@@ -17,7 +17,7 @@ export function DepositPaymentPage() {
   const { id }             = useParams<{ id: string }>();
   const navigate           = useNavigate();
   const [searchParams]     = useSearchParams();
-  const defaultDate        = searchParams.get("date") ?? new Date().toISOString().split("T")[0];
+  const defaultDate        = searchParams.get("date") ?? toWibDateStr();
 
   const { data: deposit, isLoading, isError } = useDeposit(id!);
   const { data: existingPayments = [] }        = useDepositPayments(id!);

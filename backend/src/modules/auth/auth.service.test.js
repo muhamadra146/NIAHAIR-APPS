@@ -1,5 +1,7 @@
 'use strict';
 
+jest.mock('../../config/prisma', () => ({}));
+jest.mock('../../common/utils/mailer', () => ({ sendPasswordResetEmail: jest.fn() }));
 jest.mock('./auth.repository');
 jest.mock('bcryptjs');
 jest.mock('jsonwebtoken');
@@ -25,6 +27,8 @@ const USER_SUPER_ADMIN = {
 
 const ALL_BRANCHES = [{ id: 'b1', name: 'Jakarta' }, { id: 'b2', name: 'Surabaya' }];
 
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
+
 beforeEach(() => {
   jest.clearAllMocks();
   jwt.sign.mockReturnValue('mock.jwt.token');
@@ -36,27 +40,27 @@ beforeEach(() => {
 describe('login', () => {
   test('throws 401 when user not found', async () => {
     repo.findUserByEmail.mockResolvedValue(null);
-    await expect(svc.login({ email: 'x@x.com', password: 'pw' }))
+    await expect(svc.login({ identifier: 'x@x.com', password: 'pw' }))
       .rejects.toMatchObject({ statusCode: 401 });
   });
 
   test('throws 401 when user is inactive', async () => {
     repo.findUserByEmail.mockResolvedValue({ ...USER_STAFF, isActive: false });
-    await expect(svc.login({ email: 'staff@salon.com', password: 'pw' }))
+    await expect(svc.login({ identifier: 'staff@salon.com', password: 'pw' }))
       .rejects.toMatchObject({ statusCode: 401 });
   });
 
   test('throws 401 when password is wrong', async () => {
     repo.findUserByEmail.mockResolvedValue(USER_STAFF);
     bcrypt.compare.mockResolvedValue(false);
-    await expect(svc.login({ email: 'staff@salon.com', password: 'wrong' }))
+    await expect(svc.login({ identifier: 'staff@salon.com', password: 'wrong' }))
       .rejects.toMatchObject({ statusCode: 401 });
   });
 
   test('returns token + user with employee branches for non-admin', async () => {
     repo.findUserByEmail.mockResolvedValue(USER_STAFF);
 
-    const result = await svc.login({ email: 'staff@salon.com', password: 'pw' });
+    const result = await svc.login({ identifier: 'staff@salon.com', password: 'pw' });
     expect(jwt.sign).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'u1', roleCode: 'STAFF' }),
       expect.anything(),
@@ -71,9 +75,18 @@ describe('login', () => {
     repo.findUserByEmail.mockResolvedValue(USER_SUPER_ADMIN);
     repo.findAllBranches.mockResolvedValue(ALL_BRANCHES);
 
-    const result = await svc.login({ email: 'admin@salon.com', password: 'pw' });
+    const result = await svc.login({ identifier: 'admin@salon.com', password: 'pw' });
     expect(repo.findAllBranches).toHaveBeenCalled();
     expect(result.user.branches).toHaveLength(2);
+  });
+
+  test('looks up by username when identifier has no "@"', async () => {
+    repo.findUserByUsername.mockResolvedValue(USER_STAFF);
+
+    const result = await svc.login({ identifier: 'nia', password: 'pw' });
+    expect(repo.findUserByUsername).toHaveBeenCalledWith('nia');
+    expect(repo.findUserByEmail).not.toHaveBeenCalled();
+    expect(result.token).toBe('mock.jwt.token');
   });
 
   test('returns empty branches array when employee has no branches', async () => {
@@ -81,7 +94,7 @@ describe('login', () => {
       ...USER_STAFF, employee: { id: 'e1', name: 'Nia', employeeBranches: [] },
     });
 
-    const result = await svc.login({ email: 'staff@salon.com', password: 'pw' });
+    const result = await svc.login({ identifier: 'staff@salon.com', password: 'pw' });
     expect(result.user.branches).toHaveLength(0);
   });
 });

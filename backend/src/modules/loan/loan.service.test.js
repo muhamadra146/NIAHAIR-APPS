@@ -1,6 +1,8 @@
 'use strict';
 
 jest.mock('./loan.repository');
+// createLoan memakai prisma.$transaction — jangan sentuh DB asli di unit test
+jest.mock('../../config/prisma', () => ({ $transaction: jest.fn((fn) => fn('tx')) }));
 
 const repo = require('./loan.repository');
 const svc  = require('./loan.service');
@@ -54,7 +56,8 @@ describe('createLoan', () => {
     });
 
     expect(repo.create).toHaveBeenCalledWith(
-      expect.objectContaining({ loanNo: 'KSB-000001', remainingAmount: 5000000 })
+      expect.objectContaining({ loanNo: 'KSB-000001', remainingAmount: 5000000 }),
+      'tx', // dibuat di dalam transaksi
     );
     expect(result).toBeDefined();
   });

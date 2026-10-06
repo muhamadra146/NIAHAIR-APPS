@@ -343,12 +343,13 @@ export function useCreateOpeningBalance() {
 
 // ── GAP 3: Low Stock & Min Stock ─────────────────────────────────────────────
 
-export function useLowStock(params?: { warehouseId?: string; branchId?: string }) {
+export function useLowStock(params?: { warehouseId?: string; branchId?: string }, enabled = true) {
   return useQuery({
     queryKey:       ["low-stock", params],
     queryFn:        () => fetchLowStock(params),
     staleTime:      60 * 1000,
     refetchOnMount: true,
+    enabled,
   });
 }
 

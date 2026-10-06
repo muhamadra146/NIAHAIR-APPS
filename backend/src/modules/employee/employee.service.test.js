@@ -1,8 +1,12 @@
 'use strict';
 
 jest.mock('./employee.repository');
+jest.mock('../../config/cloudinary', () => ({
+  uploader: { destroy: jest.fn().mockResolvedValue({ result: 'ok' }) },
+}));
 
 const repo = require('./employee.repository');
+const cloudinary = require('../../config/cloudinary');
 const svc  = require('./employee.service');
 
 const EMPLOYEE = {
@@ -158,12 +162,29 @@ describe('deleteEmployee', () => {
     await expect(svc.deleteEmployee('x')).rejects.toMatchObject({ statusCode: 404 });
   });
 
-  test('calls softDelete on success', async () => {
+  test('calls hardDelete on success (no files to clean up)', async () => {
     repo.findById.mockResolvedValue(EMPLOYEE);
-    repo.softDelete.mockResolvedValue({ ...EMPLOYEE, isActive: false });
+    repo.hardDelete.mockResolvedValue(EMPLOYEE);
 
     const result = await svc.deleteEmployee('e1');
-    expect(repo.softDelete).toHaveBeenCalledWith('e1');
-    expect(result.isActive).toBe(false);
+    expect(cloudinary.uploader.destroy).not.toHaveBeenCalled();
+    expect(repo.hardDelete).toHaveBeenCalledWith('e1');
+    expect(result).toEqual(EMPLOYEE);
+  });
+
+  test('removes KTP & contract files from Cloudinary before hardDelete', async () => {
+    repo.findById.mockResolvedValue({
+      ...EMPLOYEE,
+      ktpFilePublicId: 'ktp1',
+      ktpFileUrl: 'https://res.cloudinary.com/x/image/upload/ktp1.jpg',
+      contractFilePublicId: 'ctr1',
+      contractFileUrl: 'https://res.cloudinary.com/x/raw/upload/ctr1.pdf',
+    });
+    repo.hardDelete.mockResolvedValue(EMPLOYEE);
+
+    await svc.deleteEmployee('e1');
+    expect(cloudinary.uploader.destroy).toHaveBeenCalledWith('ktp1', { resource_type: 'image', invalidate: true });
+    expect(cloudinary.uploader.destroy).toHaveBeenCalledWith('ctr1', { resource_type: 'raw', invalidate: true });
+    expect(repo.hardDelete).toHaveBeenCalledWith('e1');
   });
 });

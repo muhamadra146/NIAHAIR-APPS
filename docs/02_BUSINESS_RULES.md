@@ -3790,6 +3790,16 @@ Outstanding
 1.000.000
 ```
 
+Status invoice mengikuti uang yang sudah masuk (deposit + pembayaran):
+
+- `UNPAID` (Belum Bayar) — belum ada uang masuk.
+- `PARTIAL` (Sebagian) — sudah ada uang masuk, masih ada sisa tagihan.
+- `PAID` (Lunas) — sisa tagihan = 0 (FIN-016).
+
+Invoice `PARTIAL` diperlakukan sama dengan `UNPAID`: masih bisa dibayar, diedit, dan tampil di "Perlu Dibayar".
+
+Status ini hanya di ERP. Accurate menghitung status pelunasan sendiri dari penerimaan yang di-sync; status ERP tidak dikirim ke Accurate.
+
 ---
 
 # FIN-016
@@ -4785,8 +4795,10 @@ Payroll dihitung berdasarkan Payroll Period.
 Contoh.
 
 ```
-June 2026
+Gaji Juni 2026 (bulan kerja Juni)
 ```
+
+Periode mengikuti tanggal gajian karyawan; lihat COM-017.
 
 Payroll Period memiliki status.
 
@@ -5061,6 +5073,28 @@ Phone.
 Housing.
 
 Allowance bersifat configurable.
+
+### Uang Makan (per hari)
+
+Diberikan per hari **masuk kerja** (absensi PRESENT / LATE / EARLY_LEAVE / HALF_DAY). Tidak diberikan saat libur, cuti, sakit, izin tidak masuk, atau tidak masuk.
+
+Batas setengah hari = (jam kerja shift − 1 jam istirahat) ÷ 2. Shift 10 jam → 4,5 jam; shift 9 jam → 4 jam.
+
+- Lama kerja (absen pulang − absen masuk) ≥ batas → uang makan **penuh** (termasuk izin pulang setelah batas).
+- Lama kerja < batas → **setengah** (50% uang makan harian di Setting Gaji).
+- Tidak ada absen pulang atau jam shift tidak diketahui → penuh (dapat dikoreksi lewat Koreksi Jam Kerja).
+
+### Tunjangan Transport (per bulan)
+
+Pembagi = jumlah hari periode gaji − hari libur (OFF) di jadwal karyawan. Tarif harian = tunjangan ÷ pembagi.
+
+Contoh: periode 31 hari, libur 4 → pembagi 27; tunjangan Rp 500.000 → Rp 18.519 per hari.
+
+Setiap hari **tidak hadir** dipotong tarif harian: cuti, sakit, izin tidak masuk, dan tidak masuk tanpa keterangan. Hari libur (OFF) dan libur nasional tidak dipotong.
+
+Contoh: periode 30 hari, libur 4, sakit 1 hari → Rp 500.000 ÷ 26 × 25.
+
+Hari tanpa jadwal dianggap hari kerja, sehingga jadwal (termasuk hari OFF) harus diisi lengkap. Sebelum generate, sistem memperingatkan bila jadwal belum lengkap atau periode belum selesai.
 
 ---
 
@@ -5513,7 +5547,9 @@ Saat menyimpan, backend menghitung ulang dari data tersimpan + koreksi qty. Angk
 
 Koreksi nominal manual di Kalkulator dicatat sebagai Manual Override (siapa, kapan, hitungan sistem).
 
-Koreksi nominal manual hanya boleh dilakukan SUPER_ADMIN, OWNER, dan FINANCE (sama dengan izin override komisi). Role lain tetap boleh menyimpan hasil hitungan sistem.
+Kalkulasi komisi (Kalkulator, generate, regenerate) hanya boleh dilakukan SUPER_ADMIN, OWNER, dan FINANCE, termasuk koreksi nominal manual (sama dengan izin override komisi).
+
+Staf (STAFF_OPERASIONAL) hanya mengisi pengerjaan di Input Job dan tidak boleh menghitung komisinya sendiri.
 
 ---
 
@@ -5549,15 +5585,103 @@ Pengurangan komisi hanya melalui mekanisme yang tercatat: potongan Job Helper (C
 ---
 
 # COM-013
-## Dynamic Rate by Staff Count (Home Service)
+## Job Default Rate & Rate by Staff Count
 
 ### Rule
 
-Job dengan `staffCountMax` membentuk grup rate dinamis bersama satu job cadangan (job aktif pertama tanpa `staffCountMax` di kategori yang sama).
+Setiap Job dapat memiliki **Tarif Bawaan**: jenis (Nominal / Persen) dan nilai, berlaku untuk semua staf yang **tidak** memiliki Commission Rule sendiri untuk job tersebut.
 
-Untuk job dalam grup tersebut, rule komisi diambil dari job dengan `staffCountMax` terkecil yang ≥ jumlah staf unik di kategori pada invoice; jika tidak ada, dari job cadangan.
+Tarif bawaan dapat memiliki **Tingkatan per Jumlah Staf** ("sampai N staf → nilai"; satu tingkatan tanpa batas = "lebih dari itu"). Jumlah staf = staf unik di kategori yang sama pada invoice. Dipilih tingkatan dengan batas terkecil yang ≥ jumlah staf; jika tidak ada, tingkatan "lebih dari itu"; jika tidak ada, nilai tarif bawaan.
 
-Job lain di kategori yang sama tetap memakai rule-nya sendiri.
+Urutan sumber tarif per staf:
+
+1. Commission Rule karyawan untuk job tersebut (pengecualian per orang).
+2. Tarif bawaan job (dengan tingkatan).
+3. Tidak ada keduanya → komisi 0 dan ditandai "belum ada tarif".
+
+Tarif bawaan memakai base `AFTER_DISCOUNT_BEFORE_TAX` untuk jenis Persen.
+
+Kalkulator Komisi menampilkan sumber tarif tiap staf ("rule karyawan" / "tarif job").
+
+---
+
+# COM-014
+## Client Note Before Job Input
+
+### Rule
+
+Catatan Klien (Client Consultation Note) wajib diisi untuk sebuah invoice sebelum pengerjaan (Input Job) invoice tersebut dapat disimpan.
+
+Selama Catatan Klien belum ada, aksi di Input Job adalah "Isi Catatan Klien"; setelah tersimpan, aksi berubah menjadi "Isi Sekarang".
+
+Backend menolak penyimpanan pengerjaan tanpa Catatan Klien (422), sehingga aturan ini tidak dapat dilewati.
+
+Invoice yang komisinya sudah disetujui/dibayar hanya dapat dilihat dan tidak terkena aturan ini.
+
+---
+
+# COM-015
+## Job Quantity Limit
+
+### Rule
+
+Untuk Job Utama dengan Cara Bagi `BY_QTY`, total qty yang diisi seluruh staf pada satu item tidak boleh melebihi qty item di invoice (qty × konversi, contoh: 1 MEDIUM = 120 helai).
+
+Berlaku di Input Job (peringatan + tombol simpan dikunci) dan di backend (penyimpanan ditolak, 422). Kalkulator Komisi menampilkan peringatan yang sama.
+
+Saat staf mencentang job tersebut, qty otomatis diisi sisa qty item (qty item − qty staf lain).
+
+Job bagi rata (`EQUAL`), penuh (`FULL`), dan Job Helper tidak terkena batas ini.
+
+---
+
+# COM-016
+## Home Service Paid via Commission
+
+### Rule
+
+Uang jasa Home Service dibayarkan lewat **komisi** kategori Home Service, bukan dihitung otomatis di payroll. Payroll tidak lagi memiliki komponen "Service Charge Home Service".
+
+Tidak ada tarif yang di-hardcode. Semuanya diatur lewat konfigurasi:
+
+- **Item** biaya Home Service di invoice (contoh: SERVICE CHARGE) memakai Kategori Komisi Home Service.
+- **Satu Job** Home Service di kategori tersebut (Cara Bagi `FULL`, Qty default `ONE`) dengan Tarif Bawaan Nominal dan Tingkatan per Jumlah Staf (COM-013), contoh: sampai 3 staf → Rp 75.000, lebih dari itu → Rp 50.000 per staf.
+- **Commission Rule per karyawan** tidak diperlukan; hanya dibuat jika seorang staf mendapat tarif berbeda.
+
+Staf yang ikut Home Service mencentang job Home Service di Input Job; komisi dihitung dan disetujui seperti komisi lainnya.
+
+Komisi Home Service hanya muncul jika item biaya Home Service ditagihkan di invoice.
+
+---
+
+# COM-017
+## Commission & Payroll Pay Period
+
+### Rule
+
+**Nama gaji = bulan kerja.** "Gaji Oktober" = periode kerja yang dimulai di bulan Oktober, dibayar pada tanggal gajian bulan berikutnya.
+
+Periode mengikuti tanggal gajian karyawan (`payDay`, default 1): mulai tanggal gajian bulan kerja s/d sehari sebelum tanggal gajian bulan berikutnya.
+
+- Tanggal gajian 1: Gaji Oktober = kerja 1–31 Okt, dibayar 1 Nov.
+- Tanggal gajian 7: Gaji Oktober = kerja 7 Okt – 6 Nov, dibayar 7 Nov.
+- Tanggal gajian 29–31: bila bulan tidak punya tanggal tsb, dipakai hari terakhir bulan itu (tanggal gajian 31 → Gaji Januari 2026 = 31 Jan – 27 Feb, dibayar 28 Feb). Periode selalu menyambung tanpa celah/tumpang tindih.
+
+Generate per karyawan (mode Per Bulan), Bulk Generate, daftar payroll, slip gaji, dan Komisi Saya memakai aturan yang sama. Mode **Rentang Tanggal** untuk periode transisi/kasus khusus.
+
+**Komisi masuk gaji berdasarkan tanggal disetujui** (`approvedAt`). Saat payroll dibuat, payroll mengambil **semua komisi APPROVED yang belum masuk payroll lain dan disetujui s/d akhir periode** (termasuk sisa periode sebelumnya) dan mencatatnya ke slip (`commission.payrollId`). Saat payroll dibayar, hanya komisi yang tercatat di slip itu yang menjadi PAID. Payroll dihapus → komisinya dilepas dan ikut payroll berikutnya. Hitung ulang payroll DRAFT memasukkan komisi yang baru disetujui.
+
+**Kontinuitas periode:** payroll yang tumpang tindih (berbagi satu hari pun) ditolak. Celah dari payroll sebelumnya (mis. payroll bulan sebelumnya belum dibuat atau tanggal gajian diubah) ditampilkan sebagai peringatan sebelum generate.
+
+**Halaman Komisi Saya** default ke periode gaji yang sedang berjalan:
+
+- **Menunggu Persetujuan** — semua komisi PENDING.
+- **Siap Dibayar** — slip periode ini sudah dibuat: komisi APPROVED yang tercatat di slip; belum dibuat: komisi APPROVED yang belum masuk slip mana pun dan disetujui s/d akhir periode (termasuk sisa periode lalu).
+- **Sudah Dibayar** — komisi PAID yang tercatat di slip periode ini.
+- **Total Komisi** = Menunggu Persetujuan + Siap Dibayar + Sudah Dibayar.
+- Bila slip periode ini sudah dibuat dan ada komisi disetujui yang belum masuk slip mana pun, tampil pengingat "akan ikut gaji berikutnya".
+
+Komisi dibayar hanya lewat payroll.
 
 ---
 
@@ -6334,6 +6458,12 @@ Purchase Return menghasilkan.
 RETURN Movement.
 
 Tidak menghapus Receiving sebelumnya.
+
+Retur dibuat dari faktur pembelian yang sudah POSTED (tombol "Buat Retur" di detail faktur).
+
+Setelah di-posting, retur masuk antrean sync dan dikirim ke Accurate sebagai Retur Pembelian dengan "Retur dari: Faktur" (`returnType = INVOICE`, faktur induk lewat `invoiceId`). Syarat: faktur induk, pemasok, dan barang sudah tersinkron ke Accurate. Accurate menolak qty retur yang melebihi qty faktur.
+
+Retur POSTED tidak dapat dibatalkan.
 
 ---
 

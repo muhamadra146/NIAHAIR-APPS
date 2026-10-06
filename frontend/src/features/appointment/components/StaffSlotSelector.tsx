@@ -130,7 +130,7 @@ export function StaffSlotSelector({
                         </span>
                       )}
                       {isInThisSlot  && <span className="shrink-0 text-primary text-xs">✓</span>}
-                      {isInOtherSlot && <span className="shrink-0 text-xs text-muted-foreground/50">(slot lain)</span>}
+                      {isInOtherSlot && <span className="shrink-0 text-xs text-muted-foreground/50">(juga di peran lain)</span>}
                       {checkedOut    && <span className="shrink-0 text-xs text-amber-600">sudah pulang</span>}
                     </button>
                   );
@@ -169,13 +169,16 @@ export function slotsToStaffIds(staffBySlot: StaffBySlot): string[] {
 }
 
 /** Convert staffBySlot → [{ employeeId, slotKey }] array preserving slot info */
+// Satu karyawan boleh memegang beberapa peran di booking yang sama (diatur manager),
+// jadi yang dibuang hanya pasangan karyawan + peran yang sama persis.
 export function slotsToStaffBySlot(staffBySlot: StaffBySlot): { employeeId: string; slotKey: string }[] {
   const seen   = new Set<string>();
   const result: { employeeId: string; slotKey: string }[] = [];
   for (const slot of APPOINTMENT_SLOTS.map((s) => s.key) as SlotKey[]) {
     for (const employeeId of staffBySlot[slot]) {
-      if (!seen.has(employeeId)) {
-        seen.add(employeeId);
+      const key = `${employeeId}::${slot}`;
+      if (!seen.has(key)) {
+        seen.add(key);
         result.push({ employeeId, slotKey: slot });
       }
     }

@@ -5,7 +5,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, WIB_TZ, toWibDateStr } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import {
   fetchCommissionCategories,
@@ -322,7 +321,7 @@ const EMPTY_RULE: RuleFormState = {
   employeeId: "", commissionCategoryId: "", commissionJobId: "", slotKey: "",
   commissionType: "PERCENTAGE", commissionValue: "",
   commissionBase: "AFTER_DISCOUNT_BEFORE_TAX",
-  effectiveDate: new Date().toISOString().split("T")[0],
+  effectiveDate: toWibDateStr(),
   endDate: "", isActive: true,
 };
 
@@ -656,7 +655,7 @@ function CommissionRuleSection() {
                     </td>
                     <td className="px-4 py-3">
                       <p className="text-xs text-slate-600">
-                        {new Date(rule.effectiveDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "2-digit" })}
+                        {new Date(rule.effectiveDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "numeric", month: "short", year: "2-digit" })}
                       </p>
                       {!rule.isActive && (
                         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">Nonaktif</span>

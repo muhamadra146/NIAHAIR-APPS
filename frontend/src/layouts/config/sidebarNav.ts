@@ -16,14 +16,10 @@ import {
   DollarSign,
   Banknote,
   NotebookPen,
-  UmbrellaOff,
   FileText,
-  HandHelping,
-  Thermometer,
   Sparkles,
   ShoppingCart,
   AlertCircle,
-  PenLine,
   Truck,
   Archive,
   Crown,
@@ -211,7 +207,7 @@ export const sidebarNav: NavItem[] = [
     label: "Membership",
     href:  "/memberships",
     icon:  Crown,
-    roles: ALL_ROLES,
+    roles: MANAGEMENT_ROLES,
     group: "Data",
   },
 
@@ -320,34 +316,11 @@ export const sidebarNav: NavItem[] = [
     group:         "Kehadiran",
   },
 
+  // Pengajuan: Cuti, Izin, Sakit (tab Cuti & Izin) + Koreksi Jam Kerja — satu menu
   {
-    label: "Koreksi Kehadiran",
-    href:  "/attendance-corrections",
-    icon:  PenLine,
-    roles: ALL_ROLES,
-    group: "Kehadiran",
-  },
-
-  {
-    label: "Cuti",
-    href:  "/leaves",
-    icon:  UmbrellaOff,
-    roles: ALL_ROLES,
-    group: "Kehadiran",
-  },
-
-  {
-    label: "Izin",
-    href:  "/permissions",
-    icon:  HandHelping,
-    roles: ALL_ROLES,
-    group: "Kehadiran",
-  },
-
-  {
-    label: "Sakit",
-    href:  "/sick-leaves",
-    icon:  Thermometer,
+    label: "Pengajuan",
+    href:  "/pengajuan",
+    icon:  FileText,
     roles: ALL_ROLES,
     group: "Kehadiran",
   },

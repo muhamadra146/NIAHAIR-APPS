@@ -71,7 +71,7 @@ export async function deleteTreatmentItem(sessionId: string, itemId: string): Pr
 
 // ── Treatment Assignments ─────────────────────────────────────────────────────
 
-export async function fetchAssignments(sessionId: string, itemId: string): Promise<TreatmentAssignment[]> {
+export async function fetchAssignments(_sessionId: string, itemId: string): Promise<TreatmentAssignment[]> {
   const { data } = await api.get<ApiResponse<{ data: TreatmentAssignment[]; meta: unknown }>>(
     `/treatment-items/${itemId}/assignments`,
     { params: { limit: 100 } },
@@ -80,7 +80,7 @@ export async function fetchAssignments(sessionId: string, itemId: string): Promi
 }
 
 export async function createAssignment(
-  sessionId: string,
+  _sessionId: string,
   itemId: string,
   input: CreateAssignmentInput,
 ): Promise<TreatmentAssignment> {
@@ -92,8 +92,8 @@ export async function createAssignment(
 }
 
 export async function updateAssignment(
-  sessionId: string,
-  itemId: string,
+  _sessionId: string,
+  _itemId: string,
   assignmentId: string,
   input: UpdateAssignmentInput,
 ): Promise<TreatmentAssignment> {
@@ -104,7 +104,7 @@ export async function updateAssignment(
   return data.data;
 }
 
-export async function deleteAssignment(sessionId: string, itemId: string, assignmentId: string): Promise<void> {
+export async function deleteAssignment(_sessionId: string, _itemId: string, assignmentId: string): Promise<void> {
   await api.delete(`/treatment-assignments/${assignmentId}`);
 }
 

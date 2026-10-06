@@ -1,7 +1,6 @@
 import { useState, useRef } from "react";
-import { Plus, CheckCircle, XCircle, AlertTriangle, Thermometer, X, Paperclip, FileImage } from "lucide-react";
+import { CheckCircle, XCircle, AlertTriangle, Thermometer, X, Paperclip, FileImage } from "lucide-react";
 import { EmptyState }    from "@/components/common/EmptyState";
-import { PageContainer } from "@/components/layout/PageContainer";
 import { Button }        from "@/components/ui/button";
 import { Input }         from "@/components/ui/input";
 import { Label }         from "@/components/ui/label";
@@ -16,6 +15,7 @@ import {
   useUploadSickLeaveDocument,
 } from "../hooks";
 import type { SickLeave } from "../types";
+import { WIB_TZ, toWibDateStr, wibDateParts } from "@/lib/utils";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -25,7 +25,7 @@ const ADMIN_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"];
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(d).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "short", year: "numeric" });
 }
 
 function apiErr(err: unknown) {
@@ -172,7 +172,7 @@ function CreateDialog({
   onClose: () => void;
   noLetterCount: number;
 }) {
-  const today = new Date().toISOString().split("T")[0];
+  const today = toWibDateStr();
   const [startDate,  setStartDate ] = useState(today);
   const [endDate,    setEndDate   ] = useState(today);
   const [hasLetter,  setHasLetter ] = useState(false);
@@ -415,7 +415,7 @@ function SickLeaveCard({
         </div>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        Cabang: {sl.branch.name} · Diajukan {new Date(sl.createdAt).toLocaleDateString("id-ID")}
+        Cabang: {sl.branch.name} · Diajukan {new Date(sl.createdAt).toLocaleDateString("id-ID", { timeZone: WIB_TZ })}
       </p>
     </div>
   );
@@ -423,17 +423,16 @@ function SickLeaveCard({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export function SickLeavePage() {
+/** Panel pengajuan — dipakai di halaman Pengajuan. Dialog "Ajukan" dikontrol parent. */
+export function SickLeavePanel({ createOpen, onCreateClose }: { createOpen: boolean; onCreateClose: () => void }) {
   const { user } = useAuthStore();
   const isAdmin  = ADMIN_ROLES.includes(user?.role?.code ?? "");
-
-  const [createOpen,   setCreateOpen  ] = useState(false);
   const [reviewing,    setReviewing   ] = useState<SickLeave | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [lightboxUrl,  setLightboxUrl ] = useState<string | null>(null);
 
-  const myQuery  = useMySickLeaves({ status: (statusFilter as SickLeave["status"]) || undefined });
-  const allQuery = useSickLeaves({ status: (statusFilter as SickLeave["status"]) || undefined });
+  const myQuery  = useMySickLeaves({ status: (statusFilter as SickLeave["status"]) || undefined }, !isAdmin);
+  const allQuery = useSickLeaves({ status: (statusFilter as SickLeave["status"]) || undefined }, isAdmin);
   const query    = isAdmin ? allQuery : myQuery;
   const items    = query.data?.data ?? [];
 
@@ -441,12 +440,12 @@ export function SickLeavePage() {
   const cancelMut  = useCancelSickLeave();
 
   // No-letter count for current year (employee's own data)
-  const currentYear  = new Date().getFullYear();
+  const currentYear  = wibDateParts().year;
   const myAllQuery   = useMySickLeaves({});
   const noLetterCount = (myAllQuery.data?.data ?? []).filter((sl) => {
     if (sl.hasLetter) return false;
     if (!["APPROVED", "PENDING"].includes(sl.status)) return false;
-    return new Date(sl.startDate).getFullYear() === currentYear;
+    return wibDateParts(new Date(sl.startDate)).year === currentYear;
   }).length;
 
   async function handleCancel(id: string) {
@@ -454,18 +453,7 @@ export function SickLeavePage() {
   }
 
   return (
-    <PageContainer
-      className="max-w-3xl"
-      title="Pengajuan Sakit"
-      subtitle={isAdmin ? "Kelola pengajuan sakit karyawan" : "Ajukan dan pantau izin sakit kamu"}
-      action={
-        !isAdmin ? (
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Ajukan Sakit
-          </Button>
-        ) : undefined
-      }
-    >
+    <>
       <div className="space-y-5">
 
         {/* Pending warning (admin) */}
@@ -523,7 +511,7 @@ export function SickLeavePage() {
                 ? "Tidak ada pengajuan dengan status ini"
                 : isAdmin
                   ? "Belum ada pengajuan sakit dari karyawan"
-                  : 'Tekan "Ajukan Sakit" untuk mulai'
+                  : 'Tekan "Ajukan" lalu pilih Sakit untuk mulai'
             }
           />
         ) : (
@@ -543,9 +531,9 @@ export function SickLeavePage() {
       </div>
 
       {/* Dialogs */}
-      <CreateDialog open={createOpen} onClose={() => setCreateOpen(false)} noLetterCount={noLetterCount} />
+      <CreateDialog open={createOpen} onClose={() => onCreateClose()} noLetterCount={noLetterCount} />
       {reviewing   && <ReviewDialog sl={reviewing} onClose={() => setReviewing(null)} onViewPhoto={setLightboxUrl} />}
       {lightboxUrl && <PhotoLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
-    </PageContainer>
+    </>
   );
 }

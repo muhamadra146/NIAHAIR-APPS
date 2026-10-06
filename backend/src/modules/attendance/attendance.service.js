@@ -1,6 +1,7 @@
 const { StatusCodes }                    = require("http-status-codes");
 const AppError                           = require("../../common/errors/AppError");
 const { paginate, paginationMeta }       = require("../../utils/pagination");
+const { toDateOnly }                     = require("../../utils/date");
 const prisma                             = require("../../config/prisma");
 const repo                               = require("./attendance.repository");
 const settingRepo                        = require("../setting/setting.repository");
@@ -103,8 +104,7 @@ const computeStatus = (checkInAt, checkOutAt, shift) => {
 // ── Get roster with attendance for a date/branch ─────────────────────────────
 
 const getDailyRoster = async (branchId, date) => {
-  const workDate = new Date(date);
-  workDate.setUTCHours(0, 0, 0, 0);
+  const workDate = toDateOnly(date);
 
   const schedules = await prisma.staffSchedule.findMany({
     where: { branchId, workDate },
@@ -133,7 +133,7 @@ const getAll = async ({ page, limit, date, branchId, employeeId }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
   const where = {};
-  if (date)       where.workDate   = new Date(date);
+  if (date)       where.workDate   = toDateOnly(date);
   if (branchId)   where.branchId   = branchId;
   if (employeeId) where.employeeId = employeeId;
 
@@ -330,7 +330,6 @@ const getReport = async ({ branchId, startDate, endDate, employeeId }) => {
   if (!branchId)             throw new AppError("branchId is required", StatusCodes.BAD_REQUEST);
   if (!startDate || !endDate) throw new AppError("startDate and endDate are required", StatusCodes.BAD_REQUEST);
 
-  const toDateOnly = (s) => { const d = new Date(s); d.setUTCHours(0, 0, 0, 0); return d; };
   const start = toDateOnly(startDate);
   const end   = toDateOnly(endDate);
   if (end < start) throw new AppError("endDate must be after startDate", StatusCodes.BAD_REQUEST);

@@ -8,15 +8,16 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   useEmployees, useAllBranches,
-  useLoansByEmployee, useCreateLoan, useUpdateLoan, useCancelLoan, useAddRepayment,
+  useLoansByEmployee, useCreateLoan, useCancelLoan, useAddRepayment,
 } from "../../hooks";
 import { toast } from "@/lib/toast";
 import type { Loan, LoanStatus, CreateLoanInput, AddRepaymentInput } from "../../types";
+import { WIB_TZ, toWibDateStr } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const fmtRp  = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "short", year: "numeric" });
 
 const STATUS_CONFIG: Record<LoanStatus, { label: string; className: string; icon: React.ComponentType<{ className?: string }> }> = {
   ACTIVE:    { label: "Aktif",     className: "bg-blue-100 text-blue-700 border-blue-200",     icon: AlertCircle   },
@@ -58,7 +59,7 @@ function CreateLoanDialog({ open, employeeId, onClose }: CreateLoanDialogProps) 
   const branches = branchData ?? [];
   const createMut = useCreateLoan();
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = toWibDateStr();
   const [branchId,   setBranch]   = useState("");
   const [total,      setTotal]    = useState("");
   const [deduction,  setDeduction] = useState("");
@@ -143,7 +144,7 @@ interface RepaymentDialogProps {
 
 function RepaymentDialog({ open, loan, onClose }: RepaymentDialogProps) {
   const addMut = useAddRepayment(loan?.id ?? "", loan?.employeeId ?? "");
-  const today  = new Date().toISOString().split("T")[0];
+  const today  = toWibDateStr();
   const [amount, setAmount] = useState("");
   const [paidAt, setPaidAt] = useState(today);
   const [notes,  setNotes]  = useState("");

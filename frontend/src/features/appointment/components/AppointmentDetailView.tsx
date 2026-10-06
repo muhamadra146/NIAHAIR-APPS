@@ -4,11 +4,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Home, Store, Plus, Loader2, Trash2, Upload, X, ImageIcon, FileText, ExternalLink, CalendarClock, CalendarDays, CheckCircle, XCircle, AlertCircle, Clock } from "lucide-react";
-import { formatDate, formatCurrency } from "@/lib/utils";
+import { formatDate, formatCurrency, toWibTimeStr, WIB_TZ } from "@/lib/utils";
 import { fetchDeposits, linkDepositToAppointment, fetchInvoices } from "@/features/invoice/api";
 import { CreateInvoiceDialog } from "@/features/invoice/components/CreateInvoiceDialog";
 import { useAuthStore } from "@/stores/authStore";
@@ -21,6 +20,7 @@ import {
 } from "../api/appointment.api";
 import { toast } from "@/lib/toast";
 import type { Appointment, AppointmentStatusHistory, AppointmentRescheduleHistory } from "../types";
+import { uniqueStaffEmployees } from "../staff";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -32,8 +32,8 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function DetailsTab({ a }: { a: Appointment }) {
-  const startTime = new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
-  const endTime   = new Date(a.endTime).toLocaleTimeString("id-ID",   { hour: "2-digit", minute: "2-digit" });
+  const startTime = new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: WIB_TZ });
+  const endTime   = new Date(a.endTime).toLocaleTimeString("id-ID",   { hour: "2-digit", minute: "2-digit", timeZone: WIB_TZ });
   const isHS      = a.type === "HOME_SERVICE";
 
   return (
@@ -59,27 +59,24 @@ function DetailsTab({ a }: { a: Appointment }) {
   );
 }
 
-function ServicesTab({ a }: { a: Appointment }) {
-  if (a.services.length === 0) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">No services added.</p>;
+
+type AppointmentStaffRow = Appointment["staffs"][number];
+
+/** Gabungkan baris AppointmentStaff per karyawan (urutan pertama muncul dipertahankan) */
+function groupStaffByEmployee(staffs: AppointmentStaffRow[]) {
+  const byEmployee = new Map<string, { employee: AppointmentStaffRow["employee"]; slotLabels: string[] }>();
+  for (const s of staffs) {
+    const row = byEmployee.get(s.employee.id) ?? { employee: s.employee, slotLabels: [] };
+    const label = s.slotKey ? s.slotKey.charAt(0).toUpperCase() + s.slotKey.slice(1) : null;
+    if (label && !row.slotLabels.includes(label)) row.slotLabels.push(label);
+    byEmployee.set(s.employee.id, row);
   }
-  return (
-    <div className="divide-y divide-border py-2">
-      {a.services.map((s) => (
-        <div key={s.id} className="flex items-center justify-between py-3">
-          <div>
-            <p className="text-sm font-medium">{s.serviceItem.name}</p>
-            <p className="text-xs text-muted-foreground font-mono">{s.serviceItem.itemCode}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return [...byEmployee.values()];
 }
 
 function StaffTab({ a }: { a: Appointment }) {
   if (a.staffs.length === 0) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">No staff assigned.</p>;
+    return <p className="py-6 text-center text-sm text-muted-foreground">Belum ada staff.</p>;
   }
   const isHS = a.type === "HOME_SERVICE";
   return (
@@ -87,30 +84,27 @@ function StaffTab({ a }: { a: Appointment }) {
       {isHS && (
         <div className="flex items-center gap-2 pb-3 text-xs text-orange-600 font-medium">
           <Home className="h-3.5 w-3.5" />
-          Home Service — {a.staffs.length <= 3 ? "Rp 75.000/orang" : "Rp 50.000/orang"} · {a.staffs.length} staff
+          {/* Tarif Home Service diatur lewat komisi kategori HS (COM-016), bukan di sini */}
+          Home Service · {uniqueStaffEmployees(a.staffs).length} staff
         </div>
       )}
-      {a.staffs.map((s) => {
-        const slotLabel = s.slotKey
-          ? s.slotKey.charAt(0).toUpperCase() + s.slotKey.slice(1)
-          : null;
-        return (
-          <div key={s.id} className="py-3 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">{s.employee.name}</p>
-              <p className="text-xs text-muted-foreground">{s.employee.employeeCode}</p>
-            </div>
-            <div className="flex items-center gap-1.5">
-              {slotLabel && (
-                <Badge variant="secondary" className="text-xs">{slotLabel}</Badge>
-              )}
-              {s.employee.role && (
-                <Badge variant="outline" className="text-xs">{s.employee.role.name}</Badge>
-              )}
-            </div>
+      {/* Satu baris per orang; staf yang memegang beberapa peran ditampilkan sebagai beberapa label */}
+      {groupStaffByEmployee(a.staffs).map(({ employee, slotLabels }) => (
+        <div key={employee.id} className="py-3 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">{employee.name}</p>
+            <p className="text-xs text-muted-foreground">{employee.employeeCode}</p>
           </div>
-        );
-      })}
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {slotLabels.map((label) => (
+              <Badge key={label} variant="secondary" className="text-xs">{label}</Badge>
+            ))}
+            {employee.role && (
+              <Badge variant="outline" className="text-xs">{employee.role.name}</Badge>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -141,18 +135,16 @@ function fmtDt(iso: string | null | undefined) {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("id-ID", {
     day: "numeric", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
+    hour: "2-digit", minute: "2-digit", timeZone: WIB_TZ,
   });
 }
 function fmtFullDate(iso: string) {
   return new Date(iso).toLocaleDateString("id-ID", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
+    weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: WIB_TZ,
   });
 }
-function padZ(n: number) { return String(n).padStart(2, "0"); }
 function toHHMM(iso: string) {
-  const d = new Date(iso);
-  return `${padZ(d.getHours())}:${padZ(d.getMinutes())}`;
+  return toWibTimeStr(iso);
 }
 
 function HistoryTab({ a }: { a: Appointment }) {
@@ -224,12 +216,14 @@ function HistoryTab({ a }: { a: Appointment }) {
 }
 
 const INVOICE_STATUS_LABEL: Record<string, string> = {
-  UNPAID:    "Belum Lunas",
+  UNPAID:    "Belum Bayar",
+  PARTIAL:   "Sebagian",
   PAID:      "Lunas",
   CANCELLED: "Dibatalkan",
 };
 const INVOICE_STATUS_COLOR: Record<string, string> = {
   UNPAID:    "text-red-600 border-red-300",
+  PARTIAL:   "text-orange-600 border-orange-300",
   PAID:      "text-green-600 border-green-300",
   CANCELLED: "text-muted-foreground",
 };
@@ -812,7 +806,7 @@ export function AppointmentDetailView({ appointment, readOnly = false }: { appoi
         <TabsTrigger value="details">Details</TabsTrigger>
         <TabsTrigger value="photos">Foto</TabsTrigger>
         <TabsTrigger value="staff">
-          Staff{appointment.staffs.length > 0 && ` (${appointment.staffs.length})`}
+          Staff{appointment.staffs.length > 0 && ` (${uniqueStaffEmployees(appointment.staffs).length})`}
         </TabsTrigger>
         <TabsTrigger value="dp">DP</TabsTrigger>
         <TabsTrigger value="history">Riwayat</TabsTrigger>

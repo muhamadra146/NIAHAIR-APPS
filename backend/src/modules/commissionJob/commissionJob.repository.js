@@ -1,5 +1,11 @@
 const prisma = require("../../config/prisma");
 
+// Tingkatan tarif: batas staf naik, "lebih dari itu" (null) terakhir
+const RATE_TIERS_INCLUDE = {
+  select:  { id: true, maxStaff: true, value: true },
+  orderBy: { maxStaff: { sort: "asc", nulls: "last" } },
+};
+
 const findAllByCategory = (categoryId, includeInactive = false, { skip = 0, take = 10 } = {}) =>
   prisma.commissionJob.findMany({
     where: {
@@ -10,6 +16,7 @@ const findAllByCategory = (categoryId, includeInactive = false, { skip = 0, take
     include: {
       // Sertakan info job yang menjadi target potongan (untuk display di UI)
       deductsFrom: { select: { id: true, name: true } },
+      rateTiers:   RATE_TIERS_INCLUDE,
     },
     skip,
     take,
@@ -31,11 +38,19 @@ const findByKey = (categoryId, jobKey) =>
     where: { commissionCategoryId_jobKey: { commissionCategoryId: categoryId, jobKey } },
   });
 
-const create = (data) =>
-  prisma.commissionJob.create({ data });
+// rateTiers: undefined = tidak diubah; [] = hapus semua; [...] = ganti semua
+const create = (data, rateTiers) =>
+  prisma.commissionJob.create({
+    data: { ...data, ...(rateTiers?.length && { rateTiers: { create: rateTiers } }) },
+    include: { rateTiers: RATE_TIERS_INCLUDE },
+  });
 
-const update = (id, data) =>
-  prisma.commissionJob.update({ where: { id }, data });
+const update = (id, data, rateTiers) =>
+  prisma.commissionJob.update({
+    where: { id },
+    data:  { ...data, ...(rateTiers !== undefined && { rateTiers: { deleteMany: {}, create: rateTiers } }) },
+    include: { rateTiers: RATE_TIERS_INCLUDE },
+  });
 
 const hardDelete = (id) =>
   prisma.commissionJob.delete({ where: { id } });

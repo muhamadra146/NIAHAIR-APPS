@@ -14,14 +14,20 @@ beforeEach(() => jest.clearAllMocks());
 describe('getAll', () => {
   test('passes isActive filter by default', async () => {
     repo.findAll.mockResolvedValue([LEAVE_TYPE]);
-    await svc.getAll();
-    expect(repo.findAll).toHaveBeenCalledWith({ isActive: true });
+    repo.count.mockResolvedValue(1);
+    const result = await svc.getAll();
+    expect(repo.findAll).toHaveBeenCalledWith({ skip: 0, take: 10, where: { isActive: true } });
+    expect(repo.count).toHaveBeenCalledWith({ isActive: true });
+    expect(result.data).toEqual([LEAVE_TYPE]);
   });
 
   test('passes empty filter when includeInactive=true', async () => {
     repo.findAll.mockResolvedValue([LEAVE_TYPE]);
-    await svc.getAll(true);
-    expect(repo.findAll).toHaveBeenCalledWith({});
+    repo.count.mockResolvedValue(1);
+    // includeInactive arrives as a query-string value
+    await svc.getAll({ includeInactive: 'true' });
+    expect(repo.findAll).toHaveBeenCalledWith({ skip: 0, take: 10, where: {} });
+    expect(repo.count).toHaveBeenCalledWith({});
   });
 });
 

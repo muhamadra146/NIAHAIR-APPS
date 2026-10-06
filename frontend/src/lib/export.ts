@@ -2,6 +2,8 @@
  * export.ts — Utilities untuk export data ke CSV / print PDF
  */
 
+import { WIB_TZ } from "@/lib/utils";
+
 // ── CSV ───────────────────────────────────────────────────────────────────────
 
 type Row = Record<string, string | number | boolean | null | undefined>;
@@ -65,7 +67,7 @@ export function fmtExportCurrency(n: number | string | null | undefined): string
 export function fmtExportDate(iso: string | Date | null | undefined): string {
   if (!iso) return "";
   const d = typeof iso === "string" ? new Date(iso) : iso;
-  return d.toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return d.toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: WIB_TZ });
 }
 
 export function fmtExportDateTime(iso: string | Date | null | undefined): string {
@@ -73,7 +75,7 @@ export function fmtExportDateTime(iso: string | Date | null | undefined): string
   const d = typeof iso === "string" ? new Date(iso) : iso;
   return d.toLocaleString("id-ID", {
     day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
+    hour: "2-digit", minute: "2-digit", timeZone: WIB_TZ,
   });
 }
 

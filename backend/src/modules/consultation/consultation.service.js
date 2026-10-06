@@ -3,6 +3,7 @@ const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const prisma     = require("../../config/prisma");
 const cloudinary = require("../../config/cloudinary");
+const { wibDayStart, wibDayEnd } = require("../../utils/date");
 const {
   findAll,
   count,
@@ -35,12 +36,8 @@ const listNotes = async ({ page, limit, customerId, branchId, filledByEmployeeId
 
   if (startDate || endDate) {
     where.filledAt = {};
-    if (startDate) where.filledAt.gte = new Date(startDate);
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setUTCHours(23, 59, 59, 999);
-      where.filledAt.lte = end;
-    }
+    if (startDate) where.filledAt.gte = wibDayStart(startDate);
+    if (endDate)   where.filledAt.lte = wibDayEnd(endDate);
   }
 
   const [data, total] = await Promise.all([
@@ -147,12 +144,8 @@ const getStatsData = async ({ branchId, startDate, endDate, month, year }) => {
     };
   } else if (startDate || endDate) {
     where.filledAt = {};
-    if (startDate) where.filledAt.gte = new Date(startDate);
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setUTCHours(23, 59, 59, 999);
-      where.filledAt.lte = end;
-    }
+    if (startDate) where.filledAt.gte = wibDayStart(startDate);
+    if (endDate)   where.filledAt.lte = wibDayEnd(endDate);
   }
 
   return getStats(where);

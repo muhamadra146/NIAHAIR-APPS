@@ -1,4 +1,5 @@
 const prisma = require("../../config/prisma");
+const { wibDayStart, wibDayEnd } = require("../../utils/date");
 
 const INCLUDE = {
   employee:           { select: { id: true, name: true } },
@@ -35,8 +36,8 @@ const findActiveByEmployeeAndJob = (employeeId, commissionCategoryId, commission
   prisma.commissionRule.findFirst({
     where: {
       employeeId, commissionCategoryId, commissionJobId, isActive: true,
-      effectiveDate: { lte: asOfDate },
-      OR: [{ endDate: null }, { endDate: { gte: asOfDate } }],
+      effectiveDate: { lte: wibDayEnd(asOfDate) },
+      OR: [{ endDate: null }, { endDate: { gte: wibDayStart(asOfDate) } }],
     },
     orderBy: { effectiveDate: "desc" },
     select: {

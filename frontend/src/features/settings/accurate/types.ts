@@ -3,7 +3,10 @@ export type SyncDirection = "APP_TO_ACCURATE" | "ACCURATE_TO_APP";
 export type SyncEntityType =
   | "CUSTOMER" | "WAREHOUSE" | "ITEM" | "UNIT" | "ITEM_UNIT"
   | "ITEM_PRICE" | "INVENTORY" | "DEPOSIT" | "INVOICE" | "PAYMENT"
-  | "LOAN" | "PAYROLL";
+  | "DEPOSIT_PAYMENT" | "STOCK_TRANSFER" | "STOCK_TRANSFER_RECEIVE"
+  | "PURCHASE_INVOICE" | "PURCHASE_RETURN"
+  | "LOAN" // tidak dipakai lagi (kasbon tidak di-sync)
+  | "PAYROLL";
 
 export interface SyncQueue {
   id:           string;

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, ChevronRight, Trash2, CheckCircle2, Clock } from "lucide-react";
+import { Plus, Search, ChevronRight, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Pagination } from "@/components/common/Pagination";
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -14,9 +14,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useAuthStore } from "@/stores/authStore";
 import { useViewOnly } from "@/hooks/useViewOnly";
 import { fetchEmployees } from "@/features/settings/api/employee.api";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, toWibDateStr, dateStrFromParts } from "@/lib/utils";
 import { useLoans, useCreateLoan, useDeleteLoan } from "../hooks";
-import type { LoanStatus, Loan } from "../types";
+import type { Loan } from "../types";
 
 const STATUS_TABS: { key: string; label: string }[] = [
   { key: "",         label: "Semua" },
@@ -113,7 +113,6 @@ export function LoanListPage() {
                         <th className="px-4 py-3 text-right font-medium text-muted-foreground">Cicilan/Bln</th>
                         <th className="px-4 py-3 text-left font-medium text-muted-foreground">Mulai</th>
                         <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Accurate</th>
                         <th className="px-4 py-3"></th>
                       </tr>
                     </thead>
@@ -136,9 +135,6 @@ export function LoanListPage() {
                             <Badge variant="outline" className={`text-xs ${STATUS_COLOR[loan.status] ?? ""}`}>
                               {STATUS_LABEL[loan.status] ?? loan.status}
                             </Badge>
-                          </td>
-                          <td className="px-4 py-3">
-                            <AccurateSyncBadge synced={!!loan.accurateLoanId} number={loan.accurateLoanNumber} />
                           </td>
                           <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
@@ -249,7 +245,6 @@ function LoanCard({ loan, onClick, onDelete }: { loan: Loan; onClick: () => void
           <Badge variant="outline" className={`text-xs ${STATUS_COLOR[loan.status] ?? ""}`}>
             {STATUS_LABEL[loan.status] ?? loan.status}
           </Badge>
-          <AccurateSyncBadge synced={!!loan.accurateLoanId} number={loan.accurateLoanNumber} />
           {onDelete && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -272,31 +267,6 @@ function LoanCard({ loan, onClick, onDelete }: { loan: Loan; onClick: () => void
   );
 }
 
-// ── Accurate Sync Status Badge ────────────────────────────────────────
-
-function AccurateSyncBadge({ synced, number }: { synced: boolean; number: string | null | undefined }) {
-  if (synced) {
-    return (
-      <span
-        title={number ? `Accurate: ${number}` : "Sudah tersinkronisasi ke Accurate"}
-        className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800"
-      >
-        <CheckCircle2 className="h-2.5 w-2.5" />
-        {number ?? "Synced"}
-      </span>
-    );
-  }
-  return (
-    <span
-      title="Menunggu sinkronisasi ke Accurate"
-      className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800"
-    >
-      <Clock className="h-2.5 w-2.5" />
-      Pending
-    </span>
-  );
-}
-
 function CreateLoanDialog({
   open, onOpenChange, branchId, onSubmit, isPending,
 }: {
@@ -306,7 +276,7 @@ function CreateLoanDialog({
   onSubmit:      (input: import("../types").CreateLoanInput) => Promise<void>;
   isPending:     boolean;
 }) {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = toWibDateStr();
   const [empSearch, setEmpSearch]     = useState("");
   const [empResults, setEmpResults]   = useState<{ id: string; name: string; employeeCode: string | null }[]>([]);
   const [selectedEmp, setSelectedEmp] = useState<{ id: string; name: string } | null>(null);
@@ -324,9 +294,8 @@ function CreateLoanDialog({
     const monthlyAmt = parseFloat(monthly);
     if (!startDate || isNaN(totalAmt) || totalAmt <= 0 || isNaN(monthlyAmt) || monthlyAmt <= 0) return;
     const months = Math.ceil(totalAmt / monthlyAmt);
-    const d = new Date(startDate);
-    d.setMonth(d.getMonth() + months - 1);
-    setEndDate(d.toISOString().slice(0, 10));
+    const [y, m, d] = startDate.split("-").map(Number);
+    setEndDate(dateStrFromParts(y, m + months - 1, d));
   }, [total, monthly, startDate]);
 
   function reset() {

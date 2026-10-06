@@ -5,6 +5,7 @@ const prisma          = require("../../config/prisma");
 const cloudinary      = require("../../config/cloudinary");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { resolveOrderBy } = require("../../utils/sort");
+const { wibDayStart, wibDayEnd } = require("../../utils/date");
 
 const ORDER_MAP = {
   visitDate:    { visitDate: "asc" },
@@ -86,8 +87,8 @@ const listAppointments = async ({ page, limit, customerId, branchId, status, sta
     // Tidak filter by visitDate — appointment ini sudah pindah ke tanggal lain
   } else if (startDate || endDate) {
     where.visitDate = {};
-    if (startDate) where.visitDate.gte = new Date(startDate);
-    if (endDate)   where.visitDate.lte = new Date(endDate);
+    if (startDate) where.visitDate.gte = wibDayStart(startDate);
+    if (endDate)   where.visitDate.lte = wibDayEnd(endDate);
   }
 
   const [data, total] = await Promise.all([
@@ -113,6 +114,20 @@ const getAppointmentById = async (id) => {
 
 const combineDatetime = (dateStr, timeStr) =>
   new Date(`${dateStr.split("T")[0]}T${timeStr}:00+07:00`);
+
+// ── Staff per peran ───────────────────────────────────────────────────
+// Satu karyawan boleh memegang beberapa peran (pemasang/asisten/colorist) di booking yang sama
+// — diatur manager. Pasangan karyawan+peran yang sama persis dibuang (unik di database).
+function uniqueStaffSlots(staffsBySlot) {
+  if (staffsBySlot === undefined) return undefined;
+  const seen = new Set();
+  return staffsBySlot.filter(({ employeeId, slotKey }) => {
+    const key = `${employeeId}::${slotKey ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 // ── Create ────────────────────────────────────────────────────────────
 
@@ -167,7 +182,7 @@ const createAppointment = async (body, userId, createdByEmployeeId = null) => {
     notes:           s.notes ?? null,
   }));
 
-  return createWithTransaction({ appointmentData, services: mappedServices, staffsBySlot, userId });
+  return createWithTransaction({ appointmentData, services: mappedServices, staffsBySlot: uniqueStaffSlots(staffsBySlot), userId });
 };
 
 // ── Update fields ─────────────────────────────────────────────────────
@@ -205,7 +220,7 @@ const updateAppointmentById = async (id, body, userId) => {
   if (type                !== undefined) data.type                = type;
   if (homeServiceAddress  !== undefined) data.homeServiceAddress  = homeServiceAddress;
 
-  return updateWithStaff(id, data, staffsBySlot);
+  return updateWithStaff(id, data, uniqueStaffSlots(staffsBySlot));
 };
 
 // ── Change status ─────────────────────────────────────────────────────

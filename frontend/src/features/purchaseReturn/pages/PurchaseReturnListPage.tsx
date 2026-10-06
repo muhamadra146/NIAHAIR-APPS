@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { SimpleSelect } from "@/components/ui/simple-select";
 import { usePurchaseReturns } from "../hooks";
 import type { PurchaseReturnStatus } from "../types";
+import { WIB_TZ } from "@/lib/utils";
 
 const WRITE_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "INVENTORY", "FINANCE"];
 
@@ -118,7 +119,7 @@ export function PurchaseReturnListPage() {
                         <td className="px-4 py-3 font-mono text-xs font-semibold">{ret.returnNo}</td>
                         <td className="px-4 py-3 font-mono text-xs">{ret.purchaseInvoice.invoiceNo}</td>
                         <td className="px-4 py-3 text-muted-foreground">
-                          {new Date(ret.returnDate).toLocaleDateString("id-ID")}
+                          {new Date(ret.returnDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ })}
                         </td>
                         <td className="px-4 py-3 text-center">{ret._count.items}</td>
                         <td className="px-4 py-3 text-right font-mono">{fmt(ret.grandTotal)}</td>

@@ -7,6 +7,7 @@ import { Button }   from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label }    from "@/components/ui/label";
 import type { Shift, ScheduleCell, RosterEmployee, ScheduleStatus } from "../types";
+import { WIB_TZ } from "@/lib/utils";
 
 interface Props {
   open:          boolean;
@@ -30,7 +31,7 @@ function shiftColorStyle(hex: string | null): React.CSSProperties {
 
 function formatDateHeader(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("id-ID", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString("id-ID", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: WIB_TZ });
 }
 
 export function ShiftCellDialog({

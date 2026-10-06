@@ -13,3 +13,4 @@ export const shiftSchema = z.object({
 });
 
 export type ShiftFormValues = z.infer<typeof shiftSchema>;
+export type ShiftFormInput = z.input<typeof shiftSchema>;

@@ -30,7 +30,6 @@ import { CommissionSettingsTab } from "@/features/settings/components/commission
 import {
   useCommissions,
   useApproveCommission,
-  usePayCommission,
   useOverrideCommission,
   useRegenerateCommission,
   useDeleteCommission,
@@ -73,8 +72,12 @@ function isReadyToCalculate(inv: JobAssignmentInvoice): boolean {
   );
 }
 
+// Kalkulator komisi hanya untuk SUPER_ADMIN, OWNER, FINANCE (sama dengan backend)
+const COMMISSION_CALC_ROLES = ["SUPER_ADMIN", "OWNER", "FINANCE"];
+
 function ApprovalTab() {
-  const { branchId } = useAuthStore();
+  const { branchId, user } = useAuthStore();
+  const canCalculate       = COMMISSION_CALC_ROLES.includes(user?.roleCode ?? "");
   const qc           = useQueryClient();
 
   const [startDate, setStart] = useState("");
@@ -232,12 +235,14 @@ function ApprovalTab() {
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <Link to={`/generate-komisi/${inv.id}/calculator`}>
-                  <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white">
-                    <Calculator className="h-3.5 w-3.5" />
-                    Kalkulasi
-                  </Button>
-                </Link>
+                {canCalculate && (
+                  <Link to={`/generate-komisi/${inv.id}/calculator`}>
+                    <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white">
+                      <Calculator className="h-3.5 w-3.5" />
+                      Kalkulasi
+                    </Button>
+                  </Link>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -287,7 +292,7 @@ function ApprovalTab() {
             <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 bg-muted/30 border-b border-border">
               <div>
                 <p className="font-semibold tabular-nums">
-                  #{group.invoiceId.slice(-8).toUpperCase()}
+                  {group.items[0]?.invoice?.invoiceNo ?? `#${group.invoiceId.slice(-8).toUpperCase()}`}
                 </p>
                 <p className="text-sm text-muted-foreground mt-0.5">
                   {group.items.length} komisi · Total{" "}
@@ -297,12 +302,14 @@ function ApprovalTab() {
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <Link to={`/generate-komisi/${group.invoiceId}/calculator`}>
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    <Calculator className="h-3.5 w-3.5" />
-                    Kalkulator
-                  </Button>
-                </Link>
+                {canCalculate && (
+                  <Link to={`/generate-komisi/${group.invoiceId}/calculator`}>
+                    <Button variant="outline" size="sm" className="gap-1.5">
+                      <Calculator className="h-3.5 w-3.5" />
+                      Kalkulator
+                    </Button>
+                  </Link>
+                )}
                 <Button
                   size="sm"
                   disabled={groupApproving || isApproving}
@@ -389,7 +396,6 @@ export function CommissionListPage() {
   });
 
   const approveMutation    = useApproveCommission();
-  const payMutation        = usePayCommission();
   const overrideMutation   = useOverrideCommission();
   const regenerateMutation = useRegenerateCommission();
   const deleteMutation     = useDeleteCommission();
@@ -605,11 +611,9 @@ export function CommissionListPage() {
                     approvingIds={approvingIds}
                     onGroupApprove={(ids) => void handleGroupApprove(ids)}
                     onApprove={(id) => approveMutation.mutate(id)}
-                    onPay={(id) => payMutation.mutate(id)}
                     onOverride={openOverride}
                     onDelete={(c) => setDeleteTarget(c)}
                     approving={approveMutation.isPending}
-                    paying={payMutation.isPending}
                   />
                 ))}
               </div>
@@ -752,11 +756,9 @@ interface InvoiceGroupRowProps {
   approvingIds:   Set<string>;
   onGroupApprove: (ids: string[]) => void;
   onApprove:      (id: string) => void;
-  onPay:          (id: string) => void;
   onOverride:     (c: Commission) => void;
   onDelete:       (c: Commission) => void;
   approving:      boolean;
-  paying:         boolean;
 }
 
 function GroupStatusBadge({ items }: { items: Commission[] }) {
@@ -787,8 +789,8 @@ function GroupStatusBadge({ items }: { items: Commission[] }) {
 function InvoiceGroupRow({
   group, expanded, onToggle, isSuperAdmin,
   approvingIds, onGroupApprove,
-  onApprove, onPay, onOverride, onDelete,
-  approving, paying,
+  onApprove, onOverride, onDelete,
+  approving,
 }: InvoiceGroupRowProps) {
   const pendingItems    = group.items.filter((c) => c.status === "PENDING");
   const isGroupApproving = pendingItems.some((c) => approvingIds.has(c.id));
@@ -883,11 +885,9 @@ function InvoiceGroupRow({
                 <ActionButtons
                   status={c.status}
                   onApprove={() => onApprove(c.id)}
-                  onPay={() => onPay(c.id)}
                   onOverride={() => onOverride(c)}
                   onDelete={() => onDelete(c)}
                   approving={approving}
-                  paying={paying}
                 />
               )}
             </div>
@@ -921,14 +921,13 @@ function CommissionStatusBadges({ commission: c }: { commission: Commission }) {
   );
 }
 
-function ActionButtons({ status, onApprove, onPay, onOverride, onDelete, approving, paying }: {
+// Komisi dibayar lewat payroll (ditandai PAID saat payroll dibayar) — tidak ada tombol bayar manual
+function ActionButtons({ status, onApprove, onOverride, onDelete, approving }: {
   status:    CommissionStatus;
   onApprove: () => void;
-  onPay:     () => void;
   onOverride: () => void;
   onDelete:  () => void;
   approving: boolean;
-  paying:    boolean;
 }) {
   const canOverride = status === "PENDING" || status === "APPROVED";
   return (

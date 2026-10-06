@@ -35,6 +35,7 @@ export interface Employee {
   isActive:         boolean;
   payDay:           number | null;
   homeBranchId:     string | null;
+  homeBranch:       { id: string; code: string; name: string } | null;
   employeeBranches: EmployeeBranch[];
   createdAt:        string;
   updatedAt:        string;

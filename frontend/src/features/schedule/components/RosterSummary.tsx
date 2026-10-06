@@ -1,4 +1,5 @@
 import type { RosterData, Shift } from "../types";
+import { WIB_TZ } from "@/lib/utils";
 
 interface Props {
   data:   RosterData | undefined;
@@ -15,7 +16,7 @@ function shiftHours(startTime: string, endTime: string): number {
 
 function formatShortDate(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { weekday: "short", day: "numeric" });
+  return d.toLocaleDateString("en-US", { weekday: "short", day: "numeric", timeZone: WIB_TZ });
 }
 
 export function RosterSummary({ data, shifts }: Props) {

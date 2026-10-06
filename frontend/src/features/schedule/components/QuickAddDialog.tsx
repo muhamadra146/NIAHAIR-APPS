@@ -5,6 +5,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label }  from "@/components/ui/label";
 import type { Shift, RosterEmployee, ScheduleStatus } from "../types";
+import { WIB_TZ } from "@/lib/utils";
 
 interface Props {
   open:         boolean;
@@ -26,7 +27,7 @@ function shiftColorStyle(hex: string | null): React.CSSProperties {
 }
 
 function formatDateLabel(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", {
+  return new Date(dateStr).toLocaleDateString("en-US", { timeZone: WIB_TZ,
     weekday: "long",
     month:   "long",
     day:     "numeric",

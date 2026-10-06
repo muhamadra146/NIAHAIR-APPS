@@ -8,6 +8,7 @@ import { useSchedules, useCreateSchedule, useUpdateSchedule, useDeleteSchedule }
 import { ScheduleForm } from "./ScheduleForm";
 import type { EmployeeSchedule } from "../types";
 import type { ScheduleFormValues } from "../schemas/schedule.schema";
+import { WIB_TZ } from "@/lib/utils";
 
 const SCHEDULE_BADGE: Record<string, "default" | "warning" | "error"> = {
   WORK:  "default",
@@ -23,11 +24,11 @@ const SCHEDULE_LABEL: Record<string, string> = {
 
 function formatTime(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("id-ID", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "short", year: "numeric" });
 }
 
 export function ScheduleTab() {

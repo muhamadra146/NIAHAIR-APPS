@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, WIB_TZ, toWibDateStr, wibMonthRange } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
 import { useSummaryReport, useRevenueReport, useCommissionReport, useSalesByItem, useInventoryReport, useProductionReport, useCustomerAnalytics } from "../hooks";
 import type { ReportParams } from "../types";
@@ -32,9 +32,7 @@ const TABS = [
 type Tab = (typeof TABS)[number]["key"];
 
 // Default: current month
-const today     = new Date();
-const firstDay  = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-const lastDay   = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+const { start: firstDay, end: lastDay } = wibMonthRange();
 
 export function ReportsPage() {
   const { branchId } = useAuthStore();
@@ -244,7 +242,7 @@ function RevenueTab({ params }: { params: Parameters<typeof useRevenueReport>[0]
   function handleExport() {
     exportCSV(
       data.map((d) => ({ Tanggal: fmtExportDate(d.date), Invoice: d.invoiceCount, Pendapatan: fmtExportCurrency(d.revenue) })),
-      `laporan-pendapatan-${params.startDate ?? "all"}-${params.endDate ?? "all"}`,
+      `laporan-pendapatan-${params?.startDate ?? "all"}-${params?.endDate ?? "all"}`,
     );
   }
 
@@ -522,7 +520,7 @@ function CommissionsTab({ params }: { params: Parameters<typeof useCommissionRep
         Dibayar:  fmtExportCurrency(r.paid),
         Total:    fmtExportCurrency(r.totalAmount),
       })),
-      `laporan-komisi-${params.startDate ?? "all"}-${params.endDate ?? "all"}`,
+      `laporan-komisi-${params?.startDate ?? "all"}-${params?.endDate ?? "all"}`,
     );
   }
 
@@ -611,7 +609,7 @@ function SalesByItemTab({ params }: { params: Parameters<typeof useSalesByItem>[
         "Inv Count": r.invoiceCount,
         "Kumulatif %": r.cumPct,
       })),
-      `laporan-penjualan-item-${params.startDate ?? "all"}-${params.endDate ?? "all"}`,
+      `laporan-penjualan-item-${params?.startDate ?? "all"}-${params?.endDate ?? "all"}`,
     );
   }
 
@@ -825,8 +823,8 @@ function SalesByItemTab({ params }: { params: Parameters<typeof useSalesByItem>[
                 tickFormatter={(v) => `${v}%`}
               />
               <Tooltip
-                formatter={(value: number, name: string) =>
-                  name === "cumPct" ? [`${value}%`, "Kumulatif"] : [value.toLocaleString("id-ID"), "Qty"]
+                formatter={(value, name) =>
+                  name === "cumPct" ? [`${value}%`, "Kumulatif"] : [Number(value).toLocaleString("id-ID"), "Qty"]
                 }
                 contentStyle={{ fontSize: 12 }}
               />
@@ -946,7 +944,7 @@ function InventoryTab({ branchId }: { branchId?: string }) {
         "Qty Tersedia": item.qtyAvailable,
         Status:      item.isLowStock ? "Menipis" : "Aman",
       })),
-      `laporan-inventory-${new Date().toISOString().slice(0, 10)}`,
+      `laporan-inventory-${toWibDateStr()}`,
     );
   }
 
@@ -1267,7 +1265,7 @@ function ProductionTab({ params }: { params: Pick<ReportParams, "startDate" | "e
                       <tr key={o.id} className="hover:bg-muted/30">
                         <td className="px-4 py-2.5 font-medium">{o.productionNo}</td>
                         <td className="px-4 py-2.5 text-muted-foreground text-xs">
-                          {new Date(o.productionDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                          {new Date(o.productionDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "short", year: "numeric" })}
                         </td>
                         <td className="px-4 py-2.5 text-center">
                           <span className={`text-xs font-semibold ${info.color}`}>{info.label}</span>
@@ -1384,7 +1382,7 @@ function CustomerAnalyticsTab({ params }: { params: ReportParams }) {
                       <td className="px-4 py-2.5 text-right font-bold tabular-nums text-green-700">{formatCurrency(c.totalSpent)}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">{formatCurrency(c.avgSpentPerVisit)}</td>
                       <td className="px-4 py-2.5 text-right text-xs text-muted-foreground">
-                        {new Date(c.lastVisit).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "2-digit" })}
+                        {new Date(c.lastVisit).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "short", year: "2-digit" })}
                       </td>
                     </tr>
                   ))
@@ -1401,8 +1399,7 @@ function CustomerAnalyticsTab({ params }: { params: ReportParams }) {
 // ── BPJS tab ──────────────────────────────────────────────────────────────────
 
 function BpjsTab({ branchId }: { branchId?: string }) {
-  const now       = new Date();
-  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const thisMonth = toWibDateStr().slice(0, 7);
   const [yearMonth, setYearMonth] = useState(thisMonth);
 
   const { data, isLoading, isError, error, refetch } = useBpjsReport({ branchId, yearMonth });

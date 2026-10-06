@@ -8,3 +8,4 @@ export const cashAccountSchema = z.object({
 });
 
 export type CashAccountFormValues = z.infer<typeof cashAccountSchema>;
+export type CashAccountFormInput = z.input<typeof cashAccountSchema>;

@@ -271,6 +271,11 @@ export function ConsultationFormPage() {
   const [searchParams]    = useSearchParams();
   const navigate          = useNavigate();
   const isEdit            = !!id;
+  // Halaman asal (mis. Input Job) — hanya path internal yang diizinkan
+  const returnParam       = searchParams.get("returnTo");
+  const backTo            = returnParam && returnParam.startsWith("/") && !returnParam.startsWith("//")
+    ? returnParam
+    : "/consultation-notes";
 
   const [invoiceId,    setInvoiceId]    = useState(searchParams.get("invoiceId") ?? "");
   const [invoiceInfo,  setInvoiceInfo]  = useState<InvoiceInfo | null>(null);
@@ -391,13 +396,10 @@ export function ConsultationFormPage() {
     } else {
       await createMutation.mutateAsync({ invoiceId, ...payload, interestingNote: form.interestingNote });
     }
-    navigate("/consultation-notes");
+    navigate(backTo);
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
-
-  // Nomor soal: klien baru mulai dari 1 (A+B+C), klien lama mulai dari 1 (C saja)
-  const qOffset = isNewClient ? 0 : 7; // A=3 soal, B=4 soal = 7 soal yang dilewati
 
   if (!invoiceId && !isEdit) {
     return (
@@ -438,7 +440,7 @@ export function ConsultationFormPage() {
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b shadow-sm px-4 py-3 flex items-center gap-3">
         <button
           type="button"
-          onClick={() => navigate("/consultation-notes")}
+          onClick={() => navigate(backTo)}
           className="p-2 rounded-xl hover:bg-muted transition-colors"
         >
           <ChevronLeft className="w-5 h-5" />
@@ -452,7 +454,7 @@ export function ConsultationFormPage() {
         <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline" size="sm"
-            onClick={() => navigate("/consultation-notes")}
+            onClick={() => navigate(backTo)}
             disabled={isPending}
           >
             Batal

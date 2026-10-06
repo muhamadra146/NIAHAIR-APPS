@@ -1,6 +1,7 @@
 'use strict';
 
 const prisma = require("../../config/prisma");
+const { wibDayStart, wibDayEnd } = require("../../utils/date");
 
 const INVOICE_INCLUDE = {
   supplier:  { select: { id: true, name: true, code: true, paymentTerms: true } },
@@ -23,8 +24,8 @@ const buildWhere = ({ supplierId, status, synced, startDate, endDate, search }) 
   if (synced === false) where.accuratePurchaseInvoiceId = null;
   if (startDate || endDate) {
     where.invoiceDate = {};
-    if (startDate) where.invoiceDate.gte = new Date(startDate);
-    if (endDate)   where.invoiceDate.lte = new Date(endDate + "T23:59:59.999Z");
+    if (startDate) where.invoiceDate.gte = wibDayStart(startDate);
+    if (endDate)   where.invoiceDate.lte = wibDayEnd(endDate);
   }
   if (search) {
     where.OR = [

@@ -1,7 +1,7 @@
 import { api } from "@/lib/axios";
 import type { ApiResponse, PaginatedResponse } from "@/types/api";
 import type {
-  Commission, CommissionListParams,
+  Commission, CommissionListParams, MyCommissionSummary,
   CommissionCategory, CommissionCategoryListParams, CreateCommissionCategoryInput, UpdateCommissionCategoryInput,
   CommissionJob, CreateCommissionJobInput, UpdateCommissionJobInput,
   CommissionRule, CommissionRuleListParams, CreateCommissionRuleInput, UpdateCommissionRuleInput,
@@ -24,6 +24,11 @@ export async function fetchMyCommissions(params: Omit<CommissionListParams, "emp
   return data.data;
 }
 
+export async function fetchMyCommissionSummary(yearMonth?: string): Promise<MyCommissionSummary> {
+  const { data } = await api.get<ApiResponse<MyCommissionSummary>>("/commissions/my/summary", { params: { yearMonth } });
+  return data.data;
+}
+
 export async function fetchCommission(id: string): Promise<Commission> {
   const { data } = await api.get<ApiResponse<Commission>>(`/commissions/${id}`);
   return data.data;
@@ -31,11 +36,6 @@ export async function fetchCommission(id: string): Promise<Commission> {
 
 export async function approveCommission(id: string): Promise<Commission> {
   const { data } = await api.patch<ApiResponse<Commission>>(`/commissions/${id}/approve`);
-  return data.data;
-}
-
-export async function payCommission(id: string): Promise<Commission> {
-  const { data } = await api.patch<ApiResponse<Commission>>(`/commissions/${id}/pay`);
   return data.data;
 }
 

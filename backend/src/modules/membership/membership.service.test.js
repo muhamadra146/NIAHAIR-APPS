@@ -3,7 +3,8 @@
 jest.mock('./membership.repository');
 jest.mock('../../config/prisma', () => ({
   customer:           { findUnique: jest.fn() },
-  customerMembership: { updateMany: jest.fn(), update: jest.fn(), create: jest.fn() },
+  customerMembership: { updateMany: jest.fn(), update: jest.fn(), create: jest.fn(), count: jest.fn() },
+  invoice:            { count: jest.fn() },
   $transaction: jest.fn((fn) => fn({
     customerMembership: { updateMany: jest.fn(), update: jest.fn().mockResolvedValue({ id: 'cm1', membership: {} }), create: jest.fn().mockResolvedValue({ id: 'cm1', membership: {} }) },
     customer:           { update: jest.fn() },
@@ -89,20 +90,49 @@ describe('remove', () => {
     await expect(svc.remove('x')).rejects.toMatchObject({ statusCode: 404 });
   });
 
-  test('throws 400 when membership is in use by customers', async () => {
+  test('throws 409 when membership is in use by customers', async () => {
     repo.findById.mockResolvedValue(MEMBERSHIP);
     repo.countCustomers.mockResolvedValue(5);
-    await expect(svc.remove('m1')).rejects.toMatchObject({ statusCode: 400 });
+    await expect(svc.remove('m1')).rejects.toMatchObject({ statusCode: 409 });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  test('removes membership when not in use', async () => {
+  test('throws 409 when membership has ACTIVE subscriptions', async () => {
     repo.findById.mockResolvedValue(MEMBERSHIP);
     repo.countCustomers.mockResolvedValue(0);
-    repo.remove.mockResolvedValue(MEMBERSHIP);
+    prisma.customerMembership.count.mockResolvedValue(2);
+    await expect(svc.remove('m1')).rejects.toMatchObject({ statusCode: 409 });
+    expect(prisma.customerMembership.count).toHaveBeenCalledWith({
+      where: { membershipId: 'm1', status: 'ACTIVE' },
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
 
-    const result = await svc.remove('m1');
-    expect(repo.remove).toHaveBeenCalledWith('m1');
-    expect(result).toEqual(MEMBERSHIP);
+  test('throws 409 when membership is referenced by invoices', async () => {
+    repo.findById.mockResolvedValue(MEMBERSHIP);
+    repo.countCustomers.mockResolvedValue(0);
+    prisma.customerMembership.count.mockResolvedValue(0);
+    prisma.invoice.count.mockResolvedValue(1);
+    await expect(svc.remove('m1')).rejects.toMatchObject({ statusCode: 409 });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('removes membership with its history in a transaction when not in use', async () => {
+    repo.findById.mockResolvedValue(MEMBERSHIP);
+    repo.countCustomers.mockResolvedValue(0);
+    prisma.customerMembership.count.mockResolvedValue(0);
+    prisma.invoice.count.mockResolvedValue(0);
+    const tx = {
+      membershipHistory:  { deleteMany: jest.fn() },
+      customerMembership: { deleteMany: jest.fn() },
+      membership:         { delete: jest.fn().mockResolvedValue(MEMBERSHIP) },
+    };
+    prisma.$transaction.mockImplementationOnce((fn) => fn(tx));
+
+    await svc.remove('m1');
+    expect(tx.membershipHistory.deleteMany).toHaveBeenCalledWith({ where: { membershipId: 'm1' } });
+    expect(tx.customerMembership.deleteMany).toHaveBeenCalledWith({ where: { membershipId: 'm1' } });
+    expect(tx.membership.delete).toHaveBeenCalledWith({ where: { id: 'm1' } });
   });
 });
 

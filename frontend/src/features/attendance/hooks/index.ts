@@ -27,8 +27,9 @@ import type {
 
 // ── Correction hooks ─────────────────────────────────────────────────
 
-export const useCorrections = (params: CorrectionListParams = {}) =>
-  useQuery({ queryKey: ["corrections", params], queryFn: () => fetchCorrections(params) });
+// enabled=false untuk role tanpa akses endpoint daftar semua pengajuan (khusus penyetuju)
+export const useCorrections = (params: CorrectionListParams = {}, enabled = true) =>
+  useQuery({ queryKey: ["corrections", params], queryFn: () => fetchCorrections(params), enabled });
 
 export const useMyCorrections = (params: CorrectionListParams = {}) =>
   useQuery({ queryKey: ["corrections", "my", params], queryFn: () => fetchMyCorrections(params) });
@@ -51,11 +52,11 @@ export const useReviewCorrection = (id: string) => {
 
 // ── Permission hooks ─────────────────────────────────────────────────
 
-export const usePermissions = (params: PermissionListParams = {}) =>
-  useQuery({ queryKey: ["permissions", params], queryFn: () => fetchPermissions(params) });
+export const usePermissions = (params: PermissionListParams = {}, enabled = true) =>
+  useQuery({ queryKey: ["permissions", params], queryFn: () => fetchPermissions(params), enabled });
 
-export const useMyPermissions = (params: PermissionListParams = {}) =>
-  useQuery({ queryKey: ["permissions", "my", params], queryFn: () => fetchMyPermissions(params) });
+export const useMyPermissions = (params: PermissionListParams = {}, enabled = true) =>
+  useQuery({ queryKey: ["permissions", "my", params], queryFn: () => fetchMyPermissions(params), enabled });
 
 export const useCreatePermission = () => {
   const qc = useQueryClient();
@@ -93,11 +94,11 @@ export const useCancelPermission = () => {
 
 // ── Sick Leave hooks ─────────────────────────────────────────────────
 
-export const useSickLeaves = (params: SickLeaveListParams = {}) =>
-  useQuery({ queryKey: ["sick-leaves", params], queryFn: () => fetchSickLeaves(params) });
+export const useSickLeaves = (params: SickLeaveListParams = {}, enabled = true) =>
+  useQuery({ queryKey: ["sick-leaves", params], queryFn: () => fetchSickLeaves(params), enabled });
 
-export const useMySickLeaves = (params: SickLeaveListParams = {}) =>
-  useQuery({ queryKey: ["sick-leaves", "my", params], queryFn: () => fetchMySickLeaves(params) });
+export const useMySickLeaves = (params: SickLeaveListParams = {}, enabled = true) =>
+  useQuery({ queryKey: ["sick-leaves", "my", params], queryFn: () => fetchMySickLeaves(params), enabled });
 
 export const useCreateSickLeave = () => {
   const qc = useQueryClient();

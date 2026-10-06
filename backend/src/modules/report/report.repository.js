@@ -1,12 +1,13 @@
 const prisma = require("../../config/prisma");
 const { Prisma } = require("@prisma/client");
+const { wibDayStart, wibDayEnd, toDateOnly } = require("../../utils/date");
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function dateWhere(startDate, endDate, field = "createdAt") {
   const filter = {};
-  if (startDate) filter.gte = new Date(startDate);
-  if (endDate)   filter.lte = new Date(endDate + "T23:59:59.999Z");
+  if (startDate) filter.gte = wibDayStart(startDate);
+  if (endDate)   filter.lte = wibDayEnd(endDate);
   return Object.keys(filter).length ? { [field]: filter } : {};
 }
 
@@ -101,23 +102,23 @@ const getDailyRevenue = async ({ branchId, startDate, endDate }) => {
   }
   if (startDate) {
     conditions.push(`"invoiceDate" >= $${idx++}`);
-    values.push(new Date(startDate));
+    values.push(wibDayStart(startDate));
   }
   if (endDate) {
     conditions.push(`"invoiceDate" <= $${idx++}`);
-    values.push(new Date(endDate + "T23:59:59.999Z"));
+    values.push(wibDayEnd(endDate));
   }
 
   const where = `WHERE ${conditions.join(" AND ")}`;
 
   const rows = await prisma.$queryRawUnsafe(
     `SELECT
-       DATE("invoiceDate")      AS date,
+       DATE(("invoiceDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jakarta') AS date,
        COUNT(*)::int            AS invoice_count,
        SUM("grandTotal")        AS revenue
      FROM invoices
      ${where}
-     GROUP BY DATE("invoiceDate")
+     GROUP BY DATE(("invoiceDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jakarta')
      ORDER BY date ASC`,
     ...values,
   );
@@ -200,8 +201,8 @@ const getSalesByItem = async ({ branchId, startDate, endDate }) => {
   if (branchId) invoiceWhere.branchId = branchId;
   if (startDate || endDate) {
     invoiceWhere.invoiceDate = {};
-    if (startDate) invoiceWhere.invoiceDate.gte = new Date(startDate);
-    if (endDate)   invoiceWhere.invoiceDate.lte = new Date(endDate + "T23:59:59.999Z");
+    if (startDate) invoiceWhere.invoiceDate.gte = wibDayStart(startDate);
+    if (endDate)   invoiceWhere.invoiceDate.lte = wibDayEnd(endDate);
   }
 
   const rows = await prisma.invoiceItem.findMany({
@@ -351,8 +352,9 @@ const getInventoryReport = async ({ branchId }) => {
 
 const getProductionReport = async ({ startDate, endDate }) => {
   const dateFilter = {};
-  if (startDate) dateFilter.gte = new Date(startDate);
-  if (endDate)   dateFilter.lte = new Date(endDate + "T23:59:59.999Z");
+  // productionDate = @db.Date → tanggal-saja (00:00 UTC dari tanggal WIB)
+  if (startDate) dateFilter.gte = toDateOnly(startDate);
+  if (endDate)   dateFilter.lte = toDateOnly(endDate);
   const whereDate = Object.keys(dateFilter).length ? { productionDate: dateFilter } : {};
 
   const [orders, byStatus] = await Promise.all([
@@ -435,8 +437,8 @@ const getCustomerAnalytics = async ({ branchId, startDate, endDate }) => {
   if (branchId)  invoiceWhere.branchId = branchId;
   if (startDate || endDate) {
     invoiceWhere.invoiceDate = {};
-    if (startDate) invoiceWhere.invoiceDate.gte = new Date(startDate);
-    if (endDate)   invoiceWhere.invoiceDate.lte = new Date(endDate + "T23:59:59.999Z");
+    if (startDate) invoiceWhere.invoiceDate.gte = wibDayStart(startDate);
+    if (endDate)   invoiceWhere.invoiceDate.lte = wibDayEnd(endDate);
   }
 
   const invoices = await prisma.invoice.findMany({

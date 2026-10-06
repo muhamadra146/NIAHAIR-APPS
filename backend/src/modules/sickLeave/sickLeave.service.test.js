@@ -1,10 +1,16 @@
 'use strict';
 
 jest.mock('./sickLeave.repository');
-jest.mock('../../config/prisma', () => ({
-  employee:      { findUnique: jest.fn() },
-  staffSchedule: { upsert: jest.fn() },
-}));
+jest.mock('../../config/prisma', () => {
+  const p = {
+    employee:      { findUnique: jest.fn() },
+    staffSchedule: { upsert: jest.fn() },
+    sickLeave:     { update: jest.fn() },
+  };
+  // Interactive transaction: run the callback with the same mocked client as tx
+  p.$transaction = jest.fn((cb) => cb(p));
+  return p;
+});
 
 const repo   = require('./sickLeave.repository');
 const prisma = require('../../config/prisma');
@@ -133,13 +139,25 @@ describe('approve', () => {
   });
 
   test('upserts staff schedules and updates status to APPROVED', async () => {
-    repo.findById.mockResolvedValue(SICK);
+    // First findById = PENDING record; second (after transaction) = refreshed APPROVED record
+    repo.findById
+      .mockResolvedValueOnce(SICK)
+      .mockResolvedValueOnce({ ...SICK, status: 'APPROVED' });
     prisma.staffSchedule.upsert.mockResolvedValue({});
-    repo.update.mockResolvedValue({ ...SICK, status: 'APPROVED' });
+    prisma.sickLeave.update.mockResolvedValue({});
 
     const result = await svc.approve('sk1', 'mgr1', 'OK');
-    expect(prisma.staffSchedule.upsert).toHaveBeenCalled();
-    expect(repo.update).toHaveBeenCalledWith('sk1', expect.objectContaining({ status: 'APPROVED' }));
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    // 2024-06-01 .. 2024-06-03 inclusive → 3 SAKIT schedules
+    expect(prisma.staffSchedule.upsert).toHaveBeenCalledTimes(3);
+    expect(prisma.staffSchedule.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where:  { employeeId_branchId_workDate: { employeeId: 'e1', branchId: 'b1', workDate: new Date('2024-06-01T00:00:00.000Z') } },
+      update: { status: 'SAKIT', notes: 'Sakit' },
+    }));
+    expect(prisma.sickLeave.update).toHaveBeenCalledWith({
+      where: { id: 'sk1' },
+      data:  expect.objectContaining({ status: 'APPROVED', reviewedBy: 'mgr1', reviewNote: 'OK' }),
+    });
     expect(result.status).toBe('APPROVED');
   });
 });

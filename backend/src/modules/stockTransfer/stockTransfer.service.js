@@ -3,6 +3,7 @@ const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const { wibDayStart, wibDayEnd }   = require("../../utils/date");
 const prisma          = require("../../config/prisma");
 const repo            = require("./stockTransfer.repository");
 const { createSyncJob } = require("../syncQueue/syncQueue.service");
@@ -32,8 +33,8 @@ const getAll = async ({ page = 1, limit = 20, sourceWarehouseId, destinationWare
   if (search)                 where.transferNo             = { contains: search, mode: "insensitive" };
   if (startDate || endDate) {
     where.transferDate = {};
-    if (startDate) where.transferDate.gte = new Date(startDate);
-    if (endDate)   where.transferDate.lte = new Date(endDate + "T23:59:59.999Z");
+    if (startDate) where.transferDate.gte = wibDayStart(startDate);
+    if (endDate)   where.transferDate.lte = wibDayEnd(endDate);
   }
   if (branchId) {
     where.OR = [

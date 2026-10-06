@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { formatDate } from "@/lib/utils";
+import { formatDate, toWibDateStr } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import {
   useStockTransfers,
@@ -621,7 +621,7 @@ function ReceiveDialog({
 function CreateTransferDialog({ onClose }: { onClose: () => void }) {
   const [sourceWarehouseId, setSource]    = useState("");
   const [destinationWarehouseId, setDest] = useState("");
-  const [transferDate, setDate]           = useState(() => new Date().toISOString().slice(0, 10));
+  const [transferDate, setDate]           = useState(() => toWibDateStr());
   const [notes, setNotes]                 = useState("");
   const [lines, setLines]                 = useState<TransferItemLine[]>([]);
   const [itemSearch, setItemSearch]       = useState("");

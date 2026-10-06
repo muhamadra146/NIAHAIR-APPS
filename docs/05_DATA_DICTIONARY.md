@@ -4270,11 +4270,17 @@ commissionAmount
 
 status
 
+approvedAt — tanggal disetujui; menentukan periode gaji (COM-017)
+
+payrollId — slip gaji tempat komisi dibayar (kosong = belum masuk payroll; dilepas saat payroll dihapus)
+
 Business Rules
 
 Komisi tidak boleh dihitung dua kali.
 
 Komisi mengikuti Rule yang berlaku saat transaksi.
+
+Komisi hanya boleh masuk satu payroll (payrollId), dan ditandai PAID saat payroll tsb dibayar.
 
 ---
 
@@ -4334,11 +4340,29 @@ splitMode — `BY_QTY` | `EQUAL` | `FULL` (default `BY_QTY`)
 
 defaultQty — `ITEM_QTY` | `ONE` (default `ITEM_QTY`)
 
-staffCountMax — batas jumlah staf untuk rate dinamis (Home Service)
+defaultCommissionType — `PERCENTAGE` | `FIXED` | null; jenis tarif bawaan job (null = tanpa tarif bawaan)
+
+defaultCommissionValue — nilai tarif bawaan (dipakai jika tidak ada tingkatan yang cocok)
+
+rateTiers — relasi ke CommissionJobRateTier
 
 Business Rules
 
-Lihat 02_BUSINESS_RULES.md COM-006 s/d COM-013.
+Lihat 02_BUSINESS_RULES.md COM-006 s/d COM-016.
+
+---
+
+# 7.11b CommissionJobRateTier
+
+Tingkatan tarif bawaan job berdasarkan jumlah staf (COM-013).
+
+Fields
+
+commissionJobId — job pemilik (hapus job = hapus tingkatan)
+
+maxStaff — batas jumlah staf (≥ 1, unik per job); null = "lebih dari itu"
+
+value — nilai tarif (Rp atau %, mengikuti defaultCommissionType job)
 
 ---
 

@@ -11,7 +11,6 @@ import {
   deleteTreatmentItem,
   fetchAssignments,
   createAssignment,
-  updateAssignment,
   deleteAssignment,
   searchItems,
   fetchUnits,
@@ -27,7 +26,6 @@ import type {
   CreateTreatmentItemInput,
   UpdateTreatmentItemInput,
   CreateAssignmentInput,
-  UpdateAssignmentInput,
   BulkSaveMaterialUsageRow,
 } from "./types";
 

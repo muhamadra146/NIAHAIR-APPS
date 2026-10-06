@@ -6,16 +6,19 @@ import {
 } from "../api/leave.api";
 import type { LeaveListParams, CreateLeaveInput } from "../types";
 
-export const useLeaves = (params: LeaveListParams = {}) =>
+// enabled=false untuk role tanpa akses endpoint daftar semua cuti (khusus penyetuju)
+export const useLeaves = (params: LeaveListParams = {}, enabled = true) =>
   useQuery({
     queryKey: ["leaves", params],
     queryFn:  () => fetchLeaves(params),
+    enabled,
   });
 
-export const useMyLeaves = (params: Omit<LeaveListParams, "employeeId" | "branchId"> = {}) =>
+export const useMyLeaves = (params: Omit<LeaveListParams, "employeeId" | "branchId"> = {}, enabled = true) =>
   useQuery({
     queryKey: ["myLeaves", params],
     queryFn:  () => fetchMyLeaves(params),
+    enabled,
   });
 
 export const useLeave = (id: string) =>

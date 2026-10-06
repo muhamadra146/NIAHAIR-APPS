@@ -12,6 +12,7 @@ import { AppointmentStatusDialog } from "../components/AppointmentStatusDialog";
 import { AppointmentStatusBadge } from "../components/AppointmentStatusBadge";
 import type { UpdateAppointmentFormValues, ChangeStatusFormValues } from "../schemas/appointment.schema";
 import type { Appointment } from "../types";
+import { WIB_TZ } from "@/lib/utils";
 
 const TERMINAL_STATUSES = ["COMPLETED", "CANCELLED", "NO_SHOW"] as const;
 
@@ -20,7 +21,7 @@ const READ_ONLY_ROLES = ["STAFF_OPERASIONAL"];
 
 function formatDt(iso: string | null | undefined) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString("id-ID", {
+  return new Date(iso).toLocaleString("id-ID", { timeZone: WIB_TZ,
     day: "numeric", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });

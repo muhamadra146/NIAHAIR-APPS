@@ -12,20 +12,12 @@ import { Badge }          from "@/components/ui/badge";
 import { useAuthStore }   from "@/stores/authStore";
 import { useAttendanceReport } from "../hooks";
 import type { AttendanceReportRow } from "../types";
+import { WIB_TZ, wibMonthRange } from "@/lib/utils";
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
-function getFirstOfMonth(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
-}
-
-function getLastOfMonth(date: Date): string {
-  const last = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-  return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
-}
-
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+  return new Date(iso).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "numeric", month: "long", year: "numeric" });
 }
 
 function fmtMinutes(minutes: number): string {
@@ -306,10 +298,8 @@ function ReportTable({ rows }: { rows: AttendanceReportRow[] }) {
 
 export function AttendanceReportPage() {
   const { branchId } = useAuthStore();
-  const now = new Date();
-
-  const [startDate, setStartDate] = useState<string>(() => getFirstOfMonth(now));
-  const [endDate,   setEndDate]   = useState<string>(() => getLastOfMonth(now));
+  const [startDate, setStartDate] = useState<string>(() => wibMonthRange().start);
+  const [endDate,   setEndDate]   = useState<string>(() => wibMonthRange().end);
   const [search,    setSearch]    = useState("");
 
   // Bug 4 fix: client-side date validation before hitting the API

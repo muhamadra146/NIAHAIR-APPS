@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, BadgeDollarSign } from "lucide-react";
+import { ChevronRight, BadgeDollarSign, AlertCircle } from "lucide-react";
 import { EmptyState }      from "@/components/common/EmptyState";
 import { Pagination }      from "@/components/common/Pagination";
 import { PageContainer }   from "@/components/layout/PageContainer";
 import { Badge }           from "@/components/ui/badge";
 import { Button }          from "@/components/ui/button";
 import { Skeleton }        from "@/components/ui/skeleton";
+import { useMyCommissions, useMyCommissionSummary } from "../hooks";
 import { useAuthStore }    from "@/stores/authStore";
-import { useMyCommissions } from "../hooks";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { Commission, CommissionStatus } from "../types";
+import type { Commission, CommissionBucket, CommissionStatus } from "../types";
 import { StoredCommissionBreakdown } from "../components/CommissionBreakdown";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -18,10 +18,11 @@ import { StoredCommissionBreakdown } from "../components/CommissionBreakdown";
 const filterInputCls =
   "h-9 rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md focus-visible:shadow-md focus-visible:ring-ring/30";
 
+// Label mengikuti alur: menunggu persetujuan → siap dibayar (lewat gaji) → sudah dibayar
 const STATUS_CFG: Record<CommissionStatus, { label: string; cls: string }> = {
-  PENDING:  { label: "Pending",    cls: "bg-amber-50 text-amber-700 border-amber-200"   },
-  APPROVED: { label: "Disetujui",  cls: "bg-blue-50 text-blue-700 border-blue-200"      },
-  PAID:     { label: "Dibayar",    cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  PENDING:  { label: "Menunggu Persetujuan", cls: "bg-amber-50 text-amber-700 border-amber-200"   },
+  APPROVED: { label: "Siap Dibayar",         cls: "bg-blue-50 text-blue-700 border-blue-200"      },
+  PAID:     { label: "Sudah Dibayar",        cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
 };
 
 /** Nama job + item layanan (sistem kategori-job) */
@@ -40,125 +41,146 @@ function StatusBadge({ status }: { status: CommissionStatus }) {
   return <Badge variant="outline" className={`text-xs rounded-lg ${cls}`}>{label}</Badge>;
 }
 
+function SummaryCard({ label, bucket, hint, dot, amountCls }: {
+  label: string; bucket?: CommissionBucket; hint: string; dot: string; amountCls: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white px-4 py-3.5 shadow-sm">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${dot}`} />
+        <p className="text-xs font-medium text-slate-500">{label}</p>
+      </div>
+      {bucket ? (
+        <p className={`text-base font-bold tabular-nums ${amountCls}`}>{formatCurrency(bucket.amount)}</p>
+      ) : (
+        <Skeleton className="h-5 w-24" />
+      )}
+      <p className="mt-0.5 text-xs text-slate-400">{bucket ? `${bucket.count} item · ` : ""}{hint}</p>
+    </div>
+  );
+}
+
+const INVOICE_DETAIL_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER"];
+
+const nextMonth = (ym: string) => {
+  const [y, m] = ym.split("-").map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+};
+
+const monthLabel = (ym: string) => {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: "UTC" });
+};
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function MyCommissionPage() {
-  const { branchId } = useAuthStore();
+  const [page, setPage]           = useState(1);
+  // "" = periode gaji berjalan (dihitung backend dari tanggal gajian karyawan)
+  const [yearMonth, setYearMonth] = useState("");
+  const [status, setStatus]       = useState<CommissionStatus | "">("");
 
-  const [page, setPage]     = useState(1);
-  const [startDate, setStart] = useState("");
-  const [endDate, setEnd]     = useState("");
-  const [status, setStatus]   = useState<CommissionStatus | "">("");
+  // Ringkasan dihitung di backend — aturan periode sama dengan payroll (tanggal disetujui)
+  const { data: summary } = useMyCommissionSummary(yearMonth || undefined);
+  const activeYm = yearMonth || summary?.period.yearMonth || "";
 
   // employeeId diambil backend dari user login (GET /commissions/my)
   const { data, isLoading } = useMyCommissions({
     page,
-    limit:      20,
-    branchId:   branchId   || undefined,
-    startDate:  startDate  || undefined,
-    endDate:    endDate    || undefined,
-    status:     status     || undefined,
-  });
+    limit:     20,
+    yearMonth: activeYm || undefined,
+    status:    status || undefined,
+  }, !!activeYm); // tunggu periode gaji diketahui
 
   const commissions = data?.data ?? [];
   const meta        = data?.meta;
   const totalPages  = meta ? Math.ceil(meta.total / 20) : 1;
-  const hasFilter   = !!(startDate || endDate || status);
-
-  // ── Summary totals from current page ─────────────────────────────────────
-  // For accurate totals across ALL pages, we fetch a separate summary-all query
-  const { data: allData } = useMyCommissions({
-    limit:      1000,
-    branchId:   branchId   || undefined,
-    startDate:  startDate  || undefined,
-    endDate:    endDate    || undefined,
-    status:     status     || undefined,
-  });
-  const allItems    = allData?.data ?? [];
-  const totalAmount = allItems.reduce((s, c) => s + Number(c.commissionAmount), 0);
-  const paidAmount  = allItems.filter(c => c.status === "PAID").reduce((s, c) => s + Number(c.commissionAmount), 0);
-  const pendingAmt  = allItems.filter(c => c.status === "PENDING").reduce((s, c) => s + Number(c.commissionAmount), 0);
+  const hasFilter   = !!(yearMonth || status);
+  const period      = summary?.period;
+  // Halaman detail invoice hanya untuk role POS (lihat router) — staf lain tampil teks saja
+  const roleCode       = useAuthStore((s) => s.user?.roleCode) ?? "";
+  const canOpenInvoice = INVOICE_DETAIL_ROLES.includes(roleCode);
 
   return (
     <PageContainer
       title="Komisi Saya"
-      subtitle={meta ? `${meta.total} komisi` : "Riwayat komisi kamu"}
+      subtitle="Komisi masuk slip gaji setelah disetujui Finance"
     >
       <div className="space-y-4 sm:space-y-5">
 
-        {/* Summary cards */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-xl border border-slate-100 bg-white px-4 py-3.5 shadow-sm">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <span className="inline-block w-2 h-2 rounded-full shrink-0 bg-slate-400" />
-              <p className="text-xs font-medium text-slate-500">Total</p>
-            </div>
-            <p className="text-base font-bold tabular-nums text-slate-800">{formatCurrency(totalAmount)}</p>
-            <p className="mt-0.5 text-xs text-slate-400">{allItems.length} item</p>
-          </div>
-          <div className="rounded-xl border border-slate-100 bg-white px-4 py-3.5 shadow-sm">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <span className="inline-block w-2 h-2 rounded-full shrink-0 bg-emerald-400" />
-              <p className="text-xs font-medium text-slate-500">Dibayar</p>
-            </div>
-            <p className="text-base font-bold tabular-nums text-emerald-700">{formatCurrency(paidAmount)}</p>
-            <p className="mt-0.5 text-xs text-slate-400">{allItems.filter(c => c.status === "PAID").length} item</p>
-          </div>
-          <div className="rounded-xl border border-slate-100 bg-white px-4 py-3.5 shadow-sm">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <span className="inline-block w-2 h-2 rounded-full shrink-0 bg-amber-400" />
-              <p className="text-xs font-medium text-slate-500">Pending</p>
-            </div>
-            <p className="text-base font-bold tabular-nums text-amber-700">{formatCurrency(pendingAmt)}</p>
-            <p className="mt-0.5 text-xs text-slate-400">{allItems.filter(c => c.status === "PENDING").length} item</p>
-          </div>
-        </div>
-
-        {/* Filters */}
+        {/* Periode gaji */}
         <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Gaji Bulan</p>
+            <input
+              type="month"
+              value={activeYm}
+              onChange={(e) => { setYearMonth(e.target.value); setPage(1); }}
+              className={`${filterInputCls} px-3 text-sm`}
+            />
+          </div>
           <div>
             <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Status</p>
             <select
               value={status}
               onChange={(e) => { setStatus(e.target.value as CommissionStatus | ""); setPage(1); }}
-              className={`${filterInputCls} px-3 text-sm w-36`}
+              className={`${filterInputCls} px-3 text-sm w-48`}
             >
               <option value="">Semua Status</option>
-              <option value="PENDING">Pending</option>
-              <option value="APPROVED">Disetujui</option>
-              <option value="PAID">Dibayar</option>
+              <option value="PENDING">Menunggu Persetujuan</option>
+              <option value="APPROVED">Siap Dibayar</option>
+              <option value="PAID">Sudah Dibayar</option>
             </select>
           </div>
-
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Periode</p>
-            <div className="flex items-center rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => { setStart(e.target.value); setPage(1); }}
-                className="h-9 bg-transparent px-3 text-sm focus:outline-none"
-              />
-              <span className="text-muted-foreground text-xs px-1 select-none border-x border-slate-200 bg-slate-50 py-2">s/d</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => { setEnd(e.target.value); setPage(1); }}
-                className="h-9 bg-transparent px-3 text-sm focus:outline-none"
-              />
-            </div>
-          </div>
-
           {hasFilter && (
             <Button
               variant="ghost" size="sm"
-              onClick={() => { setStatus(""); setStart(""); setEnd(""); setPage(1); }}
+              onClick={() => { setStatus(""); setYearMonth(""); setPage(1); }}
               className="h-9 text-xs text-slate-500 hover:text-slate-800"
             >
-              Reset Filter
+              Periode Berjalan
             </Button>
           )}
         </div>
+
+        {period && (
+          <p className="text-sm text-slate-600">
+            Gaji <span className="font-semibold text-slate-800">{monthLabel(period.yearMonth)}</span>
+            {" · "}kerja {formatDate(period.periodStart)} – {formatDate(period.periodEnd)}
+            {" · "}dibayar {formatDate(period.payDate)}
+            {period.payrollStatus === "PAID" && <span className="ml-1 text-emerald-700">(slip gaji sudah dibayar)</span>}
+          </p>
+        )}
+
+        {/* Summary cards — Menunggu + Siap Dibayar + Sudah Dibayar = Total */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <SummaryCard label="Total Komisi"         bucket={summary?.total}   hint="periode ini"          dot="bg-slate-400"   amountCls="text-slate-800" />
+          <SummaryCard label="Menunggu Persetujuan" bucket={summary?.pending} hint="sedang dicek Finance" dot="bg-amber-400"   amountCls="text-amber-700" />
+          <SummaryCard
+            label="Siap Dibayar" bucket={summary?.ready} dot="bg-blue-400" amountCls="text-blue-700"
+            hint={summary && summary.ready.carryOver.amount > 0
+              ? `termasuk ${formatCurrency(summary.ready.carryOver.amount)} dari periode lalu`
+              : "dibayar lewat gaji"}
+          />
+          <SummaryCard label="Sudah Dibayar"        bucket={summary?.paid}    hint="sudah masuk gaji"     dot="bg-emerald-400" amountCls="text-emerald-700" />
+        </div>
+
+        {summary && period && summary.queued.amount > 0 && (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <p className="flex-1 min-w-[200px]">
+              Slip gaji ini sudah dibuat. Ada <span className="font-semibold">{formatCurrency(summary.queued.amount)}</span>
+              {" "}({summary.queued.count} komisi) disetujui yang belum masuk slip — akan ikut gaji berikutnya.
+            </p>
+            <Button
+              size="sm" variant="outline"
+              className="h-8 border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
+              onClick={() => { setYearMonth(nextMonth(period.yearMonth)); setStatus(""); setPage(1); }}
+            >
+              Lihat Gaji {monthLabel(nextMonth(period.yearMonth))}
+            </Button>
+          </div>
+        )}
 
         {/* Table */}
         <div className="rounded-xl border border-slate-200 overflow-hidden">
@@ -177,7 +199,7 @@ export function MyCommissionPage() {
             <EmptyState
               icon={<BadgeDollarSign className="w-6 h-6" />}
               title="Belum ada komisi"
-              description="Komisi akan muncul setelah invoice selesai diproses"
+              description="Belum ada komisi di periode gaji ini"
             />
           ) : (
             <>
@@ -191,6 +213,7 @@ export function MyCommissionPage() {
                       <JobLabel commission={c} />
                       <StoredCommissionBreakdown commission={c} className="mt-1" />
                       <div className="mt-1.5"><StatusBadge status={c.status} /></div>
+                      {c.approvedAt && <p className="text-xs text-slate-400 mt-0.5">Disetujui {formatDate(c.approvedAt)}</p>}
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-bold tabular-nums text-emerald-700">{formatCurrency(c.commissionAmount)}</p>
@@ -219,18 +242,27 @@ export function MyCommissionPage() {
                       <tr key={c.id} className="group hover:bg-slate-50 transition-colors">
                         <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{formatDate(c.createdAt)}</td>
                         <td className="px-5 py-3.5">
-                          <Link
-                            to={`/invoices/${c.invoiceId}`}
-                            className="font-mono text-xs text-primary hover:underline"
-                          >
-                            {c.invoice?.invoiceNo ?? c.invoiceId.slice(-10).toUpperCase()}
-                          </Link>
+                          {canOpenInvoice ? (
+                            <Link
+                              to={`/invoices/${c.invoiceId}`}
+                              className="font-mono text-xs text-primary hover:underline"
+                            >
+                              {c.invoice?.invoiceNo ?? c.invoiceId.slice(-10).toUpperCase()}
+                            </Link>
+                          ) : (
+                            <span className="font-mono text-xs text-slate-600">
+                              {c.invoice?.invoiceNo ?? c.invoiceId.slice(-10).toUpperCase()}
+                            </span>
+                          )}
                         </td>
                         <td className="px-5 py-3.5">
                           <JobLabel commission={c} />
                           <StoredCommissionBreakdown commission={c} className="mt-1" />
                         </td>
-                        <td className="px-5 py-3.5"><StatusBadge status={c.status} /></td>
+                        <td className="px-5 py-3.5">
+                          <StatusBadge status={c.status} />
+                          {c.approvedAt && <p className="text-xs text-slate-400 mt-1 whitespace-nowrap">Disetujui {formatDate(c.approvedAt)}</p>}
+                        </td>
                         <td className="px-5 py-3.5 text-right font-bold tabular-nums text-emerald-700 whitespace-nowrap">
                           {formatCurrency(c.commissionAmount)}
                         </td>
@@ -238,12 +270,12 @@ export function MyCommissionPage() {
                           {c.paidAt ? formatDate(c.paidAt) : "—"}
                         </td>
                         <td className="px-5 py-3.5 text-right">
-                          <Link
+                          {canOpenInvoice && <Link
                             to={`/invoices/${c.invoiceId}`}
                             className="inline-flex items-center gap-1 text-xs text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-primary"
                           >
                             Lihat <ChevronRight className="h-3.5 w-3.5" />
-                          </Link>
+                          </Link>}
                         </td>
                       </tr>
                     ))}

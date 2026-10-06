@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { usePurchaseInvoices, useSyncSuppliers } from "../hooks";
 import { CreatePurchaseInvoiceDialog } from "../components/CreatePurchaseInvoiceDialog";
 import type { PurchaseInvoice } from "../types";
+import { WIB_TZ } from "@/lib/utils";
 
 type SyncFilter = "" | "SYNCED" | "UNSYNCED" | "CANCELLED";
 
@@ -46,7 +47,7 @@ function InvoiceRow({ invoice }: { invoice: PurchaseInvoice }) {
       </td>
       <td className="px-4 py-3 text-sm">{invoice.supplier.name}</td>
       <td className="px-4 py-3 text-sm text-muted-foreground">
-        {new Date(invoice.invoiceDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+        {new Date(invoice.invoiceDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "short", year: "numeric" })}
       </td>
       <td className="px-4 py-3">
         <SyncBadge invoice={invoice} />
@@ -192,7 +193,7 @@ export function PurchasePage() {
           {meta && meta.totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t">
               <p className="text-sm text-muted-foreground">
-                {meta.total} faktur · halaman {meta.currentPage} / {meta.totalPages}
+                {meta.total} faktur · halaman {meta.page} / {meta.totalPages}
               </p>
               <div className="flex gap-1">
                 <Button size="sm" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>‹</Button>

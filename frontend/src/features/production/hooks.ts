@@ -67,7 +67,7 @@ export function useSubmitProductionQC() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: SubmitQCInput }) =>
       submitProductionQC(id, input),
-    onSuccess: (data, { id, input }) => {
+    onSuccess: (_data, { id, input }) => {
       qc.invalidateQueries({ queryKey: ["production-orders"] });
       qc.invalidateQueries({ queryKey: ["production-order", id] });  // ← fix: refresh detail
       qc.invalidateQueries({ queryKey: ["production-stats"] });

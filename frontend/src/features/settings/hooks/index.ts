@@ -357,7 +357,7 @@ export const useUpdateWarehouseAccurate = (id: string) => {
 
 // ── Shifts ────────────────────────────────────────────────────────────────────
 export const useShiftMasters = () =>
-  useQuery({ queryKey: ["shifts"], queryFn: fetchShifts, staleTime: 5 * 60 * 1000 });
+  useQuery({ queryKey: ["shifts"], queryFn: () => fetchShifts(), staleTime: 5 * 60 * 1000 });
 
 export const useCreateShift = () => {
   const qc = useQueryClient();

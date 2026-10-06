@@ -4,6 +4,7 @@ const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { resolveOrderBy }           = require("../../utils/sort");
+const { wibDayStart, wibDayEnd }   = require("../../utils/date");
 const { handleInvoicePaid }        = require("./invoice.workflow");
 
 const ORDER_MAP = {
@@ -17,6 +18,7 @@ const ORDER_MAP = {
 const { createSyncJob }            = require("../syncQueue/syncQueue.service");
 const { generateSaleMovement, reverseInvoiceSaleMovements, reverseInvoiceServiceMovements } = require("../inventory/inventory.service");
 const { accurateRequest }          = require("../accurate/accurate.client");
+const { resolveInvoiceStatus }     = require("./invoice.status");
 const prisma                       = require("../../config/prisma");
 const {
   findAll,
@@ -42,9 +44,11 @@ const {
   findDailyAssignment,
   findCommissionGenerateList,
   findAllPaidForJobAssignment,
+  findTreatmentItemsForJobLimit,
   findByIdForWorksheet,
 } = require("./invoice.repository");
 const { getActiveMembership } = require("../membership/membership.service");
+const { findJobQtyLimitViolations } = require("../commission/commission.calc");
 
 const D = (v) => new Prisma.Decimal(String(v));
 
@@ -62,12 +66,8 @@ const listInvoices = async ({ page, limit, customerId, branchId, status, appoint
 
   if (startDate || endDate) {
     where.invoiceDate = {};
-    if (startDate) where.invoiceDate.gte = new Date(startDate);
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setUTCHours(23, 59, 59, 999);
-      where.invoiceDate.lte = end;
-    }
+    if (startDate) where.invoiceDate.gte = wibDayStart(startDate);
+    if (endDate)   where.invoiceDate.lte = wibDayEnd(endDate);
   }
 
   const [data, total] = await Promise.all([
@@ -343,12 +343,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   // ── Determine invoice status ──────────────────────────────────────────
   const outstandingAmount = grandTotal.sub(totalDeposit);
 
-  let invoiceStatus;
-  if (totalDeposit.gte(grandTotal)) {
-    invoiceStatus = "PAID";
-  } else {
-    invoiceStatus = "UNPAID";
-  }
+  const invoiceStatus = resolveInvoiceStatus(outstandingAmount, totalDeposit);
 
   const invoiceNo = await buildInvoiceNo();
 
@@ -605,7 +600,7 @@ const updateInvoice = async (id, body, userId) => {
   const newOutstanding       = grandTotal.sub(existingTotalDeposit).sub(existingPaidAmount);
   const safeOutstanding      = newOutstanding.lte(D("0")) ? D("0") : newOutstanding;
 
-  const newStatus = safeOutstanding.lte(D("0")) ? "PAID" : "UNPAID";
+  const newStatus = resolveInvoiceStatus(safeOutstanding, existingTotalDeposit.add(existingPaidAmount));
 
   const invoiceData = {
     subtotal:               totalSubtotal,
@@ -712,7 +707,7 @@ const applyDepositToInvoice = async (invoiceId, { depositId, amount }, userId) =
   const newDepositStatus  = depositRemaining.sub(amountToApply).gt(D("0")) ? "PARTIAL_USED" : "USED";
   const newTotalDeposit   = D(invoice.totalDeposit).add(amountToApply);
   const newOutstanding    = outstandingAmount.sub(amountToApply);
-  const newInvoiceStatus  = newOutstanding.lte(D("0")) ? "PAID" : "UNPAID";
+  const newInvoiceStatus  = resolveInvoiceStatus(newOutstanding, newTotalDeposit.add(D(invoice.paidAmount ?? 0)));
 
   const updated = await applyDepositWithTransaction({
     invoiceId,
@@ -1028,14 +1023,44 @@ const getJobAssignmentInvoices = async ({ branchId, startDate, endDate }) => {
     lteDate = new Date(d.getTime() - WIB + 24 * 60 * 60 * 1000 - 1);  // WIB end-of-day → UTC 16:59:59 same day
   }
   const invoices = await findAllPaidForJobAssignment({ branchId, gteDate, lteDate });
-  return invoices;
+
+  // Klien baru = invoice pertama pelanggan (aturan yang sama dengan halaman Catatan Klien);
+  // dipakai Input Job untuk membuka form Catatan Klien lengkap / ringkas (COM-014)
+  const firstMap = await buildFirstInvoiceMap([...new Set(invoices.map((i) => i.customerId))]);
+  return invoices.map((i) => ({ ...i, isNewClient: firstMap.get(i.customerId) === i.id }));
 };
 
 // ── Submit Job Assignments + Auto-Generate Commission ─────────────────
 
 const { upsertMany: upsertManyJobAssignments } = require("../treatment/treatmentJobAssignment.repository");
+const {
+  findByInvoiceId: findConsultationNoteByInvoiceId,
+  buildFirstInvoiceMap,
+} = require("../consultation/consultation.repository");
 
 const submitJobAssignments = async (invoiceId, sessionsPayload) => {
+  // COM-015: total qty job proporsional per item tidak boleh melebihi qty invoice
+  const allAssignments = sessionsPayload.flatMap((sp) => sp.assignments ?? []);
+  if (allAssignments.length > 0) {
+    const tItems = await findTreatmentItemsForJobLimit(invoiceId);
+    const violations = findJobQtyLimitViolations(
+      tItems.map((ti) => ({
+        treatmentItemId: ti.id,
+        itemName:        ti.item?.name ?? "",
+        itemQty:         ti.qty != null ? Math.round(Number(ti.qty) * Number(ti.conversionSnapshot ?? 1)) : null,
+        jobs:            ti.item?.commissionCategory?.jobs ?? [],
+      })),
+      allAssignments,
+    );
+    if (violations.length > 0) {
+      const v = violations[0];
+      throw new AppError(
+        `Total ${v.jobName} untuk ${v.itemName} (${v.total} ${v.unit}) melebihi qty invoice (${v.max} ${v.unit})`,
+        StatusCodes.UNPROCESSABLE_ENTITY,
+      );
+    }
+  }
+
   // Tx 1: validasi + hapus PENDING + simpan assignments
   let assignedCount = 0;
   await prisma.$transaction(async (tx) => {
@@ -1045,6 +1070,12 @@ const submitJobAssignments = async (invoiceId, sessionsPayload) => {
     });
     if (!invoice)              throw new AppError("Invoice tidak ditemukan",   StatusCodes.NOT_FOUND);
     if (invoice.status !== "PAID") throw new AppError("Invoice harus berstatus PAID untuk generate komisi", StatusCodes.UNPROCESSABLE_ENTITY);
+
+    // COM-014: Catatan Klien wajib diisi sebelum Input Job
+    const note = await findConsultationNoteByInvoiceId(invoiceId);
+    if (!note) {
+      throw new AppError("Isi Catatan Klien untuk invoice ini terlebih dahulu sebelum mengisi pengerjaan", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
 
     const existingCommissions = await tx.commission.findMany({
       where:  { invoiceId },

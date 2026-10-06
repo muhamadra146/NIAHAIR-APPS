@@ -2,12 +2,13 @@ import { Badge }  from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Pencil } from "lucide-react";
 import type { SalarySetting } from "../../types";
+import { WIB_TZ } from "@/lib/utils";
 
 const Rp = (v: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(v);
 
 const fmtDate = (d: string) =>
-  new Date(d).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
+  new Date(d).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "short", year: "numeric" });
 
 interface Props {
   settings: SalarySetting[];

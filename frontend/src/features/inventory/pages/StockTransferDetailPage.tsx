@@ -15,7 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { toast }  from "@/lib/toast";
-import { formatDate } from "@/lib/utils";
+import { formatDate, WIB_TZ } from "@/lib/utils";
 import {
   useStockTransfer,
   useUpdateTransferStatus,
@@ -228,10 +228,10 @@ function ReceiveDialog({
 // ── Print: Surat Jalan ────────────────────────────────────────────────────────
 
 function PrintSuratJalan({ transfer }: { transfer: StockTransfer }) {
-  const printDate = new Date().toLocaleDateString("id-ID", {
+  const printDate = new Date().toLocaleDateString("id-ID", { timeZone: WIB_TZ,
     day: "numeric", month: "long", year: "numeric",
   });
-  const transferDate = new Date(transfer.transferDate).toLocaleDateString("id-ID", {
+  const transferDate = new Date(transfer.transferDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ,
     day: "numeric", month: "long", year: "numeric",
   });
   const isReceived = transfer.status === "RECEIVED";
@@ -543,7 +543,7 @@ export function StockTransferDetailPage() {
               <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
                 <div>
                   <dt className="text-muted-foreground">Tanggal Transfer</dt>
-                  <dd className="font-medium mt-0.5">{new Date(transfer.transferDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</dd>
+                  <dd className="font-medium mt-0.5">{new Date(transfer.transferDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "numeric", month: "long", year: "numeric" })}</dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Dibuat Pada</dt>

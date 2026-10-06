@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
 import { ArrowLeft, Trash2, Loader2 } from "lucide-react";
@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCreatePurchaseReturn } from "../hooks";
 import { fetchPurchaseInvoice } from "@/features/purchase/api";
 import type { PurchaseInvoice, PurchaseItem } from "@/features/purchase/types";
+import { WIB_TZ, toWibDateStr } from "@/lib/utils";
 
 interface FormItem {
   itemId:   string;
@@ -18,6 +19,7 @@ interface FormItem {
   itemName: string;
   unitName: string;
   qty:      number;
+  maxQty:   number;   // qty di faktur — retur tidak boleh melebihi (Accurate juga menolak)
   price:    number;
   discount: number;
   subtotal: number;
@@ -43,17 +45,16 @@ export function PurchaseReturnFormPage() {
   const [invoice,         setInvoice]          = useState<PurchaseInvoice | null>(null);
   const [invoiceError,    setInvoiceError]     = useState<string | null>(null);
 
-  const { register, control, watch, setValue, handleSubmit, reset,
-    formState: { errors } } = useForm<FormValues>({
+  const { register, control, watch, setValue, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
       purchaseInvoiceId: invoiceId,
-      returnDate:        new Date().toISOString().substring(0, 10),
+      returnDate:        toWibDateStr(),
       notes:             "",
       items:             [],
     },
   });
 
-  const { fields, append, remove } = useFieldArray({ control, name: "items" });
+  const { fields, remove } = useFieldArray({ control, name: "items" });
 
   const watchedItems = watch("items");
   const grandTotal = watchedItems.reduce((sum, item) => sum + (item.qty * item.price || 0), 0);
@@ -75,7 +76,7 @@ export function PurchaseReturnFormPage() {
       // Pre-fill items from invoice
       reset({
         purchaseInvoiceId: inv.id,
-        returnDate:        new Date().toISOString().substring(0, 10),
+        returnDate:        toWibDateStr(),
         notes:             "",
         items: inv.items.map((item: PurchaseItem) => ({
           itemId:   item.itemId,
@@ -83,6 +84,7 @@ export function PurchaseReturnFormPage() {
           itemName: item.item.name,
           unitName: item.unit.name,
           qty:      Number(item.qty),
+          maxQty:   Number(item.qty),
           price:    Number(item.price),
           discount: Number(item.discount ?? 0),
           subtotal: Number(item.qty) * Number(item.price),
@@ -96,6 +98,12 @@ export function PurchaseReturnFormPage() {
       setLoadingInvoice(false);
     }
   }, [reset, setValue]);
+
+  // Dibuka dari tombol "Buat Retur" di detail faktur → langsung muat fakturnya
+  const initialInvoiceId = searchParams.get("invoiceId");
+  useEffect(() => {
+    if (initialInvoiceId) void loadInvoice(initialInvoiceId);
+  }, [initialInvoiceId, loadInvoice]);
 
   const onSubmit = async (values: FormValues) => {
     const items = values.items.map((item) => ({
@@ -133,7 +141,8 @@ export function PurchaseReturnFormPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {/* noValidate: pesan validasi dari react-hook-form (Bahasa Indonesia), bukan bubble browser */}
+      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {/* Step 1: Load Invoice */}
         <Card>
           <CardHeader className="pb-3"><CardTitle className="text-base">1. Pilih Invoice Pembelian</CardTitle></CardHeader>
@@ -164,7 +173,7 @@ export function PurchaseReturnFormPage() {
                 </div>
                 <div className="flex gap-4">
                   <span className="text-muted-foreground">Tanggal:</span>
-                  <span>{new Date(invoice.invoiceDate).toLocaleDateString("id-ID")}</span>
+                  <span>{new Date(invoice.invoiceDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ })}</span>
                 </div>
                 <div className="flex gap-4">
                   <span className="text-muted-foreground">Supplier:</span>
@@ -183,7 +192,8 @@ export function PurchaseReturnFormPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="returnDate">Tanggal Retur *</Label>
-                  <Input id="returnDate" type="date" {...register("returnDate", { required: true })} />
+                  <Input id="returnDate" type="date" {...register("returnDate", { required: "Tanggal retur wajib diisi" })} />
+                  {errors.returnDate && <p className="mt-1 text-xs text-destructive">{errors.returnDate.message}</p>}
                 </div>
               </div>
               <div>
@@ -222,6 +232,7 @@ export function PurchaseReturnFormPage() {
                       const qty   = watchedItems[idx]?.qty   ?? 0;
                       const price = watchedItems[idx]?.price ?? 0;
                       const sub   = Number(qty) * Number(price);
+                      const rowErr = errors.items?.[idx];
                       return (
                         <tr key={field.id} className="border-b last:border-0">
                           <td className="px-3 py-2">
@@ -237,18 +248,32 @@ export function PurchaseReturnFormPage() {
                               type="number"
                               step="0.01"
                               min="0"
-                              {...register(`items.${idx}.qty`, { valueAsNumber: true, min: 0 })}
-                              className="text-right h-8 w-20 ml-auto"
+                              {...register(`items.${idx}.qty`, {
+                                valueAsNumber: true,
+                                validate: (v) => {
+                                  if (!Number.isFinite(v) || v <= 0) return "Qty harus lebih dari 0";
+                                  if (v > field.maxQty) return `Maks. ${field.maxQty.toLocaleString("id-ID")} (qty faktur)`;
+                                  return true;
+                                },
+                              })}
+                              aria-invalid={!!rowErr?.qty}
+                              className={`text-right h-8 w-20 ml-auto ${rowErr?.qty ? "border-destructive" : ""}`}
                             />
+                            {rowErr?.qty && <p className="mt-1 text-right text-xs text-destructive">{rowErr.qty.message}</p>}
                           </td>
                           <td className="px-3 py-2">
                             <Input
                               type="number"
                               step="1"
                               min="0"
-                              {...register(`items.${idx}.price`, { valueAsNumber: true, min: 0 })}
-                              className="text-right h-8"
+                              {...register(`items.${idx}.price`, {
+                                valueAsNumber: true,
+                                validate: (v) => (Number.isFinite(v) && v >= 0) || "Harga tidak boleh minus",
+                              })}
+                              aria-invalid={!!rowErr?.price}
+                              className={`text-right h-8 ${rowErr?.price ? "border-destructive" : ""}`}
                             />
+                            {rowErr?.price && <p className="mt-1 text-right text-xs text-destructive">{rowErr.price.message}</p>}
                           </td>
                           <td className="px-3 py-2">
                             <Input
@@ -256,9 +281,14 @@ export function PurchaseReturnFormPage() {
                               step="0.01"
                               min="0"
                               max="100"
-                              {...register(`items.${idx}.discount`, { valueAsNumber: true, min: 0, max: 100 })}
-                              className="text-right h-8 w-20 ml-auto"
+                              {...register(`items.${idx}.discount`, {
+                                valueAsNumber: true,
+                                validate: (v) => (Number.isNaN(v) || (v >= 0 && v <= 100)) || "Diskon 0–100%",
+                              })}
+                              aria-invalid={!!rowErr?.discount}
+                              className={`text-right h-8 w-20 ml-auto ${rowErr?.discount ? "border-destructive" : ""}`}
                             />
+                            {rowErr?.discount && <p className="mt-1 text-right text-xs text-destructive">{rowErr.discount.message}</p>}
                           </td>
                           <td className="px-3 py-2 text-right font-mono">{fmt(sub)}</td>
                           <td className="px-3 py-2">

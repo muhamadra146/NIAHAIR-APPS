@@ -2,7 +2,7 @@
 import { toast } from "sonner";
 import { Plus, Search, Users, RefreshCw, Loader2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

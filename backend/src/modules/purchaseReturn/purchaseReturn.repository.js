@@ -11,7 +11,7 @@ const RETURN_INCLUDE = {
   },
   items: {
     include: {
-      item: { select: { id: true, name: true, sku: true, itemType: true } },
+      item: { select: { id: true, name: true, itemCode: true, itemType: true } },
       unit: { select: { id: true, name: true } },
       inventoryMovement: { select: { id: true, movementType: true, qtyChange: true } },
     },

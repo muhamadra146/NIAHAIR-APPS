@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Plus, Check, X, Clock, AlertTriangle, CalendarDays, ArrowRight } from "lucide-react";
-import { PageContainer } from "@/components/layout/PageContainer";
+import { Check, X, Clock, AlertTriangle, CalendarDays, ArrowRight } from "lucide-react";
 import { Button }   from "@/components/ui/button";
 import { Input }    from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,23 +13,24 @@ import {
   useCorrections, useMyCorrections, useCreateCorrection, useReviewCorrection,
 } from "../hooks";
 import type { CorrectionRequest, CorrectionStatus, CreateCorrectionInput } from "../types";
+import { WIB_TZ, toWibDateStr, addDaysToDateStr } from "@/lib/utils";
 
 const ADMIN_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const fmtDateFull  = (iso: string) =>
-  new Date(iso).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long" });
+  new Date(iso).toLocaleDateString("id-ID", { timeZone: WIB_TZ, weekday: "long", day: "numeric", month: "long" });
 
 const fmtDateShort = (iso: string) =>
-  new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+  new Date(iso).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "numeric", month: "short", year: "numeric" });
 
 const fmtTime = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : null;
+  iso ? new Date(iso).toLocaleTimeString("id-ID", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" }) : null;
 
 const relativeDay = (iso: string) => {
-  const today    = new Date(); today.setHours(0,0,0,0);
-  const d        = new Date(iso); d.setHours(0,0,0,0);
+  const today    = new Date(toWibDateStr());
+  const d        = new Date(toWibDateStr(new Date(iso)));
   const diffDays = Math.round((today.getTime() - d.getTime()) / 86400000);
   if (diffDays === 0) return "Hari ini";
   if (diffDays === 1) return "Kemarin";
@@ -41,13 +41,13 @@ const relativeDay = (iso: string) => {
 // Extract HH:MM from ISO datetime
 const isoToTime = (iso: string | null | undefined) => {
   if (!iso) return "";
-  return new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false }).replace(".", ":");
+  return new Date(iso).toLocaleTimeString("id-ID", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit", hour12: false }).replace(".", ":");
 };
 
 // Build ISO datetime from date string + HH:MM time string
 const buildISO = (workDate: string, timeStr: string) => {
   if (!timeStr) return "";
-  return `${workDate.split("T")[0]}T${timeStr}:00`;
+  return `${workDate.split("T")[0]}T${timeStr}:00+07:00`; // jam input = WIB
 };
 
 const STATUS_CFG: Record<CorrectionStatus, { label: string; className: string }> = {
@@ -105,10 +105,9 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
   const { data: schedules = [], isLoading } = useQuery({
     queryKey: ["mySchedules"],
     queryFn: async () => {
-      const now   = new Date();
-      const start = new Date(now); start.setDate(now.getDate() - 30);
+      const today = toWibDateStr();
       const res = await api.get<{ data: MySchedule[] }>("/staff-schedules/my", {
-        params: { startDate: start.toISOString().split("T")[0], endDate: now.toISOString().split("T")[0] },
+        params: { startDate: addDaysToDateStr(today, -30), endDate: today },
       });
       return res.data.data;
     },
@@ -198,17 +197,17 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
                   {/* date badge */}
                   <div className={`flex flex-col items-center justify-center rounded-lg w-12 h-12 shrink-0 ${hasAbsen ? "bg-emerald-50" : "bg-red-50"}`}>
                     <span className={`text-lg font-bold leading-none ${hasAbsen ? "text-emerald-700" : "text-red-600"}`}>
-                      {new Date(s.workDate).getDate()}
+                      {new Date(s.workDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "numeric" })}
                     </span>
                     <span className={`text-[10px] font-medium ${hasAbsen ? "text-emerald-500" : "text-red-400"}`}>
-                      {new Date(s.workDate).toLocaleDateString("id-ID", { month: "short" })}
+                      {new Date(s.workDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ, month: "short" })}
                     </span>
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-sm text-slate-800">
-                        {new Date(s.workDate).toLocaleDateString("id-ID", { weekday: "long" })}
+                        {new Date(s.workDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ, weekday: "long" })}
                       </p>
                       {rel && (
                         <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{rel}</span>
@@ -525,8 +524,7 @@ function AdminView() {
 
 // ── Employee view ─────────────────────────────────────────────────────────────
 
-function MyView() {
-  const [open, setOpen]     = useState(false);
+function MyView({ createOpen, onCreateClose }: { createOpen: boolean; onCreateClose: () => void }) {
   const [page, setPage]     = useState(1);
   const { data, isLoading } = useMyCorrections({ limit: PAGE_LIMIT, page });
   const totalPages          = data?.meta?.totalPages ?? 1;
@@ -534,12 +532,7 @@ function MyView() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">Riwayat koreksi absensi kamu</p>
-        <Button size="sm" onClick={() => setOpen(true)}>
-          <Plus className="h-3.5 w-3.5 mr-1.5" /> Ajukan Koreksi
-        </Button>
-      </div>
+      <p className="text-sm text-slate-500">Riwayat koreksi absensi kamu</p>
 
       {isLoading ? (
         <div className="space-y-3">{Array.from({length:3}).map((_,i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
@@ -547,7 +540,7 @@ function MyView() {
         <div className="flex flex-col items-center rounded-xl border bg-white py-14 text-center shadow-sm">
           <Clock className="mb-3 h-9 w-9 text-slate-200" />
           <p className="text-sm font-medium text-slate-600">Belum ada koreksi</p>
-          <p className="mt-1 text-xs text-slate-400">Tekan tombol di atas jika absensi kamu perlu dikoreksi</p>
+          <p className="mt-1 text-xs text-slate-400">Tekan "Ajukan" lalu pilih Koreksi Jam Kerja jika absensi kamu perlu dikoreksi</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -583,30 +576,19 @@ function MyView() {
         onPrev={() => setPage((p) => Math.max(1, p - 1))}
         onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
       />
-      <CreateDialog open={open} onClose={() => setOpen(false)} />
+      <CreateDialog open={createOpen} onClose={onCreateClose} />
     </div>
   );
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export function CorrectionPage() {
+/** Panel Koreksi Jam Kerja — dipakai di halaman Pengajuan. Dialog "Ajukan" dikontrol parent. */
+export function CorrectionPanel({ createOpen, onCreateClose }: { createOpen: boolean; onCreateClose: () => void }) {
   const roleCode = useAuthStore((s) => s.user?.roleCode);
   const isAdmin  = ADMIN_ROLES.includes(roleCode ?? "");
 
-  return (
-    <PageContainer>
-      <div className="space-y-1 mb-5">
-        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
-          {isAdmin ? "Koreksi Kehadiran" : "Koreksi Kehadiran Saya"}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {isAdmin
-            ? "Review dan setujui permintaan koreksi kehadiran karyawan"
-            : "Ajukan koreksi jika absensi kamu tidak terekam dengan benar"}
-        </p>
-      </div>
-      {isAdmin ? <AdminView /> : <MyView />}
-    </PageContainer>
-  );
+  return isAdmin
+    ? <AdminView />
+    : <MyView createOpen={createOpen} onCreateClose={onCreateClose} />;
 }

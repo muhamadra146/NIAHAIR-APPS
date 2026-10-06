@@ -59,7 +59,7 @@ function portionText(b: BreakdownInput): string {
 
 /** Susun baris rincian, mis. "Rp 938.500 × 1/2 staf × 10% = Rp 46.925" */
 export function buildBreakdownLines(b: BreakdownInput): string[] {
-  if (!b.commissionType) return ["Staf belum punya rule komisi untuk job ini"];
+  if (!b.commissionType) return ["Staf belum punya rule komisi dan job ini belum punya tarif bawaan"];
 
   const rate = `${num(b.commissionValue)}%`;
 

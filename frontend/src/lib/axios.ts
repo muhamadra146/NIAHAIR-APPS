@@ -52,7 +52,11 @@ api.interceptors.response.use(
       const fieldErrors: { field: string; message: string }[] | undefined =
         error.response?.data?.errors;
       const detail = fieldErrors?.map((e) => e.message).join(", ");
-      return new Error(detail ? `${message}: ${detail}` : message);
+      // Tetap bawa `response` agar pemanggil yang membaca e.response.data.message
+      // mendapat pesan server, bukan teks cadangan
+      return Object.assign(new Error(detail ? `${message}: ${detail}` : message), {
+        response: error.response,
+      });
     };
 
     if (error.response?.status !== 401) {

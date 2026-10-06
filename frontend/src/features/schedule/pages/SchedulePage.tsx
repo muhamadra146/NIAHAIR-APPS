@@ -11,28 +11,23 @@ import { RosterSummary }    from "../components/RosterSummary";
 import { MobileRosterView } from "../components/MobileRosterView";
 import { ShiftCellDialog }  from "../components/ShiftCellDialog";
 import type { RosterData, ScheduleStatus, ViewMode, ScheduleCell, RosterEmployee, BulkScheduleItem } from "../types";
+import { wibDateParts } from "@/lib/utils";
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
 function getMonday(date: Date): Date {
-  // Use LOCAL weekday — getUTCDay() returns the wrong day for WIB users
-  // between midnight and 07:00 (UTC is still the previous day)
-  const day = date.getDay(); // 0 = Sun, 1 = Mon, ...
+  // Pakai tanggal kalender WIB (bukan UTC / zona device). Untuk input UTC-midnight
+  // (tanggal murni) hasilnya tanggal yang sama. Kembalian = UTC midnight tanggal Senin.
+  const { year, month, day: dom } = wibDateParts(date);
+  const day = new Date(Date.UTC(year, month - 1, dom)).getUTCDay(); // 0 = Sun, 1 = Mon, ...
   const diff = day === 0 ? -6 : 1 - day;
-  const monday = new Date(date);
-  monday.setDate(monday.getDate() + diff); // local date arithmetic
-  // Convert back to UTC midnight so toISODate() (.toISOString()) gives correct YYYY-MM-DD
-  const y = monday.getFullYear();
-  const m = String(monday.getMonth() + 1).padStart(2, "0");
-  const d = String(monday.getDate()).padStart(2, "0");
-  return new Date(`${y}-${m}-${d}T00:00:00.000Z`);
+  return new Date(Date.UTC(year, month - 1, dom + diff));
 }
 
 function getFirstOfMonth(date: Date): Date {
-  // Use LOCAL year/month to avoid the off-by-one bug for WIB users midnight-07:00
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  return new Date(`${y}-${m}-01T00:00:00.000Z`);
+  // Pakai tahun/bulan kalender WIB
+  const { year, month } = wibDateParts(date);
+  return new Date(Date.UTC(year, month - 1, 1));
 }
 
 function toISODate(d: Date): string {

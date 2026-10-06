@@ -1,5 +1,6 @@
 'use strict';
 
+jest.mock('../../config/prisma', () => ({}));
 jest.mock('./user.repository');
 jest.mock('bcryptjs');
 
@@ -58,6 +59,7 @@ describe('getById', () => {
 
 describe('createUser', () => {
   beforeEach(() => {
+    repo.findByUsername.mockResolvedValue(null);
     repo.findByEmail.mockResolvedValue(null);
     repo.findUserRoleById.mockResolvedValue({ id: 'r1', code: 'STAFF' });
     repo.findEmployeeById.mockResolvedValue({ id: 'e1' });
@@ -91,7 +93,7 @@ describe('createUser', () => {
 
   test('hashes password before create', async () => {
     await svc.createUser({ email: 'new@salon.com', password: 'pw', userRoleId: 'r1', employeeId: 'e1' });
-    expect(bcrypt.hash).toHaveBeenCalledWith('pw', 10);
+    expect(bcrypt.hash).toHaveBeenCalledWith('pw', 12);
     expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ passwordHash: 'newhash' }));
   });
 });
@@ -151,7 +153,7 @@ describe('resetPassword', () => {
     repo.updatePassword.mockResolvedValue({ id: 'u1' });
 
     const result = await svc.resetPassword('u1', { password: 'newpw' });
-    expect(bcrypt.hash).toHaveBeenCalledWith('newpw', 10);
+    expect(bcrypt.hash).toHaveBeenCalledWith('newpw', 12);
     expect(repo.updatePassword).toHaveBeenCalledWith('u1', 'newhash');
     expect(result.message).toBe('Password updated');
   });

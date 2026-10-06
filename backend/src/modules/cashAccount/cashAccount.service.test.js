@@ -85,12 +85,19 @@ describe('deleteCashAccount', () => {
     await expect(svc.deleteCashAccount('x')).rejects.toMatchObject({ statusCode: 404 });
   });
 
-  test('soft-deactivates account on delete', async () => {
-    repo.findById.mockResolvedValue(ACCOUNT);
-    repo.update.mockResolvedValue({ ...ACCOUNT, isActive: false });
+  test('throws 409 when account is used by payment methods', async () => {
+    repo.findById.mockResolvedValue({ ...ACCOUNT, paymentMethods: [{ name: 'Tunai' }, { name: 'QRIS' }] });
+    await expect(svc.deleteCashAccount('ca1')).rejects.toMatchObject({ statusCode: 409 });
+    expect(repo.remove).not.toHaveBeenCalled();
+  });
+
+  test('removes account when not used by any payment method', async () => {
+    repo.findById.mockResolvedValue({ ...ACCOUNT, paymentMethods: [] });
+    repo.remove.mockResolvedValue(ACCOUNT);
 
     const result = await svc.deleteCashAccount('ca1');
-    expect(repo.update).toHaveBeenCalledWith('ca1', { isActive: false });
-    expect(result.isActive).toBe(false);
+    expect(repo.remove).toHaveBeenCalledWith('ca1');
+    expect(repo.update).not.toHaveBeenCalled();
+    expect(result).toEqual(ACCOUNT);
   });
 });

@@ -4,6 +4,7 @@ const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const prisma          = require("../../config/prisma");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const { wibDayStart, wibDayEnd }   = require("../../utils/date");
 const {
   findMovements,
   countMovements,
@@ -61,8 +62,8 @@ const listMovements = async ({
 
   if (startDate || endDate) {
     where.createdAt = {};
-    if (startDate) where.createdAt.gte = new Date(startDate);
-    if (endDate)   where.createdAt.lte = new Date(new Date(endDate).setUTCHours(23, 59, 59, 999));
+    if (startDate) where.createdAt.gte = wibDayStart(startDate);
+    if (endDate)   where.createdAt.lte = wibDayEnd(endDate);
   }
 
   const [raw, total] = await Promise.all([

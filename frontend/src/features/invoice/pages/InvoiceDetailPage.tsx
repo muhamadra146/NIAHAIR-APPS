@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, WIB_TZ } from "@/lib/utils";
 import { fetchPaymentMethods } from "@/features/settings/api/paymentMethod.api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -23,19 +23,21 @@ import {
 } from "../hooks";
 import { createDeposit, createDepositPayment, applyDeposit } from "../api";
 import type { InvoiceStatus } from "../types";
-import { useAppointment } from "@/features/appointment/hooks";
+import { isOpenInvoice } from "../types";
 import { fetchCommissions } from "@/features/commission/api";
 import { TreatmentAssignmentSection } from "../components/TreatmentAssignmentSection";
 import { CreateInvoiceDialog } from "../components/CreateInvoiceDialog";
 
 const STATUS_LABEL: Record<InvoiceStatus, string> = {
   UNPAID:    "Belum Bayar",
+  PARTIAL:   "Sebagian",
   PAID:      "Lunas",
   CANCELLED: "Dibatalkan",
 };
 
 const STATUS_COLOR: Record<InvoiceStatus, string> = {
   UNPAID:    "text-red-600 border-red-300",
+  PARTIAL:   "text-orange-600 border-orange-300",
   PAID:      "bg-green-600 text-white",
   CANCELLED: "",
 };
@@ -62,9 +64,6 @@ export function InvoiceDetailPage() {
   const qc = useQueryClient();
 
   const canDeletePayment = user ? CAN_DELETE_PAYMENT.includes(user.roleCode) : false;
-
-  const appointmentId = invoice?.appointmentId ?? null;
-  const { data: appointment } = useAppointment(appointmentId ?? "");
 
   const { data: commissionsData } = useQuery({
     queryKey:  ["commissions", "invoice", id],
@@ -97,7 +96,7 @@ export function InvoiceDetailPage() {
     );
   }
 
-  const canPay    = invoice.status === "UNPAID";
+  const canPay    = isOpenInvoice(invoice.status);
   const outstanding = Number(invoice.outstandingAmount);
 
   return (
@@ -122,7 +121,7 @@ export function InvoiceDetailPage() {
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
-              {invoice.status === "UNPAID" && (
+              {isOpenInvoice(invoice.status) && (
                 <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
                   <Pencil className="mr-1.5 h-3.5 w-3.5" />
                   Edit
@@ -535,7 +534,7 @@ function buildWhatsAppMessage(invoice: import("../types").Invoice): string {
   const lines: string[] = [];
   lines.push(`*NIAHAIR - Struk Pembayaran*`);
   lines.push(`No: ${invoice.invoiceNo}`);
-  lines.push(`Tanggal: ${new Date(invoice.invoiceDate).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}`);
+  lines.push(`Tanggal: ${new Date(invoice.invoiceDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "long", year: "numeric" })}`);
   lines.push(`Cabang: ${invoice.branch?.name ?? "-"}`);
   lines.push(``);
   lines.push(`*Item:*`);
@@ -604,7 +603,7 @@ function printReceipt(invoice: import("../types").Invoice) {
   <div class="divider"></div>
   <div style="font-size:11px">
     <div>No : <strong>${invoice.invoiceNo}</strong></div>
-    <div>Tgl: ${new Date(invoice.invoiceDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}</div>
+    <div>Tgl: ${new Date(invoice.invoiceDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "short", year: "numeric" })}</div>
     <div>Klien: ${invoice.customer?.name ?? "-"}</div>
   </div>
   <div class="divider"></div>

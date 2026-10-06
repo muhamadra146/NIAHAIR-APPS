@@ -8,6 +8,7 @@
  */
 
 jest.mock('./invoice.repository', () => ({
+  findTreatmentItemsForJobLimit: jest.fn().mockResolvedValue([]),
   findAll:                       jest.fn(),
   count:                         jest.fn(),
   findById:                      jest.fn(),
@@ -36,7 +37,9 @@ jest.mock('../syncQueue/syncQueue.service', () => ({
 }));
 
 jest.mock('../inventory/inventory.service', () => ({
-  generateSaleMovement: jest.fn().mockResolvedValue({}),
+  generateSaleMovement:           jest.fn().mockResolvedValue({}),
+  reverseInvoiceSaleMovements:    jest.fn().mockResolvedValue({}),
+  reverseInvoiceServiceMovements: jest.fn().mockResolvedValue({}),
 }));
 
 jest.mock('../accurate/accurate.client', () => ({
@@ -51,6 +54,14 @@ jest.mock('../membership/membership.service', () => ({
   getActiveMembership: jest.fn().mockResolvedValue(null),
 }));
 
+jest.mock('../consultation/consultation.repository', () => ({
+  findByInvoiceId: jest.fn(),
+}));
+
+jest.mock('../treatment/treatmentJobAssignment.repository', () => ({
+  upsertMany: jest.fn().mockResolvedValue([]),
+}));
+
 jest.mock('../../config/prisma', () => ({
   payment:          { count: jest.fn() },
   invoice:          { findUnique: jest.fn() },
@@ -60,8 +71,11 @@ jest.mock('../../config/prisma', () => ({
 
 const repo      = require('./invoice.repository');
 const prisma    = require('../../config/prisma');
-const { getInvoiceById, cancelInvoice, deleteInvoice, applyDepositToInvoice } =
+const inventory = require('../inventory/inventory.service');
+const { getInvoiceById, cancelInvoice, deleteInvoice, applyDepositToInvoice, submitJobAssignments } =
   require('./invoice.service');
+const consultationRepo = require('../consultation/consultation.repository');
+const { upsertMany }   = require('../treatment/treatmentJobAssignment.repository');
 const AppError  = require('../../common/errors/AppError');
 
 beforeEach(() => jest.clearAllMocks());
@@ -110,12 +124,13 @@ describe('cancelInvoice', () => {
   });
 
   test('should_cancel_unpaid_invoice', async () => {
-    const mockInvoice = { id: 'inv1', status: 'UNPAID' };
+    const mockInvoice = { id: 'inv1', invoiceNo: 'INV-001', status: 'UNPAID' };
     repo.findById.mockResolvedValue(mockInvoice);
     repo.cancelWithTransaction.mockResolvedValue({ ...mockInvoice, status: 'CANCELLED' });
 
     await cancelInvoice('inv1', 'u1');
 
+    expect(inventory.reverseInvoiceSaleMovements).toHaveBeenCalledWith('INV-001');
     expect(repo.cancelWithTransaction).toHaveBeenCalledWith(
       expect.objectContaining({ invoice: mockInvoice, userId: 'u1' })
     );
@@ -147,12 +162,14 @@ describe('deleteInvoice', () => {
   });
 
   test('should_delete_invoice_when_no_payments_and_unpaid', async () => {
-    repo.findById.mockResolvedValue({ id: 'inv1', status: 'UNPAID', accurateInvoiceId: null });
+    repo.findById.mockResolvedValue({ id: 'inv1', invoiceNo: 'INV-001', status: 'UNPAID', accurateInvoiceId: null });
     prisma.payment.count.mockResolvedValue(0);
     repo.deleteWithTransaction.mockResolvedValue({});
 
     await deleteInvoice('inv1');
 
+    expect(inventory.reverseInvoiceSaleMovements).toHaveBeenCalledWith('INV-001');
+    expect(inventory.reverseInvoiceServiceMovements).toHaveBeenCalledWith('inv1');
     expect(repo.deleteWithTransaction).toHaveBeenCalledWith('inv1');
   });
 });
@@ -260,5 +277,71 @@ describe('applyDepositToInvoice', () => {
     expect(repo.applyDepositWithTransaction).toHaveBeenCalledWith(
       expect.objectContaining({ invoiceId: 'inv1', depositId: 'dep1' })
     );
+  });
+});
+
+// ── submitJobAssignments — COM-014: Catatan Klien wajib sebelum Input Job ─────
+
+describe('submitJobAssignments', () => {
+  const tx = {
+    invoice:    { findUnique: jest.fn() },
+    commission: { findMany: jest.fn(), deleteMany: jest.fn() },
+  };
+  const sessions = [{ sessionId: 's1', assignments: [{ treatmentItemId: 'ti1', commissionJobId: 'j1', employeeId: 'e1' }] }];
+
+  beforeEach(() => {
+    prisma.$transaction.mockImplementation((fn) => fn(tx));
+    tx.invoice.findUnique.mockResolvedValue({ id: 'inv1', status: 'PAID' });
+    tx.commission.findMany.mockResolvedValue([]);
+  });
+
+  test('should_reject_when_consultation_note_missing', async () => {
+    consultationRepo.findByInvoiceId.mockResolvedValue(null);
+    await expect(submitJobAssignments('inv1', sessions))
+      .rejects.toMatchObject({ statusCode: 422 });
+    expect(upsertMany).not.toHaveBeenCalled();
+  });
+
+  test('should_save_assignments_when_consultation_note_exists', async () => {
+    consultationRepo.findByInvoiceId.mockResolvedValue({ id: 'note1' });
+    const result = await submitJobAssignments('inv1', sessions);
+    expect(upsertMany).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ assigned: 1 });
+  });
+});
+
+describe('submitJobAssignments — COM-015 batas qty', () => {
+  const tx = {
+    invoice:    { findUnique: jest.fn() },
+    commission: { findMany: jest.fn(), deleteMany: jest.fn() },
+  };
+  const item = {
+    id: 'ti1', qty: 1, conversionSnapshot: 120,
+    item: { name: 'ALMOST HITAM 50CM', commissionCategory: { jobs: [
+      { id: 'pasang', name: 'pasang rambut', unit: 'helai', splitMode: 'BY_QTY', deductsFromJobId: null },
+    ] } },
+  };
+  const two = (q1, q2) => [{ sessionId: 's1', assignments: [
+    { treatmentItemId: 'ti1', commissionJobId: 'pasang', employeeId: 'e1', workQty: q1 },
+    { treatmentItemId: 'ti1', commissionJobId: 'pasang', employeeId: 'e2', workQty: q2 },
+  ] }];
+
+  beforeEach(() => {
+    prisma.$transaction.mockImplementation((fn) => fn(tx));
+    tx.invoice.findUnique.mockResolvedValue({ id: 'inv1', status: 'PAID' });
+    tx.commission.findMany.mockResolvedValue([]);
+    consultationRepo.findByInvoiceId.mockResolvedValue({ id: 'note1' });
+    repo.findTreatmentItemsForJobLimit.mockResolvedValue([item]);
+  });
+
+  test('should_reject_when_team_total_exceeds_invoice_qty', async () => {
+    await expect(submitJobAssignments('inv1', two(120, 120)))
+      .rejects.toMatchObject({ statusCode: 422 });
+    expect(upsertMany).not.toHaveBeenCalled();
+  });
+
+  test('should_save_when_team_total_within_invoice_qty', async () => {
+    await submitJobAssignments('inv1', two(70, 50));
+    expect(upsertMany).toHaveBeenCalledTimes(1);
   });
 });

@@ -8,7 +8,7 @@ import {
 import { Button }   from "@/components/ui/button";
 import { Input }    from "@/components/ui/input";
 import { Label }    from "@/components/ui/label";
-import { shiftSchema, type ShiftFormValues } from "../../schemas/shift.schema";
+import { shiftSchema, type ShiftFormValues, type ShiftFormInput } from "../../schemas/shift.schema";
 import type { ShiftMaster } from "../../types";
 
 function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
@@ -51,7 +51,7 @@ export function ShiftForm({ open, onOpenChange, onSubmit, isPending, defaultValu
   const isUsed  = defaultValues?.isUsed ?? false;
   const locked  = isEdit && isUsed;
 
-  const form = useForm<ShiftFormValues>({
+  const form = useForm<ShiftFormInput, unknown, ShiftFormValues>({
     resolver: zodResolver(shiftSchema),
     defaultValues: {
       code:      "",
@@ -202,7 +202,7 @@ export function ShiftForm({ open, onOpenChange, onSubmit, isPending, defaultValu
               <p className="text-xs text-muted-foreground">Nonaktifkan untuk shift libur / cuti</p>
             </div>
             <Toggle
-              checked={form.watch("isWorking")}
+              checked={form.watch("isWorking") ?? false}
               onChange={(v) => form.setValue("isWorking", v)}
               disabled={locked}
             />

@@ -8,7 +8,7 @@ import { Skeleton }            from "@/components/ui/skeleton";
 import { Badge }               from "@/components/ui/badge";
 import { PageContainer }       from "@/components/layout/PageContainer";
 import { useAuthStore }        from "@/stores/authStore";
-import { formatCurrency }      from "@/lib/utils";
+import { formatCurrency, toWibDateStr, toWibTimeStr, wibMonthRange, WIB_TZ } from "@/lib/utils";
 import { useAppointments }     from "@/features/appointment/hooks";
 import { useMyCommissions }    from "@/features/commission/hooks";
 import { useMyPayrolls }       from "@/features/payroll/hooks/index";
@@ -16,10 +16,10 @@ import { useMyAttendanceToday } from "@/features/attendance/hooks";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const todayStr = new Date().toISOString().slice(0, 10);
+const todayStr = toWibDateStr();
 
 function greeting() {
-  const h = new Date().getHours();
+  const h = Number(toWibTimeStr(new Date()).slice(0, 2));
   if (h < 12) return "Selamat pagi";
   if (h < 15) return "Selamat siang";
   if (h < 18) return "Selamat sore";
@@ -28,11 +28,11 @@ function greeting() {
 
 function fmtTime(iso: string | null) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: WIB_TZ });
 }
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+  return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: WIB_TZ });
 }
 
 /** Derive current payroll period from the most recent payroll record. */
@@ -41,11 +41,7 @@ function useCurrentPeriod() {
   const latest = data?.data?.[0];
   if (latest) return { start: latest.periodStart, end: latest.periodEnd };
   // Fallback: current calendar month
-  const now = new Date();
-  return {
-    start: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10),
-    end:   new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10),
-  };
+  return wibMonthRange();
 }
 
 // ── Status configs ─────────────────────────────────────────────────────────────
@@ -243,7 +239,7 @@ function TodayAppointmentsCard({ employeeId }: { employeeId: string }) {
         <div className="divide-y divide-slate-100">
           {appointments.map((a) => {
             const cfg = APPT_STATUS[a.status] ?? APPT_STATUS.BOOKED;
-            const time = new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+            const time = new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: WIB_TZ });
             return (
               // Booking Harian default ke hari ini; /appointments/:id tidak bisa diakses semua role
               <Link
@@ -283,7 +279,7 @@ export function StaffDashboardPage() {
         {/* Greeting */}
         <div>
           <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-widest">
-            {new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            {new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: WIB_TZ })}
           </p>
           <h1 className="text-2xl font-semibold tracking-tight">
             {greeting()},{" "}

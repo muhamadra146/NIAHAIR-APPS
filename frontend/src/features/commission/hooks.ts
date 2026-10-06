@@ -3,9 +3,9 @@ import { toast } from "@/lib/toast";
 import {
   fetchCommissions,
   fetchMyCommissions,
+  fetchMyCommissionSummary,
   fetchCommission,
   approveCommission,
-  payCommission,
   overrideCommission,
   regenerateCommission,
   deleteCommission,
@@ -21,10 +21,20 @@ export function useCommissions(params: CommissionListParams = {}) {
   });
 }
 
-export function useMyCommissions(params: Omit<CommissionListParams, "employeeId"> = {}) {
+export function useMyCommissions(params: Omit<CommissionListParams, "employeeId"> = {}, enabled = true) {
   return useQuery({
     queryKey:       ["commissions", "my", params],
     queryFn:        () => fetchMyCommissions(params),
+    enabled,
+    staleTime:      0,
+    refetchOnMount: true,
+  });
+}
+
+export function useMyCommissionSummary(yearMonth?: string) {
+  return useQuery({
+    queryKey:       ["commissions", "my", "summary", yearMonth ?? "current"],
+    queryFn:        () => fetchMyCommissionSummary(yearMonth),
     staleTime:      0,
     refetchOnMount: true,
   });
@@ -47,18 +57,6 @@ export function useApproveCommission() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["commissions"] });
       toast.success("Komisi disetujui");
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-}
-
-export function usePayCommission() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => payCommission(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["commissions"] });
-      toast.success("Komisi ditandai dibayar");
     },
     onError: (err: Error) => toast.error(err.message),
   });

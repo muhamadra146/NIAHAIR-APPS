@@ -53,6 +53,8 @@ import {
   type SlotKey,
   type StaffBySlot,
 } from "../components/StaffSlotSelector";
+import { WIB_TZ, toWibDateStr, toWibTimeStr, addDaysToDateStr } from "@/lib/utils";
+import { uniqueStaffEmployees } from "../staff";
 
 // ── Column config (5 active statuses only) ────────────────────────────
 
@@ -109,25 +111,19 @@ const RESCHEDULABLE: AppointmentStatus[] = ["BOOKED", "CONFIRMED", "CHECK_IN", "
 
 // ── Date helpers ──────────────────────────────────────────────────────
 
-const localDateStr = (d: Date = new Date()) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const todayStr  = () => localDateStr();
-const shiftDate = (d: string, n: number) => {
-  const dt = new Date(d + "T00:00:00"); dt.setDate(dt.getDate() + n);
-  return localDateStr(dt);
-};
-const pad       = (n: number) => String(n).padStart(2, "0");
-const dtToHHMM  = (iso: string) => { const d = new Date(iso); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const todayStr  = () => toWibDateStr();
+const shiftDate = (d: string, n: number) => addDaysToDateStr(d, n);
+const dtToHHMM  = (iso: string) => toWibTimeStr(iso);
 
 function formatDateLabel(s: string) {
   const t = todayStr();
   if (s === t) return "Hari Ini";
   if (s === shiftDate(t, -1)) return "Kemarin";
   if (s === shiftDate(t,  1)) return "Besok";
-  return new Date(s).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  return new Date(s).toLocaleDateString("id-ID", { timeZone: WIB_TZ, weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 function formatDateShort(s: string) {
-  return new Date(s).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+  return new Date(s).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "numeric", month: "long", year: "numeric" });
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────
@@ -196,9 +192,9 @@ function StaffAssignPopover({
   const [saving, setSaving] = useState(false);
 
   const startTime = new Date(appointment.startTime)
-    .toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+    .toLocaleTimeString("en-GB", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit", hour12: false });
   const endTime = new Date(appointment.endTime)
-    .toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+    .toLocaleTimeString("en-GB", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit", hour12: false });
 
   const { data: avail = [], isLoading } = useQuery({
     queryKey: ["avail-staff", date, branchId, startTime, endTime],
@@ -214,15 +210,15 @@ function StaffAssignPopover({
     staleTime: 0,
   });
 
-  const alreadyAssigned = appointment.staffs
-    .filter((s) => !avail.find((a) => a.employeeId === s.employee.id))
-    .map((s): AvailableStaff => ({
-      employeeId:    s.employee.id,
-      name:          s.employee.name,
+  const alreadyAssigned = uniqueStaffEmployees(appointment.staffs)
+    .filter((e) => !avail.find((a) => a.employeeId === e.id))
+    .map((e): AvailableStaff => ({
+      employeeId:    e.id,
+      name:          e.name,
       shiftCode:     null,
       startTime:     null,
       endTime:       null,
-      role:          s.employee.role ?? { id: "", code: "", name: "—" },
+      role:          e.role ?? { id: "", code: "", name: "—" },
       hasCheckedOut: false,
     }));
   const allStaff = [...alreadyAssigned, ...avail];
@@ -358,7 +354,7 @@ function RescheduleDialog({
           <div className="rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-sm">
             <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-2">Jadwal Sekarang</p>
             <p className="text-slate-700 font-medium">
-              {new Date(appointment.visitDate).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+              {new Date(appointment.visitDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ, weekday: "long", day: "numeric", month: "long", year: "numeric" })}
             </p>
             <p className="text-slate-500 text-xs mt-0.5">{origStart} – {origEnd}</p>
           </div>
@@ -554,8 +550,8 @@ function DraggableCard({
 
   const [showStaff,  setShowStaff]  = useState(false);
 
-  const startTime = new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
-  const endTime   = new Date(a.endTime).toLocaleTimeString("id-ID",   { hour: "2-digit", minute: "2-digit" });
+  const startTime = new Date(a.startTime).toLocaleTimeString("id-ID", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" });
+  const endTime   = new Date(a.endTime).toLocaleTimeString("id-ID",   { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" });
   const next      = NEXT_STATUS[a.status];
   const nextLabel = NEXT_LABEL[a.status];
   const advancing = advancingId === a.id;
@@ -900,8 +896,8 @@ function AppointmentListRow({
     !(a.rescheduleHistories ?? []).some((h) => h.oldVisitDate.split("T")[0] > date)
   );
 
-  const startTime = new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
-  const endTime   = new Date(a.endTime).toLocaleTimeString("id-ID",   { hour: "2-digit", minute: "2-digit" });
+  const startTime = new Date(a.startTime).toLocaleTimeString("id-ID", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" });
+  const endTime   = new Date(a.endTime).toLocaleTimeString("id-ID",   { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" });
 
   const bySlot = a.staffs.reduce<StaffBySlot>(
     (acc, s) => {
@@ -987,8 +983,10 @@ function AppointmentListRow({
               {activeSlots.map(({ key, label }) => (
                 <span key={key} className="text-[11px] text-slate-500">
                   <span className="text-slate-300">{label}:</span>{" "}
-                  {bySlot[key].map((id) => (
-                    <span key={id} className="font-medium text-slate-700">{employeeMap.get(id) ?? id}</span>
+                  {bySlot[key].map((id, i) => (
+                    <span key={id} className="font-medium text-slate-700">
+                      {i > 0 && ", "}{employeeMap.get(id) ?? id}
+                    </span>
                   ))}
                 </span>
               ))}

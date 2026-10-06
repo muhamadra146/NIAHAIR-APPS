@@ -1,4 +1,8 @@
 const prisma = require("../../config/prisma");
+const { wibDayStart } = require("../../utils/date");
+
+// Batas bulan menurut WIB: 00:00 WIB tgl 1 (createdAt = timestamp)
+const wibMonthStart = (year, month) => wibDayStart(new Date(Date.UTC(year, month - 1, 1)));
 
 const findPeriod = (year, month) =>
   prisma.inventoryPeriod.findUnique({ where: { year_month: { year, month } } });
@@ -14,8 +18,8 @@ const upsertOpenPeriod = (year, month) =>
 const closePeriod = async (year, month, closedByEmployeeId) => {
   const now = new Date();
 
-  const startOfMonth = new Date(Date.UTC(year, month - 1, 1));
-  const startOfNext  = new Date(Date.UTC(year, month, 1));
+  const startOfMonth = wibMonthStart(year, month);
+  const startOfNext  = wibMonthStart(year, month + 1);
 
   return prisma.$transaction(async (tx) => {
     const period = await tx.inventoryPeriod.upsert({
@@ -47,8 +51,8 @@ const closePeriod = async (year, month, closedByEmployeeId) => {
 
 // Reopen period: set status back to OPEN, unlock all movements in that month
 const reopenPeriod = async (year, month) => {
-  const startOfMonth = new Date(Date.UTC(year, month - 1, 1));
-  const startOfNext  = new Date(Date.UTC(year, month, 1));
+  const startOfMonth = wibMonthStart(year, month);
+  const startOfNext  = wibMonthStart(year, month + 1);
 
   return prisma.$transaction(async (tx) => {
     const period = await tx.inventoryPeriod.upsert({

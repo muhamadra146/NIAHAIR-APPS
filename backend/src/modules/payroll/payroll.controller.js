@@ -23,6 +23,14 @@ const generateController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Pratinjau periode + peringatan tumpang tindih/celah sebelum generate
+const previewPeriodController = async (req, res, next) => {
+  try {
+    const result = await svc.previewPeriod(req.query);
+    return success(res, result, "Payroll period preview");
+  } catch (err) { next(err); }
+};
+
 const bulkGenerateController = async (req, res, next) => {
   try {
     const result = await svc.bulkGenerate(req.body, req.user.id);
@@ -88,7 +96,7 @@ const deleteController = async (req, res, next) => {
 };
 
 module.exports = {
-  getAllController, getByIdController, generateController, bulkGenerateController,
+  getAllController, getByIdController, generateController, bulkGenerateController, previewPeriodController,
   recalculateController, submitController, approveController, markAsPaidController,
   updateNotesController, getMyController, getBpjsReportController, deleteController,
 };

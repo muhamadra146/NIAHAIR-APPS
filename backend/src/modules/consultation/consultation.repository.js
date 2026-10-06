@@ -134,19 +134,27 @@ const findUnfilledInvoices = async ({ branchId, search, skip, take }) => {
 
 // ── isEmployeeAssignedToInvoice ───────────────────────────────────────────────
 
+// Karyawan dianggap terkait dengan invoice jika:
+//   · pembuat invoice, ATAU
+//   · staf di booking invoice tsb (peran apa pun — Atur Staff), ATAU
+//   · sudah tercatat di Input Job (TreatmentJobAssignment), ATAU
+//   · tercatat di penugasan lama (TreatmentAssignment)
+// Catatan Klien wajib sebelum Input Job (COM-014), jadi staf booking harus lolos di sini.
 const isEmployeeAssignedToInvoice = async (invoiceId, employeeId) => {
+  if (!employeeId) return false;
+  const staffWhere = { where: { employeeId }, select: { id: true } };
   const invoice = await prisma.invoice.findUnique({
     where:  { id: invoiceId },
     select: {
       createdByEmployeeId: true,
+      appointment: { select: { staffs: staffWhere } },
       treatmentSessions: {
         select: {
+          appointment: { select: { staffs: staffWhere } },
           treatmentItems: {
             select: {
-              assignments: {
-                where:  { employeeId },
-                select: { id: true },
-              },
+              assignments:    staffWhere,
+              jobAssignments: staffWhere,
             },
           },
         },
@@ -155,8 +163,10 @@ const isEmployeeAssignedToInvoice = async (invoiceId, employeeId) => {
   });
   if (!invoice) return false;
   if (invoice.createdByEmployeeId === employeeId) return true;
+  if ((invoice.appointment?.staffs.length ?? 0) > 0) return true;
   return invoice.treatmentSessions.some((s) =>
-    s.treatmentItems.some((ti) => ti.assignments.length > 0)
+    (s.appointment?.staffs.length ?? 0) > 0 ||
+    s.treatmentItems.some((ti) => ti.assignments.length > 0 || ti.jobAssignments.length > 0)
   );
 };
 
@@ -229,6 +239,7 @@ module.exports = {
   count,
   findById,
   findByInvoiceId,
+  buildFirstInvoiceMap,
   findUnfilledInvoices,
   isEmployeeAssignedToInvoice,
   create,

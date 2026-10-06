@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, WIB_TZ, wibDateParts, dateStrFromParts } from "@/lib/utils";
 import { fetchMyLoan } from "../api";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -62,10 +62,10 @@ export function MyLoanDetailPage() {
     ? Math.ceil(remaining / monthly)
     : null;
   const estFinish   = monthsLeft != null
-    ? (() => { const d = new Date(); d.setMonth(d.getMonth() + monthsLeft); return d; })()
+    ? (() => { const { year, month, day } = wibDateParts(); return new Date(dateStrFromParts(year, month + monthsLeft, day)); })()
     : null;
   const estLabel    = estFinish
-    ? `~${monthsLeft} bulan lagi · Est. selesai ${estFinish.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}`
+    ? `~${monthsLeft} bulan lagi · Est. selesai ${estFinish.toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: WIB_TZ })}`
     : null;
 
   return (
@@ -170,7 +170,7 @@ export function MyLoanDetailPage() {
                               Potongan Gaji
                               {r.payroll?.periodStart && (
                                 <span className="text-[10px] opacity-70">
-                                  {new Date(r.payroll.periodStart).toLocaleDateString("id-ID", { month: "short", year: "numeric" })}
+                                  {new Date(r.payroll.periodStart).toLocaleDateString("id-ID", { timeZone: WIB_TZ, month: "short", year: "numeric" })}
                                 </span>
                               )}
                             </span>

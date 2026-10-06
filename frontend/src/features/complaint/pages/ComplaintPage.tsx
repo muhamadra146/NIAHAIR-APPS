@@ -6,7 +6,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useViewOnly } from "@/hooks/useViewOnly";
 import { Pagination } from "@/components/common/Pagination";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ import type { Appointment } from "@/features/appointment/types";
 import { useComplaintStats, useComplaints, useCreateComplaint, useUpdateComplaint, useDeleteComplaint } from "../hooks";
 import type { ComplaintStats } from "../types";
 import type { Complaint, ComplaintStatus, ComplaintCategory, ComplaintSeverity, CreateComplaintInput, UpdateComplaintInput } from "../types";
+import { uniqueStaffEmployees } from "@/features/appointment/staff";
 
 // ── Label mappings ────────────────────────────────────────────────────
 const STATUS_LABELS: Record<ComplaintStatus, { label: string; className: string }> = {
@@ -362,8 +363,6 @@ function ComplaintStatsSection({ stats }: { stats: ComplaintStats }) {
     : stats.thisMonth > 0 ? 100 : 0;
   const trendUp = trendPct >= 0;
 
-  const topCategory = stats.byCategory[0];
-
   const CATEGORY_SHORT: Record<string, string> = {
     HASIL_LAYANAN:  "Hasil Layanan",
     SIKAP_KARYAWAN: "Sikap Karyawan",
@@ -600,10 +599,10 @@ function CreateComplaintDialog({ branchId, onClose }: { branchId?: string | null
   }
 
   // Staff list from selected appointment
-  const staffOptions = selectedApt?.staffs.map((s) => ({
-    value: s.employee.id,
-    label: `${s.employee.name} (${s.employee.employeeCode})`,
-  })) ?? [];
+  const staffOptions = uniqueStaffEmployees(selectedApt?.staffs ?? []).map((e) => ({
+    value: e.id,
+    label: `${e.name} (${e.employeeCode})`,
+  }));
 
   // Invoice options
   const invoiceOptions = invoices.map((inv) => ({
@@ -697,7 +696,7 @@ function CreateComplaintDialog({ branchId, onClose }: { branchId?: string | null
                 </div>
                 {selectedApt.staffs.length > 0 && (
                   <p className="text-muted-foreground text-xs">
-                    Tim: {selectedApt.staffs.map((s) => s.employee.name).join(", ")}
+                    Tim: {uniqueStaffEmployees(selectedApt.staffs).map((e) => e.name).join(", ")}
                   </p>
                 )}
               </div>

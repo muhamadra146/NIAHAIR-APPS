@@ -14,6 +14,7 @@ import {
   useSyncPurchaseReturnToAccurate,
 } from "../hooks";
 import type { PurchaseReturnStatus } from "../types";
+import { WIB_TZ } from "@/lib/utils";
 
 const STATUS_LABEL: Record<PurchaseReturnStatus, string> = {
   DRAFT:     "Draft",
@@ -97,7 +98,6 @@ export function PurchaseReturnDetailPage() {
 
   const isDraft     = ret.status === "DRAFT";
   const isPosted    = ret.status === "POSTED";
-  const isCancelled = ret.status === "CANCELLED";
 
   return (
     <PageContainer>
@@ -162,7 +162,7 @@ export function PurchaseReturnDetailPage() {
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Tanggal Retur</dt>
-                  <dd>{new Date(ret.returnDate).toLocaleDateString("id-ID")}</dd>
+                  <dd>{new Date(ret.returnDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ })}</dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Invoice Induk</dt>
@@ -206,8 +206,8 @@ export function PurchaseReturnDetailPage() {
                       <tr key={item.id} className="border-b last:border-0">
                         <td className="px-4 py-3">
                           <div className="font-medium">{item.item.name}</div>
-                          {item.item.sku && (
-                            <div className="text-xs text-muted-foreground font-mono">{item.item.sku}</div>
+                          {item.item.itemCode && (
+                            <div className="text-xs text-muted-foreground font-mono">{item.item.itemCode}</div>
                           )}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{item.unit.name}</td>

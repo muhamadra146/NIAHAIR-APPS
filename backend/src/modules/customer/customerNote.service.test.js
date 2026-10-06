@@ -40,7 +40,16 @@ describe('getNotes', () => {
 
     // Assert
     expect(result).toEqual([mockNote]);
-    expect(noteRepo.findAllByCustomer).toHaveBeenCalledWith('cust-1');
+    expect(noteRepo.findAllByCustomer).toHaveBeenCalledWith('cust-1', { skip: undefined, take: undefined });
+  });
+
+  test('should_forward_pagination_to_repository', async () => {
+    customerRepo.findById.mockResolvedValue(mockCustomer);
+    noteRepo.findAllByCustomer.mockResolvedValue([mockNote]);
+
+    await getNotes('cust-1', { skip: 20, take: 10 });
+
+    expect(noteRepo.findAllByCustomer).toHaveBeenCalledWith('cust-1', { skip: 20, take: 10 });
   });
 
   test('should_return_empty_array_when_customer_has_no_notes', async () => {

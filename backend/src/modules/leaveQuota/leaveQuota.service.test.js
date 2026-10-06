@@ -15,16 +15,21 @@ beforeEach(() => jest.clearAllMocks());
 
 describe('getQuotas', () => {
   test('returns quotas with optional filters', async () => {
-    repo.findMany.mockResolvedValue([QUOTA]);
+    repo.findAll.mockResolvedValue([QUOTA]);
+    repo.count.mockResolvedValue(1);
     const result = await svc.getQuotas({ employeeId: 'e1', year: 2024 });
-    expect(repo.findMany).toHaveBeenCalledWith({ employeeId: 'e1', year: 2024 });
-    expect(result).toHaveLength(1);
+    expect(repo.findAll).toHaveBeenCalledWith({ skip: 0, take: 10, where: { employeeId: 'e1', year: 2024 } });
+    expect(repo.count).toHaveBeenCalledWith({ employeeId: 'e1', year: 2024 });
+    expect(result.data).toHaveLength(1);
+    expect(result.meta).toEqual({ total: 1, page: 1, limit: 10, totalPages: 1 });
   });
 
   test('returns all quotas without filters', async () => {
-    repo.findMany.mockResolvedValue([QUOTA]);
+    repo.findAll.mockResolvedValue([QUOTA]);
+    repo.count.mockResolvedValue(1);
     await svc.getQuotas();
-    expect(repo.findMany).toHaveBeenCalledWith({});
+    expect(repo.findAll).toHaveBeenCalledWith({ skip: 0, take: 10, where: {} });
+    expect(repo.count).toHaveBeenCalledWith({});
   });
 });
 
@@ -32,9 +37,11 @@ describe('getQuotas', () => {
 
 describe('getMyQuotas', () => {
   test('filters by employeeId', async () => {
-    repo.findMany.mockResolvedValue([QUOTA]);
-    await svc.getMyQuotas('e1', 2024);
-    expect(repo.findMany).toHaveBeenCalledWith({ employeeId: 'e1', year: 2024 });
+    repo.findAll.mockResolvedValue([QUOTA]);
+    repo.count.mockResolvedValue(1);
+    await svc.getMyQuotas('e1', { year: 2024 });
+    expect(repo.findAll).toHaveBeenCalledWith({ skip: 0, take: 10, where: { employeeId: 'e1', year: 2024 } });
+    expect(repo.count).toHaveBeenCalledWith({ employeeId: 'e1', year: 2024 });
   });
 });
 

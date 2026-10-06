@@ -15,6 +15,52 @@ const assertEnum = (value, allowed, field) => {
   }
 };
 
+const RATE_TYPES = ["PERCENTAGE", "FIXED"];
+
+// Tarif bawaan job + tingkatan jumlah staf (COM-013). Mengembalikan field yang berubah saja.
+//   defaultCommissionType  : "PERCENTAGE" | "FIXED" | null
+//   defaultCommissionValue : number ≥ 0 | null   (persen ≤ 100)
+//   rateTiers              : [{ maxStaff: int ≥ 1 | null, value: number ≥ 0 }]  — null maxStaff = "lebih dari itu"
+const normalizeRate = (body, current = {}) => {
+  const out = {};
+  if (body.defaultCommissionType !== undefined) {
+    if (body.defaultCommissionType !== null) assertEnum(body.defaultCommissionType, RATE_TYPES, "defaultCommissionType");
+    out.defaultCommissionType = body.defaultCommissionType ?? null;
+  }
+  const type = out.defaultCommissionType !== undefined ? out.defaultCommissionType : current.defaultCommissionType ?? null;
+
+  const checkValue = (v, label) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) throw new AppError(`${label} harus angka ≥ 0`, StatusCodes.BAD_REQUEST);
+    if (type === "PERCENTAGE" && n > 100) throw new AppError(`${label} (persen) maksimal 100`, StatusCodes.BAD_REQUEST);
+    return n;
+  };
+
+  if (body.defaultCommissionValue !== undefined) {
+    out.defaultCommissionValue = body.defaultCommissionValue === null || body.defaultCommissionValue === ""
+      ? null : checkValue(body.defaultCommissionValue, "Tarif bawaan");
+  }
+
+  if (body.rateTiers !== undefined) {
+    const tiers = Array.isArray(body.rateTiers) ? body.rateTiers : [];
+    if (tiers.length > 0 && !type) {
+      throw new AppError("Pilih jenis tarif (persen / nominal) sebelum mengisi tingkatan", StatusCodes.BAD_REQUEST);
+    }
+    const seen = new Set();
+    out.rateTiers = tiers.map((t, i) => {
+      const maxStaff = t.maxStaff === null || t.maxStaff === "" || t.maxStaff === undefined ? null : Number(t.maxStaff);
+      if (maxStaff !== null && (!Number.isInteger(maxStaff) || maxStaff < 1)) {
+        throw new AppError(`Tingkatan #${i + 1}: jumlah staf harus bilangan bulat ≥ 1`, StatusCodes.BAD_REQUEST);
+      }
+      const key = maxStaff ?? "lebih";
+      if (seen.has(key)) throw new AppError("Batas jumlah staf pada tingkatan tidak boleh sama", StatusCodes.BAD_REQUEST);
+      seen.add(key);
+      return { maxStaff, value: checkValue(t.value, `Tarif tingkatan #${i + 1}`) };
+    });
+  }
+  return out;
+};
+
 const sanitizeKey = (s) =>
   s.toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/__+/g, "_").replace(/^_|_$/g, "");
 
@@ -39,20 +85,14 @@ const createJob = async (categoryId, body) => {
   const cat = await prisma.commissionCategory.findUnique({ where: { id: categoryId }, select: { id: true } });
   if (!cat) throw new AppError("Commission category not found", StatusCodes.NOT_FOUND);
 
-  const { name, jobKey: rawKey, sortOrder = 0, deductsFromJobId, pricePerUnit, unit, staffCountMax, splitMode, defaultQty } = body;
+  const { name, jobKey: rawKey, sortOrder = 0, deductsFromJobId, pricePerUnit, unit, splitMode, defaultQty } = body;
   const jobKey = rawKey ? sanitizeKey(rawKey) : sanitizeKey(name);
 
   if (!name || !jobKey) throw new AppError("name wajib diisi", StatusCodes.BAD_REQUEST);
   assertEnum(splitMode,  SPLIT_MODES,  "splitMode");
   assertEnum(defaultQty, DEFAULT_QTYS, "defaultQty");
 
-  // Validasi staffCountMax: jika diisi, harus integer positif
-  if (staffCountMax !== undefined && staffCountMax !== null) {
-    const val = Number(staffCountMax);
-    if (!Number.isInteger(val) || val < 1) {
-      throw new AppError("staffCountMax harus bilangan bulat positif (≥1)", StatusCodes.BAD_REQUEST);
-    }
-  }
+  const rate = normalizeRate(body);
 
   const existing = await repo.findByKey(categoryId, jobKey);
   if (existing) throw new AppError(`Job key "${jobKey}" sudah ada di kategori ini`, StatusCodes.CONFLICT);
@@ -73,10 +113,11 @@ const createJob = async (categoryId, body) => {
     deductsFromJobId: deductsFromJobId ?? null,
     pricePerUnit:     pricePerUnit != null ? pricePerUnit : null,
     unit:             unit ? String(unit).trim() : "helai",
-    staffCountMax:    staffCountMax != null ? Number(staffCountMax) : null,
     ...(splitMode  && { splitMode }),
     ...(defaultQty && { defaultQty }),
-  });
+    ...(rate.defaultCommissionType  !== undefined && { defaultCommissionType:  rate.defaultCommissionType }),
+    ...(rate.defaultCommissionValue !== undefined && { defaultCommissionValue: rate.defaultCommissionValue }),
+  }, rate.rateTiers);
 };
 
 // ── Update ────────────────────────────────────────────────────────────
@@ -97,17 +138,9 @@ const updateJob = async (categoryId, id, body) => {
   assertEnum(body.defaultQty, DEFAULT_QTYS, "defaultQty");
   if (body.splitMode  !== undefined) data.splitMode  = body.splitMode;
   if (body.defaultQty !== undefined) data.defaultQty = body.defaultQty;
-  if (body.staffCountMax !== undefined) {
-    if (body.staffCountMax !== null) {
-      const val = Number(body.staffCountMax);
-      if (!Number.isInteger(val) || val < 1) {
-        throw new AppError("staffCountMax harus bilangan bulat positif (≥1)", StatusCodes.BAD_REQUEST);
-      }
-      data.staffCountMax = val;
-    } else {
-      data.staffCountMax = null;
-    }
-  }
+  const rate = normalizeRate(body, job);
+  if (rate.defaultCommissionType  !== undefined) data.defaultCommissionType  = rate.defaultCommissionType;
+  if (rate.defaultCommissionValue !== undefined) data.defaultCommissionValue = rate.defaultCommissionValue;
 
   // deductsFromJobId: validasi tidak boleh menunjuk ke diri sendiri + harus kategori sama
   if (body.deductsFromJobId !== undefined) {
@@ -123,7 +156,7 @@ const updateJob = async (categoryId, id, body) => {
     data.deductsFromJobId = body.deductsFromJobId ?? null;
   }
 
-  return repo.update(id, data);
+  return repo.update(id, data, rate.rateTiers);
 };
 
 // ── Delete ────────────────────────────────────────────────────────────

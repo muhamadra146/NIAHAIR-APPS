@@ -15,10 +15,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAuthStore } from "@/stores/authStore";
-import { formatDate, formatCurrency, cn } from "@/lib/utils";
+import { formatDate, formatCurrency, cn, toWibDateStr } from "@/lib/utils";
 import { useInvoices, useDeleteInvoice } from "../hooks";
 import { CreateInvoiceDialog } from "../components/CreateInvoiceDialog";
 import type { Invoice, InvoiceStatus } from "../types";
+import { isOpenInvoice } from "../types";
 
 const CAN_DELETE: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
 
@@ -26,12 +27,14 @@ const CAN_DELETE: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
 
 const STATUS_LABEL: Record<InvoiceStatus, string> = {
   UNPAID:    "Belum Bayar",
+  PARTIAL:   "Sebagian",
   PAID:      "Lunas",
   CANCELLED: "Dibatalkan",
 };
 
 const STATUS_BADGE: Record<InvoiceStatus, string> = {
   UNPAID:    "bg-red-50 text-red-600 border-red-200",
+  PARTIAL:   "bg-orange-50 text-orange-700 border-orange-200",
   PAID:      "bg-emerald-50 text-emerald-700 border-emerald-200",
   CANCELLED: "bg-slate-50 text-slate-500 border-slate-200",
 };
@@ -81,7 +84,7 @@ function KasirInvoiceCard({
   inv: Invoice;
   onPayClick: (inv: Invoice) => void;
 }) {
-  const isPending = inv.status === "UNPAID";
+  const isPending = isOpenInvoice(inv.status);
   const items     = inv.items ?? [];
   const itemLabel = items.length === 1
     ? (items[0]?.item?.name ?? "1 item")
@@ -149,7 +152,7 @@ function KasirPOSView() {
   const [formOpen, setFormOpen] = useState(false);
   const [showPaid, setShowPaid] = useState(false);
 
-  const today     = new Date().toISOString().slice(0, 10);
+  const today     = toWibDateStr();
   const { data, isLoading } = useInvoices({
     branchId:  branchId || undefined,
     startDate: today,
@@ -159,7 +162,7 @@ function KasirPOSView() {
 
   const invoices = data?.data ?? [];
 
-  const unpaid = invoices.filter((i) => i.status === "UNPAID");
+  const unpaid = invoices.filter((i) => isOpenInvoice(i.status));
   const paid   = invoices.filter((i) => i.status === "PAID");
   const todayRevenue = paid.reduce((s, i) => s + Number(i.grandTotal), 0);
 
@@ -173,7 +176,7 @@ function KasirPOSView() {
     );
   }, [invoices, search]);
 
-  const filteredUnpaid = filtered.filter((i) => i.status === "UNPAID");
+  const filteredUnpaid = filtered.filter((i) => isOpenInvoice(i.status));
   const filteredPaid   = filtered.filter((i) => i.status === "PAID");
 
   function handlePayClick(inv: Invoice) {
@@ -215,7 +218,7 @@ function KasirPOSView() {
             <StatCard icon={TrendingUp}   label="Omzet Hari Ini" value={formatCurrency(todayRevenue)}  color="bg-gradient-to-br from-pink-500 to-rose-600" />
             <StatCard icon={Receipt}      label="Total Invoice"  value={String(invoices.length)}        color="bg-gradient-to-br from-violet-500 to-purple-600" />
             <StatCard icon={CheckCircle2} label="Lunas"          value={String(paid.length)}            color="bg-gradient-to-br from-emerald-500 to-green-600" />
-            <StatCard icon={Clock}        label="Belum Bayar"    value={String(unpaid.length)}          color={unpaid.length > 0 ? "bg-gradient-to-br from-orange-500 to-amber-600" : "bg-gradient-to-br from-slate-400 to-slate-500"} />
+            <StatCard icon={Clock}        label="Belum Lunas"    value={String(unpaid.length)}          color={unpaid.length > 0 ? "bg-gradient-to-br from-orange-500 to-amber-600" : "bg-gradient-to-br from-slate-400 to-slate-500"} />
           </div>
         )}
 

@@ -3,6 +3,7 @@ const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { resolveOrderBy } = require("../../utils/sort");
+const { wibDayStart, wibDayEnd } = require("../../utils/date");
 
 const ORDER_MAP = {
   createdAt:    { createdAt: "asc" },
@@ -57,8 +58,8 @@ const listDeposits = async ({ page, limit, customerId, appointmentId, status, br
 
   if (startDate || endDate) {
     where.createdAt = {};
-    if (startDate) where.createdAt.gte = new Date(startDate);
-    if (endDate)   where.createdAt.lte = new Date(endDate);
+    if (startDate) where.createdAt.gte = wibDayStart(startDate);
+    if (endDate)   where.createdAt.lte = wibDayEnd(endDate);
   }
 
   const [deposits, total] = await Promise.all([

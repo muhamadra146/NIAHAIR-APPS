@@ -149,6 +149,7 @@ function calcCategoryItem({ subtotal, itemQty, jobs, qtyOverrides = {} }) {
     commissionValue:          w.commissionValue != null ? String(w.commissionValue) : null,
     commissionBase:           w.commissionBase ?? null,
     hasRule:                  hasRule(w),
+    rateSource:               w.rateSource ?? (w.commissionRuleId ? "RULE" : null),
     itemBase:                 toNum(baseOf(w)),
   });
 
@@ -247,6 +248,63 @@ function jobMeta(job) {
   };
 }
 
+// ── Tarif bawaan job (COM-013) ────────────────────────────────────────
+//
+// Dipakai untuk staf yang TIDAK punya Commission Rule sendiri.
+// job: { defaultCommissionType, defaultCommissionValue, rateTiers: [{ maxStaff, value }] }
+// staffCount: jumlah staf unik di kategori yang sama pada invoice.
+// Tingkatan: maxStaff terkecil yang >= staffCount; jika tak ada → tingkatan maxStaff null
+// ("lebih dari itu"); jika tak ada → defaultCommissionValue.
+// @returns { commissionType, commissionValue, tierMaxStaff } | null (job tanpa tarif bawaan)
+
+function resolveJobDefaultRate(job, staffCount) {
+  if (!job?.defaultCommissionType) return null;
+  const tiers   = job.rateTiers ?? [];
+  const bounded = tiers.filter((t) => t.maxStaff != null).sort((a, b) => a.maxStaff - b.maxStaff);
+  const matched = bounded.find((t) => t.maxStaff >= staffCount)
+    ?? tiers.find((t) => t.maxStaff == null)
+    ?? null;
+  const value = matched ? matched.value : job.defaultCommissionValue;
+  if (value == null) return null;
+  return {
+    commissionType:  job.defaultCommissionType,
+    commissionValue: String(value),
+    tierMaxStaff:    matched ? matched.maxStaff : undefined,
+  };
+}
+
+// ── Batas qty Input Job (COM-015) ─────────────────────────────────────
+//
+// Untuk job UTAMA dengan cara bagi BY_QTY (proporsional qty), total qty semua staf
+// pada satu item tidak boleh melebihi qty item di invoice (qty × konversi, mis. 120 helai).
+// Sama dengan validasi "Max" di Kalkulator Komisi.
+//
+// items: [{ treatmentItemId, itemName, itemQty, jobs: [{ id, name, unit, splitMode, deductsFromJobId }] }]
+// assignments: [{ treatmentItemId, commissionJobId, workQty }]
+// @returns [{ treatmentItemId, itemName, jobName, unit, total, max }] — kosong jika aman
+
+function findJobQtyLimitViolations(items, assignments) {
+  const totals = new Map();
+  for (const a of assignments) {
+    if (!a.commissionJobId) continue;
+    const key = `${a.treatmentItemId}::${a.commissionJobId}`;
+    totals.set(key, (totals.get(key) ?? 0) + Number(a.workQty ?? 0));
+  }
+
+  const violations = [];
+  for (const item of items) {
+    if (item.itemQty == null || item.itemQty <= 0) continue;
+    for (const job of item.jobs) {
+      if (job.deductsFromJobId || (job.splitMode ?? "BY_QTY") !== "BY_QTY") continue;
+      const total = totals.get(`${item.treatmentItemId}::${job.id}`) ?? 0;
+      if (total > item.itemQty) {
+        violations.push({ treatmentItemId: item.treatmentItemId, itemName: item.itemName, jobName: job.name, unit: job.unit || "helai", total, max: item.itemQty });
+      }
+    }
+  }
+  return violations;
+}
+
 // ── Business rules (pure, tanpa DB) ──────────────────────────────────
 
 // Override diizinkan hanya jika komisi masih PENDING atau APPROVED.
@@ -277,6 +335,8 @@ module.exports = {
   distributePool,
   detectColoristInSession,
   calcCategoryItem,
+  resolveJobDefaultRate,
+  findJobQtyLimitViolations,
   canOverride,
   canRegenerate,
 };

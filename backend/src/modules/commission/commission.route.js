@@ -5,6 +5,7 @@ const { ROLES }    = require("../../common/constants/role.constant");
 const {
   getAllController,
   getMyController,
+  getMySummaryController,
   getByIdController,
   approveController,
   payController,
@@ -20,6 +21,7 @@ const VIEW_ROLES    = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.FINA
 const FINANCE_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.FINANCE];
 
 // Self — komisi milik user login (semua role). Harus sebelum /:id
+router.get("/my/summary", authenticate, getMySummaryController);
 router.get("/my",  authenticate, getMyController);
 
 // View

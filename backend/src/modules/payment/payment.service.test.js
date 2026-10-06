@@ -173,11 +173,23 @@ describe('deletePayment', () => {
 
   test('should_delete_payment_when_found', async () => {
     repo.findById.mockResolvedValue({ id: 'pay1', invoiceId: 'inv1', accurateReceiptId: null });
-    repo.findInvoiceForDelete.mockResolvedValue({ id: 'inv1', status: 'UNPAID', paidAmount: '200000' });
+    repo.findInvoiceForDelete.mockResolvedValue({
+      id: 'inv1', status: 'UNPAID', paidAmount: '200000', _count: { commissions: 0 },
+    });
     repo.deleteWithTransaction.mockResolvedValue({});
 
     await deletePayment('pay1', 'u1');
 
     expect(repo.deleteWithTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  test('should_throw_422_when_invoice_already_has_commissions', async () => {
+    repo.findById.mockResolvedValue({ id: 'pay1', invoiceId: 'inv1', accurateReceiptId: null });
+    repo.findInvoiceForDelete.mockResolvedValue({
+      id: 'inv1', status: 'PAID', paidAmount: '500000', _count: { commissions: 2 },
+    });
+
+    await expect(deletePayment('pay1', 'u1')).rejects.toMatchObject({ statusCode: 422 });
+    expect(repo.deleteWithTransaction).not.toHaveBeenCalled();
   });
 });

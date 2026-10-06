@@ -1,13 +1,14 @@
 ﻿'use strict';
 
-const logger = require('../../utils/logger');
 const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const prisma          = require("../../config/prisma");
 const repo            = require("./purchaseReturn.repository");
 const { pushPurchaseReturnToAccurate } = require("./purchaseReturn.accurate.sync.service");
+const { createSyncJob }      = require("../syncQueue/syncQueue.service");
 const { validatePeriodOpen } = require("../inventory/inventory.period.service");
+const { toDateOnly }         = require("../../utils/date");
 
 const D = (v) => new Prisma.Decimal(String(v));
 
@@ -87,7 +88,7 @@ const createPurchaseReturn = async (body, createdByEmployeeId) => {
       data: {
         purchaseInvoiceId,
         returnNo,
-        returnDate:          new Date(returnDate),
+        returnDate:          toDateOnly(returnDate),
         notes:               notes || undefined,
         status:              "DRAFT",
         subtotal,
@@ -100,7 +101,7 @@ const createPurchaseReturn = async (body, createdByEmployeeId) => {
         createdBy:       { select: { id: true, name: true } },
         items: {
           include: {
-            item: { select: { id: true, name: true, sku: true } },
+            item: { select: { id: true, name: true, itemCode: true } },
             unit: { select: { id: true, name: true } },
           },
         },
@@ -154,7 +155,7 @@ const postPurchaseReturn = async (id, employeeId) => {
       const movement = await tx.inventoryMovement.create({
         data: {
           inventoryId:         inventory.id,
-          movementType:        "PURCHASE_RETURN",
+          movementType:        "RETURN", // enum InventoryMovementType: RETURN = Retur Pembelian
           qtyBefore,
           qtyChange,
           qtyAfter,
@@ -188,10 +189,8 @@ const postPurchaseReturn = async (id, employeeId) => {
     await tx.purchaseReturn.update({ where: { id }, data: { status: "POSTED" } });
   });
 
-  // Enqueue Accurate sync (non-blocking)
-  pushPurchaseReturnToAccurate(id).catch((err) => {
-    logger.error(`[return sync] failed returnId=${id}:`, err.message);
-  });
+  // Enqueue Accurate sync — worker retry + tampil di monitor sync
+  await createSyncJob({ entityType: "PURCHASE_RETURN", entityId: id, direction: "APP_TO_ACCURATE" });
 
   return repo.findById(id);
 };

@@ -51,33 +51,6 @@ describe('listMyCommissions', () => {
   });
 });
 
-// ── _resolveRuleJobId (rate dinamis HS / staffCountMax) ─────────────────
-
-describe('_resolveRuleJobId', () => {
-  const hs2  = { id: 'hs2',  staffCountMax: 2,    isActive: true };
-  const hs4  = { id: 'hs4',  staffCountMax: 4,    isActive: true };
-  const hsXL = { id: 'hsXL', staffCountMax: null, isActive: true }; // cadangan (pertama tanpa batas)
-  const cuci = { id: 'cuci', staffCountMax: null, isActive: true };
-  const jobs = [hs2, hs4, hsXL, cuci];
-
-  test('job grup HS dialihkan ke batas terkecil yang memenuhi jumlah staf', () => {
-    expect(svc._resolveRuleJobId(hs2, jobs, 3)).toBe('hs4');
-    expect(svc._resolveRuleJobId(hsXL, jobs, 2)).toBe('hs2');
-  });
-
-  test('melebihi semua batas → job cadangan tanpa batas', () => {
-    expect(svc._resolveRuleJobId(hs2, jobs, 5)).toBe('hsXL');
-  });
-
-  test('job di luar grup HS tetap memakai rule-nya sendiri', () => {
-    expect(svc._resolveRuleJobId(cuci, jobs, 2)).toBe('cuci');
-  });
-
-  test('kategori tanpa staffCountMax → tidak dialihkan', () => {
-    expect(svc._resolveRuleJobId(cuci, [cuci, hsXL], 3)).toBe('cuci');
-  });
-});
-
 // ── getCommissionById ──────────────────────────────────────────────────
 
 describe('getCommissionById', () => {

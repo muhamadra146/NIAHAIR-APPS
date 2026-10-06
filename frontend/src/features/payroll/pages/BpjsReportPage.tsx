@@ -7,16 +7,16 @@ import { useAllBranches }    from "@/features/settings/hooks";
 import { useAuthStore }      from "@/stores/authStore";
 import { useBpjsReport }     from "../hooks";
 import type { BpjsReportResult } from "../types";
+import { WIB_TZ, toWibDateStr } from "@/lib/utils";
 
 const fmtRp = (n: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
 
 const fmtDate = (iso: string) =>
-  new Date(iso).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
+  new Date(iso).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "short", year: "numeric" });
 
 const currentMonth = () => {
-  const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+  return toWibDateStr().slice(0, 7); // "YYYY-MM" WIB
 };
 
 const filterCls =
@@ -40,7 +40,7 @@ function exportBpjsToCsv(data: BpjsReportResult, yearMonth: string) {
   const rows = data.data.map((row) => [
     row.employee.name,
     row.employee.role.name,
-    `${new Date(row.periodStart).toLocaleDateString("id-ID")} - ${new Date(row.periodEnd).toLocaleDateString("id-ID")}`,
+    `${new Date(row.periodStart).toLocaleDateString("id-ID", { timeZone: WIB_TZ })} - ${new Date(row.periodEnd).toLocaleDateString("id-ID", { timeZone: WIB_TZ })}`,
     row.status,
     fmtNum(row.baseSalary),
     fmtNum(row.bpjsJht),

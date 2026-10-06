@@ -2,8 +2,10 @@ const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const { wibDayStart, wibDayEnd }   = require("../../utils/date");
 const prisma          = require("../../config/prisma");
 const { handleInvoicePaid } = require("../invoice/invoice.workflow");
+const { resolveInvoiceStatus } = require("../invoice/invoice.status");
 const { createSyncJob }            = require("../syncQueue/syncQueue.service");
 const { deletePaymentFromAccurate } = require("./payment.sync.service");
 const {
@@ -45,8 +47,8 @@ const listPayments = async ({ page, limit, invoiceId, paymentMethodId, branchId,
 
   if (startDate || endDate) {
     where.paymentDate = {};
-    if (startDate) where.paymentDate.gte = new Date(startDate);
-    if (endDate)   where.paymentDate.lte = new Date(endDate + "T23:59:59");
+    if (startDate) where.paymentDate.gte = wibDayStart(startDate);
+    if (endDate)   where.paymentDate.lte = wibDayEnd(endDate);
   }
 
   const [data, total] = await Promise.all([
@@ -95,8 +97,8 @@ const getPaymentSummary = async ({ startDate, endDate, paymentMethodId, branchId
   const periodWhere = { ...baseWhere };
   if (startDate || endDate) {
     periodWhere.paymentDate = {};
-    if (startDate) periodWhere.paymentDate.gte = new Date(startDate);
-    if (endDate)   periodWhere.paymentDate.lte = new Date(endDate + "T23:59:59");
+    if (startDate) periodWhere.paymentDate.gte = wibDayStart(startDate);
+    if (endDate)   periodWhere.paymentDate.lte = wibDayEnd(endDate);
   }
 
   const [todayAgg, periodAgg] = await Promise.all([
@@ -162,7 +164,7 @@ const createPayment = async (
     D(invoice.grandTotal).sub(D(invoice.totalDeposit)).sub(newPaidAmount)
   );
 
-  const newStatus = outstandingAmount.lte(D("0")) ? "PAID" : "UNPAID";
+  const newStatus = resolveInvoiceStatus(outstandingAmount, D(invoice.totalDeposit).add(newPaidAmount));
 
   const paymentData = {
     invoiceId,

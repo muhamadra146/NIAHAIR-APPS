@@ -11,7 +11,6 @@ import { Pagination }    from "@/components/common/Pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button }   from "@/components/ui/button";
-import { Badge }    from "@/components/ui/badge";
 import { Input }    from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -19,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuthStore }  from "@/stores/authStore";
 import { useViewOnly }   from "@/hooks/useViewOnly";
-import { formatDate }    from "@/lib/utils";
+import { formatDate, wibDateParts, toWibDateStr }    from "@/lib/utils";
 import {
   useConsultationNotes, useUnfilledInvoices,
   useConsultationStats, useDeleteConsultationNote,
@@ -53,7 +52,8 @@ function ClientTypeBadge({ isNewClient }: { isNewClient: boolean }) {
 // ── Days ago badge ─────────────────────────────────────────────────────────────
 
 function DaysAgoBadge({ dateStr }: { dateStr: string }) {
-  const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
+  // selisih hari kalender WIB
+  const days = Math.round((Date.parse(toWibDateStr()) - Date.parse(toWibDateStr(new Date(dateStr)))) / 86_400_000);
   if (days === 0) return <span className="text-xs text-muted-foreground">Hari ini</span>;
   if (days === 1) return <span className="text-xs text-amber-600 font-medium">Kemarin</span>;
   if (days <= 3)  return <span className="text-xs text-amber-600 font-medium">{days} hari lalu</span>;
@@ -199,9 +199,9 @@ export function ConsultationListPage() {
   const [listEndDate,   setListEndDate]   = useState("");
 
   // Tab "Statistik"
-  const now        = new Date();
-  const [statMonth, setStatMonth] = useState(now.getMonth() + 1);
-  const [statYear,  setStatYear]  = useState(now.getFullYear());
+  const now        = wibDateParts();
+  const [statMonth, setStatMonth] = useState(now.month);
+  const [statYear,  setStatYear]  = useState(now.year);
 
   // ── Tab "Isi Catatan": fetch unfilled invoices ─────────────────────────────
   const { data: unfilledData, isLoading: loadingUnfilled } = useUnfilledInvoices(
@@ -236,6 +236,7 @@ export function ConsultationListPage() {
       month:    statMonth,
       year:     statYear,
     },
+    isManager, // endpoint statistik khusus manajemen; tab Statistik juga hanya untuk mereka
   );
 
   const MONTHS = [
@@ -522,7 +523,7 @@ export function ConsultationListPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setStatMonth(now.getMonth() + 1); setStatYear(now.getFullYear()); }}
+                  onClick={() => { setStatMonth(now.month); setStatYear(now.year); }}
                   className="text-xs text-primary underline ml-1"
                 >
                   Bulan ini

@@ -18,9 +18,12 @@ beforeEach(() => jest.clearAllMocks());
 describe('listPhotos', () => {
   test('returns all photos for appointment', async () => {
     repo.findAllByAppointment.mockResolvedValue([PHOTO]);
+    repo.countByAppointment.mockResolvedValue(1);
     const result = await svc.listPhotos('a1');
-    expect(repo.findAllByAppointment).toHaveBeenCalledWith('a1');
-    expect(result).toHaveLength(1);
+    expect(repo.findAllByAppointment).toHaveBeenCalledWith('a1', { skip: 0, take: 10 });
+    expect(repo.countByAppointment).toHaveBeenCalledWith('a1');
+    expect(result.data).toHaveLength(1);
+    expect(result.meta).toMatchObject({ total: 1, page: 1, limit: 10 });
   });
 });
 

@@ -4,6 +4,7 @@ const { StatusCodes }              = require("http-status-codes");
 const AppError                     = require("../../common/errors/AppError");
 const prisma                       = require("../../config/prisma");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const { toDateOnly }               = require("../../utils/date");
 const repo                         = require("./production.repository");
 const { syncProductionToAccurate, deleteFromAccurate } = require("./production.sync.service");
 
@@ -45,8 +46,8 @@ const getAll = async ({ page = 1, limit = 20, status, branchId, warehouseId, sta
   if (warehouseId) where.warehouseId = warehouseId;
   if (startDate || endDate) {
     where.productionDate = {};
-    if (startDate) where.productionDate.gte = new Date(startDate);
-    if (endDate)   where.productionDate.lte = new Date(endDate);
+    if (startDate) where.productionDate.gte = toDateOnly(startDate);
+    if (endDate)   where.productionDate.lte = toDateOnly(endDate);
   }
 
   const [rows, total] = await Promise.all([
@@ -100,7 +101,7 @@ const create = async ({ branchId, warehouseId, productionDate, plannedStartAt, p
       productionNo,
       branchId,
       warehouseId,
-      productionDate: new Date(productionDate),
+      productionDate: toDateOnly(productionDate),
       plannedStartAt:  plannedStartAt  ? new Date(plannedStartAt)  : undefined,
       plannedFinishAt: plannedFinishAt ? new Date(plannedFinishAt) : undefined,
       notes:           notes ?? null,
@@ -505,8 +506,8 @@ const getStats = async ({ branchId, startDate, endDate } = {}) => {
   if (branchId) where.branchId = branchId;
   if (startDate || endDate) {
     where.productionDate = {};
-    if (startDate) where.productionDate.gte = new Date(startDate);
-    if (endDate)   where.productionDate.lte = new Date(endDate);
+    if (startDate) where.productionDate.gte = toDateOnly(startDate);
+    if (endDate)   where.productionDate.lte = toDateOnly(endDate);
   }
 
   const [statusCounts, recentOrders] = await Promise.all([

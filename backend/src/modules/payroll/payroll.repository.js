@@ -1,4 +1,5 @@
 const prisma = require("../../config/prisma");
+const { wibDayStart, wibDayEnd } = require("../../utils/date");
 
 const ITEM_INCLUDE = { items: { orderBy: [{ type: "asc" }, { category: "asc" }] } };
 
@@ -31,8 +32,9 @@ const findOverlapping = (employeeId, periodStart, periodEnd, excludeId) =>
     where: {
       employeeId,
       id:          excludeId ? { not: excludeId } : undefined,
-      periodStart: { lt: periodEnd },
-      periodEnd:   { gt: periodStart },
+      // Tanggal inklusif: berbagi satu hari pun dianggap tumpang tindih
+      periodStart: { lte: periodEnd },
+      periodEnd:   { gte: periodStart },
     },
   });
 
@@ -51,8 +53,13 @@ const replaceAutoItems = async (payrollId, items) => {
 };
 
 // Data needed for payroll generation
-const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) => {
-  const [salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, approvedLatePermissions, holidays, omsetBonusTiers, branchOmsetAggregate] = await Promise.all([
+// payrollId: saat hitung ulang, komisi yang sudah terhubung ke payroll ini tetap ikut
+const getGenerationData = async (employeeId, branchId, periodStart, periodEnd, payrollId = null) => {
+  // Kolom timestamp (approvedAt, createdAt) difilter dengan batas hari WIB;
+  // kolom tanggal-saja (workDate, date, visitDate) tetap pakai periodStart/periodEnd.
+  const tsRange = { gte: wibDayStart(periodStart), lte: wibDayEnd(periodEnd) };
+
+  const [salarySetting, schedules, attendances, commissions, activeLoans, approvedLatePermissions, holidays, omsetBonusTiers, branchOmsetAggregate] = await Promise.all([
     // Active salary setting
     prisma.employeeSalarySettings.findFirst({
       where: { employeeId, isActive: true },
@@ -79,12 +86,14 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) =
       },
     }),
 
-    // Approved commissions in period — include detail for breakdown
+    // Komisi disetujui yang belum dibayar s/d akhir periode — termasuk sisa periode lalu,
+    // asal belum masuk payroll lain (payrollId kosong atau payroll ini sendiri)
     prisma.commission.findMany({
       where: {
         employeeId,
         status:     "APPROVED",
-        approvedAt: { gte: periodStart, lte: periodEnd },
+        approvedAt: { lte: tsRange.lte },
+        OR: payrollId ? [{ payrollId: null }, { payrollId }] : [{ payrollId: null }],
       },
       select: {
         id:               true,
@@ -103,21 +112,6 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) =
     // Active loans for monthly deduction
     prisma.loan.findMany({
       where: { employeeId, status: "ACTIVE" },
-    }),
-
-    // Home service appointments in period where this employee was staff
-    // Fixed: explicitly filter by visitDate within period
-    prisma.appointment.findMany({
-      where: {
-        type:      "HOME_SERVICE",
-        visitDate: { gte: periodStart, lte: periodEnd },
-        status:    { in: ["IN_PROGRESS", "COMPLETED"] },
-        staffs:    { some: { employeeId } },
-      },
-      select: {
-        id:     true,
-        staffs: { select: { employeeId: true } },
-      },
     }),
 
     // Approved LATE permissions in period — used to waive late deductions
@@ -148,7 +142,7 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) =
       where: {
         branchId,
         status:    "PAID",
-        createdAt: { gte: periodStart, lte: periodEnd },
+        createdAt: tsRange,
       },
       _sum: { grandTotal: true },
     }),
@@ -173,7 +167,7 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd) =
 
   const branchOmset = Number(branchOmsetAggregate._sum?.grandTotal ?? 0);
 
-  return { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset };
+  return { salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset };
 };
 
 const findByEmployee = ({ skip, take, where }) =>
@@ -224,14 +218,34 @@ const findEmployeesForBulkGenerate = ({ branchId, payDay }) =>
   prisma.employee.findMany({
     where: {
       isActive: true,
-      payDay,
+      // payDay kosong = semua karyawan aktif (masing-masing pakai tanggal gajiannya sendiri)
+      ...(payDay ? { payDay } : {}),
       ...(branchId ? { homeBranchId: branchId } : {}),
     },
-    select: { id: true, name: true, employeeCode: true, homeBranchId: true },
+    select: { id: true, name: true, employeeCode: true, homeBranchId: true, payDay: true },
   });
+
+// Payroll terakhir karyawan yang berakhir sebelum tanggal tsb (deteksi celah periode)
+const findPreviousPayroll = (employeeId, beforeDate) =>
+  prisma.payroll.findFirst({
+    where:   { employeeId, periodEnd: { lt: beforeDate } },
+    orderBy: { periodEnd: "desc" },
+    select:  { id: true, periodStart: true, periodEnd: true },
+  });
+
+// Tanggal jadwal karyawan dalam periode (cek kelengkapan jadwal sebelum generate)
+const findScheduleDates = (employeeId, periodStart, periodEnd) =>
+  prisma.staffSchedule.findMany({
+    where:  { employeeId, workDate: { gte: periodStart, lte: periodEnd } },
+    select: { workDate: true },
+  });
+
+const findEmployeePayDay = async (employeeId) =>
+  (await prisma.employee.findUnique({ where: { id: employeeId }, select: { payDay: true } }))?.payDay ?? null;
 
 module.exports = {
   findAll, count, findById, findByEmployeeAndPeriod, findOverlapping,
+  findPreviousPayroll, findEmployeePayDay, findScheduleDates,
   create, update, replaceAutoItems, getGenerationData,
   findByEmployee, countByEmployee, findBpjsData, remove,
   findEmployeesForBulkGenerate,

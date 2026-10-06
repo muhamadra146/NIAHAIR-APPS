@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { salarySettingSchema } from "../schemas/employee.schema";
-import type { SalarySettingFormValues } from "../schemas/employee.schema";
+import type { SalarySettingFormValues, SalarySettingFormInput } from "../schemas/employee.schema";
 import type { SalarySetting } from "../types";
 
 interface Props {
@@ -58,7 +58,7 @@ function settingToForm(s: SalarySetting): SalarySettingFormValues {
 
 export function SalarySettingForm({ open, onOpenChange, onSubmit, isPending, error, defaultValues }: Props) {
   const isEdit = !!defaultValues;
-  const form = useForm<SalarySettingFormValues>({
+  const form = useForm<SalarySettingFormInput, unknown, SalarySettingFormValues>({
     resolver: zodResolver(salarySettingSchema),
     defaultValues: defaultValues ? settingToForm(defaultValues) : EMPTY_DEFAULTS,
   });

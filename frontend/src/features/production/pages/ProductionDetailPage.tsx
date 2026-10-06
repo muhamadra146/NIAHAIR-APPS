@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, Loader2, ChevronRight, Lock, Unlock, FlaskConical,
-  Package, Wrench, Users, Clock, CheckCircle2, XCircle, AlertTriangle,
+  ArrowLeft, Loader2, FlaskConical,
+  Package, Wrench, Users, Clock, CheckCircle2,
   RefreshCw, Link2,
 } from "lucide-react";
 import { PageContainer }     from "@/components/layout/PageContainer";
@@ -45,7 +45,8 @@ function ConfirmDialog({
   );
 }
 import { useProductionOrder, useUpdateProductionStatus, useSubmitProductionQC, useDeleteProductionOrder, useSyncProductionToAccurate } from "../hooks";
-import type { ProductionStatus, ProductionQCStatus } from "../types";
+import type { ProductionStatus, ProductionQCStatus, UpdateStatusInput } from "../types";
+import { WIB_TZ } from "@/lib/utils";
 
 // ── Status colours ────────────────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ const STATUS_CLASS: Record<ProductionStatus, string> = {
 // QC tidak punya next-status di sini — transisi ke COMPLETED dilakukan
 // otomatis via QC dialog (Submit QC → PASS). Tombol "Selesaikan" dihapus
 // karena selalu gagal tanpa QC PASS terlebih dahulu.
-const NEXT_STATUS: Partial<Record<ProductionStatus, { label: string; status: ProductionStatus; variant?: "destructive" | "default" | "outline" }[]>> = {
+const NEXT_STATUS: Partial<Record<ProductionStatus, { label: string; status: UpdateStatusInput["status"]; variant?: "destructive" | "default" | "outline" }[]>> = {
   DRAFT:       [{ label: "Release",         status: "RELEASED",    variant: "default"     },
                 { label: "Batalkan",        status: "CANCELLED",   variant: "destructive" }],
   RELEASED:    [{ label: "Mulai Produksi",  status: "IN_PROGRESS", variant: "default"     },
@@ -150,7 +151,7 @@ export function ProductionDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [transitioning, setTransitioning] = useState<ProductionStatus | null>(null);
 
-  const handleTransition = async (newStatus: ProductionStatus) => {
+  const handleTransition = async (newStatus: UpdateStatusInput["status"]) => {
     // QC submit opens a dialog
     if (newStatus === "QC" && order?.status === "IN_PROGRESS") {
       // This goes to QC status, not submitting QC result — different flow
@@ -197,7 +198,7 @@ export function ProductionDetailPage() {
   return (
     <PageContainer
       title={order.productionNo}
-      subtitle={`${order.branch?.name} • ${new Date(order.productionDate).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}`}
+      subtitle={`${order.branch?.name} • ${new Date(order.productionDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "long", year: "numeric" })}`}
     >
       {/* Back */}
       <Button variant="ghost" size="sm" className="mb-4 -ml-2 gap-1.5" onClick={() => navigate("/production")}>
@@ -452,7 +453,7 @@ export function ProductionDetailPage() {
                   <li key={tl.id} className="ml-4 pl-2">
                     <div className="absolute -left-1.5 mt-1 h-3 w-3 rounded-full border border-background bg-border" />
                     <p className="text-xs text-muted-foreground">
-                      {new Date(tl.createdAt).toLocaleString("id-ID", {
+                      {new Date(tl.createdAt).toLocaleString("id-ID", { timeZone: WIB_TZ,
                         day: "2-digit", month: "short", year: "numeric",
                         hour: "2-digit", minute: "2-digit",
                       })}
@@ -516,7 +517,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function fmtDt(s: string) {
-  return new Date(s).toLocaleString("id-ID", {
+  return new Date(s).toLocaleString("id-ID", { timeZone: WIB_TZ,
     day: "2-digit", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });

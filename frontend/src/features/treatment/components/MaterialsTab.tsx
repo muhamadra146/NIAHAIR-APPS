@@ -491,7 +491,7 @@ function AddMaterialDialog({
   const [selectedTiId,  setSelectedTiId]  = useState<string>(treatmentItems[0]?.id ?? "");
   const [loading,       setLoading]       = useState(false);
   const [error,         setError]         = useState<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   function reset() {
     setSearch(""); setResults([]); setSelected(null); setUnits([]);

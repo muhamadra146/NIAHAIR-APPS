@@ -208,7 +208,12 @@ function JobSection({
                   )}
 
                   {!row.hasRule && (
-                    <span className="text-[10px] font-medium text-amber-600">belum ada rule komisi</span>
+                    <span className="text-[10px] font-medium text-amber-600">belum ada tarif (rule karyawan / tarif job)</span>
+                  )}
+                  {row.hasRule && row.rateSource && (
+                    <span className="text-[10px] text-muted-foreground">
+                      {row.rateSource === "JOB" ? "tarif job" : "rule karyawan"}
+                    </span>
                   )}
                 </div>
 

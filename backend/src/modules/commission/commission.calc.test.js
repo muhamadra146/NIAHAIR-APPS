@@ -10,6 +10,8 @@ const {
   distributePool,
   detectColoristInSession,
   calcCategoryItem,
+  resolveJobDefaultRate,
+  findJobQtyLimitViolations,
   canOverride,
   canRegenerate,
 } = require("./commission.calc");
@@ -537,5 +539,64 @@ describe("override — additional business rules", () => {
     const pool    = D("0");
     const amounts = distributePool(pool, [{ workQty: "1" }]);
     expect(amounts[0].toFixed(2)).toBe("0.00");
+  });
+});
+
+describe("findJobQtyLimitViolations (COM-015)", () => {
+  const items = [{
+    treatmentItemId: "ti1", itemName: "ALMOST", itemQty: 120,
+    jobs: [
+      { id: "pasang", name: "pasang rambut", unit: "helai", splitMode: "BY_QTY", deductsFromJobId: null },
+      { id: "color",  name: "color",         unit: "sesi",  splitMode: "EQUAL",  deductsFromJobId: null },
+      { id: "remove", name: "remove",        unit: "helai", splitMode: "BY_QTY", deductsFromJobId: "pasang" },
+    ],
+  }];
+  const a = (job, qty) => ({ treatmentItemId: "ti1", commissionJobId: job, workQty: qty });
+
+  test("total tim melebihi qty invoice → pelanggaran", () => {
+    expect(findJobQtyLimitViolations(items, [a("pasang", 120), a("pasang", 120)]))
+      .toEqual([expect.objectContaining({ jobName: "pasang rambut", total: 240, max: 120 })]);
+  });
+  test("tepat sama dengan qty invoice → aman", () => {
+    expect(findJobQtyLimitViolations(items, [a("pasang", 70), a("pasang", 50)])).toEqual([]);
+  });
+  test("job bagi rata & helper tidak dibatasi", () => {
+    expect(findJobQtyLimitViolations(items, [a("color", 5), a("color", 5), a("remove", 500)])).toEqual([]);
+  });
+});
+
+describe("resolveJobDefaultRate (COM-013 tarif bawaan job)", () => {
+  const hs = {
+    defaultCommissionType: "FIXED", defaultCommissionValue: null,
+    rateTiers: [{ maxStaff: null, value: "50000" }, { maxStaff: 3, value: "75000" }],
+  };
+
+  test("≤3 staf → tingkatan 3", () => {
+    expect(resolveJobDefaultRate(hs, 1)).toMatchObject({ commissionType: "FIXED", commissionValue: "75000" });
+    expect(resolveJobDefaultRate(hs, 3)).toMatchObject({ commissionValue: "75000" });
+  });
+  test(">3 staf → tingkatan \"lebih dari itu\"", () => {
+    expect(resolveJobDefaultRate(hs, 4)).toMatchObject({ commissionValue: "50000" });
+  });
+  test("tanpa tingkatan → tarif bawaan job", () => {
+    expect(resolveJobDefaultRate({ defaultCommissionType: "FIXED", defaultCommissionValue: "5000", rateTiers: [] }, 2))
+      .toMatchObject({ commissionType: "FIXED", commissionValue: "5000" });
+  });
+  test("job tanpa jenis tarif → null (pakai rule karyawan saja)", () => {
+    expect(resolveJobDefaultRate({ defaultCommissionType: null, defaultCommissionValue: "5000", rateTiers: [] }, 1)).toBeNull();
+  });
+  test("tingkatan tidak mencakup & tanpa nilai bawaan → null", () => {
+    expect(resolveJobDefaultRate({ defaultCommissionType: "FIXED", defaultCommissionValue: null, rateTiers: [{ maxStaff: 3, value: "75000" }] }, 5)).toBeNull();
+  });
+  test("tarif FIXED dari job: setiap staf dapat nominal penuh", () => {
+    const rate = resolveJobDefaultRate(hs, 2);
+    const jobs = calcCategoryItem({
+      subtotal: 300000, itemQty: 1,
+      jobs: [job("hs", { splitMode: "FULL", workers: [
+        worker("a", { commissionRuleId: null, commissionType: rate.commissionType, commissionValue: rate.commissionValue, rateSource: "JOB" }),
+        worker("b", { commissionRuleId: null, commissionType: rate.commissionType, commissionValue: rate.commissionValue, rateSource: "JOB" }),
+      ] })],
+    });
+    expect(rowsOf(jobs, "hs").map((r) => [r.amount, r.rateSource])).toEqual([[75000, "JOB"], [75000, "JOB"]]);
   });
 });

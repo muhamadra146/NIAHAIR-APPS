@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { formatDate } from "@/lib/utils";
+import { formatDate, toWibDateStr } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import {
   useInventories, useItemCategories, useStockMovements,
@@ -60,6 +60,8 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
 
+const LOW_STOCK_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "INVENTORY", "FINANCE"];
+
 const MOVEMENT_TYPE_TABS = [
   { key: "",    label: "Semua" },
   { key: "IN",  label: "Masuk" },
@@ -90,9 +92,12 @@ export function InventoryPage() {
   const [allBranches, setAllBranches] = useState(false);
 
   const effectiveBranchId = isSuperUser && allBranches ? undefined : (branchId ?? undefined);
+  // Stok Rendah: endpoint hanya untuk SA, OWNER, MANAGER, INVENTORY, FINANCE (OFFICE tidak)
+  const canSeeLowStock = LOW_STOCK_ROLES.includes(user?.roleCode ?? "");
+  const tabs = TABS.filter((t) => t.key !== "low-stock" || canSeeLowStock);
 
   // Low stock count for badge — ikut effectiveBranchId agar sinkron dengan isi tab
-  const { data: lowStockItems = [] } = useLowStock({ branchId: effectiveBranchId });
+  const { data: lowStockItems = [] } = useLowStock({ branchId: effectiveBranchId }, canSeeLowStock);
 
   return (
     <PageContainer
@@ -123,7 +128,7 @@ export function InventoryPage() {
     >
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)}>
         <TabsList>
-          {TABS.map((tab) => (
+          {tabs.map((tab) => (
             <TabsTrigger key={tab.key} value={tab.key} className="relative">
               {tab.label}
               {tab.key === "low-stock" && lowStockItems.length > 0 && (
@@ -143,9 +148,11 @@ export function InventoryPage() {
         <TabsContent value="adjustment">
           <BatchAdjustmentTab branchId={branchId} />
         </TabsContent>
-        <TabsContent value="low-stock">
-          <LowStockTab branchId={effectiveBranchId} showAllBranches={allBranches && isSuperUser} />
-        </TabsContent>
+        {canSeeLowStock && (
+          <TabsContent value="low-stock">
+            <LowStockTab branchId={effectiveBranchId} showAllBranches={allBranches && isSuperUser} />
+          </TabsContent>
+        )}
 
       </Tabs>
 
@@ -275,7 +282,7 @@ function StockTab({ branchId, showAllBranches = false }: { branchId?: string; sh
                   inv.minStock != null ? Number(inv.minStock) : "",
                   inv.item.defaultUnit?.name ?? "",
                 ]);
-                downloadCSV(`stok_${new Date().toISOString().slice(0, 10)}.csv`, [header as string[], ...rows]);
+                downloadCSV(`stok_${toWibDateStr()}.csv`, [header as string[], ...rows]);
               }}
             >
               <Download className="h-3.5 w-3.5" /> Export CSV
@@ -318,7 +325,7 @@ function StockTab({ branchId, showAllBranches = false }: { branchId?: string; sh
                       <tr key={inv.id} className={`border-b border-border transition-colors hover:bg-muted/30 ${isLow ? "bg-red-50/40 dark:bg-red-950/10" : ""}`}>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            {isLow && <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" title="Stok di bawah minimum" />}
+                            {isLow && <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" aria-label="Stok di bawah minimum"><title>Stok di bawah minimum</title></AlertTriangle>}
                             <div>
                               <p className="font-medium">{inv.item.name}</p>
                               {inv.item.itemCode && <p className="text-xs text-muted-foreground">{inv.item.itemCode}</p>}
@@ -663,7 +670,7 @@ function MovementsTab({ branchId, showAllBranches = false }: { branchId?: string
                     m.createdByEmployee?.name ?? "",
                     m.createdAt,
                   ]);
-                  downloadCSV(`mutasi_${new Date().toISOString().slice(0, 10)}.csv`, [header, ...rows]);
+                  downloadCSV(`mutasi_${toWibDateStr()}.csv`, [header, ...rows]);
                 }}
               >
                 <Download className="h-3.5 w-3.5" /> Export CSV
@@ -1263,7 +1270,7 @@ function LowStockTab({ branchId, showAllBranches = false }: { branchId?: string;
 
 // ── GAP 2: Opening Balance Dialog ─────────────────────────────────────────────
 
-function OpeningBalanceDialog({ branchId, onClose }: { branchId?: string | null; onClose: () => void }) {
+function OpeningBalanceDialog({ onClose }:{ branchId?: string | null; onClose: () => void }) {
   const [warehouseId, setWarehouseId] = useState("");
   const [notes, setNotes]             = useState("");
   const [lines, setLines]             = useState<Array<{ itemId: string; itemName: string; itemCode: string | null; qty: string; unitCost: string }>>([]);

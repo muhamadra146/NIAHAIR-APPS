@@ -3,9 +3,9 @@ import {
   fetchPayrolls, fetchPayroll,
   generatePayroll, recalculatePayroll,
   submitPayroll, approvePayroll, markPayrollAsPaid,
-  fetchMyPayrolls, fetchBpjsReport, deletePayroll, bulkGeneratePayroll,
+  fetchMyPayrolls, fetchBpjsReport, deletePayroll, bulkGeneratePayroll, previewPayrollPeriod,
 } from "../api/payroll.api";
-import type { PayrollListParams, GeneratePayrollInput, BpjsReportParams, BulkGenerateInput } from "../types";
+import type { PayrollListParams, GeneratePayrollInput, BpjsReportParams, BulkGenerateInput, PayrollPeriodPreviewParams } from "../types";
 
 const QK = "payrolls";
 
@@ -19,6 +19,15 @@ const invalidate = (qc: ReturnType<typeof useQueryClient>, id?: string) => {
   qc.invalidateQueries({ queryKey: [QK] });
   if (id) qc.invalidateQueries({ queryKey: [QK, id] });
 };
+
+// Pratinjau periode + peringatan; aktif bila parameter lengkap
+export const usePayrollPeriodPreview = (params: PayrollPeriodPreviewParams, enabled: boolean) =>
+  useQuery({
+    queryKey: [QK, "period-preview", params],
+    queryFn:  () => previewPayrollPeriod(params),
+    enabled,
+    retry:    false,
+  });
 
 export const useGeneratePayroll = () => {
   const qc = useQueryClient();

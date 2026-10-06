@@ -2,6 +2,8 @@ const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { resolveOrderBy }           = require("../../utils/sort");
+const { wibDayStart, wibDayEnd }   = require("../../utils/date");
+const { resolvePayPeriod } = require("../../utils/payPeriod");
 
 const ORDER_MAP = {
   createdAt:    { createdAt: "asc" },
@@ -30,6 +32,9 @@ const {
   deletePendingByInvoice,
   findPayrollsContainingCommissions,
   deleteAllByInvoice,
+  sumByStatus,
+  findEmployeePayDay,
+  findPayrollForPeriod,
 } = require("./commission.repository");
 const {
   D,
@@ -38,17 +43,18 @@ const {
   canOverride,
   canRegenerate,
   calcCategoryItem,
+  resolveJobDefaultRate,
 } = require("./commission.calc");
 const { findActiveByEmployeeAndJob } = require("../commissionRule/commissionRule.repository");
 
 // ── Management ────────────────────────────────────────────────────────
 
 const listCommissions = async ({
-  page, limit, employeeId, status, branchId, invoiceId, startDate, endDate, sortBy,
+  page, limit, employeeId, status, branchId, invoiceId, startDate, endDate, sortBy, extraWhere,
 }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
   const orderBy = resolveOrderBy(sortBy, ORDER_MAP);
-  const where = {};
+  const where = { ...(extraWhere ?? {}) };
 
   if (employeeId) where.employeeId = employeeId;
   if (status)     where.status     = status;
@@ -57,8 +63,8 @@ const listCommissions = async ({
 
   if (startDate || endDate) {
     where.createdAt = {};
-    if (startDate) where.createdAt.gte = new Date(startDate);
-    if (endDate)   where.createdAt.lte = new Date(endDate);
+    if (startDate) where.createdAt.gte = wibDayStart(startDate);
+    if (endDate)   where.createdAt.lte = wibDayEnd(endDate);
   }
 
   const [commissions, total] = await Promise.all([
@@ -69,13 +75,113 @@ const listCommissions = async ({
   return { data: commissions, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
-// Self-service: employeeId selalu dari user login, tidak bisa di-override via query
-const listMyCommissions = async (employeeId, { page, limit, status, branchId, startDate, endDate, sortBy }) => {
+// ── Komisi Saya: periode gaji (COM-017) ───────────────────────────────
+//
+// Sama dengan payroll:
+//   · Nama gaji = bulan kerja; periode mengikuti tanggal gajian karyawan (utils/payPeriod).
+//   · Payroll mengambil SEMUA komisi APPROVED yang belum masuk payroll, disetujui s/d akhir periode
+//     (termasuk sisa periode lalu), dan mencatatnya lewat payrollId.
+// Kartu periode P:
+//   pending = semua PENDING (belum punya periode)
+//   ready   = payroll P sudah dibuat → APPROVED yang tercatat di slip P
+//             payroll P belum dibuat → APPROVED belum masuk slip mana pun, disetujui s/d akhir P
+//             (= persis yang akan diambil saat payroll P dibuat; carryOver = disetujui sebelum P)
+//   paid    = PAID yang tercatat di slip gaji periode P
+//   total   = pending + ready + paid
+//   queued  = (payroll P sudah dibuat) APPROVED yang belum masuk slip mana pun → ikut gaji berikutnya
+
+const assertEmployee = (employeeId) => {
   if (!employeeId)
     throw new AppError("Akun ini tidak terhubung ke data karyawan", StatusCodes.FORBIDDEN);
-  return listCommissions({ page, limit, employeeId, status, branchId, startDate, endDate, sortBy });
 };
 
+const assertYearMonth = (yearMonth) => {
+  if (yearMonth && !/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth))
+    throw new AppError("Format periode harus YYYY-MM", StatusCodes.BAD_REQUEST);
+};
+
+const myPayPeriod = async (employeeId, yearMonth) => {
+  const payDay = await findEmployeePayDay(employeeId);
+  const period = resolvePayPeriod(payDay, yearMonth);
+  const payroll = await findPayrollForPeriod(employeeId, period.periodStart, period.periodEnd);
+  return {
+    ...period,
+    payroll,
+    startTs: wibDayStart(period.periodStart),
+    endTs:   wibDayEnd(period.periodEnd),
+  };
+};
+
+const periodWhere = (period) => ({
+  pending: { status: "PENDING" },
+  ready:   period.payroll
+    ? { status: "APPROVED", payrollId: period.payroll.id }
+    : { status: "APPROVED", payrollId: null, approvedAt: { lte: period.endTs } },
+  paid:    { status: "PAID", payroll: { periodStart: { gte: period.periodStart, lte: period.periodEnd } } },
+});
+
+// Self-service: employeeId selalu dari user login, tidak bisa di-override via query
+const listMyCommissions = async (employeeId, { page, limit, status, branchId, startDate, endDate, sortBy, yearMonth }) => {
+  assertEmployee(employeeId);
+  assertYearMonth(yearMonth);
+  if (!yearMonth) {
+    return listCommissions({ page, limit, employeeId, status, branchId, startDate, endDate, sortBy });
+  }
+  const w = periodWhere(await myPayPeriod(employeeId, yearMonth));
+  const extraWhere =
+    status === "PENDING"  ? w.pending :
+    status === "APPROVED" ? w.ready   :
+    status === "PAID"     ? w.paid    :
+    { OR: [w.pending, w.ready, w.paid] };
+  // status sudah tercakup di extraWhere
+  return listCommissions({ page, limit, employeeId, branchId, sortBy, extraWhere });
+};
+
+const toBucket = (groups, status) => {
+  const g = groups.find((x) => x.status === status);
+  return { count: g?._count?._all ?? 0, amount: Number(g?._sum?.commissionAmount ?? 0) };
+};
+
+/** Ringkasan Komisi Saya per periode gaji (bulan kerja). */
+const getMyCommissionSummary = async (employeeId, { yearMonth } = {}) => {
+  assertEmployee(employeeId);
+  assertYearMonth(yearMonth);
+  const period = await myPayPeriod(employeeId, yearMonth);
+  const w = periodWhere(period);
+
+  const unscheduled = { status: "APPROVED", payrollId: null };
+  const [pendingG, readyG, paidG, carryG, queuedG] = await Promise.all([
+    sumByStatus({ employeeId, ...w.pending }),
+    sumByStatus({ employeeId, ...w.ready }),
+    sumByStatus({ employeeId, ...w.paid }),
+    period.payroll ? [] : sumByStatus({ employeeId, ...unscheduled, approvedAt: { lt: period.startTs } }),
+    period.payroll ? sumByStatus({ employeeId, ...unscheduled }) : [],
+  ]);
+
+  const pending = toBucket(pendingG, "PENDING");
+  const ready   = { ...toBucket(readyG, "APPROVED"), carryOver: toBucket(carryG, "APPROVED") };
+  const paid    = toBucket(paidG, "PAID");
+  const queued  = toBucket(queuedG, "APPROVED");
+
+  return {
+    period: {
+      yearMonth:   period.yearMonth,
+      payDay:      period.payDay,
+      periodStart: period.periodStart,
+      periodEnd:   period.periodEnd,
+      payDate:     period.payDate,
+      payrollStatus: period.payroll?.status ?? null,
+    },
+    pending,
+    ready,
+    paid,
+    queued,
+    total: {
+      count:  pending.count + ready.count + paid.count,
+      amount: pending.amount + ready.amount + paid.amount,
+    },
+  };
+};
 const getCommissionById = async (id) => {
   const commission = await findById(id);
   if (!commission) throw new AppError("Commission not found", StatusCodes.NOT_FOUND);
@@ -274,24 +380,6 @@ async function _buildLegacyRows({ invoice, treatmentItem, tx }) {
 // Perhitungan SATU sumber: calcCategoryItem (commission.calc.js) — dipakai kalkulator
 // (preview + finalize) dan regenerate, sehingga hasilnya selalu sama.
 
-// staffCountMax (rate dinamis HS): pilih job yang rule-nya dipakai berdasarkan total staf.
-// Grup HS = job ber-staffCountMax + SATU job cadangan (job aktif pertama tanpa batas).
-// Job lain di kategori yang sama (cuci, dll.) tetap memakai rule-nya sendiri.
-function _resolveRuleJobId(jobDef, catJobs, totalStaff) {
-  const active  = catJobs.filter((j) => j.isActive !== false);
-  const withMax = active.filter((j) => j.staffCountMax != null)
-    .sort((a, b) => a.staffCountMax - b.staffCountMax);
-  if (withMax.length === 0) return jobDef.id;
-
-  const fallback  = active.find((j) => j.staffCountMax == null) ?? null;
-  const inHsGroup = jobDef.staffCountMax != null || jobDef.id === fallback?.id;
-  if (!inHsGroup) return jobDef.id;
-
-  const matched = withMax.find((j) => j.staffCountMax >= totalStaff);
-  if (matched) return matched.id;
-  return fallback?.id ?? jobDef.id;
-}
-
 // Total staf unik yang assign di kategori yang sama dalam satu invoice
 function _countStaffInCategory(invoice, commissionCategoryId) {
   const ids = new Set();
@@ -333,9 +421,17 @@ async function calculateCategoryItem({ invoice, treatmentItem, qtyOverrides = {}
     const workersRaw = jas.filter((ja) => ja.commissionJobId === jobDef.id);
     if (workersRaw.length === 0) continue;
 
-    const ruleJobId = _resolveRuleJobId(jobDef, cat.jobs, totalStaff);
-    const workers   = await Promise.all(workersRaw.map(async (ja) => {
-      const rule = await findActiveByEmployeeAndJob(ja.employeeId, cat.id, ruleJobId, asOfDate);
+    // Tarif bawaan job (untuk staf tanpa rule) — tingkatan berdasarkan jumlah staf di kategori
+    const jobRate = resolveJobDefaultRate(jobDef, totalStaff);
+    const workers = await Promise.all(workersRaw.map(async (ja) => {
+      // Rule per karyawan = pengecualian; jika tidak ada → tarif bawaan job
+      const ownRule = await findActiveByEmployeeAndJob(ja.employeeId, cat.id, jobDef.id, asOfDate);
+      const rule = ownRule ?? (jobRate && {
+        id:              null,
+        commissionType:  jobRate.commissionType,
+        commissionValue: jobRate.commissionValue,
+        commissionBase:  "AFTER_DISCOUNT_BEFORE_TAX",
+      });
       // Base item menurut commissionBase rule staf (sebelum/sesudah diskon & pajak)
       const itemBase = rule && invoiceItem
         ? resolveBaseAmount(invoiceItem, rule.commissionBase, invoice.inclusiveTax ?? false)
@@ -350,6 +446,7 @@ async function calculateCategoryItem({ invoice, treatmentItem, qtyOverrides = {}
         commissionType:   rule?.commissionType ?? null,
         commissionValue:  rule?.commissionValue != null ? String(rule.commissionValue) : null,
         commissionBase:   rule?.commissionBase ?? null,
+        rateSource:       ownRule ? "RULE" : jobRate ? "JOB" : null,
       };
     }));
 
@@ -584,11 +681,11 @@ const deleteCommission = async (id, roleCode) => {
 
 module.exports = {
   // kalkulasi kategori-job (dipakai invoice worksheet/finalize)
-  _resolveRuleJobId, // diekspor untuk unit test
   calculateCategoryItem,
   toCommissionData,
   listCommissions,
   listMyCommissions,
+  getMyCommissionSummary,
   getCommissionById,
   approveCommission,
   markCommissionPaid,

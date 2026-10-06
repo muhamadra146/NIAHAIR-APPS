@@ -14,9 +14,12 @@ beforeEach(() => jest.clearAllMocks());
 describe('getAll', () => {
   test('passes year filter to repo', async () => {
     repo.findAll.mockResolvedValue([HOLIDAY]);
+    repo.count.mockResolvedValue(1);
     const result = await svc.getAll({ year: 2024 });
-    expect(repo.findAll).toHaveBeenCalledWith({ year: 2024 });
-    expect(result).toHaveLength(1);
+    expect(repo.findAll).toHaveBeenCalledWith({ skip: 0, take: 10, where: { year: 2024 } });
+    expect(repo.count).toHaveBeenCalledWith({ year: 2024 });
+    expect(result.data).toHaveLength(1);
+    expect(result.meta.total).toBe(1);
   });
 });
 

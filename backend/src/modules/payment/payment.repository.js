@@ -1,5 +1,6 @@
 const { Prisma } = require("@prisma/client");
 const prisma     = require("../../config/prisma");
+const { resolveInvoiceStatus } = require("../invoice/invoice.status");
 
 const INCLUDE = {
   invoice: {
@@ -146,7 +147,7 @@ const deleteWithTransaction = ({ payment, invoice, D, userId }) =>
       D("0"),
       D(invoice.grandTotal).sub(D(invoice.totalDeposit)).sub(newPaidAmount),
     );
-    const newStatus = newOutstanding.lte(D("0")) ? "PAID" : "UNPAID";
+    const newStatus = resolveInvoiceStatus(newOutstanding, D(invoice.totalDeposit).add(newPaidAmount));
 
     await tx.invoice.update({
       where: { id: invoice.id },

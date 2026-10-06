@@ -24,9 +24,12 @@ describe('getBySession', () => {
   test('returns items for session', async () => {
     repo.findSessionById.mockResolvedValue(SESSION);
     repo.findBySession.mockResolvedValue([TITEM]);
+    repo.countBySession.mockResolvedValue(1);
 
     const result = await svc.getBySession('ts1');
-    expect(result).toHaveLength(1);
+    expect(repo.findBySession).toHaveBeenCalledWith('ts1', { skip: 0, take: 10 });
+    expect(result.data).toHaveLength(1);
+    expect(result.meta).toMatchObject({ total: 1, page: 1, limit: 10 });
   });
 });
 

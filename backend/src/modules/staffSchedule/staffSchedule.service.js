@@ -2,16 +2,9 @@ const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const prisma          = require("../../config/prisma");
 const repo            = require("./staffSchedule.repository");
+const { wibDayStart, wibDayEnd, toDateOnly, wibDateStr, wibParts } = require("../../utils/date");
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-
-const dayBoundsUTC = (dateStr) => {
-  const start = new Date(dateStr);
-  start.setUTCHours(0, 0, 0, 0);
-  const end   = new Date(dateStr);
-  end.setUTCHours(23, 59, 59, 999);
-  return { start, end };
-};
 
 const addDays = (date, n) => {
   const d = new Date(date);
@@ -29,10 +22,9 @@ const getRoster = async ({ startDate, days = 7, branchId }) => {
 
   const numDays = Math.min(Math.max(parseInt(days) || 7, 1), 62);
 
-  const start = new Date(startDate);
-  start.setUTCHours(0, 0, 0, 0);
-  const end = addDays(start, numDays - 1);
-  end.setUTCHours(23, 59, 59, 999);
+  // workDate disimpan 00:00 UTC dari tanggal WIB
+  const start = toDateOnly(startDate);
+  const end   = addDays(start, numDays - 1);
 
   // Build the array of date strings for this range
   const dates = [];
@@ -40,7 +32,7 @@ const getRoster = async ({ startDate, days = 7, branchId }) => {
     dates.push(toDateStr(addDays(start, i)));
   }
 
-  const { employeeBranches, schedules } = await repo.findRoster(branchId, start, end);
+  const { employeeBranches, schedules } = await repo.findRoster(branchId, wibDayStart(start), wibDayEnd(end));
 
   // Build a lookup: "employeeId|dateStr" → schedule record
   const scheduleMap = new Map();
@@ -89,7 +81,7 @@ const bulkUpsert = async ({ branchId, schedules }) => {
 
   await prisma.$transaction(async () => {
     for (const item of schedules) {
-      const { start: workDate } = dayBoundsUTC(item.date);
+      const workDate = toDateOnly(item.date);
 
       if (item.status === null && item.shiftId === null) {
         // Explicit clear: delete the schedule
@@ -114,13 +106,13 @@ const getAvailableStaff = async ({ date, branchId, startTime, endTime, excludeAp
   if (!date)     throw new AppError("date is required",     StatusCodes.BAD_REQUEST);
   if (!branchId) throw new AppError("branchId is required", StatusCodes.BAD_REQUEST);
 
-  const { start, end } = dayBoundsUTC(date);
+  const workDate = toDateOnly(date);
 
   let records = await prisma.staffSchedule.findMany({
     where: {
       branchId,
       status:   "WORKING",
-      workDate: { gte: start, lte: end },
+      workDate: { gte: wibDayStart(workDate), lte: wibDayEnd(workDate) },
       employee: { isActive: true },
     },
     include: {
@@ -143,12 +135,12 @@ const getAvailableStaff = async ({ date, branchId, startTime, endTime, excludeAp
   // di jam yang sama (diatur oleh manager salon)
 
   // For today: mark staff who have already checked out
-  const todayStr = new Date(Date.now() + 7 * 3600 * 1000).toISOString().split("T")[0]; // WIB (UTC+7)
+  const todayStr = wibDateStr();
   let checkedOutSet = new Set();
   if (date.split("T")[0] === todayStr && records.length > 0) {
     const checkedOut = await prisma.attendance.findMany({
       where: {
-        workDate:   { gte: start, lte: end },
+        workDate:   workDate, // @db.Date
         employeeId: { in: records.map((r) => r.employeeId) },
         checkOutAt: { not: null },
       },
@@ -172,11 +164,10 @@ const getMySchedules = async (employeeId, { startDate, endDate } = {}) => {
   // SUPER_ADMIN / OWNER mungkin tidak punya employeeId — return empty, bukan error
   if (!employeeId) return [];
 
-  const now   = new Date();
-  const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
-  const end   = endDate   ? new Date(endDate)   : now;
-  start.setUTCHours(0, 0, 0, 0);
-  end.setUTCHours(23, 59, 59, 999);
+  // Default: awal bulan WIB s/d hari ini (WIB)
+  const { year, month } = wibParts();
+  const start = wibDayStart(startDate ?? `${year}-${String(month).padStart(2, "0")}-01`);
+  const end   = wibDayEnd(endDate ?? wibDateStr());
 
   const records = await prisma.staffSchedule.findMany({
     where:   { employeeId, workDate: { gte: start, lte: end } },

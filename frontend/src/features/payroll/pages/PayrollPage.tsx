@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   ChevronLeft, Plus, RefreshCw, CheckCircle2, Send, Banknote,
-  AlertCircle, Clock, XCircle, Trash2,
+  AlertCircle, Clock, Trash2,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button }        from "@/components/ui/button";
@@ -16,13 +16,15 @@ import { useAllBranches } from "@/features/settings/hooks";
 import {
   usePayrolls, useGeneratePayroll,
   useRecalculatePayroll, useSubmitPayroll, useApprovePayroll, useMarkPayrollAsPaid,
-  useDeletePayroll, useBulkGeneratePayroll,
+  useDeletePayroll, useBulkGeneratePayroll, usePayrollPeriodPreview,
 } from "../hooks";
+import { payrollMonthLabel, payrollRangeLabel, payrollDayLabel } from "../period";
 import { toast } from "@/lib/toast";
 import { filterInputCls } from "@/lib/ui-utils";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Payroll, PayrollStatus, PayrollItem, GeneratePayrollInput, BulkGenerateResult } from "../types";
+import type { Payroll, PayrollStatus, PayrollItem, GeneratePayrollInput, BulkGenerateResult, PayrollPeriodPreview } from "../types";
+import { WIB_TZ, toWibDateStr } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -30,12 +32,38 @@ const fmtRp = (n: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
 
 const fmtDate = (iso: string) =>
-  new Date(iso).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
+  new Date(iso).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "short", year: "numeric" });
 
-const fmtPeriod = (start: string) => {
-  const d = new Date(start);
-  return d.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
-};
+// Nama gaji = bulan kerja (COM-017)
+const fmtPeriod = (start: string) => `Gaji ${payrollMonthLabel(start)}`;
+
+/** Kotak pratinjau periode + peringatan sebelum generate */
+function PeriodPreviewBox({ preview, loading, error }: {
+  preview?: PayrollPeriodPreview; loading: boolean; error: Error | null;
+}) {
+  if (loading) return <p className="text-xs text-muted-foreground">Menghitung periode…</p>;
+  if (error)   return <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error.message}</p>;
+  if (!preview) return null;
+  return (
+    <div className="space-y-2">
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+        {preview.yearMonth && (
+          <p className="font-semibold text-slate-800">Gaji {payrollMonthLabel(preview.periodStart)}</p>
+        )}
+        <p>Periode kerja {payrollRangeLabel(preview.periodStart, preview.periodEnd)}</p>
+        {preview.payDate && (
+          <p>Dibayar {payrollDayLabel(preview.payDate)} (tanggal gajian {preview.payDay})</p>
+        )}
+      </div>
+      {preview.conflict && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{preview.conflict}</p>
+      )}
+      {preview.warnings.map((w) => (
+        <p key={w} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{w}</p>
+      ))}
+    </div>
+  );
+}
 
 const STATUS_CONFIG: Record<PayrollStatus, { label: string; badgeCls: string; icon: React.ComponentType<{ className?: string }> }> = {
   DRAFT:            { label: "Draft",             badgeCls: "bg-slate-50 text-slate-600 border-slate-200",       icon: AlertCircle   },
@@ -83,6 +111,8 @@ function AccurateJournalBadge({
 }
 
 const CAN_DELETE: string[] = ["SUPER_ADMIN", "OWNER"];
+// Setujui & tandai dibayar: sesuai backend (APPROVERS) — FINANCE hanya generate & submit
+const CAN_APPROVE: string[] = ["SUPER_ADMIN", "OWNER"];
 
 // filterInputCls imported from @/lib/ui-utils
 
@@ -95,8 +125,7 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
   const employees = empData?.data ?? [];
   const branches  = branchData ?? [];
 
-  const now       = new Date();
-  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const thisMonth = toWibDateStr().slice(0, 7);
 
   const [mode,        setMode]      = useState<"month" | "range">("month");
   const [employeeId,  setEmployee]  = useState("");
@@ -108,9 +137,14 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
 
   const generateMut = useGeneratePayroll();
 
-  const isValid = !!employeeId && !!branchId && (
-    mode === "month" ? !!yearMonth : (!!periodStart && !!periodEnd && periodEnd >= periodStart)
+  const periodReady = mode === "month" ? !!yearMonth : (!!periodStart && !!periodEnd && periodEnd >= periodStart);
+  const previewQuery = usePayrollPeriodPreview(
+    mode === "month" ? { employeeId, yearMonth } : { employeeId, periodStart, periodEnd },
+    !!employeeId && periodReady,
   );
+  const preview = previewQuery.data;
+
+  const isValid = !!employeeId && !!branchId && periodReady && !preview?.conflict;
 
   const handleSubmit = async () => {
     if (!isValid) { toast.error("Lengkapi semua field"); return; }
@@ -118,8 +152,9 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
       ? { employeeId, branchId, yearMonth, notes: notes || undefined }
       : { employeeId, branchId, periodStart, periodEnd, notes: notes || undefined };
     try {
-      await generateMut.mutateAsync(input);
+      const created = await generateMut.mutateAsync(input);
       toast.success("Payroll berhasil dibuat");
+      created.warnings?.forEach((w) => toast.warning(w));
       onClose();
     } catch (e: any) {
       toast.error(e?.response?.data?.message ?? "Gagal generate payroll");
@@ -173,8 +208,9 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
 
           {mode === "month" ? (
             <div>
-              <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Bulan *</Label>
+              <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Gaji Bulan *</Label>
               <Input type="month" value={yearMonth} onChange={(e) => setMonth(e.target.value)} className={`mt-1 ${filterInputCls}`} />
+              <p className="mt-1 text-xs text-muted-foreground">Bulan kerja; periode mengikuti tanggal gajian karyawan</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
@@ -190,6 +226,10 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
                 <p className="col-span-2 text-xs text-red-500 -mt-1">Tanggal selesai harus setelah tanggal mulai</p>
               )}
             </div>
+          )}
+
+          {employeeId && periodReady && (
+            <PeriodPreviewBox preview={preview} loading={previewQuery.isLoading} error={previewQuery.error as Error | null} />
           )}
 
           <div>
@@ -215,8 +255,7 @@ function BulkGenerateDialog({ open, onClose }: { open: boolean; onClose: () => v
   const { data: branchData } = useAllBranches();
   const branches = branchData ?? [];
 
-  const now       = new Date();
-  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const thisMonth = toWibDateStr().slice(0, 7);
 
   const [branchId, setBranch]   = useState(sessionBranchId ?? "");
   const [payDay,   setPayDay]   = useState("");
@@ -225,9 +264,11 @@ function BulkGenerateDialog({ open, onClose }: { open: boolean; onClose: () => v
   const [result,   setResult]   = useState<BulkGenerateResult | null>(null);
 
   const bulkMut = useBulkGeneratePayroll();
+  const bulkPayDay = payDay ? Number(payDay) : undefined;
+  const bulkPreview = usePayrollPeriodPreview({ payDay: bulkPayDay, yearMonth }, !!bulkPayDay && !!yearMonth);
 
   const handleSubmit = async () => {
-    if (!branchId || !yearMonth) { toast.error("Pilih cabang dan periode"); return; }
+    if (!branchId || !yearMonth) { toast.error("Pilih cabang dan bulan gaji"); return; }
     try {
       const res = await bulkMut.mutateAsync({
         branchId,
@@ -272,6 +313,13 @@ function BulkGenerateDialog({ open, onClose }: { open: boolean; onClose: () => v
                 <p className="text-xs text-red-500">Gagal</p>
               </div>
             </div>
+            {result.results.some((r) => r.warnings?.length) && (
+              <div className="max-h-40 overflow-y-auto space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                {result.results.filter((r) => r.warnings?.length).map((r) => (
+                  <p key={r.employeeId}>{r.employeeName}: {r.warnings!.join(" ")}</p>
+                ))}
+              </div>
+            )}
             {result.summary.errors > 0 && (
               <div className="max-h-40 overflow-y-auto space-y-1 rounded-lg border p-2 text-xs">
                 {result.results.filter((r) => r.status === "error").map((r) => (
@@ -292,8 +340,9 @@ function BulkGenerateDialog({ open, onClose }: { open: boolean; onClose: () => v
               </select>
             </div>
             <div>
-              <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Periode *</Label>
+              <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Gaji Bulan *</Label>
               <Input type="month" value={yearMonth} onChange={(e) => setMonth(e.target.value)} className={`mt-1 ${filterInputCls}`} />
+              <p className="mt-1 text-xs text-muted-foreground">Bulan kerja; periode tiap karyawan mengikuti tanggal gajiannya</p>
             </div>
             <div>
               <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Filter Tanggal Gajian (opsional)</Label>
@@ -305,6 +354,9 @@ function BulkGenerateDialog({ open, onClose }: { open: boolean; onClose: () => v
               />
               <p className="mt-1 text-xs text-muted-foreground">Isi untuk generate hanya karyawan dengan tanggal gajian tertentu</p>
             </div>
+            {bulkPayDay && (
+              <PeriodPreviewBox preview={bulkPreview.data} loading={bulkPreview.isLoading} error={bulkPreview.error as Error | null} />
+            )}
             <div>
               <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Catatan</Label>
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opsional" className={`mt-1 ${filterInputCls}`} />
@@ -365,7 +417,8 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
   const deleteMut  = useDeletePayroll();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const canDelete = user ? CAN_DELETE.includes(user.roleCode) : false;
+  const canDelete  = user ? CAN_DELETE.includes(user.roleCode) : false;
+  const canApprove = user ? CAN_APPROVE.includes(user.roleCode) : false;
   const isActing = recalcMut.isPending || submitMut.isPending || approveMut.isPending || paidMut.isPending || deleteMut.isPending;
 
   const handle = async (action: () => Promise<unknown>, msg: string) => {
@@ -405,12 +458,12 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
               <Trash2 className="h-3 w-3 mr-1" /> Hapus
             </Button>
           )}
-          {payroll.status === "PENDING_APPROVAL" && (
+          {payroll.status === "PENDING_APPROVAL" && canApprove && (
             <Button size="sm" className="rounded-lg" onClick={() => handle(approveMut.mutateAsync, "Payroll disetujui")} disabled={isActing}>
               <CheckCircle2 className="h-3 w-3 mr-1" /> Setujui
             </Button>
           )}
-          {payroll.status === "APPROVED" && (
+          {payroll.status === "APPROVED" && canApprove && (
             <Button size="sm" className="rounded-lg" onClick={() => handle(paidMut.mutateAsync, "Payroll ditandai dibayar")} disabled={isActing}>
               <Banknote className="h-3 w-3 mr-1" /> Tandai Dibayar
             </Button>
@@ -587,8 +640,7 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
 // ── Payroll List ──────────────────────────────────────────────────────────────
 
 const currentMonth = () => {
-  const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+  return toWibDateStr().slice(0, 7); // "YYYY-MM" WIB
 };
 
 export function PayrollPage() {

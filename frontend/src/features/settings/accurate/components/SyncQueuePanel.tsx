@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination } from "@/components/common/Pagination";
 import { useSyncQueues, useRetrySyncQueue } from "../hooks/useSyncQueue";
-import type { SyncQueue, SyncStatus } from "../types";
+import type { SyncQueue, SyncStatus, SyncQueueListParams } from "../types";
+import { WIB_TZ } from "@/lib/utils";
 
 // ── Status badge ──────────────────────────────────────────────────────────
 type BadgeVariant = "success" | "error" | "warning" | "default" | "secondary";
@@ -27,7 +28,7 @@ function SyncStatusBadge({ status }: { status: SyncStatus }) {
 // ── Helpers ───────────────────────────────────────────────────────────────
 function formatDate(iso: string | null) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString("id-ID", {
+  return new Date(iso).toLocaleString("id-ID", { timeZone: WIB_TZ,
     day: "2-digit", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
@@ -178,7 +179,7 @@ export function SyncQueuePanel() {
   const [page, setPage]                 = useState(1);
   const [retryId, setRetryId]           = useState<string | null>(null);
 
-  const params: { page: number; limit: number; status?: string } = {
+  const params: SyncQueueListParams = {
     page,
     limit: 20,
     ...(statusFilter !== "ALL" && { status: statusFilter }),

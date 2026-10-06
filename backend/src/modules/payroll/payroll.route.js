@@ -5,7 +5,7 @@ const validate     = require("../../middlewares/validate.middleware");
 const { ROLES }   = require("../../common/constants/role.constant");
 const { generateSchema, bulkGenerateSchema, updateNotesSchema } = require("./payroll.validation");
 const {
-  getAllController, getByIdController, generateController, bulkGenerateController,
+  getAllController, getByIdController, generateController, bulkGenerateController, previewPeriodController,
   recalculateController, submitController, approveController, markAsPaidController,
   updateNotesController, getMyController, getBpjsReportController, deleteController,
 } = require("./payroll.controller");
@@ -19,6 +19,7 @@ const APPROVERS = [ROLES.SUPER_ADMIN, ROLES.OWNER];
 // Employee self-service — must be BEFORE /:id
 router.get("/my",          authenticate, getMyController);
 router.get("/bpjs-report", authenticate, authorize(...ALL_ADMIN), getBpjsReportController);
+router.get("/period-preview", authenticate, authorize(...ALL_ADMIN), previewPeriodController);
 
 router.get("/",    authenticate, authorize(...ALL_ADMIN), getAllController);
 router.get("/:id", authenticate, authorize(...ALL_ADMIN), getByIdController);

@@ -26,9 +26,12 @@ describe('getByItem', () => {
   test('returns assignments for treatment item', async () => {
     repo.findTreatmentItemById.mockResolvedValue(TREATMENT_ITEM);
     repo.findByItem.mockResolvedValue([ASSIGNMENT]);
+    repo.countByItem.mockResolvedValue(1);
 
     const result = await svc.getByItem('ti1');
-    expect(result).toHaveLength(1);
+    expect(repo.findByItem).toHaveBeenCalledWith('ti1', { skip: 0, take: 10 });
+    expect(result.data).toHaveLength(1);
+    expect(result.meta).toMatchObject({ total: 1, page: 1, limit: 10 });
   });
 });
 
@@ -99,11 +102,21 @@ describe('updateAssignment', () => {
 
   test('throws 422 when new workQty exceeds max', async () => {
     repo.findById.mockResolvedValue(ASSIGNMENT);
+    repo.sumWorkQtyBySlot.mockResolvedValue(0); // no other assignment in slot (self excluded)
     await expect(svc.updateAssignment('a1', { workQty: 200 })).rejects.toMatchObject({ statusCode: 422 });
+    expect(repo.sumWorkQtyBySlot).toHaveBeenCalledWith('ti1', 'colorist', 'a1');
+    expect(repo.update).not.toHaveBeenCalled();
+  });
+
+  test('throws 422 when new workQty exceeds remaining slot quota', async () => {
+    repo.findById.mockResolvedValue(ASSIGNMENT);
+    repo.sumWorkQtyBySlot.mockResolvedValue(70); // remaining = 100 - 70 = 30
+    await expect(svc.updateAssignment('a1', { workQty: 40 })).rejects.toMatchObject({ statusCode: 422 });
   });
 
   test('updates slotKey and workQty when within max', async () => {
     repo.findById.mockResolvedValue(ASSIGNMENT);
+    repo.sumWorkQtyBySlot.mockResolvedValue(0);
     repo.update.mockResolvedValue({ ...ASSIGNMENT, workQty: 60, slotKey: 'assistant' });
 
     await svc.updateAssignment('a1', { slotKey: 'assistant', workQty: 60 });

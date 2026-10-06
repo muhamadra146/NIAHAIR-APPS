@@ -89,23 +89,23 @@ model Branch {
   employeeBranchHistories EmployeeBranchHistory[]
   employeeBranches        EmployeeBranch[]
 
-  itemPrices            ItemPrice[]
-  warehouses            Warehouse[]
-  invoices              Invoice[]
-  appointments          Appointment[]
-  deposits              Deposit[]
-  payments              Payment[]
-  treatmentSessions     TreatmentSession[]
-  staffSchedules        StaffSchedule[]
-  attendances           Attendance[]
-  loans                 Loan[]
-  payrolls              Payroll[]
-  consultationNotes     ClientConsultationNote[]
-  correctionRequests    AttendanceCorrectionRequest[]
-  permissionRequests    PermissionRequest[]
-  sickLeaves            SickLeave[]
-  complaints            Complaint[]
-  productionOrders      ProductionOrder[]
+  itemPrices         ItemPrice[]
+  warehouses         Warehouse[]
+  invoices           Invoice[]
+  appointments       Appointment[]
+  deposits           Deposit[]
+  payments           Payment[]
+  treatmentSessions  TreatmentSession[]
+  staffSchedules     StaffSchedule[]
+  attendances        Attendance[]
+  loans              Loan[]
+  payrolls           Payroll[]
+  consultationNotes  ClientConsultationNote[]
+  correctionRequests AttendanceCorrectionRequest[]
+  permissionRequests PermissionRequest[]
+  sickLeaves         SickLeave[]
+  complaints         Complaint[]
+  productionOrders   ProductionOrder[]
 
   @@map("branches")
 }
@@ -168,9 +168,9 @@ model User {
 // =====================================================
 
 model RefreshToken {
-  id        String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  tokenHash String   @unique  // SHA-256 hash of the opaque token
+  tokenHash String @unique // SHA-256 hash of the opaque token
   userId    String
 
   expiresAt DateTime
@@ -227,11 +227,11 @@ model Employee {
 
   emergencyContact String?
 
-  nikKtp               String?
-  ktpFileUrl           String?
-  ktpFilePublicId      String?
+  nikKtp          String?
+  ktpFileUrl      String?
+  ktpFilePublicId String?
 
-  resignDate           DateTime?
+  resignDate DateTime?
 
   contractFileUrl      String?
   contractFilePublicId String?
@@ -258,27 +258,27 @@ model Employee {
   createdPayments     Payment[]                @relation("PaymentCreatedBy")
   filledConsultations ClientConsultationNote[] @relation("ConsultationFilledBy")
 
-  appointmentStaffs     AppointmentStaff[]
-  treatmentAssignments  TreatmentAssignment[]
-  commissionRules       CommissionRule[]
-  commissions              Commission[]
-  attendances              Attendance[]
-  schedules                EmployeeSchedule[]
-  leaves                   Leave[]
-  overtimeChargeEmployees  OvertimeChargeEmployee[]
-  staffSchedules        StaffSchedule[]
-  salarySettings        EmployeeSalarySettings[]
-  omsetBonusTiers       EmployeeOmsetBonusTier[]
-  loans                 Loan[]
-  payrolls              Payroll[]
-  leaveQuotas           LeaveQuota[]
-  correctionRequests    AttendanceCorrectionRequest[]
-  permissionRequests    PermissionRequest[]
-  sickLeaves            SickLeave[]
+  appointmentStaffs       AppointmentStaff[]
+  treatmentAssignments    TreatmentAssignment[]
+  commissionRules         CommissionRule[]
+  commissions             Commission[]
+  attendances             Attendance[]
+  schedules               EmployeeSchedule[]
+  leaves                  Leave[]
+  overtimeChargeEmployees OvertimeChargeEmployee[]
+  staffSchedules          StaffSchedule[]
+  salarySettings          EmployeeSalarySettings[]
+  omsetBonusTiers         EmployeeOmsetBonusTier[]
+  loans                   Loan[]
+  payrolls                Payroll[]
+  leaveQuotas             LeaveQuota[]
+  correctionRequests      AttendanceCorrectionRequest[]
+  permissionRequests      PermissionRequest[]
+  sickLeaves              SickLeave[]
 
-  inventoryMovements    InventoryMovement[] @relation("InventoryMovementCreatedBy")
-  inventoryPeriods      InventoryPeriod[]   @relation("InventoryPeriodClosedBy")
-  purchaseInvoices      PurchaseInvoice[]   @relation("PurchaseInvoiceCreatedBy")
+  inventoryMovements InventoryMovement[] @relation("InventoryMovementCreatedBy")
+  inventoryPeriods   InventoryPeriod[]   @relation("InventoryPeriodClosedBy")
+  purchaseInvoices   PurchaseInvoice[]   @relation("PurchaseInvoiceCreatedBy")
 
   complaintsAbout         Complaint[]              @relation("ComplaintEmployee")
   treatmentJobAssignments TreatmentJobAssignment[]
@@ -588,8 +588,8 @@ model Item {
   purchaseUnitId       String?
   commissionCategoryId String?
 
-  accurateItemId   Int?     @unique
-  accurateIsActive Boolean  @default(true)  // false jika item suspended/non-aktif di Accurate
+  accurateItemId   Int?    @unique
+  accurateIsActive Boolean @default(true) // false jika item suspended/non-aktif di Accurate
 
   itemCode String @unique
 
@@ -606,7 +606,7 @@ model Item {
 
   category ItemCategory? @relation(fields: [categoryId], references: [id])
 
-  defaultUnit  Unit? @relation("ItemDefaultUnit",  fields: [defaultUnitId],  references: [id])
+  defaultUnit  Unit? @relation("ItemDefaultUnit", fields: [defaultUnitId], references: [id])
   purchaseUnit Unit? @relation("ItemPurchaseUnit", fields: [purchaseUnitId], references: [id])
 
   commissionCategory CommissionCategory? @relation(fields: [commissionCategoryId], references: [id])
@@ -618,16 +618,16 @@ model Item {
   inventories          Inventory[]
   stockTransferItems   StockTransferItem[]
   purchaseInvoiceItems PurchaseInvoiceItem[]
-  appointmentServices AppointmentService[]
-  invoiceItems        InvoiceItem[]
-  commissions         Commission[]
-  treatmentItems      TreatmentItem[]
-  materialUsageItems  MaterialUsageItem[]
-  serviceMaterials    ServiceMaterial[]    @relation("ServiceMaterials")
-  usedAsMaterial      ServiceMaterial[]    @relation("MaterialItems")
-  productionItems     ProductionItem[]
-  productionMaterials ProductionMaterial[]
-  purchaseReturnItems PurchaseReturnItem[]
+  appointmentServices  AppointmentService[]
+  invoiceItems         InvoiceItem[]
+  commissions          Commission[]
+  treatmentItems       TreatmentItem[]
+  materialUsageItems   MaterialUsageItem[]
+  serviceMaterials     ServiceMaterial[]     @relation("ServiceMaterials")
+  usedAsMaterial       ServiceMaterial[]     @relation("MaterialItems")
+  productionItems      ProductionItem[]
+  productionMaterials  ProductionMaterial[]
+  purchaseReturnItems  PurchaseReturnItem[]
 
   @@index([itemType])
   @@index([categoryId])
@@ -817,9 +817,9 @@ model Inventory {
 
   itemId String
 
-  qtyOnHand    Decimal @db.Decimal(18, 6)
+  qtyOnHand Decimal @db.Decimal(18, 6)
 
-  qtyReserved  Decimal @db.Decimal(18, 6)
+  qtyReserved Decimal @db.Decimal(18, 6)
 
   qtyAvailable Decimal @db.Decimal(18, 6)
 
@@ -884,8 +884,8 @@ model InventoryMovement {
 
   isLocked Boolean @default(false)
 
-  accurateAdjustmentId Int?
-  glAccountId          String?
+  accurateAdjustmentId  Int?
+  glAccountId           String?
   purchaseInvoiceItemId String?
 
   createdAt DateTime @default(now())
@@ -898,11 +898,11 @@ model InventoryMovement {
 
   purchaseInvoiceItem PurchaseInvoiceItem? @relation("PurchaseMovement", fields: [purchaseInvoiceItemId], references: [id])
 
-  materialUsageItems  MaterialUsageItem[]
-  productionItem      ProductionItem?
-  productionMaterial  ProductionMaterial?
-  purchaseReturnItem  PurchaseReturnItem?
-  stockOpnameItem     StockOpnameItem?    @relation("OpnameMovement")
+  materialUsageItems MaterialUsageItem[]
+  productionItem     ProductionItem?
+  productionMaterial ProductionMaterial?
+  purchaseReturnItem PurchaseReturnItem?
+  stockOpnameItem    StockOpnameItem?    @relation("OpnameMovement")
 
   @@index([inventoryId])
   @@index([referenceType, referenceId])
@@ -924,7 +924,7 @@ model InventoryMovement {
 // =====================================================
 
 model InventoryPeriod {
-  id   String @id @default(uuid())
+  id String @id @default(uuid())
 
   year  Int
   month Int
@@ -1031,10 +1031,10 @@ model StockOpname {
   postedAt            DateTime?
 
   // ── Accurate Sync ─────────────────────────────────────────────────────
-  accurateOrderId      Int?      // Perintah Stok Opname ID di Accurate
-  accurateOrderNumber  String?   // Nomor Perintah SO di Accurate
-  accurateResultId     Int?      // Hasil Stok Opname ID di Accurate
-  accurateResultNumber String?   // Nomor Hasil SO di Accurate
+  accurateOrderId      Int? // Perintah Stok Opname ID di Accurate
+  accurateOrderNumber  String? // Nomor Perintah SO di Accurate
+  accurateResultId     Int? // Hasil Stok Opname ID di Accurate
+  accurateResultNumber String? // Nomor Hasil SO di Accurate
   lastSyncAt           DateTime? // Waktu terakhir sync berhasil
 
   createdAt DateTime @default(now())
@@ -1042,7 +1042,7 @@ model StockOpname {
 
   warehouse Warehouse @relation(fields: [warehouseId], references: [id])
   createdBy Employee? @relation("StockOpnameCreatedBy", fields: [createdByEmployeeId], references: [id])
-  postedBy  Employee? @relation("StockOpnamePostedBy",  fields: [postedByEmployeeId],  references: [id])
+  postedBy  Employee? @relation("StockOpnamePostedBy", fields: [postedByEmployeeId], references: [id])
 
   items StockOpnameItem[]
 
@@ -1147,7 +1147,7 @@ model MaterialUsageItem {
 
   createdAt DateTime @default(now())
 
-  materialUsage     MaterialUsage      @relation(fields: [materialUsageId], references: [id])
+  materialUsage MaterialUsage @relation(fields: [materialUsageId], references: [id])
 
   materialItem Item @relation(fields: [materialItemId], references: [id])
 
@@ -1344,7 +1344,9 @@ model AppointmentStaff {
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
-  @@unique([appointmentId, employeeId])
+  // Satu karyawan boleh memegang beberapa peran (pemasang/asisten/colorist) di booking yang sama,
+  // tapi tidak dua kali di peran yang sama.
+  @@unique([appointmentId, employeeId, slotKey])
   @@index([appointmentId])
   @@index([employeeId])
   @@map("appointment_staffs")
@@ -1608,7 +1610,7 @@ model InvoiceItem {
 
   // UUID yang sama antara layanan dan bahan bakunya — untuk alokasi HPP per layanan
   // Null = tidak ada bahan baku yang terhubung (layanan standalone)
-  lineGroup  String?
+  lineGroup String?
 
   notes String?
 
@@ -1621,7 +1623,7 @@ model InvoiceItem {
 
   unit Unit @relation(fields: [unitId], references: [id])
 
-  commissions    Commission[]
+  commissions Commission[]
 
   @@index([invoiceId])
   @@index([itemId])
@@ -1717,15 +1719,15 @@ enum CommissionType {
 
 // Cara bagi komisi job primary antar staf
 enum CommissionSplitMode {
-  BY_QTY  // proporsional: qty dikerjakan ÷ qty item (mis. helai)
-  EQUAL   // dibagi rata ke jumlah staf yang mengerjakan
-  FULL    // setiap staf dapat komisi penuh (tidak dibagi)
+  BY_QTY // proporsional: qty dikerjakan ÷ qty item (mis. helai)
+  EQUAL // dibagi rata ke jumlah staf yang mengerjakan
+  FULL // setiap staf dapat komisi penuh (tidak dibagi)
 }
 
 // Qty default pengerjaan saat job dicentang di Input Job
 enum CommissionDefaultQty {
-  ITEM_QTY  // qty item × konversi (mis. 1 TEBAL = 180 helai)
-  ONE       // 1 (per kepala / per sesi)
+  ITEM_QTY // qty item × konversi (mis. 1 TEBAL = 180 helai)
+  ONE // 1 (per kepala / per sesi)
 }
 
 enum CommissionBase {
@@ -1745,9 +1747,9 @@ enum CommissionStatus {
 }
 
 enum ColoristCondition {
-  ANY     // rule selalu berlaku
+  ANY // rule selalu berlaku
   PRESENT // hanya berlaku jika ada colorist di assignment treatment ini
-  ABSENT  // hanya berlaku jika tidak ada colorist di assignment treatment ini
+  ABSENT // hanya berlaku jika tidak ada colorist di assignment treatment ini
 }
 
 model TreatmentAssignment {
@@ -1797,28 +1799,28 @@ model CommissionCategory {
 // Job per kategori — daftar pekerjaan yang bisa dikerjakan dalam satu kategori layanan.
 // Contoh: kategori "Pasang Baru" → jobs: Pasang, Remove, Cuci, Styling, Bantu Pasang
 model CommissionJob {
-  id                   String   @id @default(uuid())
+  id                   String  @id @default(uuid())
   commissionCategoryId String
-  name                 String   // "Pasang Baru", "Remove", "Cuci"
-  jobKey               String   // "pasang_baru", "remove", "cuci" (URL-safe identifier)
-  sortOrder            Int      @default(0)
-  isActive             Boolean  @default(true)
+  name                 String // "Pasang Baru", "Remove", "Cuci"
+  jobKey               String // "pasang_baru", "remove", "cuci" (URL-safe identifier)
+  sortOrder            Int     @default(0)
+  isActive             Boolean @default(true)
 
   // Chain deduction: jika diisi, job ini memotong base/komisi dari job yang ditunjuk.
   // PERCENTAGE helper → potong BASE primary; FLAT helper → potong KOMISI primary.
-  deductsFromJobId String?   @map("deducts_from_job_id")
+  deductsFromJobId       String?              @map("deducts_from_job_id")
   // Harga default per unit untuk PERCENTAGE helper (bisa di-override di kalkulator).
-  pricePerUnit     Decimal?  @db.Decimal(15, 2) @map("price_per_unit")
+  pricePerUnit           Decimal?             @map("price_per_unit") @db.Decimal(15, 2)
   // Satuan unit — label bebas: "helai", "sesi", "kepala", "cm", dll. (hanya tampilan)
-  unit             String    @default("helai") @map("unit")
+  unit                   String               @default("helai") @map("unit")
   // Cara bagi komisi job primary jika dikerjakan >1 staf (lihat CommissionSplitMode)
-  splitMode        CommissionSplitMode @default(BY_QTY) @map("split_mode")
+  splitMode              CommissionSplitMode  @default(BY_QTY) @map("split_mode")
   // Qty default saat staf mencentang job di Input Job
-  defaultQty       CommissionDefaultQty @default(ITEM_QTY) @map("default_qty")
-  // Batas jumlah staff untuk rate dinamis (Home Service):
-  // jika diisi, job ini berlaku hanya ketika total staff di invoice ≤ staffCountMax.
-  // Job tanpa nilai (null) berlaku ketika total staff > staffCountMax job lainnya.
-  staffCountMax    Int?      @map("staff_count_max")
+  defaultQty             CommissionDefaultQty @default(ITEM_QTY) @map("default_qty")
+  // Tarif bawaan job — berlaku untuk semua staf yang TIDAK punya Commission Rule sendiri.
+  // Rule per karyawan hanya untuk pengecualian. null = tidak ada tarif bawaan.
+  defaultCommissionType  CommissionType?      @map("default_commission_type")
+  defaultCommissionValue Decimal?             @map("default_commission_value") @db.Decimal(15, 2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1826,6 +1828,8 @@ model CommissionJob {
   commissionCategory CommissionCategory       @relation(fields: [commissionCategoryId], references: [id])
   commissionRules    CommissionRule[]
   jobAssignments     TreatmentJobAssignment[]
+  // Tingkatan tarif bawaan berdasarkan jumlah staf (mis. Home Service ≤3 / >3 staf)
+  rateTiers          CommissionJobRateTier[]
 
   // Self-referential: job ini memotong dari job lain dalam kategori yang sama
   deductsFrom CommissionJob?  @relation("JobDeduction", fields: [deductsFromJobId], references: [id])
@@ -1836,13 +1840,29 @@ model CommissionJob {
   @@map("commission_jobs")
 }
 
+// Tingkatan tarif bawaan job berdasarkan jumlah staf unik di kategori pada invoice.
+// Dipilih tingkatan dengan maxStaff terkecil yang >= jumlah staf; maxStaff null = "lebih dari itu".
+// Nilai mengikuti CommissionJob.defaultCommissionType (persen / nominal).
+model CommissionJobRateTier {
+  id              String   @id @default(uuid())
+  commissionJobId String   @map("commission_job_id")
+  maxStaff        Int?     @map("max_staff")
+  value           Decimal  @db.Decimal(15, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  commissionJob CommissionJob @relation(fields: [commissionJobId], references: [id], onDelete: Cascade)
+
+  @@index([commissionJobId])
+  @@map("commission_job_rate_tiers")
+}
+
 model CommissionRule {
   id String @id @default(uuid())
 
   employeeId           String
   commissionCategoryId String
-  slotKey              String?        // lama — backward compat
-  commissionJobId      String?        // baru — referensi ke CommissionJob
+  slotKey              String? // lama — backward compat
+  commissionJobId      String? // baru — referensi ke CommissionJob
 
   commissionType CommissionType
 
@@ -1889,7 +1909,6 @@ model Commission {
   // Untuk komisi berbasis job slot (sistem baru)
   treatmentJobAssignmentId String?
 
-
   employeeId String
 
   serviceItemId String
@@ -1920,10 +1939,13 @@ model Commission {
 
   paidAt DateTime?
 
+  // Slip gaji tempat komisi ini dibayar (diisi saat payroll di-generate, lepas saat payroll dihapus)
+  payrollId String?
+
   notes String?
 
   // Komisi hangus jika TreatmentSession.completedAt tidak hari yang sama dengan invoice.invoiceDate (WIB)
-  isForfeit     Boolean   @default(false)
+  isForfeit     Boolean @default(false)
   forfeitReason String?
 
   // Override manual oleh CS/Manager ketika ada komplain
@@ -1938,7 +1960,7 @@ model Commission {
 
   invoiceItem InvoiceItem? @relation(fields: [invoiceItemId], references: [id])
 
-  treatmentAssignment    TreatmentAssignment?    @relation(fields: [treatmentAssignmentId],    references: [id])
+  treatmentAssignment    TreatmentAssignment?    @relation(fields: [treatmentAssignmentId], references: [id])
   treatmentJobAssignment TreatmentJobAssignment? @relation(fields: [treatmentJobAssignmentId], references: [id])
 
   employee Employee @relation(fields: [employeeId], references: [id])
@@ -1947,12 +1969,15 @@ model Commission {
 
   commissionRule CommissionRule? @relation(fields: [commissionRuleId], references: [id])
 
+  payroll Payroll? @relation(fields: [payrollId], references: [id], onDelete: SetNull)
+
   @@unique([treatmentAssignmentId])
   @@unique([treatmentJobAssignmentId])
   @@index([invoiceId])
   @@index([employeeId])
   @@index([status])
   @@index([commissionRuleId])
+  @@index([payrollId])
   @@map("commissions")
 }
 
@@ -1991,7 +2016,6 @@ model OvertimeChargeEmployee {
   @@index([employeeId])
   @@map("overtime_charge_employees")
 }
-
 
 enum AttendanceStatus {
   PRESENT
@@ -2162,13 +2186,13 @@ model Leave {
 model LeaveType {
   id String @id @default(uuid())
 
-  code               String    @unique
-  name               String
-  quotaType          QuotaType @default(ANNUAL)
-  maxDaysPerYear     Int       @default(12)
-  isPaid             Boolean   @default(true)
-  unusedDayPayoutRate Decimal  @default(0) @db.Decimal(18, 2)
-  isActive           Boolean   @default(true)
+  code                String    @unique
+  name                String
+  quotaType           QuotaType @default(ANNUAL)
+  maxDaysPerYear      Int       @default(12)
+  isPaid              Boolean   @default(true)
+  unusedDayPayoutRate Decimal   @default(0) @db.Decimal(18, 2)
+  isActive            Boolean   @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2286,7 +2310,6 @@ model TreatmentJobAssignment {
 
   treatmentItemId String
 
-
   // Sistem baru (CommissionJob based) — job dari kategori komisi item
   commissionJobId String?
 
@@ -2306,9 +2329,9 @@ model TreatmentJobAssignment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  treatmentItem  TreatmentItem   @relation(fields: [treatmentItemId], references: [id])
-  commissionJob  CommissionJob?  @relation(fields: [commissionJobId], references: [id])
-  employee       Employee?       @relation(fields: [employeeId], references: [id])
+  treatmentItem TreatmentItem  @relation(fields: [treatmentItemId], references: [id])
+  commissionJob CommissionJob? @relation(fields: [commissionJobId], references: [id])
+  employee      Employee?      @relation(fields: [employeeId], references: [id])
 
   commission Commission?
 
@@ -2405,6 +2428,9 @@ enum SyncEntityType {
   STOCK_TRANSFER
   STOCK_TRANSFER_RECEIVE
   PURCHASE_INVOICE
+  PURCHASE_RETURN
+  LOAN
+  PAYROLL
 }
 
 enum SyncQueueStatus {
@@ -2651,7 +2677,7 @@ model PermissionRequest {
   employeeId String
   branchId   String
 
-  type   PermissionType   @default(ABSENCE)
+  type   PermissionType @default(ABSENCE)
   date   DateTime
   reason String
   notes  String?
@@ -2687,12 +2713,12 @@ model SickLeave {
   endDate   DateTime
   totalDays Int
 
-  hasLetter        Boolean   @default(false)
-  letterDate       DateTime?
-  doctorName       String?
-  diagnosis        String?
-  clinicName       String?
-  letterPhotoUrl   String?
+  hasLetter           Boolean   @default(false)
+  letterDate          DateTime?
+  doctorName          String?
+  diagnosis           String?
+  clinicName          String?
+  letterPhotoUrl      String?
   letterPhotoPublicId String?
 
   status SickLeaveStatus @default(PENDING)
@@ -2732,15 +2758,15 @@ model EmployeeSalarySettings {
   lateDeductionPerMinute       Decimal @default(0) @db.Decimal(18, 2)
   absentDeductionPerDay        Decimal @default(0) @db.Decimal(18, 2)
   earlyLeaveDeductionPerMinute Decimal @default(0) @db.Decimal(18, 2)
-  bpjsJhtPercent               Decimal @default(2)   @db.Decimal(5, 2)
+  bpjsJhtPercent               Decimal @default(2) @db.Decimal(5, 2)
   bpjsJhtEmployerPercent       Decimal @default(3.7) @db.Decimal(5, 2)
-  bpjsJpPercent                Decimal @default(1)   @db.Decimal(5, 2)
-  bpjsJpEmployerPercent        Decimal @default(2)   @db.Decimal(5, 2)
+  bpjsJpPercent                Decimal @default(1) @db.Decimal(5, 2)
+  bpjsJpEmployerPercent        Decimal @default(2) @db.Decimal(5, 2)
   lateDeductionBracket1        Decimal @default(25000) @db.Decimal(18, 2)
   lateDeductionBracket2        Decimal @default(50000) @db.Decimal(18, 2)
   lateDeductionBracket3        Decimal @default(75000) @db.Decimal(18, 2)
-  bpjsKesehatanEmployeePercent Decimal @default(1)     @db.Decimal(5, 2)
-  bpjsKesehatanEmployerPercent Decimal @default(4)     @db.Decimal(5, 2)
+  bpjsKesehatanEmployeePercent Decimal @default(1) @db.Decimal(5, 2)
+  bpjsKesehatanEmployerPercent Decimal @default(4) @db.Decimal(5, 2)
 
   effectiveDate DateTime
   endDate       DateTime?
@@ -2764,12 +2790,12 @@ model EmployeeSalarySettings {
 // =====================================================
 
 model EmployeeOmsetBonusTier {
-  id           String  @id @default(uuid())
-  employeeId   String
+  id         String @id @default(uuid())
+  employeeId String
 
-  minimumOmset Decimal @db.Decimal(18, 2)   // threshold omset minimum (e.g. 1000000)
-  percentage   Decimal @db.Decimal(10, 4)   // bonus % dari omset aktual (e.g. 0.44)
-  sortOrder    Int     @default(0)           // urutan tier ascending
+  minimumOmset Decimal @db.Decimal(18, 2) // threshold omset minimum (e.g. 1000000)
+  percentage   Decimal @db.Decimal(10, 4) // bonus % dari omset aktual (e.g. 0.44)
+  sortOrder    Int     @default(0) // urutan tier ascending
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2907,8 +2933,9 @@ model Payroll {
   employee Employee @relation(fields: [employeeId], references: [id])
   branch   Branch   @relation(fields: [branchId], references: [id])
 
-  items      PayrollItem[]
-  repayments LoanRepayment[]
+  items       PayrollItem[]
+  repayments  LoanRepayment[]
+  commissions Commission[]
 
   @@unique([employeeId, periodStart])
   @@index([employeeId])
@@ -2945,7 +2972,7 @@ model PayrollItem {
 // =====================================================
 
 model Holiday {
-  id   String @id @default(uuid())
+  id String @id @default(uuid())
 
   date DateTime @db.Date
   name String
@@ -3040,11 +3067,11 @@ model GlAccount {
 
   accurateGlAccountId Int? @unique
 
-  number    String?
-  name      String
-  category  String?
-  usage     String?
-  isActive  Boolean   @default(true)
+  number     String?
+  name       String
+  category   String?
+  usage      String?
+  isActive   Boolean   @default(true)
   lastSyncAt DateTime?
 
   createdAt DateTime @default(now())
@@ -3066,15 +3093,15 @@ model GlAccount {
 // =====================================================
 
 model PayrollGlAccount {
-  id       String @id @default(uuid())
+  id String @id @default(uuid())
 
   // e.g. "gaji", "tunjangan_makan", "tunjangan_transport",
   //      "tunjangan_lain", "bpjs_perusahaan",
   //      "hutang_bpjs", "kasbon", "kas_bank"
   category String @unique
 
-  label       String  // human-readable, e.g. "Beban Gaji Pokok"
-  type        String  // "DEBIT" | "CREDIT"
+  label       String // human-readable, e.g. "Beban Gaji Pokok"
+  type        String // "DEBIT" | "CREDIT"
   glAccountId String?
 
   createdAt DateTime @default(now())
@@ -3095,16 +3122,16 @@ model Supplier {
 
   accurateVendorId Int? @unique
 
-  name         String
-  code         String?
-  email        String?
-  phone        String?       // mobilePhone dari Accurate
-  businessPhone String?      // businessNo / telephoneNo dari Accurate
-  whatsapp     String?       // whatsappNo dari Accurate
-  website      String?       // website dari Accurate
-  address      String?
-  paymentTerms String?
-  purchaseDiscount Decimal?  @db.Decimal(5, 2) // defaultDiscount dari Accurate (auto-fill faktur)
+  name             String
+  code             String?
+  email            String?
+  phone            String? // mobilePhone dari Accurate
+  businessPhone    String? // businessNo / telephoneNo dari Accurate
+  whatsapp         String? // whatsappNo dari Accurate
+  website          String? // website dari Accurate
+  address          String?
+  paymentTerms     String?
+  purchaseDiscount Decimal? @db.Decimal(5, 2) // defaultDiscount dari Accurate (auto-fill faktur)
 
   isActive   Boolean   @default(true)
   lastSyncAt DateTime?
@@ -3268,7 +3295,6 @@ model PurchaseReturnItem {
   @@map("purchase_return_items")
 }
 
-
 // =====================================================
 // COMPLAINTS
 // =====================================================
@@ -3312,11 +3338,11 @@ model Complaint {
   description String
 
   status    ComplaintStatus @default(OPEN)
-  handledBy String?         // userId manager yang handle
+  handledBy String? // userId manager yang handle
 
   // Follow up & komunikasi
   followUpDate DateTime? // Tanggal Follow up
-  chatNotes    String?   // Log chat / komunikasi dengan klien
+  chatNotes    String? // Log chat / komunikasi dengan klien
 
   // Resolusi
   resolutionNotes String?
@@ -3325,9 +3351,9 @@ model Complaint {
 
   // Perbaikan / Redo
   repairDate      DateTime? // Tanggal Perbaikan
-  repairNotes     String?   // Keterangan hasil perbaikan
-  repairStaff     String?   // Nama hairstylist/colorist yg perbaiki
-  repairAssistant String?   // Nama asisten perbaikan
+  repairNotes     String? // Keterangan hasil perbaikan
+  repairStaff     String? // Nama hairstylist/colorist yg perbaiki
+  repairAssistant String? // Nama asisten perbaikan
 
   // Pemotongan komisi (diisi manual saat resolve)
   correctedStrands          Int?
@@ -3383,17 +3409,17 @@ model ProductionOrder {
   warehouse Warehouse @relation(fields: [warehouseId], references: [id])
   createdBy Employee? @relation("ProductionCreatedBy", fields: [createdByEmployeeId], references: [id])
 
-  items      ProductionItem[]
-  materials  ProductionMaterial[]
-  employees  ProductionEmployee[]
-  qcRecords  ProductionQC[]
-  timelines  ProductionTimeline[]
+  items     ProductionItem[]
+  materials ProductionMaterial[]
+  employees ProductionEmployee[]
+  qcRecords ProductionQC[]
+  timelines ProductionTimeline[]
 
   // ── Accurate Online sync fields ───────────────────────────────────────────────
-  accuratePekerjaanId        Int?     @map("accurate_pekerjaan_id")
-  accuratePekerjaanNumber    String?  @map("accurate_pekerjaan_number")
-  accuratePenyelesaianId     Int?     @map("accurate_penyelesaian_id")
-  accuratePenyelesaianNumber String?  @map("accurate_penyelesaian_number")
+  accuratePekerjaanId        Int?      @map("accurate_pekerjaan_id")
+  accuratePekerjaanNumber    String?   @map("accurate_pekerjaan_number")
+  accuratePenyelesaianId     Int?      @map("accurate_penyelesaian_id")
+  accuratePenyelesaianNumber String?   @map("accurate_penyelesaian_number")
   lastSyncAt                 DateTime? @map("last_sync_at")
 
   @@index([branchId])
@@ -3411,12 +3437,12 @@ model ProductionItem {
   unitId            String
 
   plannedQuantity  Decimal @db.Decimal(18, 6)
-  producedQuantity Decimal @db.Decimal(18, 6) @default(0)
+  producedQuantity Decimal @default(0) @db.Decimal(18, 6)
 
   // Porsi alokasi biaya untuk Penyelesaian Pesanan di Accurate Online.
   // Total semua item dalam satu production order HARUS = 100.
   // Default 100 untuk single-item orders.
-  costAllocationPercentage Decimal @default(100) @db.Decimal(5, 2) @map("cost_allocation_percentage")
+  costAllocationPercentage Decimal @default(100) @map("cost_allocation_percentage") @db.Decimal(5, 2)
 
   inventoryMovementId String? @unique
 
@@ -3441,8 +3467,8 @@ model ProductionMaterial {
   unitId            String
 
   plannedQuantity Decimal @db.Decimal(18, 6)
-  actualQuantity  Decimal @db.Decimal(18, 6) @default(0)
-  wasteQuantity   Decimal @db.Decimal(18, 6) @default(0)
+  actualQuantity  Decimal @default(0) @db.Decimal(18, 6)
+  wasteQuantity   Decimal @default(0) @db.Decimal(18, 6)
 
   inventoryMovementId String? @unique
 
@@ -3500,10 +3526,10 @@ model ProductionQC {
 }
 
 model ProductionTimeline {
-  id                String                @id @default(uuid())
-  productionOrderId String
-  timelineType      ProductionTimelineType
-  description       String?
+  id                  String                 @id @default(uuid())
+  productionOrderId   String
+  timelineType        ProductionTimelineType
+  description         String?
   createdByEmployeeId String?
 
   createdAt DateTime @default(now())

@@ -2,7 +2,6 @@ const { StatusCodes }    = require("http-status-codes");
 const AppError           = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo               = require("./loan.repository");
-const { createSyncJob }  = require("../syncQueue/syncQueue.service");
 
 const getAll = async ({ employeeId, branchId, status, page, limit } = {}) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -45,13 +44,7 @@ const createLoan = async (body) => {
     return repo.create(data, tx);
   });
 
-  // Enqueue Accurate sync — loan is created with ACTIVE status by default
-  await createSyncJob({
-    entityType: "LOAN",
-    entityId:   loan.id,
-    direction:  "APP_TO_ACCURATE",
-  });
-
+  // Kasbon tidak di-sync ke Accurate; tercatat lewat jurnal payroll (potongan kasbon)
   return loan;
 };
 
@@ -76,16 +69,7 @@ const cancelLoan = async (id) => {
   if (!existing) throw new AppError("Loan not found", StatusCodes.NOT_FOUND);
   if (existing.status !== "ACTIVE")
     throw new AppError("Only ACTIVE loans can be cancelled", StatusCodes.BAD_REQUEST);
-  const result = await repo.update(id, { status: "CANCELLED" });
-
-  // Bug fix #4: sync ke Accurate saat kasbon di-cancel
-  await createSyncJob({
-    entityType: "LOAN",
-    entityId:   id,
-    direction:  "APP_TO_ACCURATE",
-  });
-
-  return result;
+  return repo.update(id, { status: "CANCELLED" });
 };
 
 const addRepayment = async (loanId, body) => {
@@ -99,19 +83,7 @@ const addRepayment = async (loanId, body) => {
   if (amount > Number(loan.remainingAmount))
     throw new AppError("Amount exceeds remaining balance", StatusCodes.BAD_REQUEST);
 
-  const repayment = await repo.addRepayment(loanId, amount, new Date(body.paidAt), body.notes, body.payrollId);
-
-  // Bug fix #4: sync ke Accurate saat kasbon lunas (PAID_OFF)
-  const updated = await repo.findById(loanId);
-  if (updated && updated.status === "PAID_OFF") {
-    await createSyncJob({
-      entityType: "LOAN",
-      entityId:   loanId,
-      direction:  "APP_TO_ACCURATE",
-    });
-  }
-
-  return repayment;
+  return repo.addRepayment(loanId, amount, new Date(body.paidAt), body.notes, body.payrollId);
 };
 
 const getRepayments = async (loanId) => {

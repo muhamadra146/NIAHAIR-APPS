@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Plus, CalendarDays, AlertTriangle, X, CheckCircle, XCircle } from "lucide-react";
+import { CalendarDays, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { EmptyState }     from "@/components/common/EmptyState";
-import { PageContainer }  from "@/components/layout/PageContainer";
 import { Button }         from "@/components/ui/button";
 import { Input }          from "@/components/ui/input";
 import { Label }          from "@/components/ui/label";
@@ -18,6 +17,7 @@ import {
 } from "../hooks";
 import { useLeaveTypes, useMyLeaveQuotas } from "@/features/settings/hooks";
 import type { Leave, LeaveStatus, CreateLeaveInput } from "../types";
+import { WIB_TZ, toWibDateStr, wibDateParts } from "@/lib/utils";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -27,7 +27,7 @@ const ADMIN_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"];
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const fmtDate = (iso: string) =>
-  new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+  new Date(iso).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "numeric", month: "short", year: "numeric" });
 
 const diffDays = (start: string, end: string) =>
   Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86_400_000) + 1;
@@ -124,12 +124,12 @@ function ReviewDialog({ leave, onClose }: { leave: Leave; onClose: () => void })
 // ── Request form dialog (employee) ────────────────────────────────────────────
 
 function RequestDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const today = new Date().toISOString().split("T")[0];
+  const today = toWibDateStr();
   const [form, setForm] = useState<CreateLeaveInput>({ startDate: today, endDate: today, reason: "", leaveTypeId: "" });
   const [error, setError] = useState<string | null>(null);
   const createMut  = useCreateLeave();
   const { data: leaveTypes = [] } = useLeaveTypes();
-  const year = form.startDate ? new Date(form.startDate).getFullYear() : new Date().getFullYear();
+  const year = form.startDate ? Number(form.startDate.slice(0, 4)) : wibDateParts().year;
   const { data: myQuotas = [] } = useMyLeaveQuotas(year);
 
   const days = form.startDate && form.endDate ? diffDays(form.startDate, form.endDate) : 0;
@@ -287,8 +287,8 @@ function LeaveCard({
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
         {isAdmin
-          ? `Cabang: ${leave.employee?.homeBranch?.name ?? "—"} · Diajukan ${new Date(leave.createdAt).toLocaleDateString("id-ID")}`
-          : `Diajukan ${new Date(leave.createdAt).toLocaleDateString("id-ID")}`}
+          ? `Cabang: ${leave.employee?.homeBranch?.name ?? "—"} · Diajukan ${new Date(leave.createdAt).toLocaleDateString("id-ID", { timeZone: WIB_TZ })}`
+          : `Diajukan ${new Date(leave.createdAt).toLocaleDateString("id-ID", { timeZone: WIB_TZ })}`}
       </p>
     </div>
   );
@@ -296,31 +296,31 @@ function LeaveCard({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export function LeavePage() {
+/** Panel pengajuan — dipakai di halaman Pengajuan. Dialog "Ajukan" dikontrol parent. */
+export function LeavePanel({ createOpen, onCreateClose }: { createOpen: boolean; onCreateClose: () => void }) {
   const { user }     = useAuthStore();
   const roleCode     = user?.roleCode;
   const isAdmin      = ADMIN_ROLES.includes(roleCode ?? "");
   const employeeId   = user?.employeeId;
 
   const [filterStatus,  setFilterStatus ] = useState<LeaveStatus | "">("");
-  const [createOpen,    setCreateOpen   ] = useState(false);
   const [reviewing,     setReviewing    ] = useState<Leave | null>(null);
 
   const adminQuery = useLeaves({
     status: filterStatus || undefined,
     limit:  50,
-  });
+  }, isAdmin);
   const myQuery = useMyLeaves({
     status: filterStatus || undefined,
     limit:  50,
-  });
+  }, !isAdmin);
 
   const query  = isAdmin ? adminQuery : myQuery;
   const items  = query.data?.data ?? [];
   const pending = items.filter((l) => l.status === "PENDING").length;
 
   const cancelMut = useCancelLeave();
-  const year      = new Date().getFullYear();
+  const year      = wibDateParts().year;
   const { data: myQuotas = [] } = useMyLeaveQuotas(isAdmin ? 0 : year);
 
   async function handleCancel(id: string) {
@@ -328,19 +328,7 @@ export function LeavePage() {
   }
 
   return (
-    <PageContainer
-      title={isAdmin ? "Manajemen Cuti" : "Cuti Saya"}
-      subtitle={isAdmin
-        ? "Kelola dan setujui pengajuan cuti karyawan"
-        : "Ajukan dan lihat riwayat cuti kamu"}
-      action={
-        !isAdmin ? (
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Ajukan Cuti
-          </Button>
-        ) : undefined
-      }
-    >
+    <>
       <div className="space-y-5">
 
         {/* Pending warning (admin) */}
@@ -400,7 +388,7 @@ export function LeavePage() {
                 ? "Tidak ada pengajuan dengan status ini"
                 : isAdmin
                   ? "Belum ada pengajuan cuti dari karyawan"
-                  : 'Tekan "Ajukan Cuti" untuk mulai'
+                  : 'Tekan "Ajukan" lalu pilih Cuti untuk mulai'
             }
           />
         ) : (
@@ -421,11 +409,11 @@ export function LeavePage() {
 
       {/* Dialogs */}
       {!isAdmin && (
-        <RequestDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+        <RequestDialog open={createOpen} onClose={() => onCreateClose()} />
       )}
       {reviewing && (
         <ReviewDialog leave={reviewing} onClose={() => setReviewing(null)} />
       )}
-    </PageContainer>
+    </>
   );
 }

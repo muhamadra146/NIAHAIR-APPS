@@ -53,7 +53,7 @@ export function CustomerDetailPage() {
     .reduce((s, d) => s + Number(d.remainingAmount), 0);
 
   const outstanding = allInvoices
-    .filter(i => i.status === "UNPAID")
+    .filter(i => i.status === "UNPAID" || i.status === "PARTIAL")
     .reduce((s, i) => s + Number(i.outstandingAmount), 0);
 
   async function handleUpdate(values: CustomerFormValues) {

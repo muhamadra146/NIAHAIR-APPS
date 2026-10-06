@@ -1,10 +1,11 @@
 const { success, created } = require("../../common/responses/apiResponse");
+const { wibDateStr }       = require("../../utils/date");
 const { getDailyRoster, getAll, getById, checkIn, checkOut, manualSet, getMyToday, getMy, getReport } = require("./attendance.service");
 
 const getDailyRosterController = async (req, res, next) => {
   try {
     const { branchId, date } = req.query;
-    const result = await getDailyRoster(branchId, date || new Date().toISOString().split("T")[0]);
+    const result = await getDailyRoster(branchId, date || wibDateStr());
     return success(res, result, "Daily roster fetched");
   } catch (err) { next(err); }
 };

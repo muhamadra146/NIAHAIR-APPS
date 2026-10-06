@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { cashAccountSchema, type CashAccountFormValues } from "../../schemas/cashAccount.schema";
+import { cashAccountSchema, type CashAccountFormValues, type CashAccountFormInput } from "../../schemas/cashAccount.schema";
 import type { CashAccount } from "../../types";
 
 interface Props {
@@ -23,7 +23,7 @@ interface Props {
 export function CashAccountForm({ open, onOpenChange, onSubmit, isPending, defaultValues, error }: Props) {
   const isEdit = Boolean(defaultValues);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<CashAccountFormValues>({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<CashAccountFormInput, unknown, CashAccountFormValues>({
     resolver: zodResolver(cashAccountSchema),
   });
 

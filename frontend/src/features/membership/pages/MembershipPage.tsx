@@ -70,6 +70,7 @@ const membershipSchema = z.object({
 });
 
 type MembershipForm = z.infer<typeof membershipSchema>;
+type MembershipFormInput = z.input<typeof membershipSchema>;
 
 // ── MembershipDialog ──────────────────────────────────────────────────────────
 
@@ -86,7 +87,7 @@ function MembershipDialog({ open, editing, onClose }: MembershipDialogProps) {
   const {
     register, handleSubmit, reset, setValue, watch,
     formState: { errors },
-  } = useForm<MembershipForm>({
+  } = useForm<MembershipFormInput, unknown, MembershipForm>({
     resolver: zodResolver(membershipSchema),
     defaultValues: {
       name:          editing?.name          ?? "",

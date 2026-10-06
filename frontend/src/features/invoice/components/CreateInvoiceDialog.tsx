@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate, WIB_TZ, toWibDateStr } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { fetchAppointments } from "@/features/appointment/api/appointment.api";
 import type { Appointment } from "@/features/appointment/types";
@@ -24,12 +24,11 @@ import {
 } from "../api";
 import type {
   Deposit,
-  Invoice,
-  InvoiceStatus,
   CreateInvoiceInput,
   CreateInvoiceItemInput,
   UpdateInvoiceInput,
 } from "../types";
+import { uniqueStaffEmployees } from "@/features/appointment/staff";
 
 const MEMBERSHIP_EXPIRY_WARNING_DAYS = 7;
 
@@ -168,19 +167,19 @@ export function CreateInvoiceDialog({
   const [selectedCustomer, setSelectedCustomer]   = useState<Customer | null>(null);
   const [custSearch, setCustSearch]               = useState("");
   const [custResults, setCustResults]             = useState<Customer[]>([]);
-  const custTimer = useRef<ReturnType<typeof setTimeout>>();
+  const custTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // ── Line items ──
   const [lines, setLines]           = useState<LineItem[]>([]);
   // Layanan search
   const [itemSearch, setItemSearch] = useState("");
   const [itemResults, setItemResults] = useState<Parameters<typeof buildLineFromItem>[0][]>([]);
-  const itemTimer = useRef<ReturnType<typeof setTimeout>>();
+  const itemTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Bahan baku search — per-layanan (Option A: grouping)
   const [activeMaterialGroupId, setActiveMaterialGroupId] = useState<string | null>(null);
   const [materialSearch, setMaterialSearch] = useState("");
   const [materialResults, setMaterialResults] = useState<Parameters<typeof buildLineFromItem>[0][]>([]);
-  const materialTimer = useRef<ReturnType<typeof setTimeout>>();
+  const materialTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // ── Deposits ──
   const [selectedDeps, setSelectedDeps] = useState<SelectedDeposit[]>([]);
@@ -280,7 +279,7 @@ export function CreateInvoiceDialog({
   const [apptSearch, setApptSearch] = useState("");
 
   // Load today's active appointments + today's invoices to exclude already-invoiced ones
-  const today = new Date().toISOString().split("T")[0];
+  const today = toWibDateStr();
   const { data: apptData, isLoading: apptLoading } = useQuery({
     queryKey: ["invoice-create-appts", branchId, today],
     queryFn:  () => fetchAppointments({ page: 1, limit: 200, branchId, startDate: today, endDate: today }),
@@ -869,9 +868,9 @@ export function CreateInvoiceDialog({
                       </div>
                       <p className="font-medium text-sm mt-0.5">{selectedAppt.customer.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(selectedAppt.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                        {new Date(selectedAppt.startTime).toLocaleTimeString("id-ID", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" })}
                         {" – "}
-                        {new Date(selectedAppt.endTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                        {new Date(selectedAppt.endTime).toLocaleTimeString("id-ID", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" })}
                         {" · "}
                         {formatDate(selectedAppt.visitDate)}
                       </p>
@@ -917,9 +916,9 @@ export function CreateInvoiceDialog({
                   {/* Staff info */}
                   {selectedAppt.staffs.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
-                      {selectedAppt.staffs.map((s) => (
-                        <span key={s.id} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border/50">
-                          {s.employee.name}
+                      {uniqueStaffEmployees(selectedAppt.staffs).map((e) => (
+                        <span key={e.id} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border/50">
+                          {e.name}
                         </span>
                       ))}
                     </div>
@@ -980,9 +979,9 @@ export function CreateInvoiceDialog({
                                 <p className="font-medium text-sm truncate">{a.customer.name}</p>
                                 <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                                   <span className="text-xs text-muted-foreground">
-                                    {new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                                    {new Date(a.startTime).toLocaleTimeString("id-ID", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" })}
                                     {" – "}
-                                    {new Date(a.endTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                                    {new Date(a.endTime).toLocaleTimeString("id-ID", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" })}
                                   </span>
                                   {a.services.length > 0 && (
                                     <span className="text-[10px] text-muted-foreground/70">
@@ -1494,7 +1493,7 @@ export function CreateInvoiceDialog({
                                     type="text"
                                     value={materialSearch}
                                     onChange={handleMaterialSearch}
-                                    onBlur={(e) => {
+                                    onBlur={() => {
                                       // Delay close agar klik pada result sempat terjadi
                                       setTimeout(() => {
                                         if (!materialResults.length) closeMaterialSearch();

@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useAuthStore } from "@/stores/authStore";
 import { useViewOnly } from "@/hooks/useViewOnly";
 import { fetchCustomers } from "@/features/customer/api/customer.api";
-import { formatDate, formatCurrency } from "@/lib/utils";
+import { formatDate, formatCurrency, toWibDateStr } from "@/lib/utils";
 import { useDeposits, useCreateDeposit, useDeleteDeposit, useDepositSummary } from "../hooks";
 import type { DepositStatus, Deposit } from "../types";
 
@@ -51,7 +51,7 @@ export function DepositListPage() {
   const { branchId, user } = useAuthStore();
   const navigate = useNavigate();
   const [page, setPage]         = useState(1);
-  const [status, setStatus]     = useState<string>("");
+  const [status, setStatus]     = useState<DepositStatus | "">("");
   const [startDate, setStart]   = useState("");
   const [endDate, setEnd]       = useState("");
   const [custSearch, setCustSearch]     = useState("");
@@ -59,7 +59,7 @@ export function DepositListPage() {
   const [selectedCust, setSelectedCust] = useState<{ id: string; name: string } | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Deposit | null>(null);
-  const filterTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const filterTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [createdDeposit, setCreatedDeposit] = useState<{ id: string; name: string; amount: string; date: string } | null>(null);
 
   const isViewOnly = useViewOnly();
@@ -190,7 +190,7 @@ export function DepositListPage() {
             <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Status</p>
             <select
               value={status}
-              onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+              onChange={(e) => { setStatus(e.target.value as DepositStatus | ""); setPage(1); }}
               className={`${filterInputCls} px-3 text-sm w-40`}
             >
               <option value="">Semua Status</option>
@@ -499,7 +499,7 @@ function CreateDepositDialog({
   onSubmit:     (customerId: string, customerName: string, amount: number, notes: string, payDate: string) => Promise<void>;
   isPending:    boolean;
 }) {
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = toWibDateStr();
   const [custSearch, setCustSearch]     = useState("");
   const [custResults, setCustResults]   = useState<{ id: string; name: string; mobilePhone: string | null }[]>([]);
   const [selectedCust, setSelectedCust] = useState<{ id: string; name: string } | null>(null);
@@ -507,7 +507,7 @@ function CreateDepositDialog({
   const [payDate, setPayDate]           = useState(todayStr);
   const [notes, setNotes]               = useState("");
   const [error, setError]               = useState<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   function reset() {
     setCustSearch(""); setCustResults([]); setSelectedCust(null);

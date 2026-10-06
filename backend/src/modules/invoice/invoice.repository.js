@@ -132,7 +132,26 @@ const JOB_ASSIGNMENT_INCLUDE = {
   },
   commissions: { select: { id: true, status: true } },
   _count:      { select: { commissions: true } },
+  // COM-014: Input Job butuh Catatan Klien lebih dulu
+  consultationNote: { select: { id: true } },
 };
+
+// Item treatment invoice + job kategori — untuk validasi batas qty Input Job (COM-015)
+const findTreatmentItemsForJobLimit = (invoiceId) =>
+  prisma.treatmentItem.findMany({
+    where:  { treatmentSession: { invoiceId } },
+    select: {
+      id: true, qty: true, conversionSnapshot: true,
+      item: {
+        select: {
+          name: true,
+          commissionCategory: {
+            select: { jobs: { select: { id: true, name: true, unit: true, splitMode: true, deductsFromJobId: true } } },
+          },
+        },
+      },
+    },
+  });
 
 const findAllPaidForJobAssignment = ({ branchId, gteDate, lteDate }) => {
   const where = { status: "PAID" };
@@ -486,7 +505,7 @@ const WORKSHEET_INCLUDE = {
               commissionCategory: {
                 select: {
                   id: true, code: true, name: true,
-                  // Field kalkulasi (chain deduction, satuan, cara bagi, staffCountMax)
+                  // Field kalkulasi (chain deduction, satuan, cara bagi, tarif bawaan & tingkatan)
                   jobs: { orderBy: { sortOrder: "asc" }, select: JOB_CALC_SELECT },
                 },
               },
@@ -540,5 +559,6 @@ module.exports = {
   findDailyAssignment,
   findCommissionGenerateList,
   findAllPaidForJobAssignment,
+  findTreatmentItemsForJobLimit,
   findByIdForWorksheet,
 };

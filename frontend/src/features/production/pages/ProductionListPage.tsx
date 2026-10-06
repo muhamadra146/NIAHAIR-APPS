@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { useProductionOrders, useProductionStats, useDeleteProductionOrder } from "../hooks";
 import type { ProductionOrder, ProductionStatus } from "../types";
+import { WIB_TZ } from "@/lib/utils";
 
 // ── Status config ─────────────────────────────────────────────────────────────
 
@@ -97,7 +98,7 @@ export function ProductionListPage() {
     <PageContainer
       title="Production"
       subtitle="Kelola production order — bahan baku menjadi finished goods"
-      actions={
+      action={
         <Button size="sm" className="gap-2" onClick={() => navigate("/production/new")}>
           <Plus className="h-4 w-4" /> Buat Production Order
         </Button>
@@ -278,7 +279,7 @@ function ProductionRow({
         {o.branch && <p className="text-xs text-muted-foreground">{o.branch.name}</p>}
       </td>
       <td className="px-4 py-3 text-sm text-muted-foreground">
-        {new Date(o.productionDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+        {new Date(o.productionDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "short", year: "numeric" })}
       </td>
       <td className="px-4 py-3 text-sm text-muted-foreground">{o.warehouse?.name ?? "—"}</td>
       <td className="px-4 py-3 text-center">

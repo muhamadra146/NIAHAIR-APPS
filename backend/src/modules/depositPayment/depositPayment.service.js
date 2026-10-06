@@ -3,6 +3,7 @@ const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const cloudinary      = require("../../config/cloudinary");
 const { paginate, paginationMeta } = require("../../utils/pagination");
+const { wibDayStart, wibDayEnd }   = require("../../utils/date");
 const prisma                                                       = require("../../config/prisma");
 const { createSyncJob }                                            = require("../syncQueue/syncQueue.service");
 const { deleteDepositPaymentFromAccurate }                         = require("./depositPayment.sync.service");
@@ -45,8 +46,8 @@ const listDepositPayments = async ({ page, limit, depositId, paymentMethodId, br
   if (branchId)        where.deposit          = { branchId };
   if (startDate || endDate) {
     where.paidAt = {};
-    if (startDate) where.paidAt.gte = new Date(startDate);
-    if (endDate)   where.paidAt.lte = new Date(endDate + "T23:59:59");
+    if (startDate) where.paidAt.gte = wibDayStart(startDate);
+    if (endDate)   where.paidAt.lte = wibDayEnd(endDate);
   }
 
   const [data, total] = await Promise.all([
@@ -162,8 +163,8 @@ const getDepositPaymentSummary = async ({ startDate, endDate, paymentMethodId, b
   const periodWhere = { ...baseWhere };
   if (startDate || endDate) {
     periodWhere.paidAt = {};
-    if (startDate) periodWhere.paidAt.gte = new Date(startDate);
-    if (endDate)   periodWhere.paidAt.lte = new Date(endDate + "T23:59:59");
+    if (startDate) periodWhere.paidAt.gte = wibDayStart(startDate);
+    if (endDate)   periodWhere.paidAt.lte = wibDayEnd(endDate);
   }
 
   const [todayAgg, periodAgg] = await Promise.all([

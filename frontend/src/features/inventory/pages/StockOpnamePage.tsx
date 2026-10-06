@@ -23,7 +23,8 @@ import {
   useDeleteStockOpname, useSyncStockOpnameToAccurate,
 } from "../hooks";
 import { useWarehouses } from "@/features/settings/hooks";
-import type { InventoryPeriod, StockOpname, StockOpnameStatus, UpdateOpnameItemInput } from "../types";
+import type { InventoryPeriod, StockOpnameItemRow, StockOpnameStatus, UpdateOpnameItemInput } from "../types";
+import { WIB_TZ, wibDateParts } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -38,10 +39,10 @@ function monthLabel(year: number, month: number) {
 
 function lastNMonths(n: number): { year: number; month: number }[] {
   const result: { year: number; month: number }[] = [];
-  const now = new Date();
+  const now = wibDateParts();
   for (let i = 0; i < n; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    result.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
+    const d = new Date(Date.UTC(now.year, now.month - 1 - i, 1)); // aritmetika bulan murni
+    result.push({ year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 });
   }
   return result;
 }
@@ -192,11 +193,11 @@ function OpnameTab() {
                       <td className="px-4 py-3 text-sm text-muted-foreground">
                         {opname.createdBy?.name ?? "—"}
                         <br />
-                        <span className="text-xs">{new Date(opname.createdAt).toLocaleDateString("id-ID")}</span>
+                        <span className="text-xs">{new Date(opname.createdAt).toLocaleDateString("id-ID", { timeZone: WIB_TZ })}</span>
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
                         {opname.postedAt
-                          ? new Date(opname.postedAt).toLocaleDateString("id-ID")
+                          ? new Date(opname.postedAt).toLocaleDateString("id-ID", { timeZone: WIB_TZ })
                           : "—"}
                       </td>
                       <td className="px-4 py-3">
@@ -298,7 +299,7 @@ function OpnameTab() {
 
 // ── Create Opname Dialog ──────────────────────────────────────────────────────
 
-function CreateOpnameDialog({ branchId, onClose }: { branchId?: string | null; onClose: () => void }) {
+function CreateOpnameDialog({ onClose }:{ branchId?: string | null; onClose: () => void }) {
   const [warehouseId, setWarehouseId] = useState("");
   const [notes, setNotes]             = useState("");
 
@@ -379,7 +380,7 @@ function OpnameDetailDialog({ opnameId, onClose }: { opnameId: string; onClose: 
     }));
   }
 
-  function initEdit(item: NonNullable<typeof opname>["items"][0]) {
+  function initEdit(item: StockOpnameItemRow) {
     if (!editedItems[item.id]) {
       setEditedItems((prev) => ({
         ...prev,
@@ -887,7 +888,7 @@ function PeriodeTab() {
                     const key     = `${year}-${month}`;
                     const period  = periodMap.get(key);
                     const status  = period?.status ?? "OPEN";
-                    const isCurrent = year === new Date().getFullYear() && month === new Date().getMonth() + 1;
+                    const isCurrent = year === wibDateParts().year && month === wibDateParts().month;
 
                     return (
                       <tr key={key} className="hover:bg-muted/20 transition-colors">
@@ -907,7 +908,7 @@ function PeriodeTab() {
                         </td>
                         <td className="px-4 py-3 text-sm text-muted-foreground">
                           {period?.closedAt
-                            ? new Date(period.closedAt).toLocaleString("id-ID", {
+                            ? new Date(period.closedAt).toLocaleString("id-ID", { timeZone: WIB_TZ,
                                 day: "2-digit", month: "short", year: "numeric",
                                 hour: "2-digit", minute: "2-digit",
                               })

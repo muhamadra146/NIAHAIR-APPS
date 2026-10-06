@@ -95,9 +95,11 @@ export function useDeleteConsultationNote() {
 
 export function useConsultationStats(
   params: { branchId?: string; startDate?: string; endDate?: string; month?: number; year?: number } = {},
+  enabled = true,
 ) {
   return useQuery({
     queryKey: ["consultation-notes", "stats", params],
     queryFn:  () => fetchConsultationStats(params),
+    enabled,
   });
 }

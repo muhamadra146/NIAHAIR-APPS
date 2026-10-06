@@ -5,11 +5,13 @@ import {
 } from "./api";
 import type { ReportParams } from "./types";
 
-export function useSummaryReport(params: ReportParams = {}) {
+// enabled=false untuk role tanpa akses laporan (mis. CASHIER)
+export function useSummaryReport(params: ReportParams = {}, enabled = true) {
   return useQuery({
     queryKey: ["reports", "summary", params],
     queryFn:  () => fetchSummaryReport(params),
     staleTime: 60_000,
+    enabled,
   });
 }
 

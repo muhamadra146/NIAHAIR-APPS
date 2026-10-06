@@ -9,7 +9,7 @@ export interface PurchaseReturnItem {
   discount: string | number;
   subtotal: string | number;
   notes:    string | null;
-  item: { id: string; name: string; sku: string | null; itemType: string };
+  item: { id: string; name: string; itemCode: string | null; itemType: string };
   unit: { id: string; name: string };
   inventoryMovement: { id: string; movementType: string; qtyChange: string | number } | null;
 }

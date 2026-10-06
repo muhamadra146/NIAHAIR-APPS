@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import { Label }  from "@/components/ui/label";
 import type { SalarySetting, Employee } from "../../types";
+import { toWibDateStr } from "@/lib/utils";
 
 const schema = z.object({
   baseSalary:                    z.number({ error: "Wajib diisi" }).min(0),
@@ -30,6 +31,7 @@ const schema = z.object({
 });
 
 export type SalaryFormValues = z.infer<typeof schema>;
+type SalaryFormInput = z.input<typeof schema>;
 
 interface Props {
   employee:   Employee;
@@ -59,7 +61,7 @@ const DEDUCTION_FIELDS: { key: keyof SalaryFormValues; label: string; step?: num
 const fmt = (v: number) => new Intl.NumberFormat("id-ID").format(v);
 
 export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }: Props) {
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<SalaryFormValues>({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<SalaryFormInput, unknown, SalaryFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       baseSalary:                    0,
@@ -79,7 +81,7 @@ export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }:
       bpjsJpEmployerPercent:         2,
       bpjsKesehatanEmployeePercent:  1,
       bpjsKesehatanEmployerPercent:  4,
-      effectiveDate:                 new Date().toISOString().split("T")[0],
+      effectiveDate:                 toWibDateStr(),
       notes:                         "",
     },
   });

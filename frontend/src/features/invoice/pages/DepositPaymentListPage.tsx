@@ -15,7 +15,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useViewOnly } from "@/hooks/useViewOnly";
 import { fetchCustomers } from "@/features/customer/api/customer.api";
 import { fetchPaymentMethods } from "@/features/settings/api/paymentMethod.api";
-import { formatDate, formatCurrency } from "@/lib/utils";
+import { formatDate, formatCurrency, toWibDateStr } from "@/lib/utils";
 import { useAllDepositPayments, useCreateDepositPayment, useDeleteDepositPayment, useDepositPaymentSummary } from "../hooks";
 import type { DepositPayment } from "../types";
 
@@ -328,12 +328,12 @@ function AddPaymentDialog({
   branchId?:    string;
   onSuccess:    () => void;
 }) {
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = toWibDateStr();
 
   const [custSearch, setCustSearch]     = useState("");
   const [custResults, setCustResults]   = useState<{ id: string; name: string; mobilePhone: string | null }[]>([]);
   const [selectedCust, setSelectedCust] = useState<{ id: string; name: string } | null>(null);
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [deposits, setDeposits]               = useState<Deposit[]>([]);
   const [loadingDeposits, setLoadingDeposits] = useState(false);

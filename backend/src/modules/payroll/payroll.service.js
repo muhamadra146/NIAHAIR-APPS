@@ -3,8 +3,10 @@ const { Prisma }      = require("@prisma/client");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { resolveOrderBy } = require("../../utils/sort");
+const { wibDateStr } = require("../../utils/date");
+const { buildWorkPeriod, DEFAULT_PAY_DAY } = require("../../utils/payPeriod");
+const { computeMealAllowance, computeTransportAllowance, countUnscheduledDays, PRESENT_STATUSES } = require("./payroll.calc");
 const repo            = require("./payroll.repository");
-const settingRepo     = require("../setting/setting.repository");
 const { createSyncJob } = require("../syncQueue/syncQueue.service");
 
 const ORDER_MAP = {
@@ -35,50 +37,12 @@ const buildPeriod = (yearMonth) => {
   return { periodStart, periodEnd };
 };
 
-// Build [periodStart, periodEnd] from payDay + target month
-// e.g. payDay=7, yearMonth="2026-06" → 2026-05-07 to 2026-06-06
-const buildPeriodFromPayDay = (payDay, yearMonth) => {
-  const [y, m] = yearMonth.split("-").map(Number);
-  // periodEnd = payDay-1 of target month
-  const endDay = payDay - 1;
-  let endY = y, endM = m;
-  let endD = endDay;
-  if (endD <= 0) {
-    // e.g. payDay=1 → endDay=0 → last day of previous month
-    endM = m - 1;
-    if (endM <= 0) { endM = 12; endY = y - 1; }
-    endD = new Date(Date.UTC(endY, endM, 0)).getUTCDate();
-  }
-  const periodEnd = toDateOnly(new Date(Date.UTC(endY, endM - 1, endD)));
-
-  // periodStart = payDay of previous month
-  let startM = m - 1, startY = y;
-  if (startM <= 0) { startM = 12; startY = y - 1; }
-  const periodStart = toDateOnly(new Date(Date.UTC(startY, startM - 1, payDay)));
-
-  return { periodStart, periodEnd };
-};
+// Periode gaji dari payDay: lihat utils/payPeriod (dipakai juga oleh Komisi Saya)
 
 // ── Generate payroll items from raw data ──────────────────────────────────────
-// Default HS rates — dapat di-override via Setting key payroll_hs_rate_small / payroll_hs_rate_large
-const HS_RATE_SMALL_DEFAULT = 75_000;
-const HS_RATE_LARGE_DEFAULT = 50_000;
-
-/** Baca HS rate dari tabel Setting, fallback ke default jika belum dikonfigurasi */
-const fetchHsRates = async () => {
-  const [small, large] = await Promise.all([
-    settingRepo.findByKey("payroll_hs_rate_small"),
-    settingRepo.findByKey("payroll_hs_rate_large"),
-  ]);
-  return {
-    small: small ? Number(small.value) : HS_RATE_SMALL_DEFAULT,
-    large: large ? Number(large.value) : HS_RATE_LARGE_DEFAULT,
-  };
-};
-
-const buildItems = (salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments = [], unusedLeavePayouts = [], approvedLatePermissions = [], holidays = [], hsRates = {}, omsetBonusTiers = [], branchOmset = 0) => {
-  const HS_RATE_SMALL = hsRates.small ?? HS_RATE_SMALL_DEFAULT;
-  const HS_RATE_LARGE = hsRates.large ?? HS_RATE_LARGE_DEFAULT;
+// Home Service tidak dihitung di payroll: dibayar lewat komisi kategori HS
+// (job Home Service + tarif bawaan per jumlah staf), lihat COM-013 & COM-016.
+const buildItems = (salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts = [], approvedLatePermissions = [], holidays = [], omsetBonusTiers = [], branchOmset = 0, periodStart = null, periodEnd = null) => {
   const s = salarySetting;
 
   // Holiday date set for O(1) lookup
@@ -97,8 +61,8 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   }).length;
 
   // Present days = attendance with actual check-in (PRESENT/LATE/EARLY_LEAVE/HALF_DAY)
-  const PRESENT_STATUSES = ["PRESENT", "LATE", "EARLY_LEAVE", "HALF_DAY"];
   const presentDays = attendances.filter((a) => PRESENT_STATUSES.includes(a.status)).length;
+  // Potongan Absen (alpha) tetap dari hari WORKING terjadwal tanpa kehadiran
   const absentDays  = Math.max(workingDays - presentDays, 0);
 
   // Sum minutes
@@ -119,11 +83,14 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
     return acc + Number(s.lateDeductionBracket3 ?? 0);
   }, 0);
 
-  // Transport: daily rate × absent days deducted
-  const dailyTransport = workingDays > 0
-    ? D(s.transportAllowance).div(D(workingDays))
-    : D(0);
-  const transportAmount = D(s.transportAllowance).minus(dailyTransport.mul(D(absentDays)));
+  // Transport (PAY-018): pembagi = hari periode − hari OFF; tiap hari tidak hadir dipotong tarif harian
+  const transport = periodStart && periodEnd
+    ? computeTransportAllowance({ monthlyAmount: s.transportAllowance, periodStart, periodEnd, schedules, attendances, holidays })
+    : { amount: D(s.transportAllowance), absentDays: 0, divisor: 0, dailyRate: D(0) };
+  const transportAmount = transport.amount;
+
+  // Uang makan (PAY-018): per hari masuk; setengah bila pulang sebelum batas setengah hari
+  const meal = computeMealAllowance({ ratePerDay: s.mealAllowancePerDay, attendances, schedules });
 
   // Commissions total
   const totalCommission = commissions.reduce((acc, c) => acc + Number(c.commissionAmount), 0);
@@ -159,22 +126,14 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
     items.push({ type, category, label, amount: amt, quantity: quantity ? D(quantity) : null, rate: rate ? D(rate) : null, isAuto: true });
   };
 
-  // Service charge home service
-  const hsServiceChargeTotal = hsAppointments.reduce((acc, appt) => {
-    const staffCount = appt.staffs.length;
-    const rate = staffCount <= 3 ? HS_RATE_SMALL : HS_RATE_LARGE;
-    return acc + rate;
-  }, 0);
-
   // INCOME
   addItem("INCOME", "gaji",            "Gaji Pokok",                      s.baseSalary);
-  addItem("INCOME", "makan",           "Uang Makan",                      D(s.mealAllowancePerDay).mul(D(presentDays)), presentDays, s.mealAllowancePerDay);
+  addItem("INCOME", "makan",           meal.halfDays > 0 ? `Uang Makan (${meal.fullDays} penuh, ${meal.halfDays} setengah hari)` : "Uang Makan", meal.amount, meal.units, s.mealAllowancePerDay);
   addItem("INCOME", "tunjangan",       "Tunjangan",                       s.tunjangan ?? 0);
-  addItem("INCOME", "transport",       "Tunjangan Transport",              transportAmount);
+  addItem("INCOME", "transport",       transport.absentDays > 0 ? `Tunjangan Transport (potong ${transport.absentDays} hari tidak hadir)` : "Tunjangan Transport", transportAmount, transport.divisor ? transport.divisor - transport.absentDays : null, transport.divisor ? transport.dailyRate : null);
   addItem("INCOME", "komisi",          "Komisi",                          totalCommission);
   addItem("INCOME", "lembur",          "Lembur",                          overtimeAmount, totalOvertimeMinutes, D(s.overtimeRatePerHour).div(D(60)));
   addItem("INCOME", "libur_kerja",     "Kerja di Hari Libur",             holidayWorkAmount, holidayWorkingDays, s.holidayRatePerDay ?? 0);
-  addItem("INCOME", "service_charge_hs", "Service Charge Home Service",   hsServiceChargeTotal, hsAppointments.length, hsAppointments.length > 0 ? (hsAppointments[0].staffs.length <= 3 ? HS_RATE_SMALL : HS_RATE_LARGE) : 0);
 
   // Omset bonus — cari tier tertinggi yang dicapai
   if (omsetBonusTiers.length > 0 && branchOmset > 0) {
@@ -223,7 +182,10 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   const totalDeductions = items.filter((i) => i.type === "DEDUCTION") .reduce((a, i) => a.plus(i.amount), D(0));
   const netSalary       = grossIncome.minus(totalDeductions);
 
-  return { items, grossIncome, totalDeductions, netSalary, meta: { workingDays, presentDays, absentDays, holidayWorkingDays } };
+  return {
+    items, grossIncome, totalDeductions, netSalary,
+    meta: { workingDays, presentDays, absentDays, holidayWorkingDays, transportAbsentDays: transport.absentDays, transportDivisor: transport.divisor, mealUnits: meal.units },
+  };
 };
 
 // ── Commission breakdown helper ───────────────────────────────────────────────
@@ -258,37 +220,101 @@ const getById = async (id) => {
   return payroll;
 };
 
-const generate = async ({ employeeId, branchId, yearMonth, payDay, periodStart: ps, periodEnd: pe, notes }, createdBy) => {
-  let periodStart, periodEnd;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const wibToday = () => wibDateStr(new Date());
+const fmtDay = (d) =>
+  new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
-  if (yearMonth && payDay) {
-    // Pay-day-based period
-    ({ periodStart, periodEnd } = buildPeriodFromPayDay(Number(payDay), yearMonth));
-  } else if (yearMonth) {
-    ({ periodStart, periodEnd } = buildPeriod(yearMonth));
-  } else if (ps && pe) {
-    periodStart = toDateOnly(new Date(ps));
-    periodEnd   = toDateOnly(new Date(pe));
-    if (periodEnd < periodStart) throw new AppError("periodEnd must be after periodStart", StatusCodes.BAD_REQUEST);
-  } else {
-    throw new AppError("Either yearMonth or periodStart+periodEnd is required", StatusCodes.BAD_REQUEST);
+/**
+ * Periode payroll. Mode bulan memakai BULAN KERJA + tanggal gajian karyawan (utils/payPeriod),
+ * sama dengan bulk generate dan Komisi Saya. Mode rentang untuk periode transisi / kasus khusus.
+ */
+const resolveGeneratePeriod = async ({ employeeId, yearMonth, payDay, periodStart: ps, periodEnd: pe }) => {
+  if (yearMonth) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth))
+      throw new AppError("Format bulan harus YYYY-MM", StatusCodes.BAD_REQUEST);
+    const pd = Number(payDay) || (await repo.findEmployeePayDay(employeeId)) || DEFAULT_PAY_DAY;
+    return { ...buildWorkPeriod(pd, yearMonth), payDay: pd, yearMonth };
+  }
+  if (ps && pe) {
+    const periodStart = toDateOnly(new Date(ps));
+    const periodEnd   = toDateOnly(new Date(pe));
+    if (periodEnd < periodStart)
+      throw new AppError("Tanggal akhir harus setelah tanggal mulai", StatusCodes.BAD_REQUEST);
+    return { periodStart, periodEnd, payDate: null, payDay: null, yearMonth: null };
+  }
+  throw new AppError("Pilih bulan atau rentang tanggal", StatusCodes.BAD_REQUEST);
+};
+
+/** Tumpang tindih (error) dan celah dari payroll sebelumnya (peringatan) — lubang tanggal gajian diubah */
+const checkPeriodContinuity = async (employeeId, periodStart, periodEnd, excludeId = null) => {
+  const overlapping = await repo.findOverlapping(employeeId, periodStart, periodEnd, excludeId);
+  const conflict = overlapping
+    ? `Sudah ada payroll periode ${fmtDay(overlapping.periodStart)} – ${fmtDay(overlapping.periodEnd)} yang tumpang tindih. ` +
+      `Jika tanggal gajian karyawan diubah, buat periode transisi dengan mode "Rentang Tanggal" mulai ${fmtDay(new Date(new Date(overlapping.periodEnd).getTime() + DAY_MS))}.`
+    : null;
+
+  const warnings = [];
+
+  // Periode belum selesai → hari yang belum lewat dihitung tidak hadir (transport terpotong)
+  if (new Date(periodEnd) >= toDateOnly(wibToday())) {
+    warnings.push(
+      `Periode belum selesai (berakhir ${fmtDay(periodEnd)}). Hari yang belum dilewati dihitung tidak hadir — ` +
+      `hitung ulang payroll setelah periode berakhir.`,
+    );
   }
 
-  // Overlap check
-  const overlapping = await repo.findOverlapping(employeeId, periodStart, periodEnd, null);
-  if (overlapping) throw new AppError("Payroll sudah ada untuk periode ini (overlap terdeteksi)", StatusCodes.CONFLICT);
+  // Jadwal belum lengkap → hari tanpa jadwal dianggap hari kerja (PAY-018)
+  const schedules = await repo.findScheduleDates(employeeId, periodStart, periodEnd);
+  const unscheduled = countUnscheduledDays({ periodStart, periodEnd, schedules });
+  if (unscheduled > 0) {
+    warnings.push(
+      `Jadwal belum lengkap: ${unscheduled} hari belum diatur. Hari tanpa jadwal dianggap hari kerja — ` +
+      `isi hari libur (OFF) di Jadwal agar potongan transport benar.`,
+    );
+  }
 
-  const { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset } =
+  const prev = await repo.findPreviousPayroll(employeeId, periodStart);
+  if (prev) {
+    const expectedStart = new Date(new Date(prev.periodEnd).getTime() + DAY_MS);
+    if (new Date(periodStart) > expectedStart) {
+      warnings.push(
+        `Ada celah ${fmtDay(expectedStart)} – ${fmtDay(new Date(new Date(periodStart).getTime() - DAY_MS))} yang belum masuk payroll mana pun. ` +
+        `Buat dulu payroll periode itu, atau gunakan mode "Rentang Tanggal" bila tanggal gajian karyawan diubah.`,
+      );
+    }
+  }
+  return { conflict, warnings };
+};
+
+/** Pratinjau periode sebelum generate (dialog Generate / Bulk Generate) */
+const previewPeriod = async ({ employeeId, yearMonth, payDay, periodStart, periodEnd }) => {
+  if (!employeeId && !payDay)
+    throw new AppError("Pilih karyawan atau tanggal gajian", StatusCodes.BAD_REQUEST);
+  const period = await resolveGeneratePeriod({ employeeId, yearMonth, payDay, periodStart, periodEnd });
+  const { conflict, warnings } = employeeId
+    ? await checkPeriodContinuity(employeeId, period.periodStart, period.periodEnd)
+    : { conflict: null, warnings: [] };
+  return { ...period, conflict, warnings };
+};
+
+const generate = async ({ employeeId, branchId, yearMonth, payDay, periodStart: ps, periodEnd: pe, notes }, createdBy) => {
+  const { periodStart, periodEnd } = await resolveGeneratePeriod({ employeeId, yearMonth, payDay, periodStart: ps, periodEnd: pe });
+
+  const { conflict, warnings } = await checkPeriodContinuity(employeeId, periodStart, periodEnd);
+  if (conflict) throw new AppError(conflict, StatusCodes.CONFLICT);
+
+  const { salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset } =
     await repo.getGenerationData(employeeId, branchId, periodStart, periodEnd);
 
   if (!salarySetting)
-    throw new AppError("No active salary setting found for this employee", StatusCodes.BAD_REQUEST);
+    throw new AppError("Pengaturan gaji aktif untuk karyawan ini belum ada. Atur di Settings → Gaji Karyawan.", StatusCodes.BAD_REQUEST);
 
-  const hsRates = await fetchHsRates();
   const { items, grossIncome, totalDeductions, netSalary } =
-    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays, hsRates, omsetBonusTiers, branchOmset);
+    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, periodStart, periodEnd);
 
-  const payroll = await prisma.payroll.create({
+  const payroll = await prisma.$transaction(async (tx) => {
+   const created = await tx.payroll.create({
     data: {
       employeeId,
       branchId,
@@ -307,9 +333,18 @@ const generate = async ({ employeeId, branchId, yearMonth, payDay, periodStart: 
       branch:   { select: { id: true, code: true, name: true } },
       items:    { orderBy: [{ type: "asc" }, { category: "asc" }] },
     },
+   });
+   // Komisi di slip ini dicatat ke payroll ini → saat dibayar, hanya komisi ini yang jadi PAID
+   if (commissions.length > 0) {
+     await tx.commission.updateMany({
+       where: { id: { in: commissions.map((c) => c.id) }, payrollId: null },
+       data:  { payrollId: created.id },
+     });
+   }
+   return created;
   });
 
-  return { ...payroll, commissionBreakdown: buildCommissionBreakdown(commissions) };
+  return { ...payroll, commissionBreakdown: buildCommissionBreakdown(commissions), warnings };
 };
 
 const recalculate = async (id, userId) => {
@@ -318,17 +353,28 @@ const recalculate = async (id, userId) => {
   if (existing.status !== "DRAFT")
     throw new AppError("Only DRAFT payrolls can be recalculated", StatusCodes.BAD_REQUEST);
 
-  const { salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset } =
-    await repo.getGenerationData(existing.employeeId, existing.branchId, existing.periodStart, existing.periodEnd);
+  const { salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset } =
+    await repo.getGenerationData(existing.employeeId, existing.branchId, existing.periodStart, existing.periodEnd, id);
 
   if (!salarySetting)
-    throw new AppError("No active salary setting found", StatusCodes.BAD_REQUEST);
+    throw new AppError("Pengaturan gaji aktif untuk karyawan ini belum ada", StatusCodes.BAD_REQUEST);
 
-  const hsRates = await fetchHsRates();
   const { items, grossIncome, totalDeductions, netSalary } =
-    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, hsAppointments, unusedLeavePayouts, approvedLatePermissions, holidays, hsRates, omsetBonusTiers, branchOmset);
+    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, existing.periodStart, existing.periodEnd);
 
   await repo.replaceAutoItems(id, items);
+  const commissionIds = commissions.map((c) => c.id);
+  await prisma.$transaction([
+    // Lepas komisi yang tidak lagi memenuhi syarat, lalu hubungkan set terbaru
+    prisma.commission.updateMany({
+      where: { payrollId: id, status: "APPROVED", id: { notIn: commissionIds } },
+      data:  { payrollId: null },
+    }),
+    prisma.commission.updateMany({
+      where: { id: { in: commissionIds }, OR: [{ payrollId: null }, { payrollId: id }] },
+      data:  { payrollId: id },
+    }),
+  ]);
   const updated = await repo.update(id, {
     grossIncome,
     totalDeductions,
@@ -363,7 +409,6 @@ const markAsPaid = async (id, paidBy) => {
     throw new AppError("Only APPROVED payrolls can be marked as paid", StatusCodes.BAD_REQUEST);
 
   // Bug fix #4: kumpulkan loan yang baru PAID_OFF di dalam tx, sync setelah tx
-  const paidOffLoanIds = [];
 
   await prisma.$transaction(async (tx) => {
     const now = new Date();
@@ -373,13 +418,9 @@ const markAsPaid = async (id, paidBy) => {
       data: { status: "PAID", paidAt: now, paidBy: paidBy ?? null },
     });
 
-    // Auto-mark semua komisi APPROVED karyawan dalam periode payroll → PAID
+    // Tandai PAID tepat komisi yang tercatat di slip ini (bukan menebak dari tanggal)
     await tx.commission.updateMany({
-      where: {
-        employeeId: existing.employeeId,
-        status:     "APPROVED",
-        approvedAt: { gte: existing.periodStart, lte: existing.periodEnd },
-      },
+      where: { payrollId: id, status: "APPROVED" },
       data: { status: "PAID", paidAt: now, paidBy: paidBy ?? null },
     });
 
@@ -398,15 +439,9 @@ const markAsPaid = async (id, paidBy) => {
           data: { loanId: loan.id, payrollId: id, amount: repayAmt, paidAt: now },
         });
         await tx.loan.update({ where: { id: loan.id }, data: { remainingAmount: newRemaining, status: newStatus } });
-        if (newStatus === "PAID_OFF") paidOffLoanIds.push(loan.id);
       }
     }
   });
-
-  // Bug fix #4: sync ke Accurate untuk setiap kasbon yang baru lunas
-  for (const loanId of paidOffLoanIds) {
-    await createSyncJob({ entityType: "LOAN", entityId: loanId, direction: "APP_TO_ACCURATE" });
-  }
 
   // Enqueue Accurate sync — Jurnal Umum when payroll is PAID
   await createSyncJob({
@@ -444,29 +479,15 @@ const getMy = async ({ employeeId, page = 1, limit = 20, year }) => {
     repo.countByEmployee(where),
   ]);
 
-  // Batch: fetch all commissions for the full date range in ONE query (avoids N+1)
-  // Fix: include PAID commissions — markAsPaid() upgrades status APPROVED → PAID
+  // Batch: komisi semua slip di halaman ini dalam SATU query (lewat payrollId, hindari N+1)
   let data;
   if (rows.length === 0) {
     data = [];
   } else {
-    const minStart = rows.reduce(
-      (min, p) => (new Date(p.periodStart) < new Date(min) ? p.periodStart : min),
-      rows[0].periodStart,
-    );
-    const maxEnd = rows.reduce(
-      (max, p) => (new Date(p.periodEnd) > new Date(max) ? p.periodEnd : max),
-      rows[0].periodEnd,
-    );
-
     const allCommissions = await prisma.commission.findMany({
-      where: {
-        employeeId,
-        status:     { in: ["APPROVED", "PAID"] },
-        approvedAt: { gte: new Date(minStart), lte: new Date(maxEnd) },
-      },
+      where: { payrollId: { in: rows.map((p) => p.id) } },
       select: {
-        id: true, commissionAmount: true, approvedAt: true,
+        id: true, commissionAmount: true, approvedAt: true, payrollId: true,
         treatmentAssignment: {
           select: { treatmentItem: { select: { item: { select: { name: true } } } } },
         },
@@ -474,12 +495,7 @@ const getMy = async ({ employeeId, page = 1, limit = 20, year }) => {
     });
 
     data = rows.map((p) => {
-      const pStart = new Date(p.periodStart);
-      const pEnd   = new Date(p.periodEnd);
-      const commissions = allCommissions.filter((c) => {
-        const dt = new Date(c.approvedAt);
-        return dt >= pStart && dt <= pEnd;
-      });
+      const commissions = allCommissions.filter((c) => c.payrollId === p.id);
       return { ...p, commissionBreakdown: buildCommissionBreakdown(commissions) };
     });
   }
@@ -553,19 +569,18 @@ const getBpjsReport = async ({ branchId, yearMonth }) => {
 // ── Bulk generate ─────────────────────────────────────────────────────────────
 
 const bulkGenerate = async ({ branchId, payDay, yearMonth, notes }, createdBy) => {
-  if (!payDay)    throw new AppError("payDay is required", StatusCodes.BAD_REQUEST);
-  if (!yearMonth) throw new AppError("yearMonth is required", StatusCodes.BAD_REQUEST);
+  if (!yearMonth) throw new AppError("Pilih bulan gaji", StatusCodes.BAD_REQUEST);
 
-  const employees = await repo.findEmployeesForBulkGenerate({ branchId, payDay: Number(payDay) });
+  const employees = await repo.findEmployeesForBulkGenerate({ branchId, payDay: payDay ? Number(payDay) : undefined });
 
   const results = [];
   for (const emp of employees) {
     try {
       const payroll = await generate(
-        { employeeId: emp.id, branchId: emp.homeBranchId ?? branchId, yearMonth, payDay, notes },
+        { employeeId: emp.id, branchId: emp.homeBranchId ?? branchId, yearMonth, payDay: emp.payDay ?? undefined, notes },
         createdBy,
       );
-      results.push({ employeeId: emp.id, employeeName: emp.name, employeeCode: emp.employeeCode, status: "created", payrollId: payroll.id });
+      results.push({ employeeId: emp.id, employeeName: emp.name, employeeCode: emp.employeeCode, status: "created", payrollId: payroll.id, warnings: payroll.warnings });
     } catch (err) {
       results.push({ employeeId: emp.id, employeeName: emp.name, employeeCode: emp.employeeCode, status: "error", message: err.message });
     }
@@ -585,12 +600,8 @@ const deletePayroll = async (id) => {
     // Jika PAID: revert komisi → APPROVED dan balik kasbon
     if (payroll.status === "PAID") {
       await tx.commission.updateMany({
-        where: {
-          employeeId: payroll.employeeId,
-          status:     "PAID",
-          approvedAt: { gte: payroll.periodStart, lte: payroll.periodEnd },
-        },
-        data: { status: "APPROVED", paidAt: null, paidBy: null },
+        where: { payrollId: id, status: "PAID" },
+        data:  { status: "APPROVED", paidAt: null, paidBy: null },
       });
 
       const repayments = await tx.loanRepayment.findMany({ where: { payrollId: id } });
@@ -603,6 +614,8 @@ const deletePayroll = async (id) => {
       await tx.loanRepayment.deleteMany({ where: { payrollId: id } });
     }
 
+    // Lepas semua komisi dari payroll ini → bisa diambil payroll berikutnya
+    await tx.commission.updateMany({ where: { payrollId: id }, data: { payrollId: null } });
     await tx.payrollItem.deleteMany({ where: { payrollId: id } });
     await tx.payroll.delete({ where: { id } });
   });
@@ -611,6 +624,6 @@ const deletePayroll = async (id) => {
 };
 
 module.exports = {
-  getAll, getById, generate, recalculate, submitForApproval, approve,
+  getAll, getById, generate, previewPeriod, recalculate, submitForApproval, approve,
   markAsPaid, updateNotes, getMy, getBpjsReport, bulkGenerate, deletePayroll,
 };

@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { formatDate, formatCurrency, cn } from "@/lib/utils";
+import { formatDate, formatCurrency, cn, WIB_TZ } from "@/lib/utils";
 import {
   CreditCard, Calendar, BadgePercent, FileText, Wallet,
   Scissors, Clock, CalendarDays, Image as ImageIcon,
-  Receipt, MessageSquare, StickyNote, CheckCircle2, XCircle, Ban,
+  Receipt, MessageSquare, StickyNote, CheckCircle2, XCircle,
   User, TrendingUp, Plus, Trash2, NotebookPen, Pencil, X, Check,
   Camera, Loader2,
 } from "lucide-react";
@@ -74,11 +74,12 @@ function SummaryChips({ chips }: { chips: ChipDef[] }) {
 
 const INVOICE_BADGE: Record<string, string> = {
   UNPAID:    "bg-yellow-50 text-yellow-700 border-yellow-200",
+  PARTIAL:   "bg-orange-50 text-orange-700 border-orange-200",
   PAID:      "bg-emerald-50 text-emerald-700 border-emerald-200",
   CANCELLED: "bg-red-50 text-red-600 border-red-200",
 };
 const INVOICE_LABEL: Record<string, string> = {
-  UNPAID: "Belum Bayar", PAID: "Lunas", CANCELLED: "Dibatalkan",
+  UNPAID: "Belum Bayar", PARTIAL: "Sebagian", PAID: "Lunas", CANCELLED: "Dibatalkan",
 };
 
 const DEPOSIT_BADGE: Record<string, string> = {
@@ -407,7 +408,7 @@ function AppointmentsTab({ customerId }: { customerId: string }) {
                   </span>
                   <span className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
-                    {new Date(a.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                    {new Date(a.startTime).toLocaleTimeString("id-ID", { timeZone: WIB_TZ, hour: "2-digit", minute: "2-digit" })}
                   </span>
                 </div>
                 {a.services.length > 0 && (
@@ -434,7 +435,7 @@ function InvoicesTab({ customerId }: { customerId: string }) {
   const invoices = data?.data ?? [];
 
   const paid        = invoices.filter(i => i.status === "PAID").length;
-  const unpaid      = invoices.filter(i => i.status === "UNPAID").length;
+  const unpaid      = invoices.filter(i => i.status === "UNPAID" || i.status === "PARTIAL").length;
   const totalAmount = invoices.reduce((s, i) => s + Number(i.grandTotal), 0);
   const avgAmount   = invoices.length ? Math.round(totalAmount / invoices.length) : 0;
 
