@@ -34,6 +34,7 @@ export function useCreateComplaint() {
     mutationFn: (input: CreateComplaintInput) => createComplaint(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["complaints"] });
+      qc.invalidateQueries({ queryKey: ["complaint-stats"] });
       toast.success("Komplain berhasil dibuat");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -47,6 +48,7 @@ export function useUpdateComplaint() {
       updateComplaint(id, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["complaints"] });
+      qc.invalidateQueries({ queryKey: ["complaint-stats"] });
       toast.success("Komplain berhasil diperbarui");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -59,6 +61,7 @@ export function useDeleteComplaint() {
     mutationFn: (id: string) => deleteComplaint(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["complaints"] });
+      qc.invalidateQueries({ queryKey: ["complaint-stats"] });
       toast.success("Komplain berhasil dihapus");
     },
     onError: (err: Error) => toast.error(err.message),
