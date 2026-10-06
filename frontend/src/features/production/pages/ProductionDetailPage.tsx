@@ -46,14 +46,12 @@ function ConfirmDialog({
 }
 import { useProductionOrder, useUpdateProductionStatus, useSubmitProductionQC, useDeleteProductionOrder, useSyncProductionToAccurate } from "../hooks";
 import type { ProductionStatus, ProductionQCStatus, UpdateStatusInput } from "../types";
+import { PRODUCTION_STATUS_LABEL } from "../types";
 import { WIB_TZ } from "@/lib/utils";
 
 // ── Status colours ────────────────────────────────────────────────────────────
 
-const STATUS_LABEL: Record<ProductionStatus, string> = {
-  DRAFT: "Draft", RELEASED: "Released", IN_PROGRESS: "Berjalan",
-  QC: "QC", COMPLETED: "Selesai", CANCELLED: "Dibatalkan",
-};
+const STATUS_LABEL = PRODUCTION_STATUS_LABEL;
 
 const STATUS_CLASS: Record<ProductionStatus, string> = {
   DRAFT:       "bg-muted text-muted-foreground",

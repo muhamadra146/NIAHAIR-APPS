@@ -6,6 +6,7 @@ import {
   syncProductionToAccurate,
 } from "./api";
 import type { CreateProductionInput, UpdateStatusInput, SubmitQCInput, ProductionListParams } from "./types";
+import { PRODUCTION_STATUS_LABEL } from "./types";
 
 export function useProductionOrders(params: ProductionListParams = {}) {
   return useQuery({
@@ -56,7 +57,7 @@ export function useUpdateProductionStatus() {
       qc.invalidateQueries({ queryKey: ["production-order", data.id] });
       qc.invalidateQueries({ queryKey: ["production-stats"] });
       qc.invalidateQueries({ queryKey: ["inventories"] });
-      toast.success(`Status diperbarui ke ${data.status}`);
+      toast.success(`Status diperbarui ke ${PRODUCTION_STATUS_LABEL[data.status] ?? data.status}`);
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -71,7 +72,7 @@ export function useSubmitProductionQC() {
       qc.invalidateQueries({ queryKey: ["production-orders"] });
       qc.invalidateQueries({ queryKey: ["production-order", id] });  // ← fix: refresh detail
       qc.invalidateQueries({ queryKey: ["production-stats"] });
-      toast.success(`QC ${input.status} berhasil disubmit`);
+      toast.success(`QC ${input.status} berhasil disimpan`);
     },
     onError: (err: Error) => toast.error(err.message),
   });

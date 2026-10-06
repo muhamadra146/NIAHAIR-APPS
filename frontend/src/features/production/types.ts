@@ -4,6 +4,11 @@ export type ProductionStatus =
   | "DRAFT" | "RELEASED" | "IN_PROGRESS" | "QC" | "COMPLETED" | "CANCELLED";
 
 export type ProductionQCStatus = "PASS" | "REWORK" | "REJECT";
+
+export const PRODUCTION_STATUS_LABEL: Record<ProductionStatus, string> = {
+  DRAFT: "Draft", RELEASED: "Released", IN_PROGRESS: "Berjalan",
+  QC: "QC", COMPLETED: "Selesai", CANCELLED: "Dibatalkan",
+};
 export type ProductionEmployeeRole = "OPERATOR" | "SUPERVISOR" | "QC";
 export type ProductionTimelineType =
   | "CREATED" | "RELEASED" | "STARTED" | "MATERIAL_ISSUED"
