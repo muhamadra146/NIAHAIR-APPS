@@ -95,8 +95,8 @@ export function CustomerDetailPage() {
     return (
       <PageContainer>
         <div className="py-12 text-center text-sm text-muted-foreground">
-          Customer not found.{" "}
-          <Link to="/customers" className="text-primary underline">Back to list</Link>
+          Customer tidak ditemukan.{" "}
+          <Link to="/customers" className="text-primary underline">Kembali ke daftar</Link>
         </div>
       </PageContainer>
     );
@@ -278,7 +278,7 @@ export function CustomerDetailPage() {
         onSubmit={handleUpdate}
         isPending={updateMutation.isPending}
         defaultValues={customer}
-        title="Edit Customer"
+        title="Edit Pelanggan"
         error={formError}
       />
     </PageContainer>

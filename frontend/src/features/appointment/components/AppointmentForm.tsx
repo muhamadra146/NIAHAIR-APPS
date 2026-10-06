@@ -298,7 +298,7 @@ export function AppointmentCreateForm({ open, onOpenChange, onSubmit, isPending,
         )}
       >
         <DialogHeader className="shrink-0 border-b border-border px-4 py-4 sm:px-6">
-          <DialogTitle>New Appointment</DialogTitle>
+          <DialogTitle>Booking Baru</DialogTitle>
         </DialogHeader>
 
         <form
@@ -380,7 +380,7 @@ export function AppointmentCreateForm({ open, onOpenChange, onSubmit, isPending,
 
             {/* Visit Date */}
             <div className="space-y-1.5">
-              <Label htmlFor="visitDate">Visit Date <span className="text-destructive">*</span></Label>
+              <Label htmlFor="visitDate">Tanggal Kunjungan <span className="text-destructive">*</span></Label>
               <Input id="visitDate" type="date" {...register("visitDate")} />
               {errors.visitDate && <p className="text-xs text-destructive">{errors.visitDate.message}</p>}
             </div>
@@ -577,7 +577,7 @@ export function AppointmentCreateForm({ open, onOpenChange, onSubmit, isPending,
               Cancel
             </Button>
             <Button type="submit" className="flex-1 sm:flex-none" disabled={isPending}>
-              {isPending ? "Saving…" : "Create Appointment"}
+              {isPending ? "Menyimpan…" : "Simpan Booking"}
             </Button>
           </DialogFooter>
         </form>
@@ -713,7 +713,7 @@ export function AppointmentUpdateForm({ open, onOpenChange, onSubmit, isPending,
         )}
       >
         <DialogHeader className="shrink-0 border-b border-border px-4 py-4 sm:px-6">
-          <DialogTitle>Edit Appointment</DialogTitle>
+          <DialogTitle>Edit Booking</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-1 flex-col overflow-hidden">
@@ -763,7 +763,7 @@ export function AppointmentUpdateForm({ open, onOpenChange, onSubmit, isPending,
 
             {/* Visit Date */}
             <div className="space-y-1.5">
-              <Label htmlFor="u-visitDate">Visit Date <span className="text-destructive">*</span></Label>
+              <Label htmlFor="u-visitDate">Tanggal Kunjungan <span className="text-destructive">*</span></Label>
               <Input id="u-visitDate" type="date" {...register("visitDate")} />
               {errors.visitDate && <p className="text-xs text-destructive">{errors.visitDate.message}</p>}
             </div>
@@ -817,7 +817,7 @@ export function AppointmentUpdateForm({ open, onOpenChange, onSubmit, isPending,
               Cancel
             </Button>
             <Button type="submit" className="flex-1 sm:flex-none" disabled={isPending}>
-              {isPending ? "Saving…" : "Save Changes"}
+              {isPending ? "Menyimpan…" : "Simpan Perubahan"}
             </Button>
           </DialogFooter>
         </form>

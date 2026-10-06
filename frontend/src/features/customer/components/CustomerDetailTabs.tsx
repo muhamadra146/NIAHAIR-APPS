@@ -1180,7 +1180,7 @@ export function CustomerDetailTabs({ customer }: CustomerDetailTabsProps) {
           <TabsTrigger value="deposits">Deposits</TabsTrigger>
           <TabsTrigger value="history">Treatment</TabsTrigger>
           <TabsTrigger value="photos">Foto</TabsTrigger>
-          <TabsTrigger value="notes">Notes</TabsTrigger>
+          <TabsTrigger value="notes">Catatan</TabsTrigger>
           <TabsTrigger value="catatan">Catatan Klien</TabsTrigger>
           <TabsTrigger value="membership">Membership</TabsTrigger>
         </TabsList>

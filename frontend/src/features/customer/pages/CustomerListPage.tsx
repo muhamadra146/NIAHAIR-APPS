@@ -189,7 +189,7 @@ export function CustomerListPage() {
         onOpenChange={setFormOpen}
         onSubmit={handleCreate}
         isPending={createMutation.isPending}
-        title="Add Customer"
+        title="Tambah Pelanggan"
         error={formError}
       />
     </PageContainer>

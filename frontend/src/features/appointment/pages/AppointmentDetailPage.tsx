@@ -111,9 +111,9 @@ export function AppointmentDetailPage() {
     return (
       <PageContainer>
         <div className="py-12 text-center text-sm text-muted-foreground">
-          Appointment not found.{" "}
+          Booking tidak ditemukan.{" "}
           <Link to={backTo} className="text-primary underline">
-            Back to list
+            Kembali ke daftar
           </Link>
         </div>
       </PageContainer>

@@ -117,9 +117,9 @@ export function CustomerForm({
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2 space-y-1.5">
                 <Label htmlFor="name">
-                  Name <span className="text-destructive">*</span>
+                  Nama <span className="text-destructive">*</span>
                 </Label>
-                <Input id="name" {...register("name")} placeholder="Full name" />
+                <Input id="name" {...register("name")} placeholder="Nama lengkap" />
                 {errors.name && (
                   <p className="text-xs text-destructive">{errors.name.message}</p>
                 )}
@@ -144,45 +144,45 @@ export function CustomerForm({
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="gender">Gender</Label>
+                <Label htmlFor="gender">Jenis Kelamin</Label>
                 <select
                   id="gender"
                   {...register("gender")}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  <option value="">— Select gender —</option>
-                  <option value="FEMALE">Female</option>
-                  <option value="MALE">Male</option>
+                  <option value="">— Pilih jenis kelamin —</option>
+                  <option value="FEMALE">Perempuan</option>
+                  <option value="MALE">Laki-laki</option>
                 </select>
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="birthDate">Birth Date</Label>
+                <Label htmlFor="birthDate">Tanggal Lahir</Label>
                 <Input id="birthDate" type="date" {...register("birthDate")} />
               </div>
 
               <div className="sm:col-span-2 space-y-1.5">
-                <Label htmlFor="address">Address</Label>
-                <Input id="address" {...register("address")} placeholder="Street address" />
+                <Label htmlFor="address">Alamat</Label>
+                <Input id="address" {...register("address")} placeholder="Alamat lengkap" />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="city">City</Label>
-                <Input id="city" {...register("city")} placeholder="City" />
+                <Label htmlFor="city">Kota</Label>
+                <Input id="city" {...register("city")} placeholder="Kota" />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="province">Province</Label>
-                <Input id="province" {...register("province")} placeholder="Province" />
+                <Label htmlFor="province">Provinsi</Label>
+                <Input id="province" {...register("province")} placeholder="Provinsi" />
               </div>
 
               <div className="sm:col-span-2 space-y-1.5">
-                <Label htmlFor="notes">Notes</Label>
+                <Label htmlFor="notes">Catatan</Label>
                 <textarea
                   id="notes"
                   {...register("notes")}
                   rows={3}
-                  placeholder="Additional notes..."
+                  placeholder="Catatan tambahan..."
                   className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
                 />
               </div>
@@ -201,7 +201,7 @@ export function CustomerForm({
               Cancel
             </Button>
             <Button type="submit" className="flex-1 sm:flex-none" disabled={isPending}>
-              {isPending ? "Saving…" : "Save"}
+              {isPending ? "Menyimpan…" : "Simpan"}
             </Button>
           </DialogFooter>
         </form>

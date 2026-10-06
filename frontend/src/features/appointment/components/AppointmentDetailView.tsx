@@ -47,13 +47,13 @@ function DetailsTab({ a }: { a: Appointment }) {
       } />
       {isHS && <InfoRow label="Alamat HS" value={a.homeServiceAddress ?? "—"} />}
       <InfoRow label="Customer"        value={`${a.customer.name}${a.customer.customerNo ? ` (${a.customer.customerNo})` : ""}`} />
-      <InfoRow label="Branch"          value={`${a.branch.name} (${a.branch.code})`} />
-      <InfoRow label="Visit Date"      value={formatDate(a.visitDate)} />
-      <InfoRow label="Time"            value={`${startTime} – ${endTime}`} />
-<InfoRow label="Notes"           value={a.notes} />
-      <InfoRow label="Booked On"       value={formatDate(a.bookingDate)} />
+      <InfoRow label="Cabang"          value={`${a.branch.name} (${a.branch.code})`} />
+      <InfoRow label="Tanggal Kunjungan" value={formatDate(a.visitDate)} />
+      <InfoRow label="Jam"             value={`${startTime} – ${endTime}`} />
+<InfoRow label="Catatan"         value={a.notes} />
+      <InfoRow label="Tanggal Booking" value={formatDate(a.bookingDate)} />
       {a.createdByEmployee && (
-        <InfoRow label="Created By" value={`${a.createdByEmployee.name} (${a.createdByEmployee.employeeCode})`} />
+        <InfoRow label="Dibuat Oleh" value={`${a.createdByEmployee.name} (${a.createdByEmployee.employeeCode})`} />
       )}
     </div>
   );
@@ -803,7 +803,7 @@ export function AppointmentDetailView({ appointment, readOnly = false }: { appoi
   return (
     <Tabs defaultValue="details">
       <TabsList className="w-full justify-start overflow-x-auto">
-        <TabsTrigger value="details">Details</TabsTrigger>
+        <TabsTrigger value="details">Detail</TabsTrigger>
         <TabsTrigger value="photos">Foto</TabsTrigger>
         <TabsTrigger value="staff">
           Staff{appointment.staffs.length > 0 && ` (${uniqueStaffEmployees(appointment.staffs).length})`}
