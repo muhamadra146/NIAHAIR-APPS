@@ -198,7 +198,7 @@ export function CustomerForm({
               onClick={() => onOpenChange(false)}
               disabled={isPending}
             >
-              Cancel
+              Batal
             </Button>
             <Button type="submit" className="flex-1 sm:flex-none" disabled={isPending}>
               {isPending ? "Menyimpan…" : "Simpan"}
