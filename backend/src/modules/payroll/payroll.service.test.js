@@ -143,6 +143,7 @@ describe('generate', () => {
       commissions: [{ id: 'c1', commissionAmount: 50000 }, { id: 'c2', commissionAmount: 5000 }],
       activeLoans: [], unusedLeavePayouts: [], approvedLatePermissions: [], holidays: [],
     });
+    commissionLink.mockResolvedValue({ count: 2 });
     await svc.generate({ employeeId: 'e1', branchId: 'b1', yearMonth: '2024-06' }, 'u1');
     expect(commissionLink).toHaveBeenCalledWith({
       where: { id: { in: ['c1', 'c2'] }, payrollId: null },

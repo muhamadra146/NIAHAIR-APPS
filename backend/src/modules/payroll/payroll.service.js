@@ -336,10 +336,14 @@ const generate = async ({ employeeId, branchId, yearMonth, payDay, periodStart: 
    });
    // Komisi di slip ini dicatat ke payroll ini → saat dibayar, hanya komisi ini yang jadi PAID
    if (commissions.length > 0) {
-     await tx.commission.updateMany({
+     const linked = await tx.commission.updateMany({
        where: { id: { in: commissions.map((c) => c.id) }, payrollId: null },
        data:  { payrollId: created.id },
      });
+     // Komisi sempat diambil payroll lain (generate bersamaan) → batalkan agar tidak dibayar dua kali
+     if (linked.count !== commissions.length) {
+       throw new AppError("Sebagian komisi baru saja masuk payroll lain. Silakan generate ulang.", StatusCodes.CONFLICT);
+     }
    }
    return created;
   });
@@ -362,25 +366,29 @@ const recalculate = async (id, userId) => {
   const { items, grossIncome, totalDeductions, netSalary } =
     buildItems(salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, existing.periodStart, existing.periodEnd);
 
-  await repo.replaceAutoItems(id, items);
   const commissionIds = commissions.map((c) => c.id);
-  await prisma.$transaction([
+  // Item, komisi terhubung, dan total disimpan dalam satu transaksi agar selalu konsisten
+  const updated = await prisma.$transaction(async (tx) => {
+    await repo.replaceAutoItems(id, items, tx);
     // Lepas komisi yang tidak lagi memenuhi syarat, lalu hubungkan set terbaru
-    prisma.commission.updateMany({
+    await tx.commission.updateMany({
       where: { payrollId: id, status: "APPROVED", id: { notIn: commissionIds } },
       data:  { payrollId: null },
-    }),
-    prisma.commission.updateMany({
+    });
+    const linked = await tx.commission.updateMany({
       where: { id: { in: commissionIds }, OR: [{ payrollId: null }, { payrollId: id }] },
       data:  { payrollId: id },
-    }),
-  ]);
-  const updated = await repo.update(id, {
-    grossIncome,
-    totalDeductions,
-    netSalary,
-    lastRecalculatedBy: userId ?? null,
-    lastRecalculatedAt: new Date(),
+    });
+    if (linked.count !== commissionIds.length) {
+      throw new AppError("Sebagian komisi baru saja masuk payroll lain. Silakan hitung ulang.", StatusCodes.CONFLICT);
+    }
+    return repo.update(id, {
+      grossIncome,
+      totalDeductions,
+      netSalary,
+      lastRecalculatedBy: userId ?? null,
+      lastRecalculatedAt: new Date(),
+    }, tx);
   });
 
   return { ...updated, commissionBreakdown: buildCommissionBreakdown(commissions) };

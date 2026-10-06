@@ -191,8 +191,9 @@ const syncPayrollToAccurate = async (payrollId) => {
   }
 
   // ── Build Accurate payload ────────────────────────────────────────────
-  const periodLabel = new Date(payroll.periodEnd).toLocaleDateString("id-ID", {
-    month: "long", year: "numeric",
+  // Nama bulan gaji = bulan kerja (bulan mulai periode), mis. 7 Okt–6 Nov → "Oktober 2026"
+  const periodLabel = new Date(payroll.periodStart).toLocaleDateString("id-ID", {
+    month: "long", year: "numeric", timeZone: "UTC",
   });
   // Tanggal transaksi menurut kalender WIB (paidAt = timestamp, periodEnd = @db.Date)
   const transDate = wibDateStr(payroll.paidAt ?? payroll.periodEnd);

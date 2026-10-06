@@ -41,14 +41,15 @@ const findOverlapping = (employeeId, periodStart, periodEnd, excludeId) =>
 const create = (data) =>
   prisma.payroll.create({ data, include: PAYROLL_INCLUDE });
 
-const update = (id, data) =>
-  prisma.payroll.update({ where: { id }, data, include: PAYROLL_INCLUDE });
+// db: klien prisma atau transaksi (tx) agar bisa dipakai dalam $transaction
+const update = (id, data, db = prisma) =>
+  db.payroll.update({ where: { id }, data, include: PAYROLL_INCLUDE });
 
 // Replaces all auto items for a payroll then re-inserts
-const replaceAutoItems = async (payrollId, items) => {
-  await prisma.payrollItem.deleteMany({ where: { payrollId, isAuto: true } });
+const replaceAutoItems = async (payrollId, items, db = prisma) => {
+  await db.payrollItem.deleteMany({ where: { payrollId, isAuto: true } });
   if (items.length > 0) {
-    await prisma.payrollItem.createMany({ data: items.map((i) => ({ ...i, payrollId })) });
+    await db.payrollItem.createMany({ data: items.map((i) => ({ ...i, payrollId })) });
   }
 };
 
@@ -148,9 +149,9 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd, p
     }),
   ]);
 
-  // For December payrolls: fetch ANNUAL leave quotas with payout rate > 0
-  const isDecember = periodEnd.getMonth() === 11;
-  const year       = periodEnd.getFullYear();
+  // Payroll bulan kerja Desember (PAY-001: dinamai dari bulan mulai periode): fetch ANNUAL leave quotas with payout rate > 0
+  const isDecember = periodStart.getUTCMonth() === 11;
+  const year       = periodStart.getUTCFullYear();
   let unusedLeavePayouts = [];
   if (isDecember) {
     unusedLeavePayouts = await prisma.leaveQuota.findMany({
