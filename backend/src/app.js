@@ -74,6 +74,9 @@ const omsetBonusTierStandaloneRouter = omsetBonusTierRouter.standaloneRouter;
 
 const app = express();
 
+// Di server, request lewat Nginx (1 proxy): pakai IP asli staff untuk rate limit login
+app.set("trust proxy", 1);
+
 const isProd = process.env.NODE_ENV === "production";
 
 app.use(cors({
