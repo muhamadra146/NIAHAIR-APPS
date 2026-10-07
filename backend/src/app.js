@@ -74,8 +74,11 @@ const omsetBonusTierStandaloneRouter = omsetBonusTierRouter.standaloneRouter;
 
 const app = express();
 
-// Di server, request lewat Nginx (1 proxy): pakai IP asli staff untuk rate limit login
-app.set("trust proxy", 1);
+// Di server (di belakang Nginx) set TRUST_PROXY=1 agar rate limit login memakai IP asli staff.
+// Tanpa proxy jangan diaktifkan: header X-Forwarded-For bisa dipalsukan client.
+if (process.env.TRUST_PROXY) {
+  app.set("trust proxy", Number(process.env.TRUST_PROXY) || 1);
+}
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -190,8 +193,10 @@ app.use(errorHandler);
 const { startWorkers } = require("./workers");
 
 const PORT = process.env.PORT || 3000;
+// HOST=127.0.0.1 di server: backend hanya bisa diakses lewat Nginx, bukan langsung dari internet
+const HOST = process.env.HOST || "0.0.0.0";
 
-app.listen(PORT, () => {
-    console.log(`Server running on ${PORT}`);
+app.listen(PORT, HOST, () => {
+    console.log(`Server running on ${HOST}:${PORT}`);
     startWorkers();
 });
