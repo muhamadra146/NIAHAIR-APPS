@@ -129,11 +129,11 @@ export function useUpdateEmployeeBranches(id: string) {
 
 // ── Salary settings ───────────────────────────────────────────────────────────
 
-export function useSalarySettings(employeeId: string) {
+export function useSalarySettings(employeeId: string, enabled = true) {
   return useQuery({
     queryKey:       ["salary-settings", employeeId],
     queryFn:        () => fetchSalarySettings(employeeId),
-    enabled:        !!employeeId,
+    enabled:        enabled && !!employeeId,
     staleTime:      0,
     refetchOnMount: true,
   });

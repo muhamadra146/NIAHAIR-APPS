@@ -4821,6 +4821,10 @@ Hari kerja = hari periode − hari libur (OFF) di jadwal (sama dengan pembagi tr
 - BPJS tetap dari gaji pokok penuh.
 
 Contoh: periode 1–31 Okt, OFF 4 hari (27 hari kerja), masuk 15 Okt (15 hari kerja) → gaji pokok 3.000.000 ÷ 27 × 15 = 1.666.667.
+
+### Hak Akses Setting Gaji
+
+Setting Gaji karyawan (gaji pokok, tunjangan, potongan, BPJS) hanya dapat dilihat dan diubah oleh SUPER_ADMIN, OWNER, dan FINANCE. MANAGER dan role lain tidak dapat melihat gaji karyawan.
 ---
 
 # PAY-002

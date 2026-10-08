@@ -43,6 +43,9 @@ async function changeMyPassword(currentPassword: string, newPassword: string) {
   return data.data;
 }
 
+// Setting Gaji hanya untuk SUPER_ADMIN, OWNER, FINANCE (sama dengan backend salary.route)
+const SALARY_ROLES: string[] = ["SUPER_ADMIN", "OWNER", "FINANCE"];
+
 function apiErr(err: unknown, fallback = "Terjadi kesalahan"): string {
   if (err && typeof err === "object" && "response" in err) {
     const r = (err as { response?: { data?: { message?: string } } }).response;
@@ -76,12 +79,13 @@ export function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuthStore();
   const isOwnProfile = user?.employee?.id === id;
+  const canSalary    = user ? SALARY_ROLES.includes(user.roleCode) : false;
 
   const { data: employee, isLoading, isError } = useEmployee(id!);
   const updateMutation       = useUpdateEmployee(id!);
   const uploadFilesMutation  = useUploadEmployeeFiles();
   const updateBranchMutation = useUpdateEmployeeBranches(id!);
-  const { data: salarySettings = [], isLoading: salaryLoading } = useSalarySettings(id!);
+  const { data: salarySettings = [], isLoading: salaryLoading } = useSalarySettings(id!, canSalary);
 
   const [editOpen, setEditOpen]   = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -293,12 +297,14 @@ export function EmployeeDetailPage() {
                 value={employee.commissionEnabled ? "Aktif" : "Nonaktif"}
                 valueClass={employee.commissionEnabled ? "text-emerald-600" : "text-muted-foreground"}
               />
-              <StatChip
-                icon={<Banknote className="h-3.5 w-3.5" />}
-                label="Setting Gaji"
-                value={activeSetting ? formatCurrency(activeSetting.baseSalary) : "Belum diset"}
-                valueClass={activeSetting ? "" : "text-amber-600"}
-              />
+              {canSalary && (
+                <StatChip
+                  icon={<Banknote className="h-3.5 w-3.5" />}
+                  label="Setting Gaji"
+                  value={activeSetting ? formatCurrency(activeSetting.baseSalary) : "Belum diset"}
+                  valueClass={activeSetting ? "" : "text-amber-600"}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -307,14 +313,16 @@ export function EmployeeDetailPage() {
         <Tabs defaultValue="info">
           <TabsList className="w-full justify-start">
             <TabsTrigger value="info">Info Personal</TabsTrigger>
-            <TabsTrigger value="salary">
-              Setting Gaji
-              {salarySettings.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium">
-                  {salarySettings.length}
-                </span>
-              )}
-            </TabsTrigger>
+            {canSalary && (
+              <TabsTrigger value="salary">
+                Setting Gaji
+                {salarySettings.length > 0 && (
+                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+                    {salarySettings.length}
+                  </span>
+                )}
+              </TabsTrigger>
+            )}
             <TabsTrigger value="bonus-omset">Bonus Omset</TabsTrigger>
             {isOwnProfile && (
               <TabsTrigger value="security">Keamanan</TabsTrigger>
@@ -379,6 +387,7 @@ export function EmployeeDetailPage() {
           </TabsContent>
 
           {/* Salary settings tab */}
+          {canSalary && (
           <TabsContent value="salary" className="mt-4">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -424,6 +433,7 @@ export function EmployeeDetailPage() {
               )}
             </div>
           </TabsContent>
+          )}
 
           {/* Bonus Omset tab */}
           <TabsContent value="bonus-omset" className="mt-4">
