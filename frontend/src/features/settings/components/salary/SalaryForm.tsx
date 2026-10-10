@@ -1,9 +1,10 @@
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v4";
 import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label }  from "@/components/ui/label";
 import type { SalarySetting, Employee } from "../../types";
 import { toWibDateStr } from "@/lib/utils";
@@ -61,7 +62,7 @@ const DEDUCTION_FIELDS: { key: keyof SalaryFormValues; label: string; step?: num
 const fmt = (v: number) => new Intl.NumberFormat("id-ID").format(v);
 
 export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }: Props) {
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<SalaryFormInput, unknown, SalaryFormValues>({
+  const { register, control, handleSubmit, reset, formState: { errors } } = useForm<SalaryFormInput, unknown, SalaryFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       baseSalary:                    0,
@@ -127,13 +128,9 @@ export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }:
           {CURRENCY_FIELDS.map(({ key, label, hint }) => (
             <div key={key}>
               <Label className="text-xs">{label}</Label>
-              <Input
-                type="number"
-                min={0}
-                step={1000}
-                {...register(key, { valueAsNumber: true })}
-                className="mt-1"
-              />
+              <div className="mt-1">
+                <Controller control={control} name={key} render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
+              </div>
               {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
               {errors[key] && <p className="mt-0.5 text-xs text-destructive">{errors[key]?.message as string}</p>}
             </div>
@@ -145,16 +142,12 @@ export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }:
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Potongan Kehadiran</p>
         <div className="grid gap-3 sm:grid-cols-2">
-          {DEDUCTION_FIELDS.map(({ key, label, step, hint }) => (
+          {DEDUCTION_FIELDS.map(({ key, label, hint }) => (
             <div key={key}>
               <Label className="text-xs">{label}</Label>
-              <Input
-                type="number"
-                min={0}
-                step={step ?? 100}
-                {...register(key, { valueAsNumber: true })}
-                className="mt-1"
-              />
+              <div className="mt-1">
+                <Controller control={control} name={key} render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
+              </div>
               {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
               {errors[key] && <p className="mt-0.5 text-xs text-destructive">{errors[key]?.message as string}</p>}
             </div>

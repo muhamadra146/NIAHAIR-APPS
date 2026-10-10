@@ -1,9 +1,10 @@
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { salarySettingSchema } from "../schemas/employee.schema";
@@ -92,22 +93,22 @@ export function SalarySettingForm({ open, onOpenChange, onSubmit, isPending, err
             <p className="text-xs text-muted-foreground">Gaji pokok, tunjangan & transport otomatis proporsional bila karyawan masuk atau resign di tengah periode gaji.</p>
             <div className="grid grid-cols-2 gap-4">
               <Field label="Gaji Pokok *" error={errors.baseSalary?.message}>
-                <Input {...register("baseSalary")} type="number" min="0" step="1000" />
+                <Controller control={form.control} name="baseSalary" render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
               </Field>
               <Field label="Uang Makan / Hari" error={errors.mealAllowancePerDay?.message}>
-                <Input {...register("mealAllowancePerDay")} type="number" min="0" step="1000" />
+                <Controller control={form.control} name="mealAllowancePerDay" render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
               </Field>
               <Field label="Tunjangan / Bulan" error={errors.tunjangan?.message}>
-                <Input {...register("tunjangan")} type="number" min="0" step="1000" />
+                <Controller control={form.control} name="tunjangan" render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
               </Field>
               <Field label="Transport / Bulan" error={errors.transportAllowance?.message}>
-                <Input {...register("transportAllowance")} type="number" min="0" step="1000" />
+                <Controller control={form.control} name="transportAllowance" render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
               </Field>
               <Field label="Lembur / Jam" error={errors.overtimeRatePerHour?.message}>
-                <Input {...register("overtimeRatePerHour")} type="number" min="0" step="1000" />
+                <Controller control={form.control} name="overtimeRatePerHour" render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
               </Field>
               <Field label="Kerja Hari Libur / Hari" error={errors.holidayRatePerDay?.message}>
-                <Input {...register("holidayRatePerDay")} type="number" min="0" step="1000" />
+                <Controller control={form.control} name="holidayRatePerDay" render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
                 <p className="text-xs text-muted-foreground">Dibayar per hari hadir di hari libur nasional (daftar di Pengaturan → Hari Libur).</p>
               </Field>
             </div>
@@ -117,20 +118,20 @@ export function SalarySettingForm({ open, onOpenChange, onSubmit, isPending, err
           <Section title="Potongan">
             <div className="grid grid-cols-2 gap-4">
               <Field label="Potongan Alpha / Hari" error={errors.absentDeductionPerDay?.message}>
-                <Input {...register("absentDeductionPerDay")} type="number" min="0" step="1000" />
+                <Controller control={form.control} name="absentDeductionPerDay" render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
                 <p className="text-xs text-muted-foreground">Hanya tidak masuk tanpa keterangan. Cuti, sakit, izin, OFF & libur nasional tidak dipotong.</p>
               </Field>
               <Field label="Pot. Pulang Cepat / Menit" error={errors.earlyLeaveDeductionPerMinute?.message}>
-                <Input {...register("earlyLeaveDeductionPerMinute")} type="number" min="0" />
+                <Controller control={form.control} name="earlyLeaveDeductionPerMinute" render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
               </Field>
               <Field label="Pot. Terlambat 1–30 menit" error={errors.lateDeductionBracket1?.message}>
-                <Input {...register("lateDeductionBracket1")} type="number" min="0" step="5000" />
+                <Controller control={form.control} name="lateDeductionBracket1" render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
               </Field>
               <Field label="Pot. Terlambat 31–60 menit" error={errors.lateDeductionBracket2?.message}>
-                <Input {...register("lateDeductionBracket2")} type="number" min="0" step="5000" />
+                <Controller control={form.control} name="lateDeductionBracket2" render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
               </Field>
               <Field label="Pot. Terlambat 61+ menit" error={errors.lateDeductionBracket3?.message}>
-                <Input {...register("lateDeductionBracket3")} type="number" min="0" step="5000" />
+                <Controller control={form.control} name="lateDeductionBracket3" render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
               </Field>
             </div>
           </Section>
