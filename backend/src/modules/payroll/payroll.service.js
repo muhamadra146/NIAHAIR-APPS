@@ -58,11 +58,11 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   const workingSchedules = schedules.filter((sc) => sc.status === "WORKING");
   const workingDays      = workingSchedules.length;
 
-  // Holiday working days = schedules on a public holiday
-  const holidayWorkingDays = workingSchedules.filter((sc) => {
-    const dateKey = new Date(sc.workDate).toISOString().split("T")[0];
-    return holidaySet.has(dateKey);
-  }).length;
+  // Kerja hari libur = hari libur nasional yang benar-benar dihadiri (ada absensi hadir), bukan sekadar dijadwalkan
+  const presentDateSet = new Set(
+    attendances.filter((a) => PRESENT_STATUSES.includes(a.status)).map((a) => new Date(a.workDate).toISOString().split("T")[0])
+  );
+  const holidayWorkingDays = [...presentDateSet].filter((d) => holidaySet.has(d)).length;
 
   // Present days = attendance with actual check-in (PRESENT/LATE/EARLY_LEAVE/HALF_DAY)
   const presentDays = attendances.filter((a) => PRESENT_STATUSES.includes(a.status)).length;
@@ -190,7 +190,7 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   }
 
   // DEDUCTION
-  addItem("DEDUCTION", "absen",          "Potongan Absen",          D(s.absentDeductionPerDay).mul(D(absentDays)), absentDays, s.absentDeductionPerDay);
+  addItem("DEDUCTION", "absen",          "Potongan Alpha",          D(s.absentDeductionPerDay).mul(D(absentDays)), absentDays, s.absentDeductionPerDay);
   addItem("DEDUCTION", "terlambat",      "Potongan Terlambat",      lateDeductionTotal);
   addItem("DEDUCTION", "pulang_cepat",   "Potongan Pulang Cepat",   D(s.earlyLeaveDeductionPerMinute).mul(D(totalEarlyLeaveMinutes)), totalEarlyLeaveMinutes, s.earlyLeaveDeductionPerMinute);
   addItem("DEDUCTION", "bpjs_jht",       "BPJS JHT",                bpjsJht);

@@ -5113,6 +5113,10 @@ Contoh: periode 30 hari, libur 4, sakit 1 hari → Rp 500.000 ÷ 26 × 25.
 
 Hari tanpa jadwal dianggap hari kerja, sehingga jadwal (termasuk hari OFF) harus diisi lengkap. Sebelum generate, sistem memperingatkan bila jadwal belum lengkap atau periode belum selesai.
 
+### Kerja Hari Libur (per hari)
+
+Dibayar **tarif kerja hari libur** (Setting Gaji) untuk setiap hari libur nasional yang **benar-benar dihadiri** (ada absensi hadir: PRESENT / LATE / EARLY_LEAVE / HALF_DAY). Dijadwalkan kerja tapi tidak hadir → tidak dibayar. Daftar hari libur diambil dari Pengaturan → Hari Libur.
+
 ---
 
 # PAY-019
@@ -5133,6 +5137,8 @@ Manual Adjustment.
 Semua Deduction wajib memiliki Reason.
 
 ### Potongan Absen (alpha)
+
+Di aplikasi dan slip gaji disebut **Potongan Alpha**.
 
 Potongan Absen = hari alpha × potongan absen per hari di Setting Gaji.
 
