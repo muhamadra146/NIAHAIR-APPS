@@ -3,6 +3,7 @@ import { Search, Loader2, Trash2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/lib/toast";
 import { useQuery } from "@tanstack/react-query";
@@ -307,8 +308,8 @@ export function CreatePurchaseInvoiceDialog({ open, onClose }: Props) {
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground mb-1">Harga</p>
-                            <Input type="number" min={0} step={100} value={line.price}
-                              onChange={(e) => updateLine(line._key, "price", e.target.value)}
+                            <CurrencyInput prefix={false} value={line.price}
+                              onValueChange={(v) => updateLine(line._key, "price", v)}
                               className="h-8 text-right font-mono text-xs px-2" />
                           </div>
                           <div>
@@ -376,9 +377,9 @@ export function CreatePurchaseInvoiceDialog({ open, onClose }: Props) {
                                 className="h-7 text-right font-mono text-xs w-16 ml-auto px-1" />
                             </td>
                             <td className="px-2 py-2">
-                              <Input type="number" min={0} step={100} value={line.price}
-                                onChange={(e) => updateLine(line._key, "price", e.target.value)}
-                                className="h-7 text-right font-mono text-xs w-24 ml-auto px-1" />
+                              <CurrencyInput prefix={false} value={line.price}
+                                onValueChange={(v) => updateLine(line._key, "price", v)}
+                                className="h-7 text-right font-mono text-xs w-28 ml-auto px-1" />
                             </td>
                             <td className="px-2 py-2">
                               <Input type="number" min={0} max={100} step={0.01} value={line.discount}

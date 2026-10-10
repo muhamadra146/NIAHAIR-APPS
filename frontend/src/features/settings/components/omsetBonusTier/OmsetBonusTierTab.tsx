@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { Plus, ChevronLeft, Pencil, Trash2 } from "lucide-react";
 import { Button }      from "@/components/ui/button";
 import { Input }       from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label }       from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -53,7 +54,7 @@ function TierDialog({
   const updateMut = useUpdateOmsetBonusTier(editing?.id ?? "", employeeId);
   const isPending = createMut.isPending || updateMut.isPending;
 
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<TierFormValues>({
+  const { register, control, handleSubmit, formState: { errors }, reset } = useForm<TierFormValues>({
     defaultValues: {
       minimumOmset: editing ? String(editing.minimumOmset) : "",
       percentage:   editing ? String(editing.percentage)   : "",
@@ -99,16 +100,13 @@ function TierDialog({
           {/* Minimum Omset */}
           <div className="space-y-1.5">
             <Label htmlFor="minimumOmset">Minimum Omset (Rp)</Label>
-            <Input
-              id="minimumOmset"
-              type="number"
-              min={0}
-              step={1000}
-              placeholder="Contoh: 10000000"
-              {...register("minimumOmset", {
-                required: "Wajib diisi",
-                min: { value: 0, message: "Minimal 0" },
-              })}
+            <Controller
+              control={control}
+              name="minimumOmset"
+              rules={{ required: "Wajib diisi", min: { value: 0, message: "Minimal 0" } }}
+              render={({ field }) => (
+                <CurrencyInput ref={field.ref} name={field.name} onBlur={field.onBlur} id="minimumOmset" placeholder="Contoh: 10.000.000" value={field.value} onValueChange={field.onChange} />
+              )}
             />
             {errors.minimumOmset && (
               <p className="text-xs text-destructive">{errors.minimumOmset.message}</p>

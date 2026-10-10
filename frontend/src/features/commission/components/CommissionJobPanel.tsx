@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Check, X, Loader2, ChevronDown, ChevronUp, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Badge }  from "@/components/ui/badge";
 import { toast }  from "@/lib/toast";
 import {
@@ -128,13 +129,23 @@ function JobRateFields({
         {type && (
           <>
             <span className="text-[10px] text-muted-foreground">{unitLabel}</span>
-            <Input
-              type="number" min={0}
-              value={value}
-              onChange={e => onValue(e.target.value)}
-              className="h-6 text-xs w-24"
-              placeholder={tiers.length ? "opsional" : "nilai"}
-            />
+            {type === "FIXED" ? (
+              <CurrencyInput
+                prefix={false}
+                value={value}
+                onValueChange={onValue}
+                className="h-6 text-xs w-28"
+                placeholder={tiers.length ? "opsional" : "nilai"}
+              />
+            ) : (
+              <Input
+                type="number" min={0}
+                value={value}
+                onChange={e => onValue(e.target.value)}
+                className="h-6 text-xs w-24"
+                placeholder={tiers.length ? "opsional" : "nilai"}
+              />
+            )}
           </>
         )}
         <span className="text-[10px] text-muted-foreground">
@@ -156,12 +167,21 @@ function JobRateFields({
                   placeholder="lebih"
                 />
                 <span className="text-[10px] text-muted-foreground">staf → {unitLabel}</span>
-                <Input
-                  type="number" min={0}
-                  value={t.value}
-                  onChange={e => setTier(i, { value: e.target.value })}
-                  className="h-6 text-xs w-24"
-                />
+                {type === "FIXED" ? (
+                  <CurrencyInput
+                    prefix={false}
+                    value={t.value}
+                    onValueChange={(v) => setTier(i, { value: v })}
+                    className="h-6 text-xs w-28"
+                  />
+                ) : (
+                  <Input
+                    type="number" min={0}
+                    value={t.value}
+                    onChange={e => setTier(i, { value: e.target.value })}
+                    className="h-6 text-xs w-24"
+                  />
+                )}
                 <Button
                   size="sm" variant="ghost" className="h-5 px-1 text-destructive hover:text-destructive"
                   onClick={() => onTiers(tiers.filter((_, idx) => idx !== i))}
@@ -389,11 +409,11 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
                           {editDeductsFrom && (
                             <>
                               <span className="text-[10px] text-muted-foreground">@ Rp</span>
-                              <Input
-                                type="number" min={0}
+                              <CurrencyInput
+                                prefix={false}
                                 value={editPrice}
-                                onChange={e => setEditPrice(e.target.value)}
-                                className="h-6 text-xs w-20"
+                                onValueChange={setEditPrice}
+                                className="h-6 text-xs w-24"
                                 placeholder="harga"
                               />
                               <span className="text-[10px] text-muted-foreground">/ {editUnit || "helai"}</span>
@@ -533,11 +553,11 @@ export function CommissionJobPanel({ categoryId, categoryName }: Props) {
                     {editDeductsFrom && (
                       <>
                         <span className="text-[10px] text-muted-foreground">@ Rp</span>
-                        <Input
-                          type="number" min={0}
+                        <CurrencyInput
+                          prefix={false}
                           value={editPrice}
-                          onChange={e => setEditPrice(e.target.value)}
-                          className="h-6 text-xs w-20"
+                          onValueChange={setEditPrice}
+                          className="h-6 text-xs w-24"
                           placeholder="harga"
                         />
                         <span className="text-[10px] text-muted-foreground">/ {editUnit || "helai"}</span>

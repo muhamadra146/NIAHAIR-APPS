@@ -24,6 +24,7 @@ import {
 } from "@/features/invoice/api/commissionGenerate.api";
 import { CommissionBreakdown } from "@/features/commission/components/CommissionBreakdown";
 import { SPLIT_MODE_LABEL, type BreakdownInput } from "@/features/commission/commissionBreakdown";
+import { CurrencyInput } from "@/components/ui/currency-input";
 
 // ── Kalkulator Komisi ─────────────────────────────────────────────────
 //
@@ -62,13 +63,12 @@ function WorkerAmountInput({
   value, onChange, locked,
 }: { value: number; onChange: (v: number) => void; locked: boolean }) {
   return (
-    <input
-      type="number"
-      min={0}
+    <CurrencyInput
+      prefix={false}
       disabled={locked}
       value={value}
-      onChange={(e) => onChange(Math.max(0, parseInt(e.target.value, 10) || 0))}
-      className="w-24 rounded border border-border bg-background px-2 py-1 text-right text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:w-32"
+      onChange={onChange}
+      className="h-8 w-24 px-2 py-1 text-right text-sm sm:w-32"
     />
   );
 }

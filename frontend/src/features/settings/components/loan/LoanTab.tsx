@@ -3,6 +3,7 @@ import { Plus, ChevronLeft, AlertCircle, CheckCircle2, XCircle, Banknote } from 
 import { Button }   from "@/components/ui/button";
 import { Badge }    from "@/components/ui/badge";
 import { Input }    from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label }    from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -108,11 +109,11 @@ function CreateLoanDialog({ open, employeeId, onClose }: CreateLoanDialogProps) 
           </div>
           <div>
             <Label className="text-xs">Total Pinjaman (Rp) *</Label>
-            <Input type="number" min={1} value={total} onChange={(e) => setTotal(e.target.value)} className="mt-1" />
+            <CurrencyInput value={total} onValueChange={setTotal} wrapperClassName="mt-1" />
           </div>
           <div>
             <Label className="text-xs">Potongan per Bulan (Rp) *</Label>
-            <Input type="number" min={1} value={deduction} onChange={(e) => setDeduction(e.target.value)} className="mt-1" />
+            <CurrencyInput value={deduction} onValueChange={setDeduction} wrapperClassName="mt-1" />
           </div>
           <div>
             <Label className="text-xs">Tanggal Mulai *</Label>
@@ -175,8 +176,8 @@ function RepaymentDialog({ open, loan, onClose }: RepaymentDialogProps) {
         <div className="space-y-3 py-1">
           <div>
             <Label className="text-xs">Jumlah Bayar (Rp) *</Label>
-            <Input type="number" min={1} max={loan.remainingAmount} value={amount}
-              onChange={(e) => setAmount(e.target.value)} className="mt-1" />
+            <CurrencyInput value={amount}
+              onValueChange={setAmount} wrapperClassName="mt-1" />
           </div>
           <div>
             <Label className="text-xs">Tanggal Bayar *</Label>

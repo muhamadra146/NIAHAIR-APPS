@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/stores/authStore";
@@ -318,10 +318,6 @@ function EditDepositDialog({
     onOpenChange(v);
   }
 
-  function formatDisplay(raw: string) {
-    const n = raw.replace(/\D/g, "");
-    return n ? Number(n).toLocaleString("id-ID") : "";
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -349,16 +345,7 @@ function EditDepositDialog({
           {canEditAmount && (
             <div className="flex flex-col gap-1.5">
               <Label>Jumlah</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
-                <Input
-                  className="pl-8"
-                  value={formatDisplay(amount)}
-                  onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))}
-                  placeholder="0"
-                  inputMode="numeric"
-                />
-              </div>
+              <CurrencyInput value={amount} onValueChange={setAmount} placeholder="0" />
             </div>
           )}
           <div className="flex flex-col gap-1.5">

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -183,11 +184,10 @@ export function MembershipTab() {
             </div>
             <div className="space-y-1.5">
               <Label>Harga (Rp)</Label>
-              <Input
-                type="number" min={0} step={10000}
-                placeholder="cth: 500000"
+              <CurrencyInput
+                placeholder="cth: 500.000"
                 value={form.price}
-                onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                onValueChange={(v) => setForm((f) => ({ ...f, price: v }))}
               />
             </div>
             <div className="space-y-1.5">
@@ -211,13 +211,20 @@ export function MembershipTab() {
             </div>
             <div className="space-y-1.5">
               <Label>Nilai Diskon {form.discountType === "PERCENTAGE" ? "(%)" : "(Rp)"}</Label>
-              <Input
-                type="number" min={0}
-                step={form.discountType === "PERCENTAGE" ? 1 : 10000}
-                placeholder={form.discountType === "PERCENTAGE" ? "cth: 10" : "cth: 50000"}
-                value={form.discountValue}
-                onChange={(e) => setForm((f) => ({ ...f, discountValue: e.target.value }))}
-              />
+              {form.discountType === "PERCENTAGE" ? (
+                <Input
+                  type="number" min={0} max={100} step={1}
+                  placeholder="cth: 10"
+                  value={form.discountValue}
+                  onChange={(e) => setForm((f) => ({ ...f, discountValue: e.target.value }))}
+                />
+              ) : (
+                <CurrencyInput
+                  placeholder="cth: 50.000"
+                  value={form.discountValue}
+                  onValueChange={(v) => setForm((f) => ({ ...f, discountValue: v }))}
+                />
+              )}
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
           </div>

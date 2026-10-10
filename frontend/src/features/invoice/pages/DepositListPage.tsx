@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { filterInputCls } from "@/lib/ui-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -569,16 +570,12 @@ function CreateDepositDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>Jumlah *</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">Rp</span>
-                <Input
-                  className="pl-8 rounded-xl border-slate-200 shadow-sm"
-                  value={amount ? Number(amount).toLocaleString("id-ID") : ""}
-                  onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))}
-                  placeholder="0"
-                  inputMode="numeric"
-                />
-              </div>
+              <CurrencyInput
+                className="rounded-xl border-slate-200 shadow-sm"
+                value={amount}
+                onValueChange={setAmount}
+                placeholder="0"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Tanggal *</Label>

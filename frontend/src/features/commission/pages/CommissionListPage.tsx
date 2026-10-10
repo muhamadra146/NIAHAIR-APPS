@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { filterInputCls } from "@/lib/ui-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -644,12 +645,9 @@ export function CommissionListPage() {
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
               <Label className="text-sm font-medium">Nominal Komisi (Rp)</Label>
-              <Input
-                type="number"
-                min={0}
-                step={1}
+              <CurrencyInput
                 value={overrideAmount}
-                onChange={(e) => setOverrideAmount(e.target.value)}
+                onValueChange={setOverrideAmount}
                 placeholder="0"
                 className="h-9"
               />

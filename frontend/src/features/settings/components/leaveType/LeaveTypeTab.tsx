@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Plus, Pencil, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -250,13 +251,10 @@ export function LeaveTypeTab() {
             {isAnnual && (
               <div className="space-y-1.5">
                 <Label>Payout Cuti Sisa / Hari (Rp)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step={10000}
-                  placeholder="cth: 100000"
+                <CurrencyInput
+                  placeholder="cth: 100.000"
                   value={form.unusedDayPayoutRate}
-                  onChange={(e) => setForm((f) => ({ ...f, unusedDayPayoutRate: e.target.value }))}
+                  onValueChange={(v) => setForm((f) => ({ ...f, unusedDayPayoutRate: v }))}
                 />
                 <p className="text-xs text-muted-foreground">
                   Jika &gt; 0, sisa hari cuti akhir tahun akan dibayar ke karyawan (masuk payroll Desember).

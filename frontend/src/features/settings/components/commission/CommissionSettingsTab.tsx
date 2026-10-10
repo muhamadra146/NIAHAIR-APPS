@@ -4,6 +4,7 @@ import { Plus, Pencil, Check, X, Loader2, Tag, Users, Trash2, AlertTriangle } fr
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -499,14 +500,22 @@ function CommissionRuleSection() {
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs font-medium text-slate-600">Nilai {form.commissionType === "PERCENTAGE" ? "(%)" : "(Rp)"}</Label>
-        <Input
-          type="number" min={0.01} step={0.01}
-          max={form.commissionType === "PERCENTAGE" ? 100 : undefined}
-          className="h-9 text-sm"
-          placeholder={form.commissionType === "PERCENTAGE" ? "10" : "50000"}
-          value={form.commissionValue}
-          onChange={(e) => setForm((f) => ({ ...f, commissionValue: e.target.value }))}
-        />
+        {form.commissionType === "PERCENTAGE" ? (
+          <Input
+            type="number" min={0.01} step={0.01} max={100}
+            className="h-9 text-sm"
+            placeholder="10"
+            value={form.commissionValue}
+            onChange={(e) => setForm((f) => ({ ...f, commissionValue: e.target.value }))}
+          />
+        ) : (
+          <CurrencyInput
+            className="h-9 text-sm"
+            placeholder="50.000"
+            value={form.commissionValue}
+            onValueChange={(v) => setForm((f) => ({ ...f, commissionValue: v }))}
+          />
+        )}
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs font-medium text-slate-600">Dasar Perhitungan</Label>

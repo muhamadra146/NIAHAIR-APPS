@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Pencil, Trash2, Loader2, Crown, Percent, DollarSign, RefreshCw } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { PageContainer }    from "@/components/layout/PageContainer";
@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button }           from "@/components/ui/button";
 import { Badge }            from "@/components/ui/badge";
 import { Input }            from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label }            from "@/components/ui/label";
 import { SimpleSelect } from "@/components/ui/simple-select";
 import {
@@ -88,7 +89,7 @@ function MembershipDialog({ open, editing, onClose }: MembershipDialogProps) {
   const updateMut = useUpdateMembership();
 
   const {
-    register, handleSubmit, reset, setValue, watch,
+    register, control, handleSubmit, reset, setValue, watch,
     formState: { errors },
   } = useForm<MembershipFormInput, unknown, MembershipForm>({
     resolver: zodResolver(membershipSchema),
@@ -144,7 +145,7 @@ function MembershipDialog({ open, editing, onClose }: MembershipDialogProps) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="price">Harga (Rp) <span className="text-destructive">*</span></Label>
-              <Input id="price" type="number" min={0} step={1000} {...register("price")} />
+              <Controller control={control} name="price" render={({ field }) => <CurrencyInput {...field} id="price" value={field.value as number} />} />
               {errors.price && <p className="text-xs text-destructive">{errors.price.message}</p>}
             </div>
             <div className="space-y-1.5">
@@ -172,13 +173,11 @@ function MembershipDialog({ open, editing, onClose }: MembershipDialogProps) {
                 Nilai Diskon {discountType === "PERCENTAGE" ? "(%)" : "(Rp)"}
                 <span className="text-destructive"> *</span>
               </Label>
-              <Input
-                id="discountValue"
-                type="number"
-                min={0}
-                step={discountType === "PERCENTAGE" ? 1 : 1000}
-                {...register("discountValue")}
-              />
+              {discountType === "PERCENTAGE" ? (
+                <Input id="discountValue" type="number" min={0} max={100} step={1} {...register("discountValue")} />
+              ) : (
+                <Controller control={control} name="discountValue" render={({ field }) => <CurrencyInput {...field} id="discountValue" value={field.value as number} />} />
+              )}
               {errors.discountValue && <p className="text-xs text-destructive">{errors.discountValue.message}</p>}
             </div>
           </div>

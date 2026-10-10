@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { formatCurrency, formatDate, WIB_TZ } from "@/lib/utils";
 import { fetchPaymentMethods } from "@/features/settings/api/paymentMethod.api";
@@ -415,14 +416,6 @@ function CreateAndApplyDepositDialog({
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
 
-  function formatAmountDisplay(raw: string) {
-    const num = raw.replace(/\D/g, "");
-    if (!num) return "";
-    return Number(num).toLocaleString("id-ID");
-  }
-  function handleAmountChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setAmount(e.target.value.replace(/\D/g, ""));
-  }
 
   function reset() { setMethodId(""); setAmount(String(maxAmount)); setRefNo(""); setNotes(""); setError(null); }
   function handleClose(v: boolean) { if (!v) reset(); onOpenChange(v); }
@@ -478,10 +471,7 @@ function CreateAndApplyDepositDialog({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Jumlah * <span className="text-muted-foreground text-xs">(maks. {formatCurrency(maxAmount)})</span></Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
-              <Input className="pl-8" value={formatAmountDisplay(amount)} onChange={handleAmountChange} placeholder="0" inputMode="numeric" />
-            </div>
+            <CurrencyInput value={amount} onValueChange={setAmount} placeholder="0" />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>No. Referensi</Label>
@@ -693,15 +683,6 @@ function AddPaymentDialog({
   const [notes, setNotes]       = useState("");
   const [error, setError]       = useState<string | null>(null);
 
-  function formatAmountDisplay(raw: string) {
-    const num = raw.replace(/\D/g, "");
-    if (!num) return "";
-    return Number(num).toLocaleString("id-ID");
-  }
-  function handleAmountChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const raw = e.target.value.replace(/\D/g, "");
-    setAmount(raw);
-  }
 
   function reset() { setMethodId(""); setAmount(String(maxAmount)); setRefNo(""); setNotes(""); setError(null); }
   function handleClose(v: boolean) { if (!v) reset(); onOpenChange(v); }
@@ -739,10 +720,7 @@ function AddPaymentDialog({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Jumlah * <span className="text-muted-foreground text-xs">(maks. {formatCurrency(maxAmount)})</span></Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
-              <Input className="pl-8" value={formatAmountDisplay(amount)} onChange={handleAmountChange} placeholder="0" inputMode="numeric" />
-            </div>
+            <CurrencyInput value={amount} onValueChange={setAmount} placeholder="0" />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>No. Referensi</Label>
@@ -822,14 +800,10 @@ function ApplyDepositDialog({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Jumlah *</Label>
-              <Input
-                type="number"
-                min="0.01"
-                step="0.01"
-                max={selected ? Math.min(Number(selected.remainingAmount), maxAmount) : maxAmount}
+              <CurrencyInput
                 value={amount}
                 placeholder={selected ? `Maks. ${formatCurrency(Math.min(Number(selected.remainingAmount), maxAmount))}` : ""}
-                onChange={(e) => setAmount(e.target.value)}
+                onValueChange={setAmount}
               />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}

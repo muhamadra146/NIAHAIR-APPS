@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useForm, useFieldArray } from "react-hook-form";
+import { Controller, useForm, useFieldArray } from "react-hook-form";
 import { ArrowLeft, Trash2, Loader2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreatePurchaseReturn } from "../hooks";
@@ -262,16 +263,19 @@ export function PurchaseReturnFormPage() {
                             {rowErr?.qty && <p className="mt-1 text-right text-xs text-destructive">{rowErr.qty.message}</p>}
                           </td>
                           <td className="px-3 py-2">
-                            <Input
-                              type="number"
-                              step="1"
-                              min="0"
-                              {...register(`items.${idx}.price`, {
-                                valueAsNumber: true,
-                                validate: (v) => (Number.isFinite(v) && v >= 0) || "Harga tidak boleh minus",
-                              })}
-                              aria-invalid={!!rowErr?.price}
-                              className={`text-right h-8 ${rowErr?.price ? "border-destructive" : ""}`}
+                            <Controller
+                              control={control}
+                              name={`items.${idx}.price`}
+                              rules={{ validate: (v) => (Number.isFinite(v) && v >= 0) || "Harga tidak boleh minus" }}
+                              render={({ field }) => (
+                                <CurrencyInput
+                                  {...field}
+                                  prefix={false}
+                                  value={field.value as number}
+                                  aria-invalid={!!rowErr?.price}
+                                  className={`text-right h-8 ${rowErr?.price ? "border-destructive" : ""}`}
+                                />
+                              )}
                             />
                             {rowErr?.price && <p className="mt-1 text-right text-xs text-destructive">{rowErr.price.message}</p>}
                           </td>

@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -1415,12 +1416,10 @@ function OpeningBalanceDialog({ onClose }:{ branchId?: string | null; onClose: (
                         />
                       </td>
                       <td className="px-3 py-2">
-                        <Input
-                          type="number"
-                          min={0}
-                          step={1}
+                        <CurrencyInput
+                          prefix={false}
                           value={line.unitCost}
-                          onChange={(e) => updateLine(line.itemId, "unitCost", e.target.value)}
+                          onValueChange={(v) => updateLine(line.itemId, "unitCost", v)}
                           placeholder="0"
                           className="h-7 text-right font-mono text-xs w-full"
                         />

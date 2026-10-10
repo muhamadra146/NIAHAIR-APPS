@@ -7,6 +7,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -370,11 +371,11 @@ function CreateLoanDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>Total Kasbon *</Label>
-              <Input type="number" min="0.01" step="0.01" value={total} onChange={(e) => setTotal(e.target.value)} placeholder="0" />
+              <CurrencyInput value={total} onValueChange={setTotal} placeholder="0" />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Cicilan/Bulan *</Label>
-              <Input type="number" min="0.01" step="0.01" value={monthly} onChange={(e) => setMonthly(e.target.value)} placeholder="0" />
+              <CurrencyInput value={monthly} onValueChange={setMonthly} placeholder="0" />
             </div>
           </div>
 

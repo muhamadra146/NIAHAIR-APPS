@@ -5,6 +5,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -258,8 +259,8 @@ function AddRepaymentDialog({
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           <div className="flex flex-col gap-1.5">
             <Label>Jumlah *</Label>
-            <Input type="number" min="0.01" step="0.01" max={maxAmount} value={amount}
-              onChange={(e) => setAmount(e.target.value)} placeholder={`maks. ${formatCurrency(maxAmount)}`} />
+            <CurrencyInput value={amount}
+              onValueChange={setAmount} placeholder={`maks. ${formatCurrency(maxAmount)}`} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Tanggal *</Label>

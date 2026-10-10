@@ -4,6 +4,7 @@ import { Search, Trash2, ChevronDown, ChevronUp, Plus, Loader2, Receipt, Pencil,
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatCurrency, formatDate, WIB_TZ, toWibDateStr } from "@/lib/utils";
@@ -1200,11 +1201,10 @@ export function CreateInvoiceDialog({
                         </div>
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs text-muted-foreground">Rp</span>
-                          <Input
-                            type="number" min="0.01"
-                            max={Number(sd.deposit.remainingAmount)} step="0.01"
+                          <CurrencyInput
+                            prefix={false}
                             value={sd.amount}
-                            onChange={(e) => updateDepAmt(sd.depositId, e.target.value)}
+                            onValueChange={(v) => updateDepAmt(sd.depositId, v)}
                             className="h-7 w-28 text-xs px-2"
                           />
                           <button type="button" onClick={() => removeDeposit(sd.depositId)}
@@ -1303,12 +1303,11 @@ export function CreateInvoiceDialog({
                       <label htmlFor="fixed-membership-discount" className="text-xs text-purple-700 shrink-0">
                         Nominal diskon (Rp)
                       </label>
-                      <Input
+                      <CurrencyInput
                         id="fixed-membership-discount"
-                        type="number"
-                        min={0}
+                        prefix={false}
                         value={fixedMembershipDiscount}
-                        onChange={(e) => setFixedMembershipDiscount(e.target.value)}
+                        onValueChange={setFixedMembershipDiscount}
                         className={cn(
                           "h-7 text-xs w-36 focus-visible:ring-purple-400",
                           (parseFloat(fixedMembershipDiscount) || 0) > subtotalEst
@@ -1420,8 +1419,8 @@ export function CreateInvoiceDialog({
                           </select>
                           <Input type="number" min="0.01" step="0.01" value={line.qty}
                             onChange={(e) => updateLine(idx, "qty", e.target.value)} className="h-8 text-xs px-2" />
-                          <Input type="number" min="0" step="1" value={line.price}
-                            onChange={(e) => updateLine(idx, "price", e.target.value)} className="h-8 text-xs px-2" placeholder="0" />
+                          <CurrencyInput prefix={false} value={line.price}
+                            onValueChange={(v) => updateLine(idx, "price", v)} className="h-8 text-xs px-2" placeholder="0" />
                           <div className="flex gap-1 items-center">
                             <button type="button"
                               onClick={() => updateLine(idx, "discountType", line.discountType === "AMOUNT" ? "PERCENT" : "AMOUNT")}
@@ -1429,10 +1428,15 @@ export function CreateInvoiceDialog({
                                 line.discountType === "PERCENT" ? "bg-primary text-white border-primary" : "bg-muted text-muted-foreground border-border hover:border-primary/50")}>
                               {line.discountType === "PERCENT" ? "%" : "Rp"}
                             </button>
-                            <Input type="number" min="0" max={line.discountType === "PERCENT" ? "100" : undefined}
-                              step={line.discountType === "PERCENT" ? "0.1" : "1"} value={line.discount}
-                              onChange={(e) => updateLine(idx, "discount", e.target.value)}
-                              className="h-8 text-xs px-2 min-w-0" placeholder="0" />
+                            {line.discountType === "PERCENT" ? (
+                              <Input type="number" min="0" max="100" step="0.1" value={line.discount}
+                                onChange={(e) => updateLine(idx, "discount", e.target.value)}
+                                className="h-8 text-xs px-2 min-w-0" placeholder="0" />
+                            ) : (
+                              <CurrencyInput prefix={false} value={line.discount} wrapperClassName="min-w-0 flex-1"
+                                onValueChange={(v) => updateLine(idx, "discount", v)}
+                                className="h-8 text-xs px-2 min-w-0" placeholder="0" />
+                            )}
                           </div>
                           <button type="button" onClick={() => removeLine(idx)}
                             className="flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors">
@@ -1471,8 +1475,8 @@ export function CreateInvoiceDialog({
                                   </select>
                                   <Input type="number" min="0.01" step="0.01" value={mat.qty}
                                     onChange={(e) => updateLine(mIdx, "qty", e.target.value)} className="h-8 text-xs px-2" />
-                                  <Input type="number" min="0" step="1" value={mat.price}
-                                    onChange={(e) => updateLine(mIdx, "price", e.target.value)} className="h-8 text-xs px-2" placeholder="0" />
+                                  <CurrencyInput prefix={false} value={mat.price}
+                                    onValueChange={(v) => updateLine(mIdx, "price", v)} className="h-8 text-xs px-2" placeholder="0" />
                                   <button type="button" onClick={() => removeLine(mIdx)}
                                     className="flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors">
                                     <Trash2 className="h-3.5 w-3.5" />
