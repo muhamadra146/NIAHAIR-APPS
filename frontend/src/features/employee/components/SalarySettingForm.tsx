@@ -89,6 +89,7 @@ export function SalarySettingForm({ open, onOpenChange, onSubmit, isPending, err
 
           {/* Pendapatan */}
           <Section title="Pendapatan">
+            <p className="text-xs text-muted-foreground">Gaji pokok, tunjangan & transport otomatis proporsional bila karyawan masuk atau resign di tengah periode gaji.</p>
             <div className="grid grid-cols-2 gap-4">
               <Field label="Gaji Pokok *" error={errors.baseSalary?.message}>
                 <Input {...register("baseSalary")} type="number" min="0" step="1000" />
@@ -107,6 +108,7 @@ export function SalarySettingForm({ open, onOpenChange, onSubmit, isPending, err
               </Field>
               <Field label="Kerja Hari Libur / Hari" error={errors.holidayRatePerDay?.message}>
                 <Input {...register("holidayRatePerDay")} type="number" min="0" step="1000" />
+                <p className="text-xs text-muted-foreground">Dibayar per hari hadir di hari libur nasional (daftar di Pengaturan → Hari Libur).</p>
               </Field>
             </div>
           </Section>
@@ -114,8 +116,9 @@ export function SalarySettingForm({ open, onOpenChange, onSubmit, isPending, err
           {/* Potongan */}
           <Section title="Potongan">
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Potongan Absen / Hari" error={errors.absentDeductionPerDay?.message}>
+              <Field label="Potongan Alpha / Hari" error={errors.absentDeductionPerDay?.message}>
                 <Input {...register("absentDeductionPerDay")} type="number" min="0" step="1000" />
+                <p className="text-xs text-muted-foreground">Hanya tidak masuk tanpa keterangan. Cuti, sakit, izin, OFF & libur nasional tidak dipotong.</p>
               </Field>
               <Field label="Pot. Pulang Cepat / Menit" error={errors.earlyLeaveDeductionPerMinute?.message}>
                 <Input {...register("earlyLeaveDeductionPerMinute")} type="number" min="0" />

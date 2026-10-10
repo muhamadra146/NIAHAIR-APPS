@@ -611,7 +611,7 @@ function SalarySettingCard({ setting, onEdit }: { setting: SalarySetting; onEdit
           <SalRow label="Tunjangan"          value={formatCurrency(setting.tunjangan ?? "0")} />
           <SalRow label="Transport"          value={formatCurrency(setting.transportAllowance)} />
           <SalRow label="Lembur/Jam"         value={formatCurrency(setting.overtimeRatePerHour)} />
-          <SalRow label="Potongan Absen"     value={formatCurrency(setting.absentDeductionPerDay)} />
+          <SalRow label="Potongan Alpha"     value={formatCurrency(setting.absentDeductionPerDay)} />
           <SalRow label="Terlambat 1–30 mnt" value={formatCurrency(setting.lateDeductionBracket1 ?? 25000)} />
           <SalRow label="Terlambat 31–60 mnt"value={formatCurrency(setting.lateDeductionBracket2 ?? 50000)} />
           <SalRow label="Terlambat 61+ mnt"  value={formatCurrency(setting.lateDeductionBracket3 ?? 75000)} />

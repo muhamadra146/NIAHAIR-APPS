@@ -41,20 +41,20 @@ interface Props {
   onCancel:   () => void;
 }
 
-const CURRENCY_FIELDS: { key: keyof SalaryFormValues; label: string }[] = [
+const CURRENCY_FIELDS: { key: keyof SalaryFormValues; label: string; hint?: string }[] = [
   { key: "baseSalary",                   label: "Gaji Pokok (Rp)" },
   { key: "mealAllowancePerDay",          label: "Uang Makan / Hari (Rp)" },
   { key: "tunjangan",                    label: "Tunjangan / Bulan (Rp)" },
   { key: "transportAllowance",           label: "Transport / Bulan (Rp)" },
   { key: "overtimeRatePerHour",          label: "Rate Lembur / Jam (Rp)" },
-  { key: "holidayRatePerDay",            label: "Rate Kerja Hari Libur / Hari (Rp)" },
+  { key: "holidayRatePerDay",            label: "Rate Kerja Hari Libur / Hari (Rp)", hint: "Dibayar per hari hadir di hari libur nasional (daftar di Pengaturan → Hari Libur)." },
 ];
 
-const DEDUCTION_FIELDS: { key: keyof SalaryFormValues; label: string; step?: number }[] = [
+const DEDUCTION_FIELDS: { key: keyof SalaryFormValues; label: string; step?: number; hint?: string }[] = [
   { key: "lateDeductionBracket1",        label: "Potongan Terlambat 1–30 menit (Rp)", step: 5000 },
   { key: "lateDeductionBracket2",        label: "Potongan Terlambat 31–60 menit (Rp)", step: 5000 },
   { key: "lateDeductionBracket3",        label: "Potongan Terlambat 61+ menit (Rp)", step: 5000 },
-  { key: "absentDeductionPerDay",        label: "Potongan Tidak Hadir / Hari (Rp)" },
+  { key: "absentDeductionPerDay",        label: "Potongan Alpha / Hari (Rp)", hint: "Hanya tidak masuk tanpa keterangan. Cuti, sakit, izin, OFF & libur nasional tidak dipotong." },
   { key: "earlyLeaveDeductionPerMinute", label: "Potongan Pulang Cepat / Menit (Rp)" },
 ];
 
@@ -122,8 +122,9 @@ export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }:
       {/* Pendapatan */}
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pendapatan</p>
+        <p className="mb-2 text-xs text-muted-foreground">Gaji pokok, tunjangan & transport otomatis proporsional bila karyawan masuk atau resign di tengah periode gaji.</p>
         <div className="grid gap-3 sm:grid-cols-2">
-          {CURRENCY_FIELDS.map(({ key, label }) => (
+          {CURRENCY_FIELDS.map(({ key, label, hint }) => (
             <div key={key}>
               <Label className="text-xs">{label}</Label>
               <Input
@@ -133,6 +134,7 @@ export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }:
                 {...register(key, { valueAsNumber: true })}
                 className="mt-1"
               />
+              {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
               {errors[key] && <p className="mt-0.5 text-xs text-destructive">{errors[key]?.message as string}</p>}
             </div>
           ))}
@@ -143,7 +145,7 @@ export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }:
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Potongan Kehadiran</p>
         <div className="grid gap-3 sm:grid-cols-2">
-          {DEDUCTION_FIELDS.map(({ key, label, step }) => (
+          {DEDUCTION_FIELDS.map(({ key, label, step, hint }) => (
             <div key={key}>
               <Label className="text-xs">{label}</Label>
               <Input
@@ -153,6 +155,7 @@ export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }:
                 {...register(key, { valueAsNumber: true })}
                 className="mt-1"
               />
+              {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
               {errors[key] && <p className="mt-0.5 text-xs text-destructive">{errors[key]?.message as string}</p>}
             </div>
           ))}
