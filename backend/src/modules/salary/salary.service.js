@@ -28,6 +28,9 @@ const createSetting = async (body) => {
     overtimeRatePerHour:         body.overtimeRatePerHour         ?? 0,
     holidayRatePerDay:           body.holidayRatePerDay           ?? 0,
     lateDeductionPerMinute:      body.lateDeductionPerMinute      ?? 0,
+    lateDeductionBracket1:       body.lateDeductionBracket1       ?? 25000,
+    lateDeductionBracket2:       body.lateDeductionBracket2       ?? 50000,
+    lateDeductionBracket3:       body.lateDeductionBracket3       ?? 75000,
     absentDeductionPerDay:       body.absentDeductionPerDay       ?? 0,
     earlyLeaveDeductionPerMinute: body.earlyLeaveDeductionPerMinute ?? 0,
     bpjsJhtPercent:              body.bpjsJhtPercent              ?? 2,
@@ -60,6 +63,7 @@ const updateSetting = async (id, body) => {
   const fields = [
     "baseSalary", "mealAllowancePerDay", "tunjangan", "transportAllowance",
     "overtimeRatePerHour", "holidayRatePerDay", "lateDeductionPerMinute",
+    "lateDeductionBracket1", "lateDeductionBracket2", "lateDeductionBracket3",
     "absentDeductionPerDay", "earlyLeaveDeductionPerMinute",
     "bpjsJhtPercent", "bpjsJhtEmployerPercent",
     "bpjsJpPercent",  "bpjsJpEmployerPercent",
