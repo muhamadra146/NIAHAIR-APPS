@@ -195,6 +195,8 @@ export function CreateInvoiceDialog({
   const [inclusiveTax, setInclusive]            = useState(false);
   const [notes, setNotes]                       = useState("");
   const [error, setError]                       = useState<string | null>(null);
+  // Konfirmasi item layanan/produk berharga Rp 0 (klik Simpan kedua kali untuk lanjut)
+  const [zeroPriceAck, setZeroPriceAck]         = useState<string | null>(null);
   const [submitting, setSubmitting]             = useState(false);
   const [membershipDiscApplied, setMembershipDiscApplied] = useState(false);
   const [fixedMembershipDiscount, setFixedMembershipDiscount] = useState("0");
@@ -622,6 +624,17 @@ export function CreateInvoiceDialog({
       if (!l.unitId) { setError(`Pilih satuan untuk: ${l.itemName}`); return; }
       const qty = parseFloat(l.qty);
       if (isNaN(qty) || qty <= 0) { setError(`Qty tidak valid untuk: ${l.itemName}`); return; }
+    }
+
+    // Peringatan item yang ditagih dengan harga Rp 0 (bahan baku dikecualikan)
+    const zeroLines = layananLines.filter((l) => !(parseFloat(l.price) > 0));
+    if (zeroLines.length > 0) {
+      const key = zeroLines.map((l) => l.lineGroup ?? l.itemId).join(",");
+      if (zeroPriceAck !== key) {
+        setZeroPriceAck(key);
+        setError(`Harga Rp 0 untuk: ${zeroLines.map((l) => l.itemName).join(", ")}. Periksa harganya. Jika memang gratis, klik Simpan sekali lagi untuk melanjutkan.`);
+        return;
+      }
     }
 
     for (const d of selectedDeps) {
@@ -1411,6 +1424,9 @@ export function CreateInvoiceDialog({
                               </span>
                             </div>
                             {sub > 0 && <p className="text-[10px] text-muted-foreground mt-0.5">= {formatCurrency(sub)}</p>}
+                            {!(parseFloat(line.price) > 0) && (
+                              <p className="text-[10px] font-medium text-amber-600 mt-0.5">⚠ Harga Rp 0 — periksa harga</p>
+                            )}
                           </div>
                           <select value={line.unitId} onChange={(e) => updateLine(idx, "unitId", e.target.value)}
                             className="h-8 rounded border border-input bg-background px-1.5 text-xs w-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
