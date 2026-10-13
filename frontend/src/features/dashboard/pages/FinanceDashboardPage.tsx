@@ -248,7 +248,9 @@ export function FinanceDashboardPage() {
               <KpiCard
                 label="Kas Masuk"
                 value={data.cashReceived.total}
-                sub={`${data.cashReceived.paymentCount} pembayaran`}
+                sub={data.cashReceived.depositPayments
+                  ? `${data.cashReceived.paymentCount} pembayaran · termasuk DP ${IDR(data.cashReceived.depositPayments)}`
+                  : `${data.cashReceived.paymentCount} pembayaran`}
                 color="green"
                 icon={Wallet}
               />

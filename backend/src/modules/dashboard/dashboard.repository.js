@@ -56,23 +56,38 @@ const getRevenueSummary = async ({ branchId, startDate, endDate }) => {
   };
 };
 
-// ── Cash Received (dari Payment) ─────────────────────────────────────────────
+// ── Cash Received (pembayaran invoice + pembayaran DP/deposit) ──────────────
+// Uang yang benar-benar diterima pada tanggal bayar. Bagian invoice yang dibayar
+// pakai deposit tidak tercatat di payments, jadi tidak terhitung dua kali.
 
 const getCashReceivedSummary = async ({ branchId, startDate, endDate }) => {
-  const where = {
-    ...(branchId ? { branchId } : {}),
-    ...dateWhere("paymentDate", startDate, endDate),
-  };
+  const [inv, dep] = await Promise.all([
+    prisma.payment.aggregate({
+      where: {
+        ...(branchId ? { branchId } : {}),
+        ...dateWhere("paymentDate", startDate, endDate),
+      },
+      _count: { _all: true },
+      _sum:   { amount: true },
+    }),
+    prisma.depositPayment.aggregate({
+      where: {
+        ...(branchId ? { deposit: { branchId } } : {}),
+        ...dateWhere("paidAt", startDate, endDate),
+      },
+      _count: { _all: true },
+      _sum:   { amount: true },
+    }),
+  ]);
 
-  const agg = await prisma.payment.aggregate({
-    where,
-    _count: { _all: true },
-    _sum:   { amount: true },
-  });
-
+  const invoiceTotal = Number(inv._sum.amount ?? 0);
+  const depositTotal = Number(dep._sum.amount ?? 0);
   return {
-    total:        Number(agg._sum.amount ?? 0),
-    paymentCount: agg._count._all,
+    total:               invoiceTotal + depositTotal,
+    paymentCount:        inv._count._all + dep._count._all,
+    invoicePayments:     invoiceTotal,
+    depositPayments:     depositTotal,
+    depositPaymentCount: dep._count._all,
   };
 };
 
@@ -190,17 +205,23 @@ const getDailyTrend = async ({ branchId, startDate, endDate }) => {
   let   pi            = 1;
 
   if (branchId) { payConditions.push(`"branchId" = $${pi++}`); payValues.push(branchId); }
-  if (startDate){ payConditions.push(`"paymentDate" >= $${pi++}`); payValues.push(wibDayStart(startDate)); }
-  if (endDate)  { payConditions.push(`"paymentDate" <= $${pi++}`); payValues.push(wibDayEnd(endDate)); }
+  if (startDate){ payConditions.push(`"paidAt" >= $${pi++}`); payValues.push(wibDayStart(startDate)); }
+  if (endDate)  { payConditions.push(`"paidAt" <= $${pi++}`); payValues.push(wibDayEnd(endDate)); }
 
+  // Pembayaran invoice + pembayaran DP/deposit (cabang deposit)
   const payRows = await prisma.$queryRawUnsafe(
     `SELECT
-       ${wibDateSql("paymentDate")} AS date,
+       ${wibDateSql("paidAt")} AS date,
        COUNT(*)::int        AS payment_count,
        SUM(amount)          AS cash_received
-     FROM payments
+     FROM (
+       SELECT "paymentDate" AS "paidAt", amount, "branchId" FROM payments
+       UNION ALL
+       SELECT dp."paidAt", dp.amount, d."branchId"
+         FROM deposit_payments dp JOIN deposits d ON d.id = dp."depositId"
+     ) cash
      ${payConditions.length ? `WHERE ${payConditions.join(" AND ")}` : ""}
-     GROUP BY ${wibDateSql("paymentDate")}
+     GROUP BY ${wibDateSql("paidAt")}
      ORDER BY date ASC`,
     ...payValues,
   );

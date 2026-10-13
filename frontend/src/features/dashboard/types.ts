@@ -27,8 +27,11 @@ export interface FinanceDashboardData {
     paidTotal:    number;
   };
   cashReceived: {
-    total:        number;
-    paymentCount: number;
+    total:               number;
+    paymentCount:        number;
+    invoicePayments?:    number;
+    depositPayments?:    number;
+    depositPaymentCount?: number;
   };
   purchases: {
     total:        number;
