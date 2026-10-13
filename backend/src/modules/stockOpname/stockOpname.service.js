@@ -110,8 +110,10 @@ const create = async ({ warehouseId, notes, createdByEmployeeId }) => {
 //
 // items: Array<{ id: StockOpnameItemId, qtyActual: number|null, notes?: string }>
 // qtyActual null = belum diisi (reset). Nilai 0 valid (stok habis).
+// Balasan ringkas: frontend memuat ulang detail opname sendiri setelah simpan,
+// jadi tidak perlu mengirim balik ratusan item (sebelumnya ±423 KB per simpan).
 const updateItems = async (opnameId, items) => {
-  const opname = await repo.findById(opnameId);
+  const opname = await repo.findForItemUpdate(opnameId);
   if (!opname) throw new AppError("Opname tidak ditemukan", StatusCodes.NOT_FOUND);
   if (opname.status === "POSTED") {
     throw new AppError("Opname sudah diposting, tidak bisa diubah", StatusCodes.CONFLICT);
@@ -145,14 +147,15 @@ const updateItems = async (opnameId, items) => {
   );
 
   // Upgrade ke IN_PROGRESS jika masih DRAFT
+  const status = opname.status === "DRAFT" ? "IN_PROGRESS" : opname.status;
   if (opname.status === "DRAFT") {
     await prisma.stockOpname.update({
       where: { id: opnameId },
-      data:  { status: "IN_PROGRESS" },
+      data:  { status },
     });
   }
 
-  return repo.findById(opnameId);
+  return { id: opnameId, status, updatedCount: items.length };
 };
 
 // ── Post — buat ADJUSTMENT movement untuk setiap item yang ada selisih ────────

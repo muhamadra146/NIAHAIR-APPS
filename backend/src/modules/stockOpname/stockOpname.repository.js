@@ -105,6 +105,13 @@ const findById = async (id) => {
   }
 };
 
+// Data ringan untuk validasi simpan item (status + id item saja, tanpa detail barang)
+const findForItemUpdate = (id) =>
+  prisma.stockOpname.findUnique({
+    where:  { id },
+    select: { id: true, status: true, items: { select: { id: true } } },
+  });
+
 const findMaxSeqToday = (prefix, tx = prisma) =>
   tx.stockOpname
     .findFirst({
@@ -118,4 +125,4 @@ const findMaxSeqToday = (prefix, tx = prisma) =>
       return isNaN(seq) ? 0 : seq;
     });
 
-module.exports = { findAll, count, findById, findMaxSeqToday };
+module.exports = { findAll, count, findById, findForItemUpdate, findMaxSeqToday };

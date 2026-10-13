@@ -167,8 +167,8 @@ export async function createStockOpname(input: CreateOpnameInput): Promise<Stock
 export async function updateOpnameItems(
   opnameId: string,
   items: UpdateOpnameItemInput[],
-): Promise<StockOpname> {
-  const { data } = await api.patch<ApiResponse<StockOpname>>(`/stock-opnames/${opnameId}/items`, { items });
+): Promise<{ id: string; status: string; updatedCount: number }> {
+  const { data } = await api.patch<ApiResponse<{ id: string; status: string; updatedCount: number }>>(`/stock-opnames/${opnameId}/items`, { items });
   return data.data;
 }
 
