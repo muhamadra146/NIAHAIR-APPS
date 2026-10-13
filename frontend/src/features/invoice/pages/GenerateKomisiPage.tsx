@@ -252,7 +252,8 @@ function JobAssignmentModal({
         </div>
 
         {/* ── Body ────────────────────────────────────────────────── */}
-        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+        {/* Teks form pengisian ditampilkan KAPITAL (requirement Finance #3) — data tidak diubah */}
+        <div className="overflow-y-auto flex-1 p-5 space-y-4 uppercase">
           {jobItems.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
               <AlertCircle className="h-8 w-8" />
