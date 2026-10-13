@@ -121,9 +121,6 @@ export function SalarySettingForm({ open, onOpenChange, onSubmit, isPending, err
                 <Controller control={form.control} name="absentDeductionPerDay" render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
                 <p className="text-xs text-muted-foreground">Hanya tidak masuk tanpa keterangan. Cuti, sakit, izin, OFF & libur nasional tidak dipotong.</p>
               </Field>
-              <Field label="Pot. Pulang Cepat / Menit" error={errors.earlyLeaveDeductionPerMinute?.message}>
-                <Controller control={form.control} name="earlyLeaveDeductionPerMinute" render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
-              </Field>
               <Field label="Pot. Terlambat 1–30 menit" error={errors.lateDeductionBracket1?.message}>
                 <Controller control={form.control} name="lateDeductionBracket1" render={({ field }) => <CurrencyInput {...field} value={field.value as number} />} />
               </Field>

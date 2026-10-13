@@ -61,8 +61,7 @@ export function SalaryHistoryTable({ settings, onEdit }: Props) {
             <Row label="Potong terlambat 1–30mnt" value={Rp(Number(s.lateDeductionBracket1 ?? 0))} />
             <Row label="Potong terlambat 31–60mnt" value={Rp(Number(s.lateDeductionBracket2 ?? 0))} />
             <Row label="Potong terlambat 61+mnt"  value={Rp(Number(s.lateDeductionBracket3 ?? 0))} />
-            <Row label="Potong absen/hari"        value={Rp(Number(s.absentDeductionPerDay))} />
-            <Row label="Potong pulang cepat/mnt"  value={Rp(Number(s.earlyLeaveDeductionPerMinute))} />
+            <Row label="Potong alpha/hari"        value={Rp(Number(s.absentDeductionPerDay))} />
             <Row label="BPJS JHT"                 value={`${s.bpjsJhtPercent}%`} />
             <Row label="BPJS JP"                  value={`${s.bpjsJpPercent}%`} />
             <Row label="BPJS Kesehatan karyawan"  value={`${s.bpjsKesehatanEmployeePercent ?? 1}%`} />

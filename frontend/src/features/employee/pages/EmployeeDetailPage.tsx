@@ -615,7 +615,6 @@ function SalarySettingCard({ setting, onEdit }: { setting: SalarySetting; onEdit
           <SalRow label="Terlambat 1–30 mnt" value={formatCurrency(setting.lateDeductionBracket1 ?? 25000)} />
           <SalRow label="Terlambat 31–60 mnt"value={formatCurrency(setting.lateDeductionBracket2 ?? 50000)} />
           <SalRow label="Terlambat 61+ mnt"  value={formatCurrency(setting.lateDeductionBracket3 ?? 75000)} />
-          <SalRow label="Pulang Cepat/mnt"   value={`${formatCurrency(setting.earlyLeaveDeductionPerMinute)}/mnt`} />
           <SalRow label="JHT Kar/Per"        value={`${setting.bpjsJhtPercent}% / ${setting.bpjsJhtEmployerPercent ?? 3.7}%`} />
           <SalRow label="JP Kar/Per"         value={`${setting.bpjsJpPercent}% / ${setting.bpjsJpEmployerPercent ?? 2}%`} />
         </div>

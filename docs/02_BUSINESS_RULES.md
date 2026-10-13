@@ -4154,6 +4154,19 @@ Finance dianggap valid apabila.
 
 ---
 
+# FIN-038
+## Dashboard Keuangan: Revenue dan Kas Masuk
+
+**Total Revenue** = total invoice (UNPAID / PARTIAL / PAID) menurut tanggal invoice.
+
+**Kas Masuk** = uang yang benar-benar diterima menurut tanggal bayar: pembayaran invoice **ditambah pembayaran DP / deposit** customer. Bagian invoice yang dibayar memakai deposit tidak dihitung lagi (uangnya sudah masuk saat DP dibayar). Refund deposit belum dikurangkan dari Kas Masuk.
+
+**Net Cash Flow** = Kas Masuk − pembelian − komisi dibayar − gaji dibayar.
+
+(Keputusan user 2026-10-13.)
+
+---
+
 # CHAPTER 7 SUMMARY
 
 Finance Module merupakan pusat transaksi operasional.
@@ -5115,7 +5128,12 @@ Hari tanpa jadwal dianggap hari kerja, sehingga jadwal (termasuk hari OFF) harus
 
 ### Kerja Hari Libur (per hari)
 
-Dibayar **tarif kerja hari libur** (Setting Gaji) untuk setiap hari libur nasional yang **benar-benar dihadiri** (ada absensi hadir: PRESENT / LATE / EARLY_LEAVE / HALF_DAY). Dijadwalkan kerja tapi tidak hadir → tidak dibayar. Daftar hari libur diambil dari Pengaturan → Hari Libur.
+Dibayar **tarif kerja hari libur** (Setting Gaji) untuk setiap hari libur nasional yang **dijadwalkan kerja oleh manager** (permintaan masuk lewat jadwal) **dan benar-benar dihadiri** (ada absensi hadir: PRESENT / LATE / EARLY_LEAVE / HALF_DAY). Dibayar penuh walaupun pulang cepat.
+
+- Dijadwalkan kerja tapi tidak hadir → tidak dibayar.
+- Jadwal OFF tapi datang sendiri → tidak dibayar.
+
+Daftar hari libur diambil dari Pengaturan → Hari Libur.
 
 ---
 
@@ -5145,6 +5163,10 @@ Potongan Absen = hari alpha × potongan absen per hari di Setting Gaji.
 Hari alpha = hari kerja dalam masa kerja tanpa absensi hadir. Tidak dihitung alpha: hari libur (OFF), libur nasional, Cuti / Izin / Sakit (status jadwal), dan hari sebelum tanggal masuk / sesudah tanggal resign. Hari tanpa jadwal dihitung hari kerja (sama dengan transport, PAY-018).
 
 Cuti, sakit, dan izin tidak masuk tidak kena Potongan Absen (sudah memengaruhi transport dan uang makan).
+
+### Pulang Cepat
+
+Pulang cepat **tidak dipotong per menit**. Dampaknya hanya ke uang makan: lama kerja di bawah batas setengah hari → uang makan 50% (PAY-018). Kolom potongan pulang cepat di Setting Gaji tidak dipakai lagi. (Keputusan user 2026-10-13.)
 
 ---
 

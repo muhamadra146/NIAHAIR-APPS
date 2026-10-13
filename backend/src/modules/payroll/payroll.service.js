@@ -58,11 +58,17 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   const workingSchedules = schedules.filter((sc) => sc.status === "WORKING");
   const workingDays      = workingSchedules.length;
 
-  // Kerja hari libur = hari libur nasional yang benar-benar dihadiri (ada absensi hadir), bukan sekadar dijadwalkan
+  // Kerja hari libur (PAY-018) = libur nasional yang DIJADWALKAN kerja oleh manager (permintaan masuk)
+  // DAN benar-benar dihadiri. Datang sendiri saat jadwal OFF tidak dibayar.
   const presentDateSet = new Set(
     attendances.filter((a) => PRESENT_STATUSES.includes(a.status)).map((a) => new Date(a.workDate).toISOString().split("T")[0])
   );
-  const holidayWorkingDays = [...presentDateSet].filter((d) => holidaySet.has(d)).length;
+  const scheduledWorkDates = new Set(
+    workingSchedules
+      .filter((sc) => !(sc.shift && !sc.shift.startTime)) // shift "Day Off" tanpa jam = libur
+      .map((sc) => new Date(sc.workDate).toISOString().split("T")[0])
+  );
+  const holidayWorkingDays = [...presentDateSet].filter((d) => holidaySet.has(d) && scheduledWorkDates.has(d)).length;
 
   // Present days = attendance with actual check-in (PRESENT/LATE/EARLY_LEAVE/HALF_DAY)
   const presentDays = attendances.filter((a) => PRESENT_STATUSES.includes(a.status)).length;
@@ -80,7 +86,6 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   const tunjanganAmount  = proration.prorated ? D(s.tunjangan ?? 0).mul(proration.factor) : D(s.tunjangan ?? 0);
 
   // Sum minutes
-  const totalEarlyLeaveMinutes = attendances.reduce((acc, a) => acc + (a.earlyLeaveMinutes ?? 0), 0);
   const totalOvertimeMinutes   = attendances.reduce((acc, a) => acc + (a.overtimeMinutes   ?? 0), 0);
 
   // Bracket-based late deduction — per occurrence
@@ -192,7 +197,7 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   // DEDUCTION
   addItem("DEDUCTION", "absen",          "Potongan Alpha",          D(s.absentDeductionPerDay).mul(D(absentDays)), absentDays, s.absentDeductionPerDay);
   addItem("DEDUCTION", "terlambat",      "Potongan Terlambat",      lateDeductionTotal);
-  addItem("DEDUCTION", "pulang_cepat",   "Potongan Pulang Cepat",   D(s.earlyLeaveDeductionPerMinute).mul(D(totalEarlyLeaveMinutes)), totalEarlyLeaveMinutes, s.earlyLeaveDeductionPerMinute);
+  // Pulang cepat tidak dipotong per menit (PAY-019): cukup memengaruhi uang makan (setengah hari, PAY-018)
   addItem("DEDUCTION", "bpjs_jht",       "BPJS JHT",                bpjsJht);
   addItem("DEDUCTION", "bpjs_jp",        "BPJS JP",                 bpjsJp);
   if (!bpjsKesehatan.isZero()) {

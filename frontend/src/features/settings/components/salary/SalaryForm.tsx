@@ -56,7 +56,6 @@ const DEDUCTION_FIELDS: { key: keyof SalaryFormValues; label: string; step?: num
   { key: "lateDeductionBracket2",        label: "Potongan Terlambat 31–60 menit (Rp)", step: 5000 },
   { key: "lateDeductionBracket3",        label: "Potongan Terlambat 61+ menit (Rp)", step: 5000 },
   { key: "absentDeductionPerDay",        label: "Potongan Alpha / Hari (Rp)", hint: "Hanya tidak masuk tanpa keterangan. Cuti, sakit, izin, OFF & libur nasional tidak dipotong." },
-  { key: "earlyLeaveDeductionPerMinute", label: "Potongan Pulang Cepat / Menit (Rp)" },
 ];
 
 const fmt = (v: number) => new Intl.NumberFormat("id-ID").format(v);
