@@ -1493,6 +1493,13 @@ Dengan standar ini, seluruh REST API tetap stabil, konsisten, dan aman digunakan
 
 Frontend Testing bertujuan memastikan seluruh antarmuka pengguna bekerja dengan benar, konsisten, dan memberikan pengalaman pengguna yang baik.
 
+### Tools & Cara Menjalankan
+
+- Framework: **Vitest** + **Testing Library** (environment jsdom, zona waktu Asia/Jakarta).
+- Lokasi: file `*.test.ts` / `*.test.tsx` di samping kode yang diuji (`frontend/src/**`).
+- Jalankan: `cd frontend && pnpm test` (sekali jalan) atau `pnpm test:watch`.
+- Cek tipe: `npx tsc -p tsconfig.app.json --noEmit` (bukan `tsc -p .`, yang tidak memeriksa file apa pun).
+
 Testing mencakup.
 
 - Component
