@@ -26,6 +26,7 @@ import { createDeposit, createDepositPayment, applyDeposit } from "../api";
 import type { InvoiceStatus } from "../types";
 import { isOpenInvoice } from "../types";
 import { CreateInvoiceDialog } from "../components/CreateInvoiceDialog";
+import { itemDiscountParts, invoiceDiscountSummary, invoiceDiscountTotal, discountText } from "../discount";
 
 const STATUS_LABEL: Record<InvoiceStatus, string> = {
   UNPAID:    "Belum Bayar",
@@ -153,7 +154,11 @@ export function InvoiceDetailPage() {
         {/* Summary cards */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <SummaryCard label="Subtotal"    value={formatCurrency(invoice.subtotal)} />
-          <SummaryCard label="Diskon"      value={formatCurrency(invoice.totalDiscount)} />
+          <SummaryCard
+            label="Diskon"
+            value={formatCurrency(invoiceDiscountTotal(invoice))}
+            sub={invoiceDiscountSummary(invoice).map(discountText).join(" · ") || undefined}
+          />
           <SummaryCard label="Pajak"       value={formatCurrency(invoice.totalTax)} />
           <SummaryCard label="Grand Total" value={formatCurrency(invoice.grandTotal)} highlight />
         </div>
@@ -193,7 +198,13 @@ export function InvoiceDetailPage() {
                       <td className="px-4 py-2 text-right">{item.qty}</td>
                       <td className="px-4 py-2 text-right">{formatCurrency(item.price)}</td>
                       <td className="px-4 py-2 text-right text-muted-foreground">
-                        {Number(item.discount) > 0 ? formatCurrency(item.discount) : "—"}
+                        {itemDiscountParts(item, invoice).length > 0
+                          ? itemDiscountParts(item, invoice).map((p) => (
+                              <p key={p.kind} className={`whitespace-nowrap text-xs ${p.kind === "membership" ? "text-purple-700" : "text-red-600"}`}>
+                                {p.label} <span className="font-medium">−{formatCurrency(p.amount)}</span>
+                              </p>
+                            ))
+                          : "—"}
                       </td>
                       <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.subtotal)}</td>
                     </tr>
@@ -381,12 +392,13 @@ export function InvoiceDetailPage() {
 
 // ── Summary card ──────────────────────────────────────────────────────────────
 
-function SummaryCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function SummaryCard({ label, value, highlight, sub }: { label: string; value: string; highlight?: boolean; sub?: string }) {
   return (
     <Card className={highlight ? "border-primary/40 bg-primary/5" : ""}>
       <CardContent className="px-4 py-3">
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className={`mt-0.5 text-base font-bold ${highlight ? "text-primary" : ""}`}>{value}</p>
+        {sub && <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{sub}</p>}
       </CardContent>
     </Card>
   );
@@ -507,11 +519,12 @@ function buildWhatsAppMessage(invoice: import("../types").Invoice): string {
   (invoice.items ?? []).forEach((item) => {
     const subtotal = Number(item.subtotal).toLocaleString("id-ID");
     lines.push(`• ${item.item?.name ?? "-"} x${item.qty} = Rp ${subtotal}`);
+    itemDiscountParts(item, invoice).forEach((p) => lines.push(`   ${p.label} -Rp ${Math.round(p.amount).toLocaleString("id-ID")}`));
   });
   lines.push(``);
-  if (Number(invoice.totalDiscount) > 0) {
-    lines.push(`Diskon: -Rp ${Number(invoice.totalDiscount).toLocaleString("id-ID")}`);
-  }
+  invoiceDiscountSummary(invoice).forEach((p) => {
+    lines.push(`${p.label}: -Rp ${Math.round(p.amount).toLocaleString("id-ID")}`);
+  });
   if (Number(invoice.totalTax) > 0) {
     lines.push(`Pajak: Rp ${Number(invoice.totalTax).toLocaleString("id-ID")}`);
   }
@@ -532,7 +545,7 @@ function printReceipt(invoice: import("../types").Invoice) {
   const items = (invoice.items ?? [])
     .map((item) => `
       <tr>
-        <td style="padding:4px 0;border-bottom:1px dashed #e5e7eb">${item.item?.name ?? "-"}${item.item?.itemCode ? `<br><small style="color:#6b7280">${item.item.itemCode}</small>` : ""}</td>
+        <td style="padding:4px 0;border-bottom:1px dashed #e5e7eb">${item.item?.name ?? "-"}${item.item?.itemCode ? `<br><small style="color:#6b7280">${item.item.itemCode}</small>` : ""}${itemDiscountParts(item, invoice).map((p) => `<br><small>${p.label} -Rp ${Math.round(p.amount).toLocaleString("id-ID")}</small>`).join("")}</td>
         <td style="padding:4px 0;text-align:center;border-bottom:1px dashed #e5e7eb">${item.qty}</td>
         <td style="padding:4px 0;text-align:right;border-bottom:1px dashed #e5e7eb">Rp ${Number(item.price).toLocaleString("id-ID")}</td>
         <td style="padding:4px 0;text-align:right;border-bottom:1px dashed #e5e7eb">Rp ${Number(item.subtotal).toLocaleString("id-ID")}</td>
@@ -586,7 +599,7 @@ function printReceipt(invoice: import("../types").Invoice) {
   </table>
   <div class="divider"></div>
   <table>
-    ${Number(invoice.totalDiscount) > 0 ? `<tr><td>Diskon</td><td style="text-align:right">-Rp ${Number(invoice.totalDiscount).toLocaleString("id-ID")}</td></tr>` : ""}
+    ${invoiceDiscountSummary(invoice).map((p) => `<tr><td>${p.label}</td><td style="text-align:right">-Rp ${Math.round(p.amount).toLocaleString("id-ID")}</td></tr>`).join("")}
     ${Number(invoice.totalTax) > 0 ? `<tr><td>Pajak</td><td style="text-align:right">Rp ${Number(invoice.totalTax).toLocaleString("id-ID")}</td></tr>` : ""}
     <tr class="total-row"><td>TOTAL</td><td style="text-align:right">Rp ${Number(invoice.grandTotal).toLocaleString("id-ID")}</td></tr>
   </table>

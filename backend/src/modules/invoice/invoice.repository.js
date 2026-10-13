@@ -5,6 +5,8 @@ const INCLUDE = {
   customer:          { select: { id: true, name: true, customerNo: true, mobilePhone: true } },
   branch:            { select: { id: true, code: true, name: true } },
   createdByEmployee: { select: { id: true, employeeCode: true, name: true } },
+  // Paket membership saat invoice dibuat — untuk memisahkan teks diskon membership dari diskon item
+  membership:        { select: { id: true, name: true, discountType: true, discountValue: true } },
   items: {
     include: {
       item: { select: { id: true, name: true, itemCode: true, itemType: true } },

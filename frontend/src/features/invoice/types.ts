@@ -22,6 +22,7 @@ export interface InvoiceItemRef {
   id:       string;
   name:     string;
   itemCode: string;
+  itemType?: string;
 }
 
 export interface InvoiceUnitRef {
@@ -85,6 +86,9 @@ export interface Invoice {
   invoiceDate:         string;
   subtotal:            string;
   totalDiscount:       string;
+  /** Diskon membership (persen: sudah termasuk di totalDiscount; nominal: dipotong dari total) */
+  membershipDiscountTotal?: string | null;
+  membership?:         { id: string; name: string; discountType: "PERCENTAGE" | "FIXED_AMOUNT"; discountValue: string } | null;
   totalTax:            string;
   grandTotal:          string;
   totalDeposit:        string;
