@@ -194,6 +194,7 @@ export function InvoiceDetailPage() {
                         <p className="font-medium">{item.item?.name ?? item.itemId}</p>
                         <p className="text-xs text-muted-foreground">{item.item?.itemCode} · {item.unit?.name}</p>
                         {item.taxable && <span className="text-xs text-blue-600">+PPN {item.taxRate}%</span>}
+                        {item.isMaterial && <span className="text-xs text-amber-700">Bahan baku · tidak ditagih &amp; tidak tampil di struk</span>}
                       </td>
                       <td className="px-4 py-2 text-right">{item.qty}</td>
                       <td className="px-4 py-2 text-right">{formatCurrency(item.price)}</td>
@@ -516,7 +517,8 @@ function buildWhatsAppMessage(invoice: import("../types").Invoice): string {
   lines.push(`Cabang: ${invoice.branch?.name ?? "-"}`);
   lines.push(``);
   lines.push(`*Item:*`);
-  (invoice.items ?? []).forEach((item) => {
+  // Bahan baku = biaya internal, tidak ditampilkan ke customer
+  (invoice.items ?? []).filter((item) => !item.isMaterial).forEach((item) => {
     const subtotal = Number(item.subtotal).toLocaleString("id-ID");
     lines.push(`• ${item.item?.name ?? "-"} x${item.qty} = Rp ${subtotal}`);
     itemDiscountParts(item, invoice).forEach((p) => lines.push(`   ${p.label} -Rp ${Math.round(p.amount).toLocaleString("id-ID")}`));
@@ -542,7 +544,9 @@ function buildWhatsAppMessage(invoice: import("../types").Invoice): string {
 }
 
 function printReceipt(invoice: import("../types").Invoice) {
+  // Bahan baku = biaya internal, tidak dicetak di struk customer
   const items = (invoice.items ?? [])
+    .filter((item) => !item.isMaterial)
     .map((item) => `
       <tr>
         <td style="padding:4px 0;border-bottom:1px dashed #e5e7eb">${item.item?.name ?? "-"}${item.item?.itemCode ? `<br><small style="color:#6b7280">${item.item.itemCode}</small>` : ""}${itemDiscountParts(item, invoice).map((p) => `<br><small>${p.label} -Rp ${Math.round(p.amount).toLocaleString("id-ID")}</small>`).join("")}</td>
