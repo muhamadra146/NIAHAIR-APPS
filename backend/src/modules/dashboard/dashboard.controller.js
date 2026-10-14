@@ -1,7 +1,7 @@
 'use strict';
 
 const { success }           = require("../../common/responses/apiResponse");
-const { getFinanceDashboard } = require("./dashboard.service");
+const { getFinanceDashboard, getFinanceDetails } = require("./dashboard.service");
 
 const financeDashboardController = async (req, res, next) => {
   try {
@@ -13,4 +13,15 @@ const financeDashboardController = async (req, res, next) => {
   }
 };
 
-module.exports = { financeDashboardController };
+// GET /dashboard/finance/details?type=revenue|purchases — data di balik kartu dashboard
+const financeDetailsController = async (req, res, next) => {
+  try {
+    const { type, branchId, startDate, endDate } = req.query;
+    const result = await getFinanceDetails({ type, branchId, startDate, endDate });
+    return success(res, result, "Finance dashboard details fetched");
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { financeDashboardController, financeDetailsController };

@@ -24,6 +24,7 @@ const {
   findAppointmentById,
   create,
   updateStatus,
+  sumPaid,
   updateDeposit,
   removeDeposit,
   updateAppointmentLink,
@@ -132,7 +133,12 @@ const refundDeposit = async (id) => {
     );
   }
 
-  const updated = await updateStatus(id, "REFUNDED");
+  // Uang yang dikembalikan = DP dibayar − yang sudah dipakai di invoice (FIN-039: mengurangi pendapatan)
+  const used           = withComputed(deposit).usedAmount;
+  const paid           = D(await sumPaid(id));
+  const refundedAmount = paid.gt(used) ? paid.sub(used) : D("0");
+
+  const updated = await updateStatus(id, "REFUNDED", { refundedAt: new Date(), refundedAmount });
   return withComputed(updated);
 };
 
@@ -157,7 +163,11 @@ const cancelDeposit = async (id) => {
     );
   }
 
-  const updated = await updateStatus(id, "CANCELLED");
+  // Batal setelah dibayar = uang DP dikembalikan, diperlakukan sama dengan refund (keputusan user 2026-10-14)
+  const paid  = D(await sumPaid(id));
+  const extra = paid.gt(0) ? { refundedAt: new Date(), refundedAmount: paid } : {};
+
+  const updated = await updateStatus(id, "CANCELLED", extra);
   return withComputed(updated);
 };
 

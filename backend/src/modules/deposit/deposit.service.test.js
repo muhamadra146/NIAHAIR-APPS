@@ -16,6 +16,7 @@ jest.mock('./deposit.repository', () => ({
   findAppointmentById:  jest.fn(),
   create:               jest.fn(),
   updateStatus:         jest.fn(),
+  sumPaid:              jest.fn().mockResolvedValue(0),
   updateDeposit:        jest.fn(),
   removeDeposit:        jest.fn(),
   updateAppointmentLink: jest.fn(),
@@ -158,22 +159,29 @@ describe('refundDeposit', () => {
     await expect(refundDeposit('dep1')).rejects.toMatchObject({ statusCode: 422 });
   });
 
-  test('should_refund_when_status_is_PAID', async () => {
+  test('should_refund_when_status_is_PAID_and_record_full_paid_amount', async () => {
     repo.findById.mockResolvedValue(makeDeposit({ status: 'PAID' }));
+    repo.sumPaid.mockResolvedValueOnce('500000');
     repo.updateStatus.mockResolvedValue(makeDeposit({ status: 'REFUNDED' }));
 
     await refundDeposit('dep1');
 
-    expect(repo.updateStatus).toHaveBeenCalledWith('dep1', 'REFUNDED');
+    const [, status, extra] = repo.updateStatus.mock.calls[0];
+    expect(status).toBe('REFUNDED');
+    expect(extra.refundedAt).toBeInstanceOf(Date);
+    expect(Number(extra.refundedAmount)).toBe(500000);
   });
 
-  test('should_refund_when_status_is_PARTIAL_USED', async () => {
-    repo.findById.mockResolvedValue(makeDeposit({ status: 'PARTIAL_USED' }));
+  test('should_refund_only_unused_part_when_status_is_PARTIAL_USED', async () => {
+    repo.findById.mockResolvedValue(makeDeposit({ status: 'PARTIAL_USED', invoiceDeposits: [{ amountApplied: '200000' }] }));
+    repo.sumPaid.mockResolvedValueOnce('500000');
     repo.updateStatus.mockResolvedValue(makeDeposit({ status: 'REFUNDED' }));
 
     await refundDeposit('dep1');
 
-    expect(repo.updateStatus).toHaveBeenCalledWith('dep1', 'REFUNDED');
+    const [, status, extra] = repo.updateStatus.mock.calls[0];
+    expect(status).toBe('REFUNDED');
+    expect(Number(extra.refundedAmount)).toBe(300000);
   });
 });
 
@@ -198,13 +206,16 @@ describe('cancelDeposit', () => {
     await expect(cancelDeposit('dep1')).rejects.toMatchObject({ statusCode: 422 });
   });
 
-  test('should_cancel_when_status_is_PAID', async () => {
+  test('should_cancel_PAID_deposit_as_refund_of_paid_amount', async () => {
     repo.findById.mockResolvedValue(makeDeposit({ status: 'PAID' }));
+    repo.sumPaid.mockResolvedValueOnce('500000');
     repo.updateStatus.mockResolvedValue(makeDeposit({ status: 'CANCELLED' }));
 
     await cancelDeposit('dep1');
 
-    expect(repo.updateStatus).toHaveBeenCalledWith('dep1', 'CANCELLED');
+    const [, status, extra] = repo.updateStatus.mock.calls[0];
+    expect(status).toBe('CANCELLED');
+    expect(Number(extra.refundedAmount)).toBe(500000);
   });
 
   test('should_cancel_when_status_is_UNPAID', async () => {
@@ -213,7 +224,7 @@ describe('cancelDeposit', () => {
 
     await cancelDeposit('dep1');
 
-    expect(repo.updateStatus).toHaveBeenCalledWith('dep1', 'CANCELLED');
+    expect(repo.updateStatus).toHaveBeenCalledWith('dep1', 'CANCELLED', {});
   });
 });
 

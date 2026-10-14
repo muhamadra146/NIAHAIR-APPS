@@ -39,8 +39,15 @@ const findAppointmentById = (id) =>
 const create = (data) =>
   prisma.deposit.create({ data, include: INCLUDE });
 
-const updateStatus = (id, status) =>
-  prisma.deposit.update({ where: { id }, data: { status }, include: INCLUDE });
+/** extra: mis. { refundedAt, refundedAmount } saat uang DP dikembalikan */
+const updateStatus = (id, status, extra = {}) =>
+  prisma.deposit.update({ where: { id }, data: { status, ...extra }, include: INCLUDE });
+
+/** Total uang DP yang sudah dibayar client */
+const sumPaid = async (depositId) => {
+  const agg = await prisma.depositPayment.aggregate({ where: { depositId }, _sum: { amount: true } });
+  return agg._sum.amount ?? 0;
+};
 
 const updateDeposit = (id, data) =>
   prisma.deposit.update({ where: { id }, data, include: INCLUDE });
@@ -59,6 +66,7 @@ module.exports = {
   findAppointmentById,
   create,
   updateStatus,
+  sumPaid,
   updateDeposit,
   removeDeposit,
   updateAppointmentLink,

@@ -4163,15 +4163,55 @@ Finance dianggap valid apabila.
 ---
 
 # FIN-038
-## Dashboard Keuangan: Revenue dan Kas Masuk
+## Dashboard Keuangan: Invoice Terbit dan Arus Kas
 
-**Total Revenue** = total invoice (UNPAID / PARTIAL / PAID) menurut tanggal invoice.
+**Invoice Belum Lunas** = sisa tagihan invoice (UNPAID / PARTIAL / PAID) menurut tanggal invoice.
 
-**Kas Masuk** = uang yang benar-benar diterima menurut tanggal bayar: pembayaran invoice **ditambah pembayaran DP / deposit** customer. Bagian invoice yang dibayar memakai deposit tidak dihitung lagi (uangnya sudah masuk saat DP dibayar). Refund deposit belum dikurangkan dari Kas Masuk.
+**Arus Kas Bersih** = Pendapatan Kotor (FIN-039) − pembelian gudang − komisi disetujui/dibayar − gaji dibayar.
 
-**Net Cash Flow** = Kas Masuk − pembelian − komisi dibayar − gaji dibayar.
+Semua angka dashboard **per cabang** (cabang aktif di header, bisa diganti ke cabang lain atau "Semua cabang"). Setiap kartu bisa diklik ke data di baliknya.
 
-(Keputusan user 2026-10-13.)
+(Keputusan user 2026-10-13, diperbarui 2026-10-14: "Kas Masuk" digantikan Pendapatan Kotor.)
+
+---
+
+# FIN-039
+## Pendapatan Kotor & Pendapatan Bersih
+
+(Keputusan user & tim Finance 2026-10-14.)
+
+### Pendapatan Kotor
+Uang yang dibayar client **pada tanggal bayar**: pembayaran invoice + pembayaran DP − uang DP yang dikembalikan.
+
+- Isinya semua yang ada di invoice **setelah diskon** (termasuk diskon membership): treatment, ongkos PP, service charge, charge lembur, dan PPN.
+- Bagian invoice yang dibayar memakai DP **tidak dihitung lagi** (uangnya sudah masuk saat DP dibayar).
+- **Refund DP** dan **pembatalan DP yang sudah dibayar** mengurangi pendapatan pada tanggal refund/batal sebesar uang yang dikembalikan (DP dibayar − yang sudah dipakai di invoice). Tanggal & jumlahnya disimpan di deposit (`refundedAt`, `refundedAmount`).
+
+### Pendapatan Bersih — 2 versi
+| | Rumus |
+|---|---|
+| **Bersih sebelum komisi** | Kotor − **PPN** − **Ongkos PP** − **50% Charge Lembur** (bagian tim) − **komisi tim Home Service** |
+| **Bersih setelah komisi** | Bersih sebelum komisi − **komisi staf lainnya** |
+
+- Komisi yang dihitung: semua status **kecuali Ditolak** (menunggu, disetujui, dibayar). Komisi Charge Lembur tidak dihitung lagi karena bagian tim (50%) sudah dipotong dari nilai item.
+- Komisi tim Home Service mengikuti komisi yang dibuat dari Input Pekerjaan (COM-016). Selama Input Pekerjaan belum diisi, komisinya belum ikut dipotong; dashboard menampilkan peringatan jumlah invoice tersebut.
+- Item Ongkos PP, Charge Lembur, dan Service Charge Home Service ditentukan lewat pengaturan (`finance_ongkos_pp_item_codes`, `finance_charge_lembur_item_codes`, `finance_home_service_item_codes`, berisi daftar kode item), bukan ditulis di kode.
+
+### Pembayaran sebagian
+Potongan melekat di invoice, sedangkan uangnya bisa masuk bertahap. Potongan dihitung **sebanding** dengan uang yang masuk (pembayaran ÷ grand total invoice), sehingga angka harian masuk akal dan total sebulan selalu sama dengan hitungan per invoice.
+
+Contoh invoice kotor Rp 1.550.000 (bersih sebelum komisi Rp 1.075.000, setelah komisi Rp 985.000) dibayar 30% lalu 70%:
+
+| Tanggal | Kotor | Bersih sebelum komisi | Bersih setelah komisi |
+|---|---|---|---|
+| 1 Okt | Rp 465.000 | Rp 322.500 | Rp 295.500 |
+| 10 Okt | Rp 1.085.000 | Rp 752.500 | Rp 689.500 |
+
+### DP dari menu Deposit
+Saat DP dibayar, isi invoice belum diketahui: DP masuk **kotor dan bersih penuh** pada tanggal bayar. Potongannya dihitung **saat DP dipakai di invoice** (baris "DP dipakai": kotor Rp 0, bersih dikurangi potongan untuk porsi DP). Totalnya tetap sama, hanya bergeser hari.
+
+### Pembelian Gudang
+Faktur pembelian berstatus **diposting**, menurut tanggal faktur, untuk **gudang yang terhubung ke cabang** terpilih (cabang NIAHAIR = NIAHAIR GUDANG). Gudang yang belum dihubungkan ke cabang hanya muncul di "Semua cabang".
 
 ---
 

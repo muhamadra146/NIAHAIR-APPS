@@ -1437,6 +1437,10 @@ model Deposit {
 
   paidAt DateTime?
 
+  // Uang DP yang dikembalikan ke client (refund, atau batal setelah dibayar) — mengurangi pendapatan pada refundedAt
+  refundedAt     DateTime?
+  refundedAmount Decimal?  @db.Decimal(18, 2)
+
   accurateDepositId     Int?      @unique
   accurateDepositNumber String?
   lastSyncAt            DateTime?

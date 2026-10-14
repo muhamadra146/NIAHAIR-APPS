@@ -21,10 +21,7 @@ function dateOnlyWhere(field, startDate, endDate) {
   return Object.keys(f).length ? { [field]: f } : {};
 }
 
-// Tanggal kalender WIB dari kolom TIMESTAMP (disimpan UTC tanpa zona)
-const wibDateSql = (col) => `DATE(("${col}" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jakarta')`;
-
-// ── Revenue (dari Invoice) ────────────────────────────────────────────────────
+// ── Invoice terbit (tanggal invoice) — untuk kartu piutang ────────────────────
 
 const getRevenueSummary = async ({ branchId, startDate, endDate }) => {
   const where = {
@@ -56,75 +53,128 @@ const getRevenueSummary = async ({ branchId, startDate, endDate }) => {
   };
 };
 
-// ── Cash Received (pembayaran invoice + pembayaran DP/deposit) ──────────────
-// Uang yang benar-benar diterima pada tanggal bayar. Bagian invoice yang dibayar
-// pakai deposit tidak tercatat di payments, jadi tidak terhitung dua kali.
+// ── Uang client (pendapatan kotor/bersih, FIN-039) ────────────────────────────
 
-const getCashReceivedSummary = async ({ branchId, startDate, endDate }) => {
-  const [inv, dep] = await Promise.all([
-    prisma.payment.aggregate({
-      where: {
-        ...(branchId ? { branchId } : {}),
-        ...dateWhere("paymentDate", startDate, endDate),
+const CUSTOMER = { select: { id: true, name: true } };
+
+/** Pembayaran invoice pada tanggal bayar. Bagian yang dibayar pakai DP tidak ada di sini. */
+const findInvoicePayments = ({ branchId, startDate, endDate }) =>
+  prisma.payment.findMany({
+    where:   { ...(branchId ? { branchId } : {}), ...dateWhere("paymentDate", startDate, endDate) },
+    select:  {
+      id: true, paymentNo: true, amount: true, paymentDate: true, invoiceId: true,
+      invoice: { select: { invoiceNo: true, customer: CUSTOMER } },
+    },
+    orderBy: { paymentDate: "asc" },
+  });
+
+/** Pembayaran DP dari client pada tanggal bayar (cabang deposit) */
+const findDepositPayments = ({ branchId, startDate, endDate }) =>
+  prisma.depositPayment.findMany({
+    where:   { ...(branchId ? { deposit: { branchId } } : {}), ...dateWhere("paidAt", startDate, endDate) },
+    select:  {
+      id: true, paymentNo: true, amount: true, paidAt: true, depositId: true,
+      deposit: { select: { customer: CUSTOMER } },
+    },
+    orderBy: { paidAt: "asc" },
+  });
+
+/** DP yang dipakai di invoice — potongan pendapatan bersih untuk porsi DP dihitung di sini */
+const findDepositApplications = ({ branchId, startDate, endDate }) =>
+  prisma.invoiceDeposit.findMany({
+    where:   {
+      invoice: { status: { not: "CANCELLED" }, ...(branchId ? { branchId } : {}) },
+      ...dateWhere("createdAt", startDate, endDate),
+    },
+    select:  {
+      id: true, amountApplied: true, createdAt: true, invoiceId: true, depositId: true,
+      invoice: { select: { invoiceNo: true, customer: CUSTOMER } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+/** Uang DP yang dikembalikan ke client (refund / batal setelah dibayar) */
+const findDepositRefunds = ({ branchId, startDate, endDate }) =>
+  prisma.deposit.findMany({
+    where:   {
+      refundedAmount: { gt: 0 },
+      ...(branchId ? { branchId } : {}),
+      ...dateWhere("refundedAt", startDate, endDate),
+    },
+    select:  { id: true, status: true, refundedAt: true, refundedAmount: true, customer: CUSTOMER },
+    orderBy: { refundedAt: "asc" },
+  });
+
+/** Rincian invoice untuk menghitung porsi bersih: item, PPN, dan komisi (kecuali ditolak) */
+const findInvoicesForRevenue = (ids) =>
+  ids.length === 0 ? Promise.resolve([]) : prisma.invoice.findMany({
+    where:  { id: { in: ids } },
+    select: {
+      id: true, grandTotal: true, totalTax: true,
+      items: {
+        select: {
+          subtotal: true, isMaterial: true,
+          item: { select: { itemCode: true, commissionCategoryId: true } },
+        },
       },
-      _count: { _all: true },
-      _sum:   { amount: true },
-    }),
-    prisma.depositPayment.aggregate({
-      where: {
-        ...(branchId ? { deposit: { branchId } } : {}),
-        ...dateWhere("paidAt", startDate, endDate),
+      commissions: {
+        where:  { status: { not: "REJECTED" } },
+        select: { commissionAmount: true, serviceItem: { select: { itemCode: true } } },
       },
-      _count: { _all: true },
-      _sum:   { amount: true },
-    }),
-  ]);
+    },
+  });
 
-  const invoiceTotal = Number(inv._sum.amount ?? 0);
-  const depositTotal = Number(dep._sum.amount ?? 0);
-  return {
-    total:               invoiceTotal + depositTotal,
-    paymentCount:        inv._count._all + dep._count._all,
-    invoicePayments:     invoiceTotal,
-    depositPayments:     depositTotal,
-    depositPaymentCount: dep._count._all,
-  };
-};
+// ── Pembelian (gudang milik cabang) ───────────────────────────────────────────
 
-// ── Purchases / Expenses (dari PurchaseInvoice) ───────────────────────────────
+const purchaseWhere = ({ branchId, startDate, endDate }) => ({
+  status: "POSTED",
+  ...(branchId ? { warehouse: { branchId } } : {}),
+  ...dateWhere("invoiceDate", startDate, endDate),
+});
 
-const getPurchaseSummary = async ({ startDate, endDate }) => {
-  const where = {
-    status: "POSTED",
-    ...dateWhere("invoiceDate", startDate, endDate),
-  };
-
+const getPurchaseSummary = async (params) => {
   const agg = await prisma.purchaseInvoice.aggregate({
-    where,
+    where:  purchaseWhere(params),
     _count: { _all: true },
     _sum:   { grandTotal: true },
   });
-
   return {
     total:        Number(agg._sum.grandTotal ?? 0),
     invoiceCount: agg._count._all,
   };
 };
 
+const findPurchases = (params) =>
+  prisma.purchaseInvoice.findMany({
+    where:   purchaseWhere(params),
+    select:  {
+      id: true, invoiceNo: true, supplierInvoiceNo: true, invoiceDate: true, grandTotal: true,
+      supplier:  { select: { name: true } },
+      warehouse: { select: { name: true } },
+    },
+    orderBy: { invoiceDate: "asc" },
+  });
+
+const findBranchWarehouses = (branchId) =>
+  prisma.warehouse.findMany({ where: branchId ? { branchId } : { branchId: { not: null } }, select: { name: true }, orderBy: { name: "asc" } });
+
 // ── Commission Summary ────────────────────────────────────────────────────────
 
-const getCommissionSummary = async ({ startDate, endDate }) => {
-  const dateF = dateWhere("createdAt", startDate, endDate);
+const getCommissionSummary = async ({ branchId, startDate, endDate }) => {
+  const where = {
+    ...dateWhere("createdAt", startDate, endDate),
+    ...(branchId ? { invoice: { branchId } } : {}),
+  };
 
   const [agg, byStatus] = await Promise.all([
     prisma.commission.aggregate({
-      where:  { ...dateF, status: { in: ["APPROVED", "PAID"] } },
+      where:  { ...where, status: { in: ["APPROVED", "PAID"] } },
       _count: { _all: true },
       _sum:   { commissionAmount: true },
     }),
     prisma.commission.groupBy({
       by:    ["status"],
-      where: { ...dateF },
+      where,
       _sum:  { commissionAmount: true },
       _count:{ _all: true },
     }),
@@ -175,100 +225,16 @@ const getPayrollSummary = async ({ branchId, startDate, endDate }) => {
   };
 };
 
-// ── Daily Trend (Revenue + Cash Received) ────────────────────────────────────
-
-const getDailyTrend = async ({ branchId, startDate, endDate }) => {
-  // ── Revenue per hari ─────────────────────────────────────────────────────
-  const revConditions = [`status IN ('UNPAID', 'PARTIAL', 'PAID')`];
-  const revValues     = [];
-  let   ri            = 1;
-
-  if (branchId) { revConditions.push(`"branchId" = $${ri++}`); revValues.push(branchId); }
-  if (startDate){ revConditions.push(`"invoiceDate" >= $${ri++}`); revValues.push(wibDayStart(startDate)); }
-  if (endDate)  { revConditions.push(`"invoiceDate" <= $${ri++}`); revValues.push(wibDayEnd(endDate)); }
-
-  const revRows = await prisma.$queryRawUnsafe(
-    `SELECT
-       ${wibDateSql("invoiceDate")} AS date,
-       COUNT(*)::int         AS invoice_count,
-       SUM("grandTotal")     AS revenue
-     FROM invoices
-     WHERE ${revConditions.join(" AND ")}
-     GROUP BY ${wibDateSql("invoiceDate")}
-     ORDER BY date ASC`,
-    ...revValues,
-  );
-
-  // ── Cash received per hari ───────────────────────────────────────────────
-  const payConditions = [];
-  const payValues     = [];
-  let   pi            = 1;
-
-  if (branchId) { payConditions.push(`"branchId" = $${pi++}`); payValues.push(branchId); }
-  if (startDate){ payConditions.push(`"paidAt" >= $${pi++}`); payValues.push(wibDayStart(startDate)); }
-  if (endDate)  { payConditions.push(`"paidAt" <= $${pi++}`); payValues.push(wibDayEnd(endDate)); }
-
-  // Pembayaran invoice + pembayaran DP/deposit (cabang deposit)
-  const payRows = await prisma.$queryRawUnsafe(
-    `SELECT
-       ${wibDateSql("paidAt")} AS date,
-       COUNT(*)::int        AS payment_count,
-       SUM(amount)          AS cash_received
-     FROM (
-       SELECT "paymentDate" AS "paidAt", amount, "branchId" FROM payments
-       UNION ALL
-       SELECT dp."paidAt", dp.amount, d."branchId"
-         FROM deposit_payments dp JOIN deposits d ON d.id = dp."depositId"
-     ) cash
-     ${payConditions.length ? `WHERE ${payConditions.join(" AND ")}` : ""}
-     GROUP BY ${wibDateSql("paidAt")}
-     ORDER BY date ASC`,
-    ...payValues,
-  );
-
-  // ── Merge ke satu array ──────────────────────────────────────────────────
-  const dateMap = new Map();
-
-  const toDateStr = (d) => (d instanceof Date
-    ? d.toISOString().slice(0, 10)
-    : String(d).slice(0, 10));
-
-  for (const r of revRows) {
-    const d = toDateStr(r.date);
-    dateMap.set(d, {
-      date:         d,
-      revenue:      Number(r.revenue      ?? 0),
-      invoiceCount: Number(r.invoice_count ?? 0),
-      cashReceived: 0,
-      paymentCount: 0,
-    });
-  }
-
-  for (const r of payRows) {
-    const d   = toDateStr(r.date);
-    const key = dateMap.get(d);
-    if (key) {
-      key.cashReceived = Number(r.cash_received ?? 0);
-      key.paymentCount = Number(r.payment_count ?? 0);
-    } else {
-      dateMap.set(d, {
-        date:         d,
-        revenue:      0,
-        invoiceCount: 0,
-        cashReceived: Number(r.cash_received ?? 0),
-        paymentCount: Number(r.payment_count ?? 0),
-      });
-    }
-  }
-
-  return Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date));
-};
-
 module.exports = {
   getRevenueSummary,
-  getCashReceivedSummary,
+  findInvoicePayments,
+  findDepositPayments,
+  findDepositApplications,
+  findDepositRefunds,
+  findInvoicesForRevenue,
   getPurchaseSummary,
+  findPurchases,
+  findBranchWarehouses,
   getCommissionSummary,
   getPayrollSummary,
-  getDailyTrend,
 };
