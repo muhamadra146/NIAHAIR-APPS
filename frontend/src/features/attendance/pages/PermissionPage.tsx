@@ -8,7 +8,8 @@ import { Skeleton }      from "@/components/ui/skeleton";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { useAuthStore }  from "@/stores/authStore";
+import { useAuthStore }  from "@/stores/authStore";
+import { canApprove } from "@/lib/access";
 import {
   useMyPermissions, usePermissions,
   useCreatePermission, useApprovePermission, useRejectPermission, useCancelPermission,
@@ -19,7 +20,6 @@ import { WIB_TZ, toWibDateStr } from "@/lib/utils";
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 // OFFICE punya Approval/Verifikasi sesuai access matrix
-const ADMIN_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -308,9 +308,9 @@ function PermissionCard({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 /** Panel pengajuan — dipakai di halaman Pengajuan. Dialog "Ajukan" dikontrol parent. */
-export function PermissionPanel({ createOpen, onCreateClose }: { createOpen: boolean; onCreateClose: () => void }) {
+export function PermissionPanel({ createOpen, onCreateClose, asApprover }: { createOpen: boolean; onCreateClose: () => void; asApprover?: boolean }) {
   const { user } = useAuthStore();
-  const isAdmin  = ADMIN_ROLES.includes(user?.role?.code ?? "");
+  const isAdmin  = asApprover ?? canApprove(user);
   const [reviewing,    setReviewing  ] = useState<PermissionRequest | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
 

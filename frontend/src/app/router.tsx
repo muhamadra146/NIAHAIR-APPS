@@ -92,6 +92,8 @@ export const router = createBrowserRouter([
           { path: "/my-kasbon/:id",  element: <MyLoanDetailPage /> },
           // Jadwal Saya: self-service untuk semua role
           { path: "/my-schedule",    element: <MySchedulePage /> },
+          // Semua karyawan melihat jadwal rekan satu divisinya; ubah = manager divisi / Owner / SA
+          { path: "/schedule",       element: <SchedulePage /> },
           { path: "/attendance-corrections", element: <Navigate to="/pengajuan?tab=koreksi" replace /> },
           // Attendance: self check-in untuk semua role; monitor tim untuk admin (lihat TeamPage)
           { path: "/attendance",             element: <TeamPage /> },
@@ -155,7 +157,6 @@ export const router = createBrowserRouter([
             children: [
               { path: "/employees",          element: <EmployeeListPage /> },
               { path: "/employees/:id",      element: <EmployeeDetailPage /> },
-              { path: "/schedule",           element: <SchedulePage /> },
               { path: "/attendance-report",  element: <AttendanceReportPage /> },
             ],
           },

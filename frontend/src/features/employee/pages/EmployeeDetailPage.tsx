@@ -19,6 +19,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { api } from "@/lib/axios";
 import { toast } from "@/lib/toast";
 import { useAuthStore } from "@/stores/authStore";
+import { isFullAccess } from "@/lib/access";
 import type { ApiResponse } from "@/types/api";
 import {
   useEmployee,
@@ -143,6 +144,7 @@ export function EmployeeDetailPage() {
         payDay:            values.payDay ?? null,
         isActive:          values.isActive,
         homeBranchId:      values.homeBranchId     || null,
+        ...(isFullAccess(user) ? { divisionId: values.divisionId || null, isDivisionManager: !!values.divisionId && !!values.isDivisionManager } : {}),
       });
       await updateBranchMutation.mutateAsync({ branchIds: values.branchIds ?? [] });
       if (files.ktpFile || files.contractFile) {

@@ -36,6 +36,9 @@ export interface Employee {
   payDay:           number | null;
   homeBranchId:     string | null;
   homeBranch:       { id: string; code: string; name: string } | null;
+  divisionId?:        string | null;
+  isDivisionManager?: boolean;
+  division?:          { id: string; code: string; name: string } | null;
   employeeBranches: EmployeeBranch[];
   createdAt:        string;
   updatedAt:        string;
@@ -92,6 +95,8 @@ export interface CreateEmployeeInput {
   commissionEnabled?: boolean;
   payDay?:           number | null;
   homeBranchId?:     string | null;
+  divisionId?:        string | null;
+  isDivisionManager?: boolean;
 }
 
 export interface UpdateEmployeeBranchesInput {
@@ -114,6 +119,8 @@ export interface UpdateEmployeeInput {
   isActive?:          boolean;
   payDay?:            number | null;
   homeBranchId?:      string | null;
+  divisionId?:        string | null;
+  isDivisionManager?: boolean;
 }
 
 export interface UploadEmployeeFilesInput {

@@ -8,14 +8,14 @@ import {
 } from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
-import { useAuthStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/authStore";
+import { canApprove } from "@/lib/access";
 import {
   useCorrections, useMyCorrections, useCreateCorrection, useReviewCorrection,
 } from "../hooks";
 import type { CorrectionRequest, CorrectionStatus, CreateCorrectionInput } from "../types";
 import { WIB_TZ, toWibDateStr, addDaysToDateStr } from "@/lib/utils";
 
-const ADMIN_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -584,9 +584,9 @@ function MyView({ createOpen, onCreateClose }: { createOpen: boolean; onCreateCl
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 /** Panel Koreksi Jam Kerja — dipakai di halaman Pengajuan. Dialog "Ajukan" dikontrol parent. */
-export function CorrectionPanel({ createOpen, onCreateClose }: { createOpen: boolean; onCreateClose: () => void }) {
-  const roleCode = useAuthStore((s) => s.user?.roleCode);
-  const isAdmin  = ADMIN_ROLES.includes(roleCode ?? "");
+export function CorrectionPanel({ createOpen, onCreateClose, asApprover }: { createOpen: boolean; onCreateClose: () => void; asApprover?: boolean }) {
+  const user     = useAuthStore((s) => s.user);
+  const isAdmin  = asApprover ?? canApprove(user);
 
   return isAdmin
     ? <AdminView />

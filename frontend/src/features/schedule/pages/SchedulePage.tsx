@@ -1,7 +1,9 @@
 import { useState, useCallback, useMemo } from "react";
 import { Loader2, AlertCircle } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
-import { useViewOnly } from "@/hooks/useViewOnly";
+import { useViewOnly } from "@/hooks/useViewOnly";
+import { canApprove } from "@/lib/access";
+import { toast } from "@/lib/toast";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useShifts, useRoster, useBulkSchedule } from "../hooks";
 import { fetchRoster } from "../api/staffSchedule.api";
@@ -56,7 +58,9 @@ function daysInMonth(dateStr: string): number {
 
 export function SchedulePage() {
   const { branchId } = useAuthStore();
-  const isViewOnly = useViewOnly();
+  // Semua karyawan boleh MELIHAT jadwal divisinya; mengubah hanya manager divisi / Owner / Super Admin
+  const user       = useAuthStore((s) => s.user);
+  const isViewOnly = useViewOnly() || !canApprove(user);
 
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [startDate, setStartDate] = useState<string>(() =>
@@ -168,6 +172,7 @@ export function SchedulePage() {
       // Build bulk items: shift each date forward by 7 days
       const schedules: BulkScheduleItem[] = [];
       for (const row of prevRoster.rows) {
+        if (row.canEdit === false) continue;            // hanya staf yang boleh diubah
         for (const cell of row.schedules) {
           if (!cell.status) continue;                    // skip unscheduled
           const newDate = toISODate(addDays(new Date(cell.date), 7));
@@ -204,12 +209,17 @@ export function SchedulePage() {
       notes?: string | null,
     ) => {
       if (!branchId) return;
+      const row = rosterData?.rows.find((r) => r.employee.id === employeeId);
+      if (row && row.canEdit === false) {
+        toast.error("Jadwal ini hanya bisa diubah oleh manager divisinya atau Owner / Super Admin.");
+        return;
+      }
       await bulkMut.mutateAsync({
         branchId,
         schedules: [{ employeeId, date, shiftId, status, notes }],
       });
     },
-    [branchId, bulkMut],
+    [branchId, bulkMut, rosterData],
   );
 
   // ── No branch guard ───────────────────────────────────────────────────────
@@ -222,7 +232,12 @@ export function SchedulePage() {
   }
 
   return (
-    <PageContainer title="Jadwal" subtitle="Roster karyawan per cabang — klik sel atau tombol + untuk assign shift">
+    <PageContainer
+      title="Jadwal"
+      subtitle={isViewOnly
+        ? "Jadwal rekan satu divisi di cabang ini"
+        : "Roster karyawan per cabang — klik sel atau tombol + untuk assign shift"}
+    >
       <div className="space-y-4">
 
       {/* ── Navigation ──────────────────────────────────────── */}
@@ -284,6 +299,7 @@ export function SchedulePage() {
             viewMode={viewMode}
             isPending={rosterLoading || bulkMut.isPending}
             onCellSave={isViewOnly ? async () => {} : handleCellSave}
+            readOnly={isViewOnly}
           />
         </div>
         <div className="w-64 shrink-0">
@@ -300,6 +316,7 @@ export function SchedulePage() {
           viewMode={viewMode}
           isPending={rosterLoading || bulkMut.isPending}
           onCellSave={isViewOnly ? async () => {} : handleCellSave}
+          readOnly={isViewOnly}
         />
         <RosterSummary data={gridData} shifts={shifts} />
       </div>

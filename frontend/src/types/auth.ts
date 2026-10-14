@@ -27,9 +27,12 @@ export interface AuthUser {
   };
 
   employee: {
-    id:           string;
-    name:         string;
-    employeeCode: string;
+    id:                 string;
+    name:               string;
+    employeeCode:       string;
+    divisionId?:        string | null;
+    isDivisionManager?: boolean;
+    division?:          { id: string; code: string; name: string } | null;
   } | null;
 
   branches: Branch[];

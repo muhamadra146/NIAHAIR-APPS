@@ -9,6 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { fetchAllBranches } from "@/features/settings/api/branch.api";
+import { useDivisions } from "@/features/division/hooks";
+import { useAuthStore } from "@/stores/authStore";
+import { isFullAccess } from "@/lib/access";
 import { useEmployeeRoles, useNextEmployeeCode } from "../hooks";
 import { createEmployeeSchema, updateEmployeeSchema } from "../schemas/employee.schema";
 import type { CreateEmployeeFormValues, UpdateEmployeeFormValues, UpdateEmployeeFormInput } from "../schemas/employee.schema";
@@ -40,6 +43,7 @@ export function EmployeeCreateForm({ open, onOpenChange, onSubmit, isPending, er
       hireDate: "", birthDate: "", address: "", emergencyContact: "",
       nikKtp: "", resignDate: "",
       commissionEnabled: false, payDay: null, homeBranchId: "", branchIds: [],
+      divisionId: "", isDivisionManager: false,
     },
   });
 
@@ -185,6 +189,10 @@ function EmployeeFormFields({
 }) {
   const { register, formState: { errors }, watch, setValue } = form;
   const [openBranch, setOpenBranch] = useState(false);
+  // Divisi & manager divisi hanya diatur Owner / Super Admin
+  const canSetDivision = isFullAccess(useAuthStore((s) => s.user));
+  const { data: divisions = [] } = useDivisions();
+  const divisionId = (watch("divisionId") as string | undefined) ?? "";
   const ktpInputRef      = useRef<HTMLInputElement>(null);
   const contractInputRef = useRef<HTMLInputElement>(null);
 
@@ -352,6 +360,38 @@ function EmployeeFormFields({
         </div>
       </Field>
 
+      {/* Divisi */}
+      {canSetDivision && (
+        <Field label="Divisi" full>
+          {/* Dikendalikan nilai form: daftar divisi dimuat async setelah form diisi */}
+          <select
+            value={divisionId}
+            onChange={(e) => {
+              setValue("divisionId", e.target.value, { shouldDirty: true });
+              if (!e.target.value) setValue("isDivisionManager", false);
+            }}
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="">— Tanpa divisi —</option>
+            {divisions.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+          <label className="mt-2 flex items-center gap-2 text-sm">
+            <Switch
+              checked={(watch("isDivisionManager") as boolean) ?? false}
+              onCheckedChange={(v) => setValue("isDivisionManager", v)}
+              disabled={!divisionId}
+            />
+            Manager Divisi
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Manager divisi mengatur jadwal &amp; menyetujui pengajuan staf divisinya di cabang utamanya.
+            Pengajuan manager disetujui Owner / Super Admin.
+          </p>
+        </Field>
+      )}
+
       {/* Home Branch */}
       {branches.length > 0 && (
         <Field label="Home Branch" error={errs.homeBranchId?.message} full>
@@ -472,5 +512,7 @@ function employeeToForm(e: Employee): UpdateEmployeeFormValues {
     isActive:          e.isActive,
     homeBranchId:      e.homeBranchId ?? "",
     branchIds:         e.employeeBranches?.map((eb) => eb.branch.id) ?? [],
+    divisionId:        e.divisionId ?? "",
+    isDivisionManager: e.isDivisionManager ?? false,
   };
 }

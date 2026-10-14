@@ -69,10 +69,12 @@ function ShiftCell({
   cell,
   onClick,
   onUnassign,
+  readOnly = false,
 }: {
   cell:       ScheduleCell | null;
   onClick:    () => void;
   onUnassign: () => void;
+  readOnly?:  boolean;
 }) {
   // Empty — no x button
   if (!cell?.status) {
@@ -90,7 +92,7 @@ function ShiftCell({
   if (cell.status === "OFF") {
     return (
       <div className="relative group">
-        <UnassignBtn onUnassign={onUnassign} />
+        {!readOnly && <UnassignBtn onUnassign={onUnassign} />}
         <button
           type="button"
           onClick={onClick}
@@ -112,7 +114,7 @@ function ShiftCell({
   if (cell.status === "LEAVE") {
     return (
       <div className="relative group">
-        <UnassignBtn onUnassign={onUnassign} />
+        {!readOnly && <UnassignBtn onUnassign={onUnassign} />}
         <button
           type="button"
           onClick={onClick}
@@ -132,7 +134,7 @@ function ShiftCell({
 
   return (
     <div className="relative group">
-      <UnassignBtn onUnassign={onUnassign} />
+      {!readOnly && <UnassignBtn onUnassign={onUnassign} />}
       <button
         type="button"
         onClick={onClick}
@@ -171,9 +173,11 @@ interface Props {
     status:     ScheduleStatus | null,
     notes?:     string | null,
   ) => void;
+  /** Hanya lihat (bukan manager divisi / Owner / SA) */
+  readOnly?:  boolean;
 }
 
-export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave }: Props) {
+export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave, readOnly = false }: Props) {
   const [editDialog, setEditDialog] = useState<{
     employee: RosterEmployee;
     date:     string;
@@ -262,14 +266,14 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave }: Pr
                       <span className="text-xs font-bold text-foreground">
                         {day} {num}
                       </span>
-                      <button
+                      {!readOnly && <button
                         type="button"
                         onClick={() => setQuickAddDate(date)}
                         className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border text-muted-foreground hover:border-primary hover:bg-primary hover:text-primary-foreground transition-colors"
                         title={`Add schedule — ${day} ${num}`}
                       >
                         <Plus className="h-3 w-3" />
-                      </button>
+                      </button>}
                     </div>
                   </th>
                 );
@@ -326,7 +330,8 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave }: Pr
                   <td key={cell.date} className="px-1 py-2">
                     <ShiftCell
                       cell={cell}
-                      onClick={() => openEdit(row.employee, cell.date, cell)}
+                      readOnly={readOnly || row.canEdit === false}
+                      onClick={() => { if (!(readOnly || row.canEdit === false)) openEdit(row.employee, cell.date, cell); }}
                       onUnassign={() => onCellSave(row.employee.id, cell.date, null, null)}
                     />
                   </td>

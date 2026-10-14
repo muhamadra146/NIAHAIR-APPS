@@ -16,6 +16,8 @@ export const createEmployeeSchema = z.object({
   payDay:            z.coerce.number().int().min(1).max(31).optional().nullable(),
   homeBranchId:      z.string().optional().or(z.literal("")),
   branchIds:         z.array(z.string()).default([]),
+  divisionId:        z.string().optional().or(z.literal("")),
+  isDivisionManager: z.boolean().default(false),
 });
 
 export const updateEmployeeSchema = createEmployeeSchema.partial().extend({

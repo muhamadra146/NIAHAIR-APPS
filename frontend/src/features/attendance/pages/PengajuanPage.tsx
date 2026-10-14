@@ -8,6 +8,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { useAuthStore } from "@/stores/authStore";
+import { canApprove } from "@/lib/access";
 import { useLeaves } from "@/features/leave/hooks";
 import { LeavePanel } from "@/features/leave/pages/LeavePage";
 import { usePermissions, useSickLeaves, useCorrections } from "../hooks";
@@ -24,8 +25,9 @@ import { CorrectionPanel } from "./CorrectionPage";
 //
 // URL: /pengajuan?tab=cuti-izin|koreksi&jenis=cuti|izin|sakit
 
-// Role penyetuju — sama di semua jenis pengajuan
-const APPROVER_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"];
+// Penyetuju = Owner, Super Admin, atau manager divisi (lihat lib/access).
+// Penyetuju yang juga karyawan punya dua tampilan: "Persetujuan Tim" dan "Pengajuan Saya"
+// (pengajuan manager disetujui Owner / Super Admin).
 
 type TabKey   = "cuti-izin" | "koreksi";
 type JenisKey = "cuti" | "izin" | "sakit";
@@ -101,16 +103,20 @@ function CreateChooser({ open, onClose, onPick }: {
 
 // ── Tampilan halaman ──────────────────────────────────────────────────
 
-function PengajuanView({ isApprover, pending }: { isApprover: boolean; pending: PendingCounts | null }) {
+function PengajuanView({ isApprover, canSubmit, pending }: { isApprover: boolean; canSubmit: boolean; pending: PendingCounts | null }) {
   const [params, setParams] = useSearchParams();
+  // Tampilan: "tim" (menyetujui) atau "saya" (pengajuan sendiri)
+  const view: "tim" | "saya" = !isApprover ? "saya" : (params.get("lihat") === "saya" && canSubmit ? "saya" : "tim");
+  const approving = view === "tim";
   const tab:   TabKey   = isTab(params.get("tab")) ? (params.get("tab") as TabKey) : "cuti-izin";
   const jenis: JenisKey = isJenis(params.get("jenis")) ? (params.get("jenis") as JenisKey) : "cuti";
 
   const [chooserOpen, setChooserOpen] = useState(false);
   const [creating,    setCreating]    = useState<CreateKey | null>(null);
 
-  function go(next: { tab?: TabKey; jenis?: JenisKey }) {
+  function go(next: { tab?: TabKey; jenis?: JenisKey; lihat?: "tim" | "saya" }) {
     const p = new URLSearchParams(params);
+    if (next.lihat) p.set("lihat", next.lihat);
     if (next.tab)   p.set("tab", next.tab);
     if (next.jenis) p.set("jenis", next.jenis);
     setParams(p, { replace: true });
@@ -125,28 +131,45 @@ function PengajuanView({ isApprover, pending }: { isApprover: boolean; pending: 
   }
 
   const closeCreate = () => setCreating(null);
-  const cutiIzinPending = pending ? pending.cuti + pending.izin + pending.sakit : 0;
+  const shownPending    = approving ? pending : null;
+  const cutiIzinPending = shownPending ? shownPending.cuti + shownPending.izin + shownPending.sakit : 0;
 
   return (
     <PageContainer
       className="max-w-3xl"
       title="Pengajuan"
-      subtitle={isApprover
+      subtitle={approving
         ? "Kelola dan setujui pengajuan cuti, izin, sakit, dan koreksi jam kerja karyawan"
         : "Ajukan cuti, izin, sakit, atau koreksi jam kerja, dan pantau statusnya"}
-      action={!isApprover ? (
+      action={!approving && canSubmit ? (
         <Button size="sm" onClick={() => setChooserOpen(true)}>
           <Plus className="mr-1 h-4 w-4" /> Ajukan
         </Button>
       ) : undefined}
     >
+      {isApprover && canSubmit && (
+        <div className="mb-4 inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
+          {([["tim", "Persetujuan Tim"], ["saya", "Pengajuan Saya"]] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => go({ lihat: key })}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                view === key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       <Tabs value={tab} onValueChange={(v) => go({ tab: v as TabKey })} className="space-y-5">
         <TabsList>
           <TabsTrigger value="cuti-izin">
             Cuti & Izin <PendingBadge count={cutiIzinPending} />
           </TabsTrigger>
           <TabsTrigger value="koreksi">
-            Koreksi Jam Kerja <PendingBadge count={pending?.koreksi} />
+            Koreksi Jam Kerja <PendingBadge count={shownPending?.koreksi} />
           </TabsTrigger>
         </TabsList>
 
@@ -166,24 +189,24 @@ function PengajuanView({ isApprover, pending }: { isApprover: boolean; pending: 
               >
                 <Icon className="h-3.5 w-3.5" />
                 {label}
-                {!!pending?.[key] && (
+                {!!shownPending?.[key] && (
                   <span className={`rounded-full px-1.5 text-[10px] font-bold ${
                     jenis === key ? "bg-white/25" : "bg-amber-500 text-white"
                   }`}>
-                    {pending[key]}
+                    {shownPending[key]}
                   </span>
                 )}
               </button>
             ))}
           </div>
 
-          {jenis === "cuti"  && <LeavePanel      createOpen={creating === "cuti"}  onCreateClose={closeCreate} />}
-          {jenis === "izin"  && <PermissionPanel createOpen={creating === "izin"}  onCreateClose={closeCreate} />}
-          {jenis === "sakit" && <SickLeavePanel  createOpen={creating === "sakit"} onCreateClose={closeCreate} />}
+          {jenis === "cuti"  && <LeavePanel      key={view} asApprover={approving} createOpen={creating === "cuti"}  onCreateClose={closeCreate} />}
+          {jenis === "izin"  && <PermissionPanel key={view} asApprover={approving} createOpen={creating === "izin"}  onCreateClose={closeCreate} />}
+          {jenis === "sakit" && <SickLeavePanel  key={view} asApprover={approving} createOpen={creating === "sakit"} onCreateClose={closeCreate} />}
         </TabsContent>
 
         <TabsContent value="koreksi" className="mt-0">
-          <CorrectionPanel createOpen={creating === "koreksi"} onCreateClose={closeCreate} />
+          <CorrectionPanel key={view} asApprover={approving} createOpen={creating === "koreksi"} onCreateClose={closeCreate} />
         </TabsContent>
       </Tabs>
 
@@ -193,7 +216,7 @@ function PengajuanView({ isApprover, pending }: { isApprover: boolean; pending: 
 }
 
 // Jumlah menunggu persetujuan — hanya untuk penyetuju (endpoint daftar semua pengajuan khusus penyetuju)
-function ApproverPengajuan() {
+function ApproverPengajuan({ canSubmit }: { canSubmit: boolean }) {
   const cuti    = useLeaves({ status: "PENDING", limit: 1 });
   const izin    = usePermissions({ status: "PENDING", limit: 1 });
   const sakit   = useSickLeaves({ status: "PENDING", limit: 1 });
@@ -202,6 +225,7 @@ function ApproverPengajuan() {
   return (
     <PengajuanView
       isApprover
+      canSubmit={canSubmit}
       pending={{
         cuti:    totalOf(cuti.data),
         izin:    totalOf(izin.data),
@@ -213,7 +237,10 @@ function ApproverPengajuan() {
 }
 
 export function PengajuanPage() {
-  const roleCode   = useAuthStore((s) => s.user?.roleCode) ?? "";
-  const isApprover = APPROVER_ROLES.includes(roleCode);
-  return isApprover ? <ApproverPengajuan /> : <PengajuanView isApprover={false} pending={null} />;
+  const user       = useAuthStore((s) => s.user);
+  const isApprover = canApprove(user);
+  const canSubmit  = !!user?.employeeId;
+  return isApprover
+    ? <ApproverPengajuan canSubmit={canSubmit} />
+    : <PengajuanView isApprover={false} canSubmit={canSubmit} pending={null} />;
 }

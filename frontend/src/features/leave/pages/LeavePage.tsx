@@ -11,6 +11,7 @@ import {
 import { Skeleton }       from "@/components/ui/skeleton";
 
 import { useAuthStore }   from "@/stores/authStore";
+import { canApprove } from "@/lib/access";
 import {
   useLeaves, useMyLeaves,
   useCreateLeave, useApproveLeave, useRejectLeave, useCancelLeave,
@@ -22,7 +23,6 @@ import { WIB_TZ, toWibDateStr, wibDateParts } from "@/lib/utils";
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 // OFFICE punya approval cuti sesuai access matrix
-const ADMIN_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -297,10 +297,9 @@ function LeaveCard({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 /** Panel pengajuan — dipakai di halaman Pengajuan. Dialog "Ajukan" dikontrol parent. */
-export function LeavePanel({ createOpen, onCreateClose }: { createOpen: boolean; onCreateClose: () => void }) {
+export function LeavePanel({ createOpen, onCreateClose, asApprover }: { createOpen: boolean; onCreateClose: () => void; asApprover?: boolean }) {
   const { user }     = useAuthStore();
-  const roleCode     = user?.roleCode;
-  const isAdmin      = ADMIN_ROLES.includes(roleCode ?? "");
+  const isAdmin      = asApprover ?? canApprove(user);
   const employeeId   = user?.employeeId;
 
   const [filterStatus,  setFilterStatus ] = useState<LeaveStatus | "">("");

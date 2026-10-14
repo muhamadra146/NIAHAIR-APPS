@@ -8,7 +8,8 @@ import { Skeleton }      from "@/components/ui/skeleton";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { useAuthStore }  from "@/stores/authStore";
+import { useAuthStore }  from "@/stores/authStore";
+import { canApprove } from "@/lib/access";
 import {
   useMySickLeaves, useSickLeaves,
   useCreateSickLeave, useApproveSickLeave, useRejectSickLeave, useCancelSickLeave,
@@ -20,7 +21,6 @@ import { WIB_TZ, toWibDateStr, wibDateParts } from "@/lib/utils";
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 // OFFICE punya Approval/Verifikasi sesuai access matrix
-const ADMIN_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -424,9 +424,9 @@ function SickLeaveCard({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 /** Panel pengajuan — dipakai di halaman Pengajuan. Dialog "Ajukan" dikontrol parent. */
-export function SickLeavePanel({ createOpen, onCreateClose }: { createOpen: boolean; onCreateClose: () => void }) {
+export function SickLeavePanel({ createOpen, onCreateClose, asApprover }: { createOpen: boolean; onCreateClose: () => void; asApprover?: boolean }) {
   const { user } = useAuthStore();
-  const isAdmin  = ADMIN_ROLES.includes(user?.role?.code ?? "");
+  const isAdmin  = asApprover ?? canApprove(user);
   const [reviewing,    setReviewing   ] = useState<SickLeave | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [lightboxUrl,  setLightboxUrl ] = useState<string | null>(null);

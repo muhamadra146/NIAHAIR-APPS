@@ -4735,6 +4735,29 @@ Address.
 
 ---
 
+# EMP-033
+## Divisi & Manager Divisi
+
+(Keputusan user 2026-10-14.)
+
+- **Divisi** = kelompok karyawan (awal: Operasional, Finance, Office). Divisi dapat ditambah, diubah, dan dinonaktifkan di **Pengaturan → Divisi**.
+- Satu karyawan **hanya satu divisi**; satu divisi boleh punya banyak karyawan dan **banyak manager**.
+- **Manager divisi** = karyawan dengan tanda "Manager Divisi" (role apa pun: MANAGER, FINANCE, OFFICE, …). Wewenangnya: staf yang **satu divisi dan satu cabang utama** dengannya.
+- Divisi, tanda manager, dan divisi karyawan **hanya diatur Owner / Super Admin**.
+
+### Wewenang
+
+| Siapa | Jadwal (lihat) | Jadwal (ubah) & persetujuan cuti / izin / sakit / koreksi |
+| --- | --- | --- |
+| Owner, Super Admin | Semua | Semua karyawan |
+| Manager divisi | Rekan satu divisi di cabangnya | Staf satu divisi & cabang, **bukan dirinya dan bukan sesama manager** |
+| Karyawan lain | Rekan satu divisi di cabangnya | — |
+| Karyawan tanpa divisi | Hanya jadwalnya sendiri | Diurus Owner / Super Admin |
+
+Pengajuan milik manager divisi disetujui **Owner / Super Admin**. Role MANAGER yang bukan manager divisi tidak lagi mengurus jadwal & persetujuan staf. Bila ada beberapa manager untuk staf yang sama, persetujuan pertama yang berlaku dan nama penyetuju tercatat.
+
+---
+
 # CHAPTER 8 SUMMARY
 
 Employee merupakan pusat seluruh Human Resource pada NIAHAIR ERP.

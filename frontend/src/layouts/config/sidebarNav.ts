@@ -284,8 +284,8 @@ export const sidebarNav: NavItem[] = [
     label:         "Jadwal Karyawan",
     href:          "/schedule",
     icon:          CalendarRange,
-    roles:         [...MANAGEMENT_ROLES, "OFFICE", "FINANCE"],
-    viewOnlyRoles: ["FINANCE"],
+    // Semua role: lihat jadwal divisi sendiri; ubah hanya manager divisi / Owner / SA
+    roles:         ALL_ROLES,
     group:         "Kehadiran",
   },
 

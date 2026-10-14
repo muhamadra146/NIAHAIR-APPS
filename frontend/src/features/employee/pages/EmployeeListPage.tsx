@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Pagination } from "@/components/common/Pagination";
 import { useAuthStore } from "@/stores/authStore";
+import { isFullAccess } from "@/lib/access";
 import { useViewOnly } from "@/hooks/useViewOnly";
 import { fetchAllBranches } from "@/features/settings/api/branch.api";
 import { useEmployees, useCreateEmployee, useUploadEmployeeFiles, useDeactivateEmployee, useDeleteEmployee } from "../hooks";
@@ -90,6 +91,7 @@ export function EmployeeListPage() {
         commissionEnabled: values.commissionEnabled,
         payDay:            values.payDay ?? undefined,
         homeBranchId:      values.homeBranchId     || undefined,
+        ...(isFullAccess(user) ? { divisionId: values.divisionId || null, isDivisionManager: !!values.divisionId && !!values.isDivisionManager } : {}),
       });
       if ((values.branchIds ?? []).length > 0) {
         await updateEmployeeBranches(created.id, { branchIds: values.branchIds });

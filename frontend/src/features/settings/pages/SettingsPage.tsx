@@ -41,6 +41,7 @@ import { MembershipTab }           from "../components/membership/MembershipTab"
 import { AttendanceSettingsTab }   from "../components/attendance/AttendanceSettingsTab";
 import { HolidayTab }              from "../components/holiday/HolidayTab";
 import { SalaryTab }              from "../components/salary/SalaryTab";
+import { DivisionTab }            from "@/features/division/DivisionTab";
 import { OmsetBonusTierTab }      from "../components/omsetBonusTier/OmsetBonusTierTab";
 
 import type { EmployeeRole, User, Branch, PaymentMethod, CashAccount, Warehouse, ShiftMaster } from "../types";
@@ -1044,6 +1045,7 @@ function ShiftTab() {
 // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const TABS = [
   { value: "employees",       label: "Karyawan" },
+  { value: "divisions",       label: "Divisi" },
   { value: "users",           label: "User" },
   { value: "branches",        label: "Cabang" },
   { value: "payment-methods", label: "Pembayaran" },
@@ -1095,6 +1097,7 @@ export function SettingsPage() {
 
           <div className="flex-1 min-w-0">
             <TabsContent value="employees"       className="mt-0 p-6"><EmployeeTab /></TabsContent>
+            <TabsContent value="divisions"       className="mt-0 p-6"><DivisionTab /></TabsContent>
             <TabsContent value="users"           className="mt-0 p-6"><UserTab /></TabsContent>
             <TabsContent value="branches"        className="mt-0 p-6"><BranchTab /></TabsContent>
             <TabsContent value="payment-methods" className="mt-0 p-6"><PaymentMethodTab /></TabsContent>

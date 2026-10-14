@@ -25,11 +25,14 @@ export interface RosterEmployee {
   name:         string;
   employeeCode: string;
   role:         { id: string; code: string; name: string };
+  division?:    { id: string; code: string; name: string } | null;
 }
 
 export interface RosterRow {
   employee:  RosterEmployee;
   schedules: ScheduleCell[];
+  /** Boleh diubah oleh user ini (manager divisi untuk stafnya / Owner / Super Admin) */
+  canEdit?:  boolean;
 }
 
 export interface RosterData {
