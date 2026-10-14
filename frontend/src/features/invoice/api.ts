@@ -10,8 +10,7 @@ import type {
   UpdateInvoiceInput,
   AddPaymentInput,
   ApplyDepositInput,
-  CreateDepositInput,
-} from "./types";
+  CreateDepositInput, MemberEligibilityItem } from "./types";
 
 interface InvoiceListData {
   data: Invoice[];
@@ -279,7 +278,7 @@ export interface ItemUnitOption {
   unit:            { id: string; name: string };
 }
 
-export interface ItemSearchResult {
+export interface ItemSearchResult extends MemberEligibilityItem {
   id:             string;
   name:           string;
   itemCode:       string;

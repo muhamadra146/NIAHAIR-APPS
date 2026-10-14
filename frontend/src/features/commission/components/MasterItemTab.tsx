@@ -73,6 +73,19 @@ export function MasterItemTab() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // Tanda "tidak kena diskon member" (Ongkos PP, Charge, Cancel, dll.)
+  const memberDiscMut = useMutation({
+    mutationFn: (item: MasterItem) =>
+      updateItemCommission(item.id, { excludeMemberDiscount: !item.excludeMemberDiscount }),
+    onSuccess: (updated) => {
+      qc.invalidateQueries({ queryKey: ["master-items"] });
+      toast.success(updated.excludeMemberDiscount
+        ? `${updated.name}: tidak kena diskon member`
+        : `${updated.name}: dapat diskon member`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   function startEdit(item: MasterItem) {
     setEditId(item.id);
     setSelectedCatId(item.commissionCategoryId ?? "");
@@ -83,7 +96,7 @@ export function MasterItemTab() {
       <CardHeader className="pb-3 pt-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-xs text-muted-foreground mr-1">Set kategori komisi untuk setiap item</p>
+            <p className="text-xs text-muted-foreground mr-1">Set kategori komisi &amp; diskon member untuk setiap item</p>
             <div className="flex items-center gap-1 rounded-md border border-border bg-muted/40 p-0.5">
               {TYPE_FILTERS.map((f) => (
                 <button
@@ -121,6 +134,7 @@ export function MasterItemTab() {
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Nama</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tipe</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Kategori Komisi</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground" title="Diskon membership berlaku bila kategori item dicentang di paket member">Diskon Member</th>
                   <th className="px-4 py-3 w-24" />
                 </tr>
               </thead>
@@ -128,7 +142,10 @@ export function MasterItemTab() {
                 {items.map((item) => (
                       <tr key={item.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.itemCode}</td>
-                        <td className="px-4 py-2.5 font-medium">{item.name}</td>
+                        <td className="px-4 py-2.5">
+                          <div className="font-medium">{item.name}</div>
+                          {item.category && <div className="text-[11px] text-muted-foreground">{item.category.name}</div>}
+                        </td>
                         <td className="px-4 py-2.5">
                           <Badge variant={item.itemType === "SERVICE" ? "default" : "secondary"} className="text-[10px]">
                             {item.itemType === "SERVICE" ? "Layanan" : "Produk"}
@@ -161,6 +178,22 @@ export function MasterItemTab() {
                               {item.commissionCategory?.name ?? "Belum diset"}
                             </span>
                           )}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <button
+                            type="button"
+                            disabled={memberDiscMut.isPending}
+                            onClick={() => memberDiscMut.mutate(item)}
+                            title="Klik untuk mengubah"
+                            className={[
+                              "rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50",
+                              item.excludeMemberDiscount
+                                ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                                : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+                            ].join(" ")}
+                          >
+                            {item.excludeMemberDiscount ? "Tidak kena diskon" : "Ikut paket"}
+                          </button>
                         </td>
                         <td className="px-4 py-2.5 text-right">
                           {editId !== item.id && (

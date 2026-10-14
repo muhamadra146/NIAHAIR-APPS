@@ -18,11 +18,24 @@ export interface InvoiceBranch {
   name: string;
 }
 
-export interface InvoiceItemRef {
+export interface InvoiceItemRef extends MemberEligibilityItem {
   id:       string;
   name:     string;
   itemCode: string;
   itemType?: string;
+}
+
+/** Field item untuk menentukan apakah item dapat diskon membership */
+export interface MemberEligibilityItem {
+  categoryId?:            string | null;
+  /** true = tidak pernah kena diskon membership (Ongkos PP, Charge, dll.) */
+  excludeMemberDiscount?: boolean;
+  category?:              { parentId?: string | null } | null;
+}
+
+/** Paket membership — kategori item yang dapat diskon */
+export interface MemberDiscountConfig {
+  discountCategories?: { categoryId: string }[];
 }
 
 export interface InvoiceUnitRef {
@@ -88,7 +101,7 @@ export interface Invoice {
   totalDiscount:       string;
   /** Diskon membership (persen: sudah termasuk di totalDiscount; nominal: dipotong dari total) */
   membershipDiscountTotal?: string | null;
-  membership?:         { id: string; name: string; discountType: "PERCENTAGE" | "FIXED_AMOUNT"; discountValue: string } | null;
+  membership?:         ({ id: string; name: string; discountType: "PERCENTAGE" | "FIXED_AMOUNT"; discountValue: string } & MemberDiscountConfig) | null;
   totalTax:            string;
   grandTotal:          string;
   totalDeposit:        string;

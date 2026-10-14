@@ -28,7 +28,9 @@ import type {
   CreateInvoiceInput,
   CreateInvoiceItemInput,
   UpdateInvoiceInput,
+  MemberEligibilityItem,
 } from "../types";
+import { isMemberDiscountEligible } from "../discount";
 import { uniqueStaffEmployees } from "@/features/appointment/staff";
 
 const MEMBERSHIP_EXPIRY_WARNING_DAYS = 7;
@@ -61,6 +63,8 @@ interface LineItem {
   isMaterial:   boolean;
   /** UUID shared antara layanan dan bahan bakunya — null hanya untuk data lama */
   lineGroup:    string;
+  /** Kategori & tanda item — untuk menentukan apakah dapat diskon membership */
+  memberItem:   MemberEligibilityItem;
   itemUnits:    ItemUnitOption[];
   itemPrices:   ItemPriceOption[];
 }
@@ -80,7 +84,7 @@ function resolvePrice(prices: ItemPriceOption[], unitId: string, branchId: strin
 
 
 function buildLineFromItem(
-  item: { id: string; name: string; itemCode: string; itemType: string; itemPrices: ItemPriceOption[]; itemUnits: ItemUnitOption[] },
+  item: { id: string; name: string; itemCode: string; itemType: string; itemPrices: ItemPriceOption[]; itemUnits: ItemUnitOption[] } & MemberEligibilityItem,
   branchId: string,
   isMaterial = false,
   lineGroup = "",
@@ -100,6 +104,7 @@ function buildLineFromItem(
     discountType: "AMOUNT",
     isMaterial,
     lineGroup,
+    memberItem:   { categoryId: item.categoryId, excludeMemberDiscount: item.excludeMemberDiscount, category: item.category },
     itemUnits:    item.itemUnits,
     itemPrices:   item.itemPrices ?? [],
   };
@@ -440,18 +445,21 @@ export function CreateInvoiceDialog({
   }
 
   function applyDiscountToLine(line: LineItem, m: NonNullable<typeof activeMembership>): LineItem {
-    // Membership discount hanya untuk layanan (bukan bahan baku)
-    if (!line.isMaterial && m.discountType === "PERCENTAGE" && line.itemType === "SERVICE") {
+    // Membership discount hanya untuk item yang kategorinya dicentang di paket & tidak dikecualikan
+    if (m.discountType === "PERCENTAGE" && isMemberDiscountEligible(line.memberItem, m, line.isMaterial)) {
       return { ...line, discountType: "PERCENT", discount: String(m.discountValue) };
     }
-    return line; // FIXED_AMOUNT handled at invoice level; non-SERVICE items unchanged
+    return line; // FIXED_AMOUNT handled at invoice level; item lain tidak berubah
   }
 
   function toggleMembershipDiscount() {
     if (!activeMembership) return;
     if (membershipDiscApplied) {
       if (activeMembership.discountType === "PERCENTAGE") {
-        setLines((prev) => prev.map((l) => ({ ...l, discount: "0", discountType: "AMOUNT" as const })));
+        setLines((prev) => prev.map((l) =>
+          isMemberDiscountEligible(l.memberItem, activeMembership, l.isMaterial)
+            ? { ...l, discount: "0", discountType: "AMOUNT" as const }
+            : l));
       } else {
         setFixedMembershipDiscount("0");
       }
@@ -540,9 +548,18 @@ export function CreateInvoiceDialog({
     return sum + price * qty;
   }, 0);
   const taxEst         = taxable && !inclusiveTax ? subtotalEst * 0.11 : 0;
+  // Diskon nominal dibatasi total item yang dapat diskon member (sama dengan backend)
+  const memberEligibleEst = lines.reduce((sum, l) => {
+    if (!isMemberDiscountEligible(l.memberItem, activeMembership, l.isMaterial)) return sum;
+    const price = parseFloat(l.price) || 0;
+    const qty   = parseFloat(l.qty) || 1;
+    const disc  = parseFloat(l.discount) || 0;
+    const gross = Math.max(0, l.discountType === "PERCENT" ? price * qty * (1 - disc / 100) : price * qty - disc);
+    return sum + gross * (taxable && !inclusiveTax ? 1.11 : 1);
+  }, 0);
   const fixedMembershipDiscountAmt =
     activeMembership?.discountType === "FIXED_AMOUNT" && membershipDiscApplied
-      ? parseFloat(fixedMembershipDiscount) || 0
+      ? Math.min(parseFloat(fixedMembershipDiscount) || 0, memberEligibleEst)
       : 0;
   const grandEst        = Math.max(0, subtotalEst + taxEst - fixedMembershipDiscountAmt);
   const totalDepApplied = selectedDeps.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
@@ -596,6 +613,7 @@ export function CreateInvoiceDialog({
           discountType: (li.discountType as "AMOUNT" | "PERCENT") ?? "AMOUNT",
           isMaterial:   li.isMaterial ?? false,
           lineGroup,
+          memberItem:   { categoryId: full.categoryId, excludeMemberDiscount: full.excludeMemberDiscount, category: full.category },
           itemUnits:    full.itemUnits ?? [],
           itemPrices:   full.itemPrices ?? [],
         };
@@ -695,11 +713,11 @@ export function CreateInvoiceDialog({
         if (!membershipDiscApplied) {
           membershipDiscountTotalValue = 0;
         } else if (activeMembership.discountType === "FIXED_AMOUNT") {
-          membershipDiscountTotalValue = parseFloat(fixedMembershipDiscount) || 0;
+          membershipDiscountTotalValue = fixedMembershipDiscountAmt;
         } else {
-          // PERCENTAGE: compute sum of per-item SERVICE discounts
+          // PERCENTAGE: jumlah diskon persen pada item yang dapat diskon member
           membershipDiscountTotalValue = lines.reduce((sum, l) => {
-            if (l.itemType !== "SERVICE" || l.discountType !== "PERCENT") return sum;
+            if (!isMemberDiscountEligible(l.memberItem, activeMembership, l.isMaterial) || l.discountType !== "PERCENT") return sum;
             const price = parseFloat(l.price) || 0;
             const qty   = parseFloat(l.qty)   || 1;
             const pct   = parseFloat(l.discount) || 0;

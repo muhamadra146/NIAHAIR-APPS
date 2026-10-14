@@ -176,6 +176,10 @@ export interface MasterItem {
   isActive:             boolean;
   commissionCategoryId: string | null;
   commissionCategory?:  CommissionRuleCategory | null;
+  /** Kategori item (Accurate) — penentu diskon membership */
+  category?:            { id: string; name: string } | null;
+  /** true = tidak pernah kena diskon membership */
+  excludeMemberDiscount?: boolean;
 }
 
 export interface MasterItemListParams {
@@ -187,7 +191,8 @@ export interface MasterItemListParams {
 }
 
 export interface UpdateItemCommissionInput {
-  commissionCategoryId: string | null;
+  commissionCategoryId?:  string | null;
+  excludeMemberDiscount?: boolean;
 }
 
 export type CommissionType   = "PERCENTAGE" | "FIXED";

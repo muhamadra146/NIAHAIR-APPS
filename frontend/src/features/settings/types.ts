@@ -363,6 +363,8 @@ export interface Membership {
   durationDays: number;
   discountType:  DiscountType;
   discountValue: string;
+  /** Kategori item yang dapat diskon (kategori induk mencakup sub-kategorinya) */
+  discountCategories?: { categoryId: string; category: { id: string; name: string; parentId: string | null } }[];
   createdAt:    string;
   updatedAt:    string;
 }
@@ -373,6 +375,7 @@ export interface CreateMembershipInput {
   durationDays: number;
   discountType:  DiscountType;
   discountValue: number;
+  categoryIds?:  string[];
 }
 
 export type UpdateMembershipInput = Partial<CreateMembershipInput>;

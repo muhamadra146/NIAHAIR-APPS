@@ -1,8 +1,25 @@
-import type { Invoice, InvoiceLineItem } from "./types";
+import type { Invoice, InvoiceLineItem, MemberEligibilityItem, MemberDiscountConfig } from "./types";
+
+/**
+ * Item dapat diskon membership bila: bukan bahan baku, tidak ditandai "tidak kena diskon member",
+ * dan kategorinya (atau kategori induknya) dicentang di paket membership. Sama dengan backend
+ * membership.discount.js (keputusan user 2026-10-14).
+ */
+export function isMemberDiscountEligible(
+  item: MemberEligibilityItem | null | undefined,
+  membership: MemberDiscountConfig | null | undefined,
+  isMaterial = false,
+): boolean {
+  if (isMaterial || !item || !membership || item.excludeMemberDiscount) return false;
+  const ids = new Set((membership.discountCategories ?? []).map((d) => d.categoryId));
+  if (item.categoryId && ids.has(item.categoryId)) return true;
+  const parentId = item.category?.parentId;
+  return !!parentId && ids.has(parentId);
+}
 
 // ── Teks diskon invoice ──────────────────────────────────────────────────────
 // Kolom `discount` per item menyimpan diskon item DITAMBAH diskon membership persen
-// (khusus layanan). Fungsi di sini memisahkan keduanya untuk ditampilkan:
+// (khusus item yang dapat diskon member). Fungsi di sini memisahkan keduanya untuk ditampilkan:
 //   "Diskon 10% Rp 50.000"            ← diskon item
 //   "Diskon Membership Gold 10% Rp …" ← diskon membership
 
@@ -28,7 +45,7 @@ export function itemDiscountParts(item: InvoiceLineItem, invoice: Invoice): Disc
   if (!(total > 0)) return [];
 
   const gross   = Number(item.price) * Number(item.qty);
-  const memPct  = item.item?.itemType === "SERVICE" ? membershipPercent(invoice) : 0;
+  const memPct  = isMemberDiscountEligible(item.item, invoice.membership, item.isMaterial ?? false) ? membershipPercent(invoice) : 0;
   let   memPart = memPct > 0 ? Math.round((gross * memPct) / 100) : 0;
   let   own: number;
 

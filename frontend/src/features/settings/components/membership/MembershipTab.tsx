@@ -9,6 +9,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { useMemberships, useCreateMembership, useUpdateMembership, useDeleteMembership } from "../../hooks";
+import { useItemCategories } from "@/features/inventory/hooks";
+import type { ItemCategory } from "@/features/inventory/types";
 import type { Membership, CreateMembershipInput, UpdateMembershipInput, DiscountType } from "../../types";
 
 function apiErr(err: unknown) {
@@ -28,12 +30,65 @@ interface FormState {
   durationDays: string;
   discountType:  DiscountType;
   discountValue: string;
+  /** Kategori item yang dapat diskon membership */
+  categoryIds:   string[];
 }
 
 const EMPTY: FormState = {
   name: "", price: "", durationDays: "30",
-  discountType: "PERCENTAGE", discountValue: "0",
+  discountType: "PERCENTAGE", discountValue: "0", categoryIds: [],
 };
+
+/** Kategori induk + sub-kategorinya, urut nama */
+function categoryTree(categories: ItemCategory[]) {
+  const byName = (a: ItemCategory, b: ItemCategory) => a.name.localeCompare(b.name);
+  const ids = new Set(categories.map((c) => c.id));
+  return categories
+    .filter((c) => !c.parentId || !ids.has(c.parentId))
+    .sort(byName)
+    .map((parent) => ({ parent, children: categories.filter((c) => c.parentId === parent.id).sort(byName) }));
+}
+
+/** Pilihan kategori diskon: centang induk = semua sub-kategorinya ikut */
+function DiscountCategoryPicker({ categories, value, onChange }: {
+  categories: ItemCategory[];
+  value:      string[];
+  onChange:   (ids: string[]) => void;
+}) {
+  const selected = new Set(value);
+  const toggle = (id: string, childIds: string[] = []) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else { next.add(id); childIds.forEach((c) => next.delete(c)); }   // induk sudah mencakup sub-kategori
+    onChange([...next]);
+  };
+  return (
+    <div className="max-h-56 space-y-1 overflow-y-auto rounded-md border p-2">
+      {categoryTree(categories).map(({ parent, children }) => {
+        const parentOn = selected.has(parent.id);
+        return (
+          <div key={parent.id}>
+            <label className="flex items-center gap-2 rounded px-1 py-0.5 text-sm font-medium hover:bg-slate-50">
+              <input type="checkbox" checked={parentOn} onChange={() => toggle(parent.id, children.map((c) => c.id))} />
+              {parent.name}
+              {children.length > 0 && <span className="text-xs font-normal text-muted-foreground">(semua sub-kategori)</span>}
+            </label>
+            {children.length > 0 && (
+              <div className="ml-6 grid grid-cols-2 gap-x-2">
+                {children.map((c) => (
+                  <label key={c.id} className={`flex items-center gap-2 rounded px-1 py-0.5 text-xs ${parentOn ? "text-muted-foreground" : "hover:bg-slate-50"}`}>
+                    <input type="checkbox" disabled={parentOn} checked={parentOn || selected.has(c.id)} onChange={() => toggle(c.id)} />
+                    {c.name}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function toForm(m: Membership): FormState {
   return {
@@ -42,6 +97,7 @@ function toForm(m: Membership): FormState {
     durationDays:  String(m.durationDays),
     discountType:  m.discountType,
     discountValue: String(m.discountValue),
+    categoryIds:   (m.discountCategories ?? []).map((d) => d.categoryId),
   };
 }
 
@@ -53,6 +109,7 @@ export function MembershipTab() {
   const [deleteId, setDeleteId]   = useState<string | null>(null);
 
   const { data, isLoading } = useMemberships({ limit: 100 });
+  const { data: categories = [] } = useItemCategories();
   const memberships = data?.data ?? [];
 
   const createMut = useCreateMembership();
@@ -62,7 +119,9 @@ export function MembershipTab() {
 
   function openCreate() {
     setEditItem(null);
-    setForm(EMPTY);
+    // Default paket baru: diskon untuk kategori JASA (treatment)
+    const jasa = categories.find((c) => !c.parentId && c.name.toUpperCase() === "JASA");
+    setForm({ ...EMPTY, categoryIds: jasa ? [jasa.id] : [] });
     setError(null);
     setFormOpen(true);
   }
@@ -84,6 +143,7 @@ export function MembershipTab() {
           durationDays:  Number(form.durationDays),
           discountType:  form.discountType,
           discountValue: Number(form.discountValue),
+          categoryIds:   form.categoryIds,
         };
         await updateMut.mutateAsync(input);
       } else {
@@ -93,6 +153,7 @@ export function MembershipTab() {
           durationDays:  Number(form.durationDays),
           discountType:  form.discountType,
           discountValue: Number(form.discountValue),
+          categoryIds:   form.categoryIds,
         };
         await createMut.mutateAsync(input);
       }
@@ -126,16 +187,16 @@ export function MembershipTab() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-slate-50/70">
-              {["Nama", "Harga", "Durasi", "Tipe Diskon", "Nilai Diskon", ""].map((h) => (
+              {["Nama", "Harga", "Durasi", "Tipe Diskon", "Nilai Diskon", "Diskon Untuk", ""].map((h) => (
                 <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {isLoading ? (
-              <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Memuat...</td></tr>
+              <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Memuat...</td></tr>
             ) : memberships.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Belum ada membership</td></tr>
+              <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Belum ada membership</td></tr>
             ) : memberships.map((m) => (
               <tr key={m.id} className="hover:bg-slate-50/70">
                 <td className="px-4 py-3 font-medium">{m.name}</td>
@@ -150,6 +211,15 @@ export function MembershipTab() {
                   {m.discountType === "PERCENTAGE"
                     ? `${m.discountValue}%`
                     : IDR(m.discountValue)}
+                </td>
+                <td className="px-4 py-3">
+                  {(m.discountCategories ?? []).length === 0
+                    ? <span className="text-xs text-amber-600">Belum ada kategori</span>
+                    : <div className="flex flex-wrap gap-1">
+                        {m.discountCategories!.map((d) => (
+                          <Badge key={d.categoryId} variant="outline" className="text-[11px]">{d.category.name}</Badge>
+                        ))}
+                      </div>}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end gap-1">
@@ -169,7 +239,7 @@ export function MembershipTab() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editItem ? "Edit Membership" : "Tambah Membership"}</DialogTitle>
           </DialogHeader>
@@ -224,6 +294,20 @@ export function MembershipTab() {
                   value={form.discountValue}
                   onValueChange={(v) => setForm((f) => ({ ...f, discountValue: v }))}
                 />
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Diskon Berlaku Untuk Kategori</Label>
+              <DiscountCategoryPicker
+                categories={categories}
+                value={form.categoryIds}
+                onChange={(ids) => setForm((f) => ({ ...f, categoryIds: ids }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Item bertanda "Tidak kena diskon member" (Ongkos PP, Charge, dll.) tetap tidak didiskon. Atur di Komisi → Master Item.
+              </p>
+              {form.categoryIds.length === 0 && (
+                <p className="text-xs text-amber-600">Belum ada kategori dipilih — paket ini tidak memberi diskon apa pun.</p>
               )}
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
