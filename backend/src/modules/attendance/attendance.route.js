@@ -7,7 +7,7 @@ const { checkInSchema, checkOutSchema, manualSetSchema } = require("./attendance
 const {
   getDailyRosterController, getAllController, getByIdController,
   checkInController, checkOutController, manualSetController,
-  getMyTodayController, getMyController, getReportController,
+  getMyTodayController, getMyController, getReportController, getPresentController,
 } = require("./attendance.controller");
 
 const router = Router();
@@ -24,6 +24,13 @@ router.get("/report",
   authenticate,
   authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE, ROLES.FINANCE),
   getReportController,
+);
+
+// GET /attendance/present?branchId=&date= — karyawan hadir (pilihan staf Charge Lembur di Input Pekerjaan)
+router.get("/present",
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.STAFF_OPERASIONAL, ROLES.FINANCE),
+  getPresentController,
 );
 
 // Self — must be before /:id

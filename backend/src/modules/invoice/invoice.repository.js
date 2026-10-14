@@ -109,7 +109,7 @@ const JOB_ASSIGNMENT_INCLUDE = {
               commissionCategoryId: true,
               commissionCategory: {
                 select: {
-                  id: true, code: true, name: true,
+                  id: true, code: true, name: true, allowAnyStaff: true,
                   jobs: {
                     where:   { isActive: true },
                     select:  { id: true, name: true, jobKey: true, sortOrder: true, deductsFromJobId: true, pricePerUnit: true, unit: true, splitMode: true, defaultQty: true },

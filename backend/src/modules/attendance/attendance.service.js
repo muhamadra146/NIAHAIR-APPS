@@ -414,4 +414,13 @@ const getReport = async ({ branchId, startDate, endDate, employeeId }) => {
   return { data: rows, period: { startDate: start, endDate: end } };
 };
 
-module.exports = { getDailyRoster, getAll, getById, checkIn, checkOut, manualSet, getMyToday, getMy, getReport };
+// Karyawan yang hadir (PRESENT / LATE / EARLY_LEAVE / HALF_DAY) di cabang & tanggal tertentu.
+// Dipakai Input Pekerjaan untuk kategori komisi "staf bisa dipilih bebas" (Charge Lembur).
+const PRESENT_STATUSES = ["PRESENT", "LATE", "EARLY_LEAVE", "HALF_DAY"];
+const getPresentEmployees = async ({ branchId, date }) => {
+  if (!branchId || !date) throw new AppError("branchId dan date wajib diisi", StatusCodes.BAD_REQUEST);
+  const rows = await repo.findPresentEmployees(branchId, toDateOnly(date), PRESENT_STATUSES);
+  return [...new Map(rows.map((r) => [r.employee.id, r.employee])).values()];
+};
+
+module.exports = { getDailyRoster, getAll, getById, checkIn, checkOut, manualSet, getMyToday, getMy, getReport, getPresentEmployees };

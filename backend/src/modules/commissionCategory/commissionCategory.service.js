@@ -40,6 +40,7 @@ const createCommissionCategory = async (body) => {
     code:     body.code,
     name:     body.name,
     isActive: body.isActive !== undefined ? body.isActive : true,
+    allowAnyStaff: body.allowAnyStaff ?? false,
   });
 };
 

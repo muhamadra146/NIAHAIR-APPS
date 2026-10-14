@@ -86,4 +86,12 @@ const getReportData = ({ branchId, startDate, endDate, employeeId }) => {
   });
 };
 
-module.exports = { findMany, count, findById, findBySchedule, findByEmployeeAndDate, create, update, upsertBySchedule, getReportData };
+// Karyawan yang absen hadir di satu cabang pada satu tanggal (pilihan staf Charge Lembur)
+const findPresentEmployees = (branchId, workDate, statuses) =>
+  prisma.attendance.findMany({
+    where:    { branchId, workDate, status: { in: statuses }, employee: { isActive: true } },
+    select:   { employee: { select: { id: true, name: true, employeeCode: true } } },
+    orderBy:  { employee: { name: "asc" } },
+  });
+
+module.exports = { findMany, count, findById, findBySchedule, findByEmployeeAndDate, create, update, upsertBySchedule, getReportData, findPresentEmployees };

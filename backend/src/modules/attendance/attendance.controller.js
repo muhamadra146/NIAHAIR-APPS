@@ -1,6 +1,6 @@
 const { success, created } = require("../../common/responses/apiResponse");
 const { wibDateStr }       = require("../../utils/date");
-const { getDailyRoster, getAll, getById, checkIn, checkOut, manualSet, getMyToday, getMy, getReport } = require("./attendance.service");
+const { getDailyRoster, getAll, getById, checkIn, checkOut, manualSet, getMyToday, getMy, getReport, getPresentEmployees } = require("./attendance.service");
 
 const getDailyRosterController = async (req, res, next) => {
   try {
@@ -59,6 +59,13 @@ const getMyController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const getPresentController = async (req, res, next) => {
+  try {
+    const result = await getPresentEmployees(req.query);
+    return success(res, result, "Karyawan hadir");
+  } catch (err) { next(err); }
+};
+
 const getReportController = async (req, res, next) => {
   try {
     const result = await getReport(req.query);
@@ -69,5 +76,5 @@ const getReportController = async (req, res, next) => {
 module.exports = {
   getDailyRosterController, getAllController, getByIdController,
   checkInController, checkOutController, manualSetController,
-  getMyTodayController, getMyController, getReportController,
+  getMyTodayController, getMyController, getReportController, getPresentController,
 };

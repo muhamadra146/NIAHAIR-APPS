@@ -16,6 +16,7 @@ jest.mock('./attendance.repository', () => ({
   upsertBySchedule: jest.fn(),
   update:          jest.fn(),
   getReportData:   jest.fn(),
+  findPresentEmployees: jest.fn(),
 }));
 
 jest.mock('../setting/setting.repository', () => ({
@@ -334,5 +335,29 @@ describe('getReport', () => {
     expect(row.absentDays).toBe(0);     // LEAVE/IZIN/SAKIT not absent
     expect(row.presentDays).toBe(1);
     expect(row.attendanceRate).toBe(100);
+  });
+});
+
+// ── getPresentEmployees — pilihan staf kategori "staf bebas" (Charge Lembur, 2026-10-14) ──
+describe('getPresentEmployees', () => {
+  const svc  = require('./attendance.service');
+  const repo = require('./attendance.repository');
+
+  test('hanya status hadir, tanpa duplikat karyawan', async () => {
+    const ani = { id: 'e1', name: 'Ani', employeeCode: 'K1' };
+    const budi = { id: 'e2', name: 'Budi', employeeCode: 'K2' };
+    repo.findPresentEmployees.mockResolvedValue([{ employee: ani }, { employee: budi }, { employee: ani }]);
+
+    const result = await svc.getPresentEmployees({ branchId: 'b1', date: '2026-10-14' });
+
+    expect(result).toEqual([ani, budi]);
+    const [branchId, , statuses] = repo.findPresentEmployees.mock.calls[0];
+    expect(branchId).toBe('b1');
+    expect(statuses).toEqual(['PRESENT', 'LATE', 'EARLY_LEAVE', 'HALF_DAY']);
+  });
+
+  test('branchId / date wajib', async () => {
+    await expect(svc.getPresentEmployees({ branchId: 'b1' })).rejects.toMatchObject({ statusCode: 400 });
+    await expect(svc.getPresentEmployees({ date: '2026-10-14' })).rejects.toMatchObject({ statusCode: 400 });
   });
 });

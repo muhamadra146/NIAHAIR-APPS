@@ -1832,6 +1832,10 @@ model CommissionCategory {
 
   isActive Boolean @default(true)
 
+  // Staf bisa dipilih bebas di Input Pekerjaan (karyawan yang hadir hari itu di cabang),
+  // tidak terbatas staf booking. Contoh: Charge Lembur — CS/kasir ikut mendapat bagian.
+  allowAnyStaff Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
