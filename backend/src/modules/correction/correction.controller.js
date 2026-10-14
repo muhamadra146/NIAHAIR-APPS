@@ -4,7 +4,7 @@ const svc = require("./correction.service");
 
 const getAllController = async (req, res, next) => {
   try {
-    const result = await svc.getAll(req.query);
+    const result = await svc.getAll(req.query, req.accessScope);
     return success(res, result, "Correction requests fetched");
   } catch (err) { next(err); }
 };
@@ -34,7 +34,7 @@ const createController = async (req, res, next) => {
 
 const reviewController = async (req, res, next) => {
   try {
-    const result = await svc.review(req.params.id, req.user.id, req.body);
+    const result = await svc.review(req.params.id, req.user.id, req.body, req.user);
     return success(res, result, "Correction request reviewed");
   } catch (err) { next(err); }
 };

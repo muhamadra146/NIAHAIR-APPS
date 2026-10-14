@@ -4,7 +4,7 @@ const svc = require("./permission.service");
 const getAllController = async (req, res, next) => {
   try {
     const { employeeId, branchId, status, page = 1, limit = 20 } = req.query;
-    const result = await svc.getAll({ employeeId, branchId, status, page: Number(page), limit: Number(limit) });
+    const result = await svc.getAll({ employeeId, branchId, status, page: Number(page), limit: Number(limit) }, req.accessScope);
     return success(res, result, "Permission requests fetched");
   } catch (err) { next(err); }
 };
@@ -34,7 +34,7 @@ const createController = async (req, res, next) => {
 const approveController = async (req, res, next) => {
   try {
     const { reviewNote } = req.body;
-    const result = await svc.approve(req.params.id, req.user.id, reviewNote);
+    const result = await svc.approve(req.params.id, req.user.id, reviewNote, req.user);
     return success(res, result, "Izin disetujui");
   } catch (err) { next(err); }
 };
@@ -42,7 +42,7 @@ const approveController = async (req, res, next) => {
 const rejectController = async (req, res, next) => {
   try {
     const { reviewNote } = req.body;
-    const result = await svc.reject(req.params.id, req.user.id, reviewNote);
+    const result = await svc.reject(req.params.id, req.user.id, reviewNote, req.user);
     return success(res, result, "Izin ditolak");
   } catch (err) { next(err); }
 };

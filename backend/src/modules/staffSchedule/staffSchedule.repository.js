@@ -6,14 +6,17 @@ const SHIFT_SELECT = {
 
 const EMPLOYEE_SELECT = {
   id: true, name: true, employeeCode: true,
-  role: { select: { id: true, code: true, name: true } },
+  divisionId: true, homeBranchId: true, isDivisionManager: true,
+  role:     { select: { id: true, code: true, name: true } },
+  division: { select: { id: true, code: true, name: true } },
 };
 
 // ── Roster query: all employees in branch + their schedules for a date range ──
-const findRoster = async (branchId, startDate, endDate) => {
+// employeeWhere: batas karyawan yang boleh dilihat (aturan divisi, lihat division.access)
+const findRoster = async (branchId, startDate, endDate, employeeWhere = {}) => {
   // 1. Try employees assigned to this specific branch via EmployeeBranch
   let employeeBranches = await prisma.employeeBranch.findMany({
-    where: { branchId, isActive: true, employee: { isActive: true } },
+    where: { branchId, isActive: true, employee: { isActive: true, ...employeeWhere } },
     include: { employee: { select: EMPLOYEE_SELECT } },
     orderBy: { employee: { name: "asc" } },
   });
@@ -23,7 +26,7 @@ const findRoster = async (branchId, startDate, endDate) => {
   // while still keeping schedules per-branch.
   if (employeeBranches.length === 0) {
     const allEmployees = await prisma.employee.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...employeeWhere },
       select: EMPLOYEE_SELECT,
       orderBy: { name: "asc" },
     });

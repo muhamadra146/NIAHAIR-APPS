@@ -15,6 +15,8 @@ const createEmployeeSchema = object({
   commissionEnabled: optional(boolean()),
   homeBranchId:      optional(nullable(string())),
   payDay:            optional(nullable(pipe(number(), integer(), minValue(1), maxValue(31)))),
+  divisionId:        optional(nullable(string())),
+  isDivisionManager: optional(boolean()),
 });
 
 const updateEmployeeSchema = object({
@@ -33,6 +35,8 @@ const updateEmployeeSchema = object({
   isActive:          optional(boolean()),
   homeBranchId:      optional(nullable(string())),
   payDay:            optional(nullable(pipe(number(), integer(), minValue(1), maxValue(31)))),
+  divisionId:        optional(nullable(string())),
+  isDivisionManager: optional(boolean()),
 });
 
 const updateEmployeeBranchesSchema = object({

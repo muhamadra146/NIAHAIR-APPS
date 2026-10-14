@@ -2,6 +2,7 @@ const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const prisma          = require("../../config/prisma");
 const repo            = require("./staffSchedule.repository");
+const divisionAccess  = require("../division/division.access");
 const { wibDayStart, wibDayEnd, toDateOnly, wibDateStr, wibParts } = require("../../utils/date");
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -16,7 +17,9 @@ const toDateStr = (date) => date.toISOString().split("T")[0];
 
 // ── Roster (grouped) ─────────────────────────────────────────────────────────
 
-const getRoster = async ({ startDate, days = 7, branchId }) => {
+// Jadwal yang terlihat: Owner/SA semua; karyawan → rekan satu divisi di cabangnya;
+// tanpa divisi → hanya dirinya. canEdit = boleh diubah oleh user ini (manager divisi / Owner / SA).
+const getRoster = async ({ startDate, days = 7, branchId }, user = null) => {
   if (!startDate) throw new AppError("startDate is required", StatusCodes.BAD_REQUEST);
   if (!branchId)  throw new AppError("branchId is required",  StatusCodes.BAD_REQUEST);
 
@@ -32,7 +35,9 @@ const getRoster = async ({ startDate, days = 7, branchId }) => {
     dates.push(toDateStr(addDays(start, i)));
   }
 
-  const { employeeBranches, schedules } = await repo.findRoster(branchId, wibDayStart(start), wibDayEnd(end));
+  const visibleWhere = user ? await divisionAccess.visibleEmployeeWhere(user) : {};
+  const scope        = user ? await divisionAccess.getScope(user) : { all: true };
+  const { employeeBranches, schedules } = await repo.findRoster(branchId, wibDayStart(start), wibDayEnd(end), visibleWhere);
 
   // Build a lookup: "employeeId|dateStr" → schedule record
   const scheduleMap = new Map();
@@ -47,7 +52,9 @@ const getRoster = async ({ startDate, days = 7, branchId }) => {
       name:         employee.name,
       employeeCode: employee.employeeCode,
       role:         employee.role,
+      division:     employee.division ?? null,
     },
+    canEdit: divisionAccess.canManageTarget(scope, employee),
     schedules: dates.map((date) => {
       const s = scheduleMap.get(`${employee.id}|${date}`);
       return {
@@ -65,9 +72,17 @@ const getRoster = async ({ startDate, days = 7, branchId }) => {
 
 // ── Bulk upsert ───────────────────────────────────────────────────────────────
 
-const bulkUpsert = async ({ branchId, schedules }) => {
+const bulkUpsert = async ({ branchId, schedules }, user = null) => {
   if (!branchId)  throw new AppError("branchId is required",   StatusCodes.BAD_REQUEST);
   if (!schedules?.length) return { updated: 0 };
+
+  // Hanya manager divisi (untuk stafnya) atau Owner / Super Admin yang boleh mengubah jadwal
+  if (user) {
+    const scope = await divisionAccess.getScope(user);
+    for (const employeeId of new Set(schedules.map((s) => s.employeeId))) {
+      await divisionAccess.assertCanManage(user, employeeId, scope);
+    }
+  }
 
   // Validate shiftId references exist
   const shiftIds = [...new Set(schedules.map((s) => s.shiftId).filter(Boolean))];

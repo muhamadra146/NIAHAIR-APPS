@@ -12,6 +12,7 @@ const USER_AUTH_INCLUDE = {
     include: {
       role:             true,
       employeeBranches: EMPLOYEE_BRANCH_INCLUDE,
+      division:         { select: { id: true, code: true, name: true } },
     },
   },
 };
@@ -35,6 +36,7 @@ const findUserById = (id) =>
         include: {
           role:             true,
           employeeBranches: EMPLOYEE_BRANCH_INCLUDE,
+          division:         { select: { id: true, code: true, name: true } },
         },
       },
     },

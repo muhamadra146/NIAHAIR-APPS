@@ -1,8 +1,7 @@
 const { Router }   = require("express");
 const authenticate  = require("../../middlewares/auth.middleware");
-const authorize     = require("../../middlewares/role.middleware");
+const requireApprover = require("../../middlewares/approver.middleware");
 const validate      = require("../../middlewares/validate.middleware");
-const { ROLES }    = require("../../common/constants/role.constant");
 const { bulkScheduleSchema } = require("./staffSchedule.validation");
 const {
   getRosterController,
@@ -21,7 +20,7 @@ router.get("/my",        authenticate, getMySchedulesController);
 router.post(
   "/bulk",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE),
+  requireApprover, // manager divisi / Owner / SA — batas staf dicek di service
   validate(bulkScheduleSchema),
   bulkUpsertController,
 );

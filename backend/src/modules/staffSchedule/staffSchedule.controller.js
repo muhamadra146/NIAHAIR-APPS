@@ -3,14 +3,14 @@ const { getRoster, bulkUpsert, getAvailableStaff, getMySchedules } = require("./
 
 const getRosterController = async (req, res, next) => {
   try {
-    const result = await getRoster(req.query);
+    const result = await getRoster(req.query, req.user);
     return success(res, result, "Roster fetched");
   } catch (err) { next(err); }
 };
 
 const bulkUpsertController = async (req, res, next) => {
   try {
-    const result = await bulkUpsert(req.body);
+    const result = await bulkUpsert(req.body, req.user);
     return success(res, result, "Schedules updated");
   } catch (err) { next(err); }
 };

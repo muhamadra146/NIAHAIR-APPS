@@ -3,6 +3,8 @@ const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { resolveOrderBy } = require("../../utils/sort");
 const cloudinary = require("../../config/cloudinary");
+const divisionRepo   = require("../division/division.repository");
+const divisionAccess = require("../division/division.access");
 
 // Deteksi resource_type dari URL Cloudinary (/raw/upload/ = file, sisanya = image)
 const deleteCloudinaryFile = async (publicId, url) => {
@@ -102,7 +104,31 @@ const getById = async (id) => {
 
 const getNextCode = async () => generateNextCode();
 
-const createEmployee = async (body) => {
+// ── Divisi & manager divisi ──────────────────────────────────────────
+// Hanya Owner / Super Admin yang boleh mengisi divisi & tanda manager divisi.
+// Manager divisi wajib punya divisi dan cabang utama (wewenang = divisi + cabangnya).
+const applyDivisionFields = async (body, existing, actor) => {
+  const touches = body.divisionId !== undefined || body.isDivisionManager !== undefined;
+  if (!touches) return;
+  if (actor && !divisionAccess.hasFullAccess(actor)) {
+    throw new AppError("Hanya Owner atau Super Admin yang dapat mengatur divisi karyawan", StatusCodes.FORBIDDEN);
+  }
+  if (body.divisionId === "") body.divisionId = null;
+  if (body.divisionId) {
+    const division = await divisionRepo.findById(body.divisionId);
+    if (!division || !division.isActive) throw new AppError("Divisi tidak ditemukan atau nonaktif", StatusCodes.BAD_REQUEST);
+  }
+  const divisionId   = body.divisionId   !== undefined ? body.divisionId   : existing?.divisionId ?? null;
+  const homeBranchId = body.homeBranchId !== undefined ? body.homeBranchId : existing?.homeBranchId ?? null;
+  const isManager    = body.isDivisionManager !== undefined ? body.isDivisionManager : existing?.isDivisionManager ?? false;
+  if (!divisionId) { body.isDivisionManager = false; return; }
+  if (isManager && !homeBranchId) {
+    throw new AppError("Manager divisi wajib punya cabang utama", StatusCodes.BAD_REQUEST);
+  }
+};
+
+const createEmployee = async (body, actor) => {
+  await applyDivisionFields(body, null, actor);
   const role = await findRoleById(body.roleId);
   if (!role) throw new AppError("Role karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
 
@@ -133,9 +159,10 @@ const createEmployee = async (body) => {
   }
 };
 
-const updateEmployee = async (id, body) => {
+const updateEmployee = async (id, body, actor) => {
   const employee = await findById(id);
   if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
+  await applyDivisionFields(body, employee, actor);
 
   if (body.roleId && body.roleId !== employee.roleId) {
     const role = await findRoleById(body.roleId);

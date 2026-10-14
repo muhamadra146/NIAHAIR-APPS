@@ -3,6 +3,7 @@ const prisma = require("../../config/prisma");
 const INCLUDE = {
   role:       { select: { id: true, code: true, name: true } },
   homeBranch: { select: { id: true, code: true, name: true } },
+  division:   { select: { id: true, code: true, name: true } },
   employeeBranches: {
     where:   { isActive: true },
     orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],

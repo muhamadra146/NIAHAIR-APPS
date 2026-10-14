@@ -2,14 +2,17 @@ const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo = require("./correction.repository");
+const divisionAccess = require("../division/division.access");
 const attendanceSvc = require("../attendance/attendance.service");
 
-const getAll = async ({ page, limit, branchId, status, employeeId }) => {
+const getAll = async ({ page, limit, branchId, status, employeeId }, scope = null) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
   const where = {};
   if (branchId)   where.branchId   = branchId;
   if (status)     where.status     = status;
   if (employeeId) where.employeeId = employeeId;
+  // Batas wewenang divisi (manager divisi: staf satu divisi & cabang; Owner/SA: semua)
+  if (scope && !scope.all) where.employee = { ...(where.employee ?? {}), ...divisionAccess.managedEmployeeWhere(scope) };
 
   const [rows, total] = await Promise.all([repo.findAll({ skip, take, where }), repo.count(where)]);
   return { data: rows, meta: paginationMeta(total, pageNum, limitNum) };
@@ -50,9 +53,10 @@ const create = async (employeeId, branchId, { staffScheduleId, attendanceId, req
   });
 };
 
-const review = async (id, reviewerId, { status, reviewNote }) => {
+const review = async (id, reviewerId, { status, reviewNote }, actor = null) => {
   const cr = await repo.findById(id);
   if (!cr) throw new AppError("Pengajuan koreksi tidak ditemukan", StatusCodes.NOT_FOUND);
+  await divisionAccess.assertCanManage(actor, cr.employeeId);
   if (cr.status !== "PENDING") throw new AppError("Hanya pengajuan berstatus PENDING yang bisa diproses", StatusCodes.BAD_REQUEST);
   if (!["APPROVED", "REJECTED"].includes(status))
     throw new AppError("Status harus APPROVED atau REJECTED", StatusCodes.BAD_REQUEST);

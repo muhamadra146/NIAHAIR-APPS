@@ -3,6 +3,7 @@ const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const prisma  = require("../../config/prisma");
 const repo    = require("./permission.repository");
+const divisionAccess = require("../division/division.access");
 
 const toDateOnly = (d) => {
   const date = new Date(d);
@@ -10,12 +11,14 @@ const toDateOnly = (d) => {
   return date;
 };
 
-const getAll = async ({ page = 1, limit = 20, employeeId, branchId, status }) => {
+const getAll = async ({ page = 1, limit = 20, employeeId, branchId, status }, scope = null) => {
   const { skip, take } = paginate(page, limit);
   const where = {};
   if (employeeId) where.employeeId = employeeId;
   if (branchId)   where.branchId   = branchId;
   if (status)     where.status     = status;
+  // Batas wewenang divisi (manager divisi: staf satu divisi & cabang; Owner/SA: semua)
+  if (scope && !scope.all) where.employee = { ...(where.employee ?? {}), ...divisionAccess.managedEmployeeWhere(scope) };
   const [rows, total] = await Promise.all([repo.findAll({ skip, take, where }), repo.count(where)]);
   return { data: rows, meta: paginationMeta(total, page, limit) };
 };
@@ -69,9 +72,10 @@ const create = async (employeeId, branchId, { type, date, reason, notes, estimat
   });
 };
 
-const approve = async (id, reviewedBy, reviewNote) => {
+const approve = async (id, reviewedBy, reviewNote, actor = null) => {
   const perm = await repo.findById(id);
   if (!perm) throw new AppError("Izin tidak ditemukan", StatusCodes.NOT_FOUND);
+  await divisionAccess.assertCanManage(actor, perm.employeeId);
   if (perm.status !== "PENDING") throw new AppError("Hanya izin PENDING yang bisa disetujui", StatusCodes.BAD_REQUEST);
 
   // ABSENCE: mark schedule as IZIN (absent)
@@ -94,9 +98,10 @@ const approve = async (id, reviewedBy, reviewNote) => {
   return repo.findById(id);
 };
 
-const reject = async (id, reviewedBy, reviewNote) => {
+const reject = async (id, reviewedBy, reviewNote, actor = null) => {
   const perm = await repo.findById(id);
   if (!perm) throw new AppError("Izin tidak ditemukan", StatusCodes.NOT_FOUND);
+  await divisionAccess.assertCanManage(actor, perm.employeeId);
   if (perm.status !== "PENDING") throw new AppError("Hanya izin PENDING yang bisa ditolak", StatusCodes.BAD_REQUEST);
 
   return repo.update(id, {

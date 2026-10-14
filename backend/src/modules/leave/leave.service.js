@@ -5,6 +5,7 @@ const { resolveOrderBy } = require("../../utils/sort");
 const prisma          = require("../../config/prisma");
 const repo            = require("./leave.repository");
 const quotaSvc        = require("../leaveQuota/leaveQuota.service");
+const divisionAccess = require("../division/division.access");
 
 const ORDER_MAP = {
   createdAt:    { createdAt: "asc" },
@@ -51,7 +52,7 @@ const createLeaveSchedules = async (tx, employeeId, branchId, startDate, endDate
 
 // ── Service functions ─────────────────────────────────────────────────────────
 
-const getAll = async ({ page, limit, employeeId, status, branchId, sortBy }) => {
+const getAll = async ({ page, limit, employeeId, status, branchId, sortBy }, scope = null) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
   const orderBy = resolveOrderBy(sortBy, ORDER_MAP);
   const where = {};
@@ -60,6 +61,8 @@ const getAll = async ({ page, limit, employeeId, status, branchId, sortBy }) => 
   if (branchId) {
     where.employee = { homeBranchId: branchId };
   }
+  // Batas wewenang divisi (manager divisi: staf satu divisi & cabang; Owner/SA: semua)
+  if (scope && !scope.all) where.employee = { ...(where.employee ?? {}), ...divisionAccess.managedEmployeeWhere(scope) };
 
   const [rows, total] = await Promise.all([
     repo.findAll({ skip, take, where, orderBy }),
@@ -136,9 +139,10 @@ const createLeave = async (employeeId, { startDate, endDate, reason, leaveTypeId
   });
 };
 
-const approve = async (id, approvedBy) => {
+const approve = async (id, approvedBy, actor = null) => {
   const leave = await repo.findById(id);
   if (!leave) throw new AppError("Cuti tidak ditemukan", StatusCodes.NOT_FOUND);
+  await divisionAccess.assertCanManage(actor, leave.employeeId);
   if (leave.status !== "PENDING") throw new AppError("Hanya cuti berstatus PENDING yang bisa disetujui", StatusCodes.BAD_REQUEST);
 
   const branchId = leave.employee?.homeBranch?.id ?? null;
@@ -158,9 +162,10 @@ const approve = async (id, approvedBy) => {
   return repo.findById(id);
 };
 
-const reject = async (id, approvedBy) => {
+const reject = async (id, approvedBy, actor = null) => {
   const leave = await repo.findById(id);
   if (!leave) throw new AppError("Cuti tidak ditemukan", StatusCodes.NOT_FOUND);
+  await divisionAccess.assertCanManage(actor, leave.employeeId);
   if (leave.status !== "PENDING") throw new AppError("Hanya cuti berstatus PENDING yang bisa ditolak", StatusCodes.BAD_REQUEST);
   return repo.update(id, { status: "REJECTED", approvedBy, approvedAt: new Date() });
 };

@@ -3,6 +3,7 @@ const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const prisma  = require("../../config/prisma");
 const repo    = require("./sickLeave.repository");
+const divisionAccess = require("../division/division.access");
 
 const MAX_NO_LETTER_PER_YEAR = 2;
 
@@ -28,12 +29,14 @@ const dateRange = (start, end) => {
 
 // ── Service functions ─────────────────────────────────────────────────────────
 
-const getAll = async ({ page = 1, limit = 20, employeeId, branchId, status }) => {
+const getAll = async ({ page = 1, limit = 20, employeeId, branchId, status }, scope = null) => {
   const { skip, take } = paginate(page, limit);
   const where = {};
   if (employeeId) where.employeeId = employeeId;
   if (branchId)   where.branchId   = branchId;
   if (status)     where.status     = status;
+  // Batas wewenang divisi (manager divisi: staf satu divisi & cabang; Owner/SA: semua)
+  if (scope && !scope.all) where.employee = { ...(where.employee ?? {}), ...divisionAccess.managedEmployeeWhere(scope) };
   const [rows, total] = await Promise.all([repo.findAll({ skip, take, where }), repo.count(where)]);
   return { data: rows, meta: paginationMeta(total, page, limit) };
 };
@@ -104,9 +107,10 @@ const create = async (employeeId, branchId, body) => {
   return repo.create(data);
 };
 
-const approve = async (id, reviewedBy, reviewNote) => {
+const approve = async (id, reviewedBy, reviewNote, actor = null) => {
   const sick = await repo.findById(id);
   if (!sick) throw new AppError("Data sakit tidak ditemukan", StatusCodes.NOT_FOUND);
+  await divisionAccess.assertCanManage(actor, sick.employeeId);
   if (sick.status !== "PENDING") throw new AppError("Hanya sakit PENDING yang bisa disetujui", StatusCodes.BAD_REQUEST);
 
   // Schedule upserts + status update in one transaction — prevents ghost SAKIT schedules
@@ -131,9 +135,10 @@ const approve = async (id, reviewedBy, reviewNote) => {
   return repo.findById(id);
 };
 
-const reject = async (id, reviewedBy, reviewNote) => {
+const reject = async (id, reviewedBy, reviewNote, actor = null) => {
   const sick = await repo.findById(id);
   if (!sick) throw new AppError("Data sakit tidak ditemukan", StatusCodes.NOT_FOUND);
+  await divisionAccess.assertCanManage(actor, sick.employeeId);
   if (sick.status !== "PENDING") throw new AppError("Hanya sakit PENDING yang bisa ditolak", StatusCodes.BAD_REQUEST);
 
   return repo.update(id, {

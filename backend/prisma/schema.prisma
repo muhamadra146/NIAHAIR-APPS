@@ -202,6 +202,24 @@ model EmployeeRole {
   @@map("employee_roles")
 }
 
+// Divisi karyawan (Operasional, Finance, Office, …) — dikelola Owner/Super Admin di Pengaturan.
+// Manager divisi = karyawan dengan isDivisionManager; wewenangnya: staf satu divisi & satu cabang utama.
+model Division {
+  id String @id @default(uuid())
+
+  code String @unique
+  name String
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employees Employee[]
+
+  @@map("divisions")
+}
+
 // =====================================================
 // EMPLOYEES
 // =====================================================
@@ -242,11 +260,15 @@ model Employee {
 
   payDay Int? // tanggal gajian: 1, 7, 14, dst.
 
+  divisionId        String?
+  isDivisionManager Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   role       EmployeeRole @relation(fields: [roleId], references: [id])
   homeBranch Branch?      @relation("EmployeeHomeBranch", fields: [homeBranchId], references: [id])
+  division   Division?    @relation(fields: [divisionId], references: [id], onDelete: SetNull)
 
   branchHistories  EmployeeBranchHistory[]
   employeeBranches EmployeeBranch[]
@@ -294,6 +316,7 @@ model Employee {
 
   @@index([roleId])
   @@index([homeBranchId])
+  @@index([divisionId])
   @@map("employees")
 }
 

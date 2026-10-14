@@ -1,8 +1,7 @@
 const { Router }   = require("express");
 const authenticate  = require("../../middlewares/auth.middleware");
-const authorize     = require("../../middlewares/role.middleware");
+const requireApprover = require("../../middlewares/approver.middleware");
 const validate      = require("../../middlewares/validate.middleware");
-const { ROLES }    = require("../../common/constants/role.constant");
 const { createLeaveSchema } = require("./leave.validation");
 const {
   getAllController, getMyController, getByIdController,
@@ -12,10 +11,9 @@ const {
 const router = Router();
 
 // OFFICE punya approval cuti sesuai access matrix
-const MANAGER_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE];
 
 // Admin: all leaves
-router.get("/",    authenticate, authorize(...MANAGER_ROLES), getAllController);
+router.get("/",    authenticate, requireApprover, getAllController);
 
 // Self: my leaves (before /:id to avoid conflict)
 router.get("/my",  authenticate, getMyController);
@@ -27,8 +25,8 @@ router.get("/:id", authenticate, getByIdController);
 router.post("/", authenticate, validate(createLeaveSchema), createController);
 
 // Approve / Reject (managers)
-router.post("/:id/approve", authenticate, authorize(...MANAGER_ROLES), approveController);
-router.post("/:id/reject",  authenticate, authorize(...MANAGER_ROLES), rejectController);
+router.post("/:id/approve", authenticate, requireApprover, approveController);
+router.post("/:id/reject",  authenticate, requireApprover, rejectController);
 
 // Cancel own pending leave
 router.delete("/:id", authenticate, cancelController);

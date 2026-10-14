@@ -4,7 +4,7 @@ const svc = require("./leave.service");
 const getAllController = async (req, res, next) => {
   try {
     const { employeeId, status, branchId, page = 1, limit = 20 } = req.query;
-    const result = await svc.getAll({ employeeId, status, branchId, page: Number(page), limit: Number(limit) });
+    const result = await svc.getAll({ employeeId, status, branchId, page: Number(page), limit: Number(limit) }, req.accessScope);
     return success(res, result, "Leaves fetched");
   } catch (err) { next(err); }
 };
@@ -33,14 +33,14 @@ const createController = async (req, res, next) => {
 
 const approveController = async (req, res, next) => {
   try {
-    const result = await svc.approve(req.params.id, req.user.id);
+    const result = await svc.approve(req.params.id, req.user.id, req.user);
     return success(res, result, "Leave approved");
   } catch (err) { next(err); }
 };
 
 const rejectController = async (req, res, next) => {
   try {
-    const result = await svc.reject(req.params.id, req.user.id);
+    const result = await svc.reject(req.params.id, req.user.id, req.user);
     return success(res, result, "Leave rejected");
   } catch (err) { next(err); }
 };

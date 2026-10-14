@@ -36,7 +36,7 @@ const createController = async (req, res, next) => {
       ...(files.ktpFile?.[0]      && { ktpFileUrl: files.ktpFile[0].path, ktpFilePublicId: files.ktpFile[0].filename }),
       ...(files.contractFile?.[0] && { contractFileUrl: files.contractFile[0].path, contractFilePublicId: files.contractFile[0].filename }),
     };
-    const employee = await createEmployee(body);
+    const employee = await createEmployee(body, req.user);
     return created(res, employee, "Employee created");
   } catch (err) {
     next(err);
@@ -51,7 +51,7 @@ const updateController = async (req, res, next) => {
       ...(files.ktpFile?.[0]      && { ktpFileUrl: files.ktpFile[0].path, ktpFilePublicId: files.ktpFile[0].filename }),
       ...(files.contractFile?.[0] && { contractFileUrl: files.contractFile[0].path, contractFilePublicId: files.contractFile[0].filename }),
     };
-    const result = await updateEmployee(req.params.id, body);
+    const result = await updateEmployee(req.params.id, body, req.user);
     return success(res, result, "Employee updated");
   } catch (err) {
     next(err);
