@@ -56,6 +56,7 @@ import { PurchaseReturnListPage }    from "@/features/purchaseReturn/pages/Purch
 import { PurchaseReturnDetailPage }  from "@/features/purchaseReturn/pages/PurchaseReturnDetailPage";
 import { PurchaseReturnFormPage }    from "@/features/purchaseReturn/pages/PurchaseReturnFormPage";
 import { FinanceDashboardPage }      from "@/features/dashboard/pages/FinanceDashboardPage";
+import { FinanceDetailsPage }        from "@/features/dashboard/pages/FinanceDetailsPage";
 import { AttendanceReportPage }     from "@/features/team/pages/AttendanceReportPage";
 
 export const router = createBrowserRouter([
@@ -252,6 +253,7 @@ export const router = createBrowserRouter([
             element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","FINANCE"]} />,
             children: [
               { path: "/finance", element: <FinanceDashboardPage /> },
+              { path: "/finance/rincian", element: <FinanceDetailsPage /> },
             ],
           },
 

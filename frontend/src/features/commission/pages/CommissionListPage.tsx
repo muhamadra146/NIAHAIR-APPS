@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchJobAssignmentInvoices,
@@ -378,9 +378,11 @@ export function CommissionListPage() {
   const [activeTab, setActiveTab] = useState<"commissions" | "approval" | "items" | "settings">("commissions");
 
   const [page, setPage]         = useState(1);
+  // Periode awal bisa datang dari tautan Dashboard Keuangan (?startDate=&endDate=)
+  const [searchParams]          = useSearchParams();
   const [status, setStatus]     = useState("");
-  const [startDate, setStart]   = useState("");
-  const [endDate, setEnd]       = useState("");
+  const [startDate, setStart]   = useState(searchParams.get("startDate") ?? "");
+  const [endDate, setEnd]       = useState(searchParams.get("endDate") ?? "");
   const [invoiceId, setInvoiceId] = useState("");
 
   const [overrideTarget, setOverrideTarget] = useState<OverrideTarget | null>(null);

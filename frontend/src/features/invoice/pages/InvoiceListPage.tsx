@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Plus, Eye, Search, CreditCard, Receipt,
   TrendingUp, Clock, CheckCircle2, ChevronDown, ChevronUp, Trash2, ChevronRight,
@@ -331,9 +331,11 @@ function KasirPOSView() {
 function ManagementView() {
   const { branchId, user } = useAuthStore();
   const [page, setPage]               = useState(1);
+  // Periode awal bisa datang dari tautan Dashboard Keuangan (?startDate=&endDate=)
+  const [searchParams]                = useSearchParams();
   const [status, setStatus]           = useState<InvoiceStatus | "">("");
-  const [startDate, setStart]         = useState("");
-  const [endDate, setEnd]             = useState("");
+  const [startDate, setStart]         = useState(searchParams.get("startDate") ?? "");
+  const [endDate, setEnd]             = useState(searchParams.get("endDate") ?? "");
   const [formOpen, setFormOpen]       = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null);
 
