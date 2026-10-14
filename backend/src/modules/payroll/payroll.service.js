@@ -7,6 +7,7 @@ const { wibDateStr } = require("../../utils/date");
 const { buildWorkPeriod, DEFAULT_PAY_DAY } = require("../../utils/payPeriod");
 const { computeMealAllowance, computeTransportAllowance, computeProration, computeAlphaDays, countUnscheduledDays, PRESENT_STATUSES } = require("./payroll.calc");
 const repo            = require("./payroll.repository");
+const notification = require("../notification/notification.service");
 const { createSyncJob } = require("../syncQueue/syncQueue.service");
 
 const ORDER_MAP = {
@@ -426,7 +427,16 @@ const submitForApproval = async (id, userId) => {
   if (!existing) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
   if (existing.status !== "DRAFT")
     throw new AppError("Hanya payroll DRAFT yang bisa diajukan", StatusCodes.BAD_REQUEST);
-  return repo.update(id, { status: "PENDING_APPROVAL", submittedBy: userId ?? null, submittedAt: new Date() });
+  const updated = await repo.update(id, { status: "PENDING_APPROVAL", submittedBy: userId ?? null, submittedAt: new Date() });
+  // Notifikasi → Owner, Super Admin & Finance (bulan kerja = bulan mulai periode)
+  await notification.payrollPending({
+    employeeName:      updated?.employee?.name ?? "karyawan",
+    periodLabel:       updated?.periodStart
+      ? "Gaji " + new Date(updated.periodStart).toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: "UTC" })
+      : "",
+    submittedByUserId: userId ?? null,
+  });
+  return updated;
 };
 
 const approve = async (id, approvedBy) => {

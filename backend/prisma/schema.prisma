@@ -157,6 +157,7 @@ model User {
   reviewedPermissions PermissionRequest[]           @relation("PermissionReviewer")
   reviewedSickLeaves  SickLeave[]                   @relation("SickLeaveReviewer")
   refreshTokens       RefreshToken[]
+  notifications       Notification[]
 
   @@index([userRoleId])
   @@index([employeeId])
@@ -200,6 +201,28 @@ model EmployeeRole {
   employees Employee[]
 
   @@map("employee_roles")
+}
+
+// Notifikasi di aplikasi (lonceng) — juga dikirim lewat email. Izin user 2026-10-14.
+model Notification {
+  id String @id @default(uuid())
+
+  userId String
+
+  type    String // LEAVE_REQUEST, PERMISSION_REQUEST, …, REQUEST_DECIDED, COMMISSION_PENDING, PAYROLL_PENDING, LOAN_CREATED
+  title   String
+  message String
+  link    String? // path frontend, mis. /pengajuan?tab=cuti-izin&jenis=cuti
+
+  isRead Boolean   @default(false)
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
 }
 
 // Divisi karyawan (Operasional, Finance, Office, …) — dikelola Owner/Super Admin di Pengaturan.

@@ -81,4 +81,18 @@ const review = async (id, reviewerId, { status, reviewNote }, actor = null) => {
   return updated;
 };
 
-module.exports = { getAll, getMy, getById, create, review };
+// ── Notifikasi (lihat notification.service) ─────────────────────────
+const notification = require("../notification/notification.service");
+
+const createNotify = async (...args) => {
+  const r = await create(...args);
+  await notification.requestCreated("CORRECTION", { employeeId: r.employeeId });
+  return r;
+};
+const reviewNotify = async (id, reviewerId, body, actor) => {
+  const r = await review(id, reviewerId, body, actor);
+  await notification.requestDecided("CORRECTION", { employeeId: r.employeeId, approved: body.status === "APPROVED", note: body.reviewNote });
+  return r;
+};
+
+module.exports = { getAll, getMy, getById, create: createNotify, review: reviewNotify };

@@ -123,4 +123,13 @@ const deleteLoan = async (id) => {
   await repo.remove(id);
 };
 
-module.exports = { getAll, getByEmployee, getById, createLoan, updateLoan, cancelLoan, addRepayment, getRepayments, getMyLoans, getMyLoanById, deleteLoan };
+// ── Notifikasi kasbon baru → Owner, Super Admin & Finance ─────────────
+const notification = require("../notification/notification.service");
+
+const createLoanNotify = async (body, actor = null) => {
+  const loan = await createLoan(body);
+  await notification.loanCreated({ employeeId: loan.employeeId, totalAmount: loan.totalAmount, createdByUserId: actor?.id ?? null });
+  return loan;
+};
+
+module.exports = { getAll, getByEmployee, getById, createLoan: createLoanNotify, updateLoan, cancelLoan, addRepayment, getRepayments, getMyLoans, getMyLoanById, deleteLoan };

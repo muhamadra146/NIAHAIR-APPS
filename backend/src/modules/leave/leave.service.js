@@ -178,4 +178,24 @@ const cancel = async (id, employeeId) => {
   return repo.update(id, { status: "CANCELLED" });
 };
 
-module.exports = { getAll, getMy, getById, createLeave, approve, reject, cancel };
+// ── Notifikasi (lihat notification.service) ─────────────────────────
+const notification = require("../notification/notification.service");
+const _tgl = (d) => new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+const createLeaveNotify = async (...args) => {
+  const leave = await createLeave(...args);
+  await notification.requestCreated("LEAVE", { employeeId: leave.employeeId, detail: `${_tgl(leave.startDate)} – ${_tgl(leave.endDate)}, ${leave.totalDays} hari` });
+  return leave;
+};
+const approveNotify = async (...args) => {
+  const leave = await approve(...args);
+  await notification.requestDecided("LEAVE", { employeeId: leave.employeeId, approved: true });
+  return leave;
+};
+const rejectNotify = async (...args) => {
+  const leave = await reject(...args);
+  await notification.requestDecided("LEAVE", { employeeId: leave.employeeId, approved: false });
+  return leave;
+};
+
+module.exports = { getAll, getMy, getById, createLeave: createLeaveNotify, approve: approveNotify, reject: rejectNotify, cancel };

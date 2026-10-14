@@ -120,4 +120,24 @@ const cancel = async (id, employeeId) => {
   return repo.update(id, { status: "REJECTED" });
 };
 
-module.exports = { getAll, getMy, getById, create, approve, reject, cancel };
+// ── Notifikasi (lihat notification.service) ─────────────────────────
+const notification = require("../notification/notification.service");
+const _tgl = (d) => new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+const createNotify = async (...args) => {
+  const r = await create(...args);
+  await notification.requestCreated("PERMISSION", { employeeId: r.employeeId, detail: r.type === "LATE" ? `terlambat, ${_tgl(r.date)}` : `tidak masuk, ${_tgl(r.date)}` });
+  return r;
+};
+const approveNotify = async (id, reviewedBy, reviewNote, actor) => {
+  const r = await approve(id, reviewedBy, reviewNote, actor);
+  await notification.requestDecided("PERMISSION", { employeeId: r.employeeId, approved: true, note: reviewNote });
+  return r;
+};
+const rejectNotify = async (id, reviewedBy, reviewNote, actor) => {
+  const r = await reject(id, reviewedBy, reviewNote, actor);
+  await notification.requestDecided("PERMISSION", { employeeId: r.employeeId, approved: false, note: reviewNote });
+  return r;
+};
+
+module.exports = { getAll, getMy, getById, create: createNotify, approve: approveNotify, reject: rejectNotify, cancel };

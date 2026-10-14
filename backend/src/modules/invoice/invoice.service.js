@@ -19,7 +19,8 @@ const { createSyncJob }            = require("../syncQueue/syncQueue.service");
 const { generateSaleMovement, reverseInvoiceSaleMovements, reverseInvoiceServiceMovements } = require("../inventory/inventory.service");
 const { accurateRequest }          = require("../accurate/accurate.client");
 const { resolveInvoiceStatus }     = require("./invoice.status");
-const prisma                       = require("../../config/prisma");
+const prisma                       = require("../../config/prisma");
+const notification = require("../notification/notification.service");
 const {
   findAll,
   count,
@@ -1096,6 +1097,9 @@ const submitJobAssignments = async (invoiceId, sessionsPayload) => {
     }
   });
 
+  // Notifikasi Finance: invoice siap dihitung komisinya
+  if (assignedCount > 0) await notification.jobsReadyForCalculation({ invoiceId });
+
   // Tidak auto-generate — user akan buka CommissionCalculatorPage untuk hitung & finalize
   return { assigned: assignedCount, commissionsCreated: 0, needsCalculator: true };
 };
@@ -1234,6 +1238,9 @@ const finalizeCommissionFromCalculator = async (invoiceId, { qtyOverrides = {}, 
     await tx.commission.deleteMany({ where: { invoiceId, status: "PENDING" } });
     await tx.commission.createMany({ data });
   });
+
+  // Notifikasi Finance lain: komisi menunggu persetujuan
+  await notification.commissionPending({ invoiceId, count: data.length, actorUserId: userId ?? null });
 
   return { created: data.length };
 };
