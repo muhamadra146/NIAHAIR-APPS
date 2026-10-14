@@ -9,6 +9,8 @@
  *   detailDownPayment → array of { invoiceId, paymentAmount } to apply deposits
  */
 
+const { isMemberDiscountEligible } = require("../membership/membership.discount");
+
 const formatDate = (date) => {
   const d  = new Date(date);
   const dd = String(d.getDate()).padStart(2, "0");
@@ -25,7 +27,9 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
   // then add all current items fresh. "Replace all" strategy — reliable regardless of DB state.
   const deleteEntries = currentAccurateItemIds.map((id) => ({ id, _status: "DELETE" }));
 
-  // Proportional FIXED_AMOUNT membership discount distribution across SERVICE items.
+  // Proportional FIXED_AMOUNT membership discount distribution across item yang dapat diskon member
+  // (kategori dicentang di paket, tidak dikecualikan, bukan bahan baku). Bila konfigurasi paket sudah
+  // berubah sehingga tidak ada item yang cocok, dibagi ke semua item non-bahan agar total tetap sama.
   // DB values (invoice_items.discount) are unchanged — commission base is protected.
   // This distributes the invoice-level membershipDiscountTotal into per-line itemCashDiscount
   // in the Accurate sync payload only. Rounding: last SERVICE item absorbs the remainder
@@ -38,7 +42,9 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
   const membershipDiscountTotal = Number(invoice.membershipDiscountTotal ?? 0);
   const membershipDistributionMap = {};
   if (membershipDiscountTotal > 0 && invoice.membership?.discountType === "FIXED_AMOUNT") {
-    const serviceItems = invoice.items.filter((line) => line.item.itemType === "SERVICE");
+    const billable = invoice.items.filter((line) => !line.isMaterial);
+    const eligible = billable.filter((line) => isMemberDiscountEligible(line.item, invoice.membership, false));
+    const serviceItems = eligible.length > 0 ? eligible : billable;
     const serviceTotal = serviceItems.reduce(
       (sum, line) => sum + Number(line.price) * Number(line.qty),
       0

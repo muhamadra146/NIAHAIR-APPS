@@ -72,7 +72,7 @@ jest.mock('../../config/prisma', () => ({
 const repo      = require('./invoice.repository');
 const prisma    = require('../../config/prisma');
 const inventory = require('../inventory/inventory.service');
-const { getInvoiceById, cancelInvoice, deleteInvoice, applyDepositToInvoice, submitJobAssignments } =
+const { getInvoiceById, cancelInvoice, deleteInvoice, applyDepositToInvoice, submitJobAssignments, createInvoice } =
   require('./invoice.service');
 const consultationRepo = require('../consultation/consultation.repository');
 const { upsertMany }   = require('../treatment/treatmentJobAssignment.repository');
@@ -343,5 +343,56 @@ describe('submitJobAssignments — COM-015 batas qty', () => {
   test('should_save_when_team_total_within_invoice_qty', async () => {
     await submitJobAssignments('inv1', two(70, 50));
     expect(upsertMany).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Diskon membership per kategori (keputusan user 2026-10-14) ─────────────
+describe('createInvoice — diskon membership per kategori', () => {
+  const { getActiveMembership } = require('../membership/membership.service');
+  const ITEMS = {
+    color:  { id: 'color',  itemCode: 'COLOR', itemType: 'SERVICE',   categoryId: 'jasa', excludeMemberDiscount: false, category: { parentId: null } },
+    pp:     { id: 'pp',     itemCode: 'PP',    itemType: 'SERVICE',   categoryId: 'jasa', excludeMemberDiscount: true,  category: { parentId: null } },
+    rambut: { id: 'rambut', itemCode: 'VIP',   itemType: 'INVENTORY', categoryId: 'vip',  excludeMemberDiscount: false, category: { parentId: 'rambut' } },
+  };
+  const membership = (discountType, discountValue, categoryIds) => ({
+    membership: { id: 'm1', discountType, discountValue, discountCategories: categoryIds.map((categoryId) => ({ categoryId })) },
+  });
+  const lines = [
+    { itemId: 'color',  unitId: 'u', qty: 1, price: 200000 },
+    { itemId: 'pp',     unitId: 'u', qty: 1, price: 100000 },
+    { itemId: 'rambut', unitId: 'u', qty: 1, price: 1000000 },
+  ];
+
+  beforeEach(() => {
+    repo.findCustomerById.mockResolvedValue({ id: 'c1' });
+    repo.findBranchById.mockResolvedValue({ id: 'b1' });
+    repo.findItemById.mockImplementation(async (id) => ITEMS[id]);
+    repo.findItemUnit.mockResolvedValue({ id: 'iu' });
+    repo.findMaxInvoiceSeqToday.mockResolvedValue(0);
+    repo.createWithTransaction.mockImplementation(async ({ invoiceData }) => ({ id: 'inv1', status: invoiceData.status }));
+    prisma.treatmentSession.findFirst.mockResolvedValue(null);
+  });
+  const saved = () => repo.createWithTransaction.mock.calls.at(-1)[0];
+
+  test('GOLD 10% (JASA): hanya treatment, Ongkos PP & rambut tidak', async () => {
+    getActiveMembership.mockResolvedValueOnce(membership('PERCENTAGE', 10, ['jasa']));
+    await createInvoice({ customerId: 'c1', items: lines }, 'u1', 'b1');
+    const { itemsData, invoiceData } = saved();
+    expect(itemsData.map((l) => Number(l.discount))).toEqual([20000, 0, 0]);
+    expect(Number(invoiceData.membershipDiscountTotal)).toBe(20000);
+  });
+
+  test('PLATINUM 10% (JASA + RAMBUT): treatment & rambut, Ongkos PP tidak', async () => {
+    getActiveMembership.mockResolvedValueOnce(membership('PERCENTAGE', 10, ['jasa', 'rambut']));
+    await createInvoice({ customerId: 'c1', items: lines }, 'u1', 'b1');
+    expect(saved().itemsData.map((l) => Number(l.discount))).toEqual([20000, 0, 100000]);
+  });
+
+  test('diskon nominal dibatasi total item yang dapat diskon', async () => {
+    getActiveMembership.mockResolvedValueOnce(membership('FIXED_AMOUNT', 500000, ['jasa']));
+    await createInvoice({ customerId: 'c1', items: lines }, 'u1', 'b1');
+    const { invoiceData } = saved();
+    expect(Number(invoiceData.membershipDiscountTotal)).toBe(200000);
+    expect(Number(invoiceData.grandTotal)).toBe(1100000);
   });
 });

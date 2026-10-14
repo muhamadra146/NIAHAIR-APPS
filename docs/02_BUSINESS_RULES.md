@@ -853,8 +853,6 @@ MERGED
 # CRM-014
 ## Customer Membership
 
-Future.
-
 Satu Customer hanya memiliki satu Membership aktif.
 
 Membership mempengaruhi.
@@ -864,6 +862,16 @@ Harga
 Benefit
 
 Promo
+
+### Diskon Membership (keputusan user 2026-10-14)
+
+- Setiap paket punya **satu** diskon: persen atau nominal (Rp).
+- Setiap paket menentukan sendiri **kategori item yang dapat diskon** (Pengaturan → Membership → "Diskon Berlaku Untuk Kategori"). Mencentang kategori induk (mis. RAMBUT) mencakup seluruh sub-kategorinya, termasuk sub-kategori baru. Contoh: GOLD = JASA (semua treatment); PLATINUM = JASA + RAMBUT.
+- Item bertanda **"Tidak kena diskon member"** tidak pernah didiskon walaupun kategorinya dicentang. Tanda diatur per item di Komisi → Master Item. Awalnya ditandai: Ongkos PP, Service Charge, semua jenis Charge (termasuk Charge Lembur), dan Cancel Hairstylist.
+- Bahan baku yang dipakai saat treatment tidak pernah kena diskon membership.
+- Diskon persen dihitung per item yang dapat diskon. Diskon nominal dipotong dari total invoice dan dibatasi total item yang dapat diskon; saat dikirim ke Accurate dibagi proporsional ke item tersebut.
+- Paket baru default mencentang kategori JASA. Paket tanpa kategori tidak memberi diskon apa pun.
+- Hanya Super Admin, Owner, Manager, dan Finance yang dapat mengubah data item (kategori komisi & tanda diskon member).
 
 ---
 

@@ -49,6 +49,7 @@ const {
   findByIdForWorksheet,
 } = require("./invoice.repository");
 const { getActiveMembership } = require("../membership/membership.service");
+const { isMemberDiscountEligible } = require("../membership/membership.discount");
 const { findJobQtyLimitViolations } = require("../commission/commission.calc");
 
 const D = (v) => new Prisma.Decimal(String(v));
@@ -142,6 +143,8 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
   // Resolve price and build line items
   const itemsData    = [];
   let membershipDiscountRunning = D("0");
+  // Total (setelah diskon item + PPN) item yang dapat diskon membership — batas diskon nominal
+  let memberEligibleTotal = D("0");
   let totalSubtotal = D("0");
   let totalDiscount = D("0");
   let totalTax      = D("0");
@@ -179,6 +182,8 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
       }
       price = D(priceRecord.sellingPrice);
     }
+    // Diskon membership hanya untuk item yang kategorinya dicentang di paket & tidak dikecualikan
+    const memberEligible  = isMemberDiscountEligible(item, activeMembership?.membership, isMaterial);
     const qty             = D(line.qty);
     const discountType    = line.discountType ?? "AMOUNT";
     const discountPercent = discountType === "PERCENT" ? D(line.discountPercent ?? 0) : null;
@@ -186,12 +191,12 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
       ? price.mul(qty).mul(discountPercent).div(D("100")).toDecimalPlaces(2)
       : D(line.discountAmount ?? 0);
 
-    // Apply PERCENTAGE membership discount hanya pada layanan (bukan bahan baku)
+    // Apply PERCENTAGE membership discount hanya pada item yang dapat diskon member
     if (
       !isMaterial &&
       !membershipDiscountOverride &&
       activeMembership?.membership?.discountType === "PERCENTAGE" &&
-      item.itemType === "SERVICE"
+      memberEligible
     ) {
       const membershipItemDiscount = price.mul(qty)
         .mul(D(activeMembership.membership.discountValue))
@@ -225,6 +230,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
       totalSubtotal = totalSubtotal.add(lineSubtotal);
       totalDiscount = totalDiscount.add(discount);
       totalTax      = totalTax.add(itemTax);
+      if (memberEligible) memberEligibleTotal = memberEligibleTotal.add(lineSubtotal).add(itemTax);
     }
 
     itemsData.push({
@@ -250,14 +256,17 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
 
   if (membershipDiscountOverride) {
     membershipDiscountTotal = bodyMembershipDiscount;
+    // Nominal: tidak boleh melebihi total item yang dapat diskon
+    if (activeMembership?.membership?.discountType === "FIXED_AMOUNT" && membershipDiscountTotal.gt(memberEligibleTotal)) {
+      membershipDiscountTotal = memberEligibleTotal;
+    }
   } else if (activeMembership) {
     if (activeMembership.membership.discountType === "PERCENTAGE") {
       membershipDiscountTotal = membershipDiscountRunning;
       // grandTotal unaffected here — PERCENTAGE was folded into per-item discount above
     } else if (activeMembership.membership.discountType === "FIXED_AMOUNT") {
-      const preDiscountTotal = totalSubtotal.add(totalTax);
       const discountValue    = D(activeMembership.membership.discountValue);
-      membershipDiscountTotal = discountValue.gt(preDiscountTotal) ? preDiscountTotal : discountValue;
+      membershipDiscountTotal = discountValue.gt(memberEligibleTotal) ? memberEligibleTotal : discountValue;
     }
   }
 
@@ -484,6 +493,8 @@ const updateInvoice = async (id, body, userId) => {
   let totalDiscount = D("0");
   let totalTax      = D("0");
   let membershipDiscountRunning = D("0");
+  // Total (setelah diskon item + PPN) item yang dapat diskon membership — batas diskon nominal
+  let memberEligibleTotal = D("0");
   // totalSubtotal / totalTax hanya dari item layanan (isMaterial=false)
 
   for (const line of items) {
@@ -509,6 +520,8 @@ const updateInvoice = async (id, body, userId) => {
       price = D(priceRecord.sellingPrice);
     }
 
+    // Diskon membership hanya untuk item yang kategorinya dicentang di paket & tidak dikecualikan
+    const memberEligible  = isMemberDiscountEligible(item, activeMembership?.membership, isMaterial);
     const qty             = D(line.qty);
     const discountType    = line.discountType ?? "AMOUNT";
     const discountPercent = discountType === "PERCENT" ? D(line.discountPercent ?? 0) : null;
@@ -516,12 +529,12 @@ const updateInvoice = async (id, body, userId) => {
       ? price.mul(qty).mul(discountPercent).div(D("100")).toDecimalPlaces(2)
       : D(line.discountAmount ?? 0);
 
-    // Membership discount hanya untuk layanan (bukan bahan baku)
+    // Membership discount hanya untuk item yang dapat diskon member
     if (
       !isMaterial &&
       !membershipDiscountOverride &&
       activeMembership?.membership?.discountType === "PERCENTAGE" &&
-      item.itemType === "SERVICE"
+      memberEligible
     ) {
       const membershipItemDiscount = price.mul(qty)
         .mul(D(activeMembership.membership.discountValue))
@@ -552,6 +565,7 @@ const updateInvoice = async (id, body, userId) => {
       totalSubtotal = totalSubtotal.add(lineSubtotal);
       totalDiscount = totalDiscount.add(discount);
       totalTax      = totalTax.add(itemTax);
+      if (memberEligible) memberEligibleTotal = memberEligibleTotal.add(lineSubtotal).add(itemTax);
     }
 
     itemsData.push({
@@ -576,13 +590,16 @@ const updateInvoice = async (id, body, userId) => {
 
   if (membershipDiscountOverride) {
     membershipDiscountTotal = bodyMembershipDiscount;
+    // Nominal: tidak boleh melebihi total item yang dapat diskon
+    if (activeMembership?.membership?.discountType === "FIXED_AMOUNT" && membershipDiscountTotal.gt(memberEligibleTotal)) {
+      membershipDiscountTotal = memberEligibleTotal;
+    }
   } else if (activeMembership) {
     if (activeMembership.membership.discountType === "PERCENTAGE") {
       membershipDiscountTotal = membershipDiscountRunning;
     } else if (activeMembership.membership.discountType === "FIXED_AMOUNT") {
-      const preDiscountTotal = totalSubtotal.add(totalTax);
       const discountValue    = D(activeMembership.membership.discountValue);
-      membershipDiscountTotal = discountValue.gt(preDiscountTotal) ? preDiscountTotal : discountValue;
+      membershipDiscountTotal = discountValue.gt(memberEligibleTotal) ? memberEligibleTotal : discountValue;
     }
   }
 

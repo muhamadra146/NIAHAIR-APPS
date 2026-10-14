@@ -1,4 +1,5 @@
 const prisma = require("../../config/prisma");
+const { ELIGIBILITY_ITEM_SELECT, DISCOUNT_CATEGORIES_SELECT } = require("../membership/membership.discount");
 
 const findInvoiceForSync = async (id) => {
   const invoice = await prisma.invoice.findUnique({
@@ -21,7 +22,7 @@ const findInvoiceForSync = async (id) => {
       membershipDiscountTotal: true,
       membershipId:            true,
       membership: {
-        select: { discountType: true },
+        select: { discountType: true, discountCategories: DISCOUNT_CATEGORIES_SELECT },
       },
       items: {
         select: {
@@ -41,6 +42,7 @@ const findInvoiceForSync = async (id) => {
               itemCode:       true,
               accurateItemId: true,
               itemType:       true,
+              ...ELIGIBILITY_ITEM_SELECT,
             },
           },
           unit: {

@@ -24,10 +24,26 @@ const assertDiscount = (discountType, discountValue) => {
   }
 };
 
+/** Kategori diskon harus ada; duplikat dibuang */
+const normalizeCategoryIds = async (categoryIds) => {
+  if (categoryIds === undefined) return undefined;
+  const ids = [...new Set(categoryIds)];
+  if (ids.length > 0 && (await repo.countCategories(ids)) !== ids.length) {
+    throw new AppError("Kategori item tidak ditemukan", StatusCodes.BAD_REQUEST);
+  }
+  return ids;
+};
+
 const create = async (body) => {
   const { name, price, durationDays, discountType, discountValue } = body;
   assertDiscount(discountType, discountValue);
-  return repo.create({ name, price, durationDays, discountType, discountValue });
+  // Tidak dikirim → default kategori JASA (semua treatment)
+  let categoryIds = await normalizeCategoryIds(body.categoryIds);
+  if (categoryIds === undefined) {
+    const jasa = await repo.findDefaultDiscountCategory();
+    categoryIds = jasa ? [jasa.id] : [];
+  }
+  return repo.create({ name, price, durationDays, discountType, discountValue, categoryIds });
 };
 
 const update = async (id, body) => {
@@ -40,6 +56,7 @@ const update = async (id, body) => {
   if (durationDays  !== undefined) data.durationDays  = durationDays;
   if (discountType  !== undefined) data.discountType  = discountType;
   if (discountValue !== undefined) data.discountValue = discountValue;
+  data.categoryIds = await normalizeCategoryIds(body.categoryIds);
   return repo.update(id, data);
 };
 

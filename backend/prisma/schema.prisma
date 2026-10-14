@@ -415,7 +415,26 @@ model Membership {
   membershipHistories MembershipHistory[]
   invoices            Invoice[]
 
+  // Kategori item yang dapat diskon membership (keputusan user 2026-10-14)
+  discountCategories MembershipDiscountCategory[]
+
   @@map("memberships")
+}
+
+// Kategori item yang dapat diskon per paket membership.
+// Kategori induk (mis. RAMBUT) mencakup seluruh sub-kategorinya.
+model MembershipDiscountCategory {
+  membershipId String
+  categoryId   String
+
+  createdAt DateTime @default(now())
+
+  membership Membership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  category   ItemCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([membershipId, categoryId])
+  @@index([categoryId])
+  @@map("membership_discount_categories")
 }
 
 // =====================================================
@@ -579,6 +598,8 @@ model ItemCategory {
 
   items Item[]
 
+  membershipDiscounts MembershipDiscountCategory[]
+
   @@index([name])
   @@index([parentId])
   @@map("item_categories")
@@ -644,6 +665,9 @@ model Item {
   itemType ItemType
 
   isActive Boolean @default(true)
+
+  // true = tidak pernah kena diskon membership (mis. Ongkos PP, Service Charge, Charge, Cancel)
+  excludeMemberDiscount Boolean @default(false)
 
   lastSyncAt DateTime?
 

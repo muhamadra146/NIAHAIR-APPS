@@ -1,15 +1,16 @@
 const prisma = require("../../config/prisma");
 const { JOB_CALC_SELECT } = require("../commission/commission.repository");
+const { ELIGIBILITY_ITEM_SELECT, DISCOUNT_CATEGORIES_SELECT } = require("../membership/membership.discount");
 
 const INCLUDE = {
   customer:          { select: { id: true, name: true, customerNo: true, mobilePhone: true } },
   branch:            { select: { id: true, code: true, name: true } },
   createdByEmployee: { select: { id: true, employeeCode: true, name: true } },
   // Paket membership saat invoice dibuat — untuk memisahkan teks diskon membership dari diskon item
-  membership:        { select: { id: true, name: true, discountType: true, discountValue: true } },
+  membership:        { select: { id: true, name: true, discountType: true, discountValue: true, discountCategories: DISCOUNT_CATEGORIES_SELECT } },
   items: {
     include: {
-      item: { select: { id: true, name: true, itemCode: true, itemType: true } },
+      item: { select: { id: true, name: true, itemCode: true, itemType: true, ...ELIGIBILITY_ITEM_SELECT } },
       unit: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "asc" },
@@ -206,7 +207,7 @@ const findBranchById = (id) =>
 const findItemById = (id) =>
   prisma.item.findUnique({
     where: { id },
-    select: { id: true, itemCode: true, name: true, itemType: true },
+    select: { id: true, itemCode: true, name: true, itemType: true, ...ELIGIBILITY_ITEM_SELECT },
   });
 
 const findItemUnit = ({ itemId, unitId }) =>

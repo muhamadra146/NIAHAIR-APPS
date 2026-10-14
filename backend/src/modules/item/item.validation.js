@@ -16,6 +16,8 @@ const updateItemSchema = object({
   defaultUnitId:        optional(string()),
   commissionCategoryId: optional(nullable(string())),
   isActive:             optional(boolean()),
+  // true = item tidak pernah kena diskon membership
+  excludeMemberDiscount: optional(boolean()),
 });
 
 module.exports = { createItemSchema, updateItemSchema };

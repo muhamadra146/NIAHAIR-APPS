@@ -29,6 +29,8 @@ router.get( "/:id/service-materials",   authenticate, getServiceMaterialsControl
 router.get("/", authenticate, getAllController);
 router.get("/:id", authenticate, getByIdController);
 router.post("/", authenticate, validate(createItemSchema), createController);
-router.put("/:id", authenticate, validate(updateItemSchema), updateController);
+// Ubah item (kategori komisi, tanda diskon member) — sama dengan akses halaman Komisi → Master Item
+const ITEM_EDIT_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.FINANCE];
+router.put("/:id", authenticate, authorize(...ITEM_EDIT_ROLES), validate(updateItemSchema), updateController);
 
 module.exports = router;
