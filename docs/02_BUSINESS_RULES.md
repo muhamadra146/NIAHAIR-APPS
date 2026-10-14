@@ -4756,6 +4756,21 @@ Address.
 
 Pengajuan milik manager divisi disetujui **Owner / Super Admin**. Role MANAGER yang bukan manager divisi tidak lagi mengurus jadwal & persetujuan staf. Bila ada beberapa manager untuk staf yang sama, persetujuan pertama yang berlaku dan nama penyetuju tercatat.
 
+
+### Notifikasi
+
+Notifikasi muncul di **lonceng** aplikasi (diperbarui tiap 1 menit, ada tanda belum dibaca) dan dikirim lewat **email** bila SMTP aktif. Kegagalan email tidak membatalkan proses.
+
+| Peristiwa | Penerima |
+| --- | --- |
+| Pengajuan cuti / izin / sakit / koreksi baru | Manager divisi karyawan di cabangnya; bila pengaju adalah manager, tanpa divisi, atau divisinya tanpa manager → Owner & Super Admin |
+| Pengajuan disetujui / ditolak | Karyawan yang mengajukan |
+| Pekerjaan invoice selesai diisi (siap dihitung komisi) | Finance |
+| Komisi tersimpan, menunggu persetujuan | Finance (kecuali yang menyimpan) |
+| Payroll diajukan untuk persetujuan | Owner, Super Admin & Finance (kecuali yang mengajukan) |
+| Kasbon baru | Owner, Super Admin & Finance (kecuali yang membuat) |
+
+Menu **Pengajuan** menampilkan jumlah pengajuan yang menunggu persetujuan si penyetuju.
 ---
 
 # CHAPTER 8 SUMMARY

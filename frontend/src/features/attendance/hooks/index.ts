@@ -38,7 +38,7 @@ export const useCreateCorrection = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateCorrectionInput) => createCorrection(input),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["corrections"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["corrections"] }); qc.invalidateQueries({ queryKey: ["notifications"] }); },
   });
 };
 
@@ -46,7 +46,7 @@ export const useReviewCorrection = (id: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: ReviewCorrectionInput) => reviewCorrection(id, input),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["corrections"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["corrections"] }); qc.invalidateQueries({ queryKey: ["notifications"] }); },
   });
 };
 
@@ -62,7 +62,7 @@ export const useCreatePermission = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreatePermissionInput) => createPermission(input),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["permissions"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["permissions"] }); qc.invalidateQueries({ queryKey: ["notifications"] }); },
   });
 };
 
@@ -71,7 +71,7 @@ export const useApprovePermission = () => {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input?: ReviewPermissionInput }) =>
       approvePermission(id, input),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["permissions"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["permissions"] }); qc.invalidateQueries({ queryKey: ["notifications"] }); },
   });
 };
 
@@ -80,7 +80,7 @@ export const useRejectPermission = () => {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input?: ReviewPermissionInput }) =>
       rejectPermission(id, input),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["permissions"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["permissions"] }); qc.invalidateQueries({ queryKey: ["notifications"] }); },
   });
 };
 
@@ -88,7 +88,7 @@ export const useCancelPermission = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => cancelPermission(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["permissions"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["permissions"] }); qc.invalidateQueries({ queryKey: ["notifications"] }); },
   });
 };
 
@@ -104,7 +104,7 @@ export const useCreateSickLeave = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateSickLeaveInput) => createSickLeave(input),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["sick-leaves"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["sick-leaves"] }); qc.invalidateQueries({ queryKey: ["notifications"] }); },
   });
 };
 
@@ -113,7 +113,7 @@ export const useApproveSickLeave = () => {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input?: ReviewSickLeaveInput }) =>
       approveSickLeave(id, input),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["sick-leaves"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["sick-leaves"] }); qc.invalidateQueries({ queryKey: ["notifications"] }); },
   });
 };
 
@@ -122,7 +122,7 @@ export const useRejectSickLeave = () => {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input?: ReviewSickLeaveInput }) =>
       rejectSickLeave(id, input),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["sick-leaves"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["sick-leaves"] }); qc.invalidateQueries({ queryKey: ["notifications"] }); },
   });
 };
 
@@ -130,7 +130,7 @@ export const useCancelSickLeave = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => cancelSickLeave(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["sick-leaves"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["sick-leaves"] }); qc.invalidateQueries({ queryKey: ["notifications"] }); },
   });
 };
 
@@ -138,6 +138,6 @@ export const useUploadSickLeaveDocument = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, file }: { id: string; file: File }) => uploadSickLeaveDocument(id, file),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["sick-leaves"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["sick-leaves"] }); qc.invalidateQueries({ queryKey: ["notifications"] }); },
   });
 };

@@ -7,6 +7,7 @@ import { useLogout } from "@/features/auth/hooks/useLogout";
 import { useLayout } from "@/contexts/LayoutContext";
 import { sidebarNav, type NavItem } from "@/layouts/config/sidebarNav";
 import logoSrc from "@/assets/logo-niahair.png";
+import { useNotificationSummary } from "@/features/notification/hooks";
 import type { UserRole } from "@/types/auth";
 
 // ── NavLink ───────────────────────────────────────────────────────────────────
@@ -19,6 +20,9 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
     || (hasChildren && pathname.startsWith(item.href + "/"))
     || (item.children?.some((c) => pathname === c.href || pathname.startsWith(c.href + "/")) ?? false);
   const Icon = item.icon;
+  // Angka pengajuan menunggu persetujuan (manager divisi / Owner / SA)
+  const { data: notif } = useNotificationSummary();
+  const badge = item.href === "/pengajuan" ? notif?.pendingApprovalTotal ?? 0 : 0;
 
   return (
     <li>
@@ -42,6 +46,14 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
           active ? "text-white" : "text-sidebar-foreground/45 group-hover:text-sidebar-foreground/80"
         )} />
         {!collapsed && <span className="truncate">{item.label}</span>}
+        {badge > 0 && (
+          <span className={cn(
+            "rounded-full bg-amber-500 text-[10px] font-bold leading-none text-white",
+            collapsed ? "absolute right-1 top-1 px-1 py-0.5" : "ml-auto px-1.5 py-0.5",
+          )}>
+            {badge > 99 ? "99+" : badge}
+          </span>
+        )}
       </Link>
 
       {/* Sub-items — only when expanded */}

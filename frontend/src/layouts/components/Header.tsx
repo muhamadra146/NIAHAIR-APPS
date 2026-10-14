@@ -5,6 +5,7 @@ import { useLayout } from "@/contexts/LayoutContext";
 import { sidebarNav } from "@/layouts/config/sidebarNav";
 import { Button } from "@/components/ui/button";
 import logoSrc from "@/assets/logo-niahair.png";
+import { NotificationBell } from "@/features/notification/NotificationBell";
 
 function usePageTitle() {
   const { pathname } = useLocation();
@@ -72,6 +73,9 @@ export function Header() {
           </button>
         )}
       </div>
+
+      {/* Notifikasi (lonceng) */}
+      <NotificationBell />
 
       {/* Right: user — click to open profile */}
       {user?.employee?.id ? (

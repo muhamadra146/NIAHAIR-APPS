@@ -33,6 +33,7 @@ export const useCreateLeave = () => {
   return useMutation({
     mutationFn: (input: CreateLeaveInput) => createLeave(input),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
       qc.invalidateQueries({ queryKey: ["myLeaves"] });
       qc.invalidateQueries({ queryKey: ["leaves"] });
       toast.success("Pengajuan cuti berhasil dikirim");
@@ -46,6 +47,7 @@ export const useApproveLeave = () => {
   return useMutation({
     mutationFn: (id: string) => approveLeave(id),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
       qc.invalidateQueries({ queryKey: ["leaves"] });
       qc.invalidateQueries({ queryKey: ["schedules"] });
       toast.success("Cuti disetujui");
@@ -59,6 +61,7 @@ export const useRejectLeave = () => {
   return useMutation({
     mutationFn: (id: string) => rejectLeave(id),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
       qc.invalidateQueries({ queryKey: ["leaves"] });
       toast.success("Cuti ditolak");
     },
@@ -71,6 +74,7 @@ export const useCancelLeave = () => {
   return useMutation({
     mutationFn: (id: string) => cancelLeave(id),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
       qc.invalidateQueries({ queryKey: ["myLeaves"] });
       toast.success("Pengajuan cuti dibatalkan");
     },

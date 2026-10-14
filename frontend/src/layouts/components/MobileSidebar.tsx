@@ -5,6 +5,7 @@ import { useLayout } from "@/contexts/LayoutContext";
 import { sidebarNav, type NavItem } from "@/layouts/config/sidebarNav";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import logoSrc from "@/assets/logo-niahair.png";
+import { useNotificationSummary } from "@/features/notification/hooks";
 import type { UserRole } from "@/types/auth";
 
 function MobileNavLink({ item }: { item: NavItem }) {
@@ -15,6 +16,8 @@ function MobileNavLink({ item }: { item: NavItem }) {
     || (hasChildren && pathname.startsWith(item.href + "/"))
     || (item.children?.some((c) => pathname === c.href || pathname.startsWith(c.href + "/")) ?? false);
   const Icon   = item.icon;
+  const { data: notif } = useNotificationSummary();
+  const badge = item.href === "/pengajuan" ? notif?.pendingApprovalTotal ?? 0 : 0;
 
   return (
     <li>
@@ -30,6 +33,11 @@ function MobileNavLink({ item }: { item: NavItem }) {
       >
         <Icon className="h-5 w-5 shrink-0" />
         <span>{item.label}</span>
+        {badge > 0 && (
+          <span className="ml-auto rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+            {badge > 99 ? "99+" : badge}
+          </span>
+        )}
       </Link>
       {item.children && active && (
         <ul className="ml-8 mt-1 space-y-1">
