@@ -35,6 +35,8 @@ export interface ItemCommissionCategory {
   id:   string;
   code: string;
   name: string;
+  /** Staf bisa dipilih bebas: karyawan yang hadir hari itu (mis. Charge Lembur) */
+  allowAnyStaff?: boolean;
   jobs: CommissionJobRef[];
 }
 
@@ -65,6 +67,7 @@ export interface JobAssignmentInvoice {
   id:          string;
   invoiceNo:   string;
   invoiceDate: string;
+  branchId?:   string;
   grandTotal:  string;
   customer:    { id: string; name: string; customerNo: string; mobilePhone: string | null };
   treatmentSessions: JobAssignmentSession[];
@@ -277,5 +280,11 @@ export async function finalizeCommission(
     `/invoices/${invoiceId}/finalize-commission`,
     payload,
   );
+  return data.data;
+}
+
+/** Karyawan yang absen hadir di cabang & tanggal tertentu (pilihan staf kategori "bebas") */
+export async function fetchPresentEmployees(branchId: string, date: string): Promise<{ id: string; name: string; employeeCode: string }[]> {
+  const { data } = await api.get<ApiResponse<{ id: string; name: string; employeeCode: string }[]>>("/attendance/present", { params: { branchId, date } });
   return data.data;
 }

@@ -7,6 +7,8 @@ export interface CommissionCategory {
   code:      string;
   name:      string;
   isActive:  boolean;
+  /** Staf bisa dipilih bebas di Input Pekerjaan (karyawan hadir hari itu) — mis. Charge Lembur */
+  allowAnyStaff?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -28,6 +30,7 @@ export interface UpdateCommissionCategoryInput {
   code?:     string;
   name?:     string;
   isActive?: boolean;
+  allowAnyStaff?: boolean;
 }
 
 // ── Commission Job ────────────────────────────────────────────────────────────

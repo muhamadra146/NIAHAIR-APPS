@@ -5776,6 +5776,23 @@ Komisi dibayar hanya lewat payroll.
 
 ---
 
+# COM-018
+## Charge Lembur & Free Staff Selection
+
+### Rule
+
+Charge Lembur (item 101271) dibagi seperti komisi (keputusan user 2026-10-14):
+
+- **50% untuk perusahaan, 50% untuk tim yang lembur.** Item memakai Kategori Komisi **Charge Lembur** dengan satu Job "Lembur": Tarif Bawaan Persentase 50% dari subtotal item (setelah diskon, sebelum PPN), Cara Bagi `EQUAL` (dibagi rata), Qty default `ONE`.
+- **Semua staf yang ikut mendapat bagian sama rata**, termasuk CS/kasir yang tidak ada di booking.
+- **Staf Operasional** yang mencentang siapa saja yang ikut lembur di Input Pekerjaan.
+
+Kategori Komisi punya pengaturan **Staf bisa dipilih bebas** (`allowAnyStaff`, default mati). Bila aktif, daftar staf di Input Pekerjaan untuk item kategori itu = **karyawan aktif yang absen hadir** (Hadir, Terlambat, Pulang Cepat, Setengah Hari) **di cabang invoice pada tanggal invoice**, bukan staf booking. Kategori lain tetap memakai staf booking (atau semua karyawan bila invoice tanpa booking).
+
+Hanya Owner / Super Admin yang mengubah pengaturan ini (menu Komisi → Pengaturan → Kategori Komisi).
+
+---
+
 # CHAPTER 9 SUMMARY
 
 Payroll & Commission merupakan modul Compensation Management.

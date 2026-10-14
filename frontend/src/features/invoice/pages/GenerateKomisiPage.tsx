@@ -19,6 +19,7 @@ import { useEmployees }  from "@/features/employee/hooks";
 import {
   fetchJobAssignmentInvoices,
   submitJobAssignments,
+  fetchPresentEmployees,
   type JobAssignmentInvoice,
 } from "@/features/invoice/api/commissionGenerate.api";
 import { uniqueStaffEmployees } from "@/features/appointment/staff";
@@ -133,6 +134,23 @@ function JobAssignmentModal({
     return () => window.removeEventListener("keydown", handleEscape);
   }, [handleEscape]);
 
+  // ── Staf untuk kategori "staf bisa dipilih bebas" (mis. Charge Lembur) ──────
+  // = karyawan yang absen hadir di cabang invoice pada tanggal invoice (keputusan user 2026-10-14)
+  const needsPresent = inv.treatmentSessions.some((s) =>
+    s.treatmentItems.some((ti) => ti.item.commissionCategory?.allowAnyStaff));
+  const invoiceDay = toWibDateStr(new Date(inv.invoiceDate));
+  const { data: presentEmployees = [] } = useQuery({
+    queryKey: ["attendance-present", inv.branchId, invoiceDay],
+    queryFn:  () => fetchPresentEmployees(inv.branchId!, invoiceDay),
+    enabled:  needsPresent && !!inv.branchId,
+  });
+  const staffForItem = (
+    session: { appointment: { staffs: { employee: { id: string; name: string; employeeCode: string } }[] } | null },
+    ti: { item: { commissionCategory: { allowAnyStaff?: boolean } | null } },
+  ) => ti.item.commissionCategory?.allowAnyStaff
+    ? presentEmployees
+    : (session.appointment ? uniqueStaffEmployees(session.appointment.staffs) : allEmployees);
+
   // ── Submit ──────────────────────────────────────────────────────────
   const submitMut = useMutation({
     mutationFn: async () => {
@@ -141,9 +159,7 @@ function JobAssignmentModal({
           const categoryJobs = ti.item.commissionCategory?.jobs ?? [];
           if (categoryJobs.length === 0) return [];
 
-          const staffList = session.appointment
-            ? uniqueStaffEmployees(session.appointment.staffs)
-            : allEmployees;
+          const staffList = staffForItem(session, ti);
 
           return staffList.flatMap((emp) =>
             categoryJobs
@@ -191,8 +207,8 @@ function JobAssignmentModal({
   // (sama dengan validasi "Max" di Kalkulator; backend juga menolak jika melebihi).
   const isQtyLimited = (job: { deductsFromJobId: string | null; splitMode?: string }) =>
     !job.deductsFromJobId && (job.splitMode ?? "BY_QTY") === "BY_QTY";
-  const staffListFor = (session: (typeof jobItems)[number]["session"]) =>
-    session.appointment ? uniqueStaffEmployees(session.appointment.staffs) : allEmployees;
+  const staffListFor = (session: (typeof jobItems)[number]["session"], ti: (typeof jobItems)[number]["ti"]) =>
+    staffForItem(session, ti);
   const itemQtyOf = (ti: (typeof jobItems)[number]["ti"]) =>
     Math.round(Number(ti.qty ?? 0) * Number(ti.conversionSnapshot ?? 1));
   // Total qty yang dicentang untuk satu job di satu item (opsional: kecuali satu staf)
@@ -207,7 +223,7 @@ function JobAssignmentModal({
   const qtyViolations = jobItems.flatMap(({ ti, session }) => {
     const max = itemQtyOf(ti);
     if (max <= 0) return [];
-    const staff = staffListFor(session);
+    const staff = staffListFor(session, ti);
     return ti.item.commissionCategory!.jobs
       .filter(isQtyLimited)
       .map((job) => ({ tiId: ti.id, itemName: ti.item.name, job, total: jobTotalQty(ti.id, job.id, staff), max }))
@@ -263,9 +279,7 @@ function JobAssignmentModal({
 
           {jobItems.map(({ ti, session }) => {
             const jobs      = ti.item.commissionCategory!.jobs;
-            const staffList = session.appointment
-              ? uniqueStaffEmployees(session.appointment.staffs)
-              : allEmployees;
+            const staffList = staffForItem(session, ti);
 
             // Qty item dalam satuan konversi (qty × conversionSnapshot, mis. 1 TEBAL × 180 = 180 helai)
             const itemQtyConverted = Math.round(
@@ -303,6 +317,15 @@ function JobAssignmentModal({
                     )}
                   </div>
                 </div>
+
+                {/* Kategori staf bebas (mis. Charge Lembur): pilih dari karyawan yang hadir hari itu */}
+                {ti.item.commissionCategory?.allowAnyStaff && (
+                  <p className="px-4 pt-3 text-xs text-muted-foreground">
+                    {staffList.length > 0
+                      ? "Centang semua karyawan yang ikut lembur (karyawan yang absen hadir hari itu). Bagian tim dibagi rata."
+                      : "Belum ada karyawan yang absen hadir di cabang ini pada tanggal invoice."}
+                  </p>
+                )}
 
                 {/* Staff + job rows */}
                 <div className="divide-y divide-border">

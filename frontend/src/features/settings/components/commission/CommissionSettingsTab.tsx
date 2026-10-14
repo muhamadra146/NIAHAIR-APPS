@@ -123,6 +123,12 @@ function CommissionCategorySection() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const anyStaffMut = useMutation({
+    mutationFn: (cat: CommissionCategory) => updateCommissionCategory(cat.id, { allowAnyStaff: !cat.allowAnyStaff }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["commission-categories"] }),
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteCommissionCategory(id),
     onSuccess: () => {
@@ -238,6 +244,11 @@ function CommissionCategorySection() {
                     </span>
                     {/* Name */}
                     <span className="flex-1 min-w-0 text-sm font-medium text-slate-800 truncate">{cat.name}</span>
+                    {cat.allowAnyStaff && (
+                      <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700" title="Di Input Pekerjaan, staf dipilih dari karyawan yang hadir hari itu">
+                        Staf bebas
+                      </span>
+                    )}
                     {/* Inactive badge */}
                     {!cat.isActive && (
                       <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
@@ -261,6 +272,14 @@ function CommissionCategorySection() {
                         onClick={() => toggleMut.mutate(cat)}
                       >
                         {cat.isActive ? "Nonaktifkan" : "Aktifkan"}
+                      </button>
+                      <button
+                        className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                        disabled={anyStaffMut.isPending}
+                        onClick={() => anyStaffMut.mutate(cat)}
+                        title="Staf bisa dipilih bebas: di Input Pekerjaan muncul semua karyawan yang absen hadir hari itu (mis. Charge Lembur untuk CS)"
+                      >
+                        {cat.allowAnyStaff ? "Matikan staf bebas" : "Jadikan staf bebas"}
                       </button>
                       <button
                         className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
