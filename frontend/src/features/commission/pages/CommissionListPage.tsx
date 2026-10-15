@@ -797,48 +797,49 @@ function InvoiceGroupRow({
 
   return (
     <div>
-      {/* Invoice header — clickable to expand/collapse */}
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex flex-wrap items-center gap-3 px-5 py-3.5 hover:bg-muted/30 transition-colors text-left"
-      >
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 ${expanded ? "" : "-rotate-90"}`}
-        />
+      {/* Invoice header — area tombol buka/tutup dan tombol Setujui bersebelahan (bukan bersarang) */}
+      <div className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-muted/30 transition-colors">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          className="flex flex-1 min-w-0 flex-wrap items-center gap-3 text-left"
+        >
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 ${expanded ? "" : "-rotate-90"}`}
+          />
 
-        {/* Invoice info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="font-semibold text-sm">{group.invoiceNo}</span>
-            <span className="text-xs text-muted-foreground">{group.customer}</span>
-            <span className="text-xs text-muted-foreground">{formatDate(group.invoiceDate)}</span>
+          {/* Invoice info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="font-semibold text-sm">{group.invoiceNo}</span>
+              <span className="text-xs text-muted-foreground">{group.customer}</span>
+              <span className="text-xs text-muted-foreground">{formatDate(group.invoiceDate)}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 mt-0.5">
+              <span className="text-xs text-muted-foreground">{group.items.length} komisi</span>
+              <GroupStatusBadge items={group.items} />
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 mt-0.5">
-            <span className="text-xs text-muted-foreground">{group.items.length} komisi</span>
-            <GroupStatusBadge items={group.items} />
-          </div>
-        </div>
 
-        {/* Right side: total + approve button */}
-        <div className="flex items-center gap-3 shrink-0">
-          <span className="text-sm font-bold tabular-nums">{formatCurrency(group.totalCommission)}</span>
-          {isSuperAdmin && pendingItems.length > 0 && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs gap-1"
-              disabled={isGroupApproving || approving}
-              onClick={(e) => { e.stopPropagation(); onGroupApprove(pendingItems.map((c) => c.id)); }}
-            >
-              {isGroupApproving
-                ? <Loader2 className="h-3 w-3 animate-spin" />
-                : <>Setujui{pendingItems.length > 1 ? ` (${pendingItems.length})` : ""}</>
-              }
-            </Button>
-          )}
-        </div>
-      </button>
+          <span className="shrink-0 text-sm font-bold tabular-nums">{formatCurrency(group.totalCommission)}</span>
+        </button>
+
+        {isSuperAdmin && pendingItems.length > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 shrink-0 text-xs gap-1"
+            disabled={isGroupApproving || approving}
+            onClick={() => onGroupApprove(pendingItems.map((c) => c.id))}
+          >
+            {isGroupApproving
+              ? <Loader2 className="h-3 w-3 animate-spin" />
+              : <>Setujui{pendingItems.length > 1 ? ` (${pendingItems.length})` : ""}</>
+            }
+          </Button>
+        )}
+      </div>
 
       {/* Expanded: per-employee commission rows */}
       {expanded && (
