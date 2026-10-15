@@ -89,12 +89,13 @@ function MobileCardList({ users, onEdit, onResetPw, onDelete }: Omit<Props, "isL
                   <Button variant="ghost" size="icon" onClick={() => onResetPw(u)} title="Reset password">
                     <KeyRound className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={() => onEdit(u)}>
+                  <Button variant="ghost" size="icon" onClick={() => onEdit(u)} title="Edit" aria-label={`Edit user ${u.employee?.name ?? u.username ?? u.email}`}>
                     <Pencil className="h-4 w-4" />
                   </Button>
                   <Button variant="ghost" size="icon"
                     className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => setConfirmId(u.id)}>
+                    onClick={() => setConfirmId(u.id)}
+                      title="Hapus" aria-label={`Hapus user ${u.employee?.name ?? u.username ?? u.email}`}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </>
@@ -168,12 +169,13 @@ function DesktopTable({ users, onEdit, onResetPw, onDelete }: Omit<Props, "isLoa
                     <Button variant="ghost" size="icon" onClick={() => onResetPw(u)} title="Reset password">
                       <KeyRound className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => onEdit(u)}>
+                    <Button variant="ghost" size="icon" onClick={() => onEdit(u)} title="Edit" aria-label={`Edit user ${u.employee?.name ?? u.username ?? u.email}`}>
                       <Pencil className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon"
                       className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => setConfirmId(u.id)}>
+                      onClick={() => setConfirmId(u.id)}
+                      title="Hapus" aria-label={`Hapus user ${u.employee?.name ?? u.username ?? u.email}`}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
