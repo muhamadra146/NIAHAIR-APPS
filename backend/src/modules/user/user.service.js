@@ -5,7 +5,7 @@ const { ROLES }       = require("../../common/constants/role.constant");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const {
   findAll, count, findById, findByEmail, findByUsername, findByEmployeeId, findByIdWithPassword,
-  findUserRoleById, findEmployeeById,
+  findUserRoleById, findEmployeeById, findEmployeeByEmail,
   create, update, updatePassword, deactivate, deleteById,
 } = require("./user.repository");
 
@@ -66,6 +66,10 @@ const createUser = async ({ username, email, password, userRoleId, employeeId })
   const taken = await findByEmployeeId(employeeId);
   if (taken) throw new AppError("Karyawan ini sudah punya akun user", StatusCodes.CONFLICT);
 
+  // Email login juga jadi email karyawan — tidak boleh dipakai karyawan lain
+  const emailOwner = await findEmployeeByEmail(email);
+  if (emailOwner && emailOwner.id !== employeeId) throw new AppError("Email sudah dipakai karyawan lain", StatusCodes.CONFLICT);
+
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   return create({ username, email, passwordHash, userRoleId, employeeId });
 };
@@ -94,6 +98,16 @@ const updateUser = async (id, body) => {
       const taken = await findByEmployeeId(body.employeeId);
       if (taken) throw new AppError("Karyawan ini sudah punya akun user", StatusCodes.CONFLICT);
     }
+  }
+
+  // Email login = email karyawan: cek unik di kedua tabel, lalu sinkronkan
+  if (body.email !== undefined && body.email !== user.email) {
+    const userOwner = await findByEmail(body.email);
+    if (userOwner && userOwner.id !== id) throw new AppError("Email sudah digunakan", StatusCodes.CONFLICT);
+    const employeeId = body.employeeId ?? user.employeeId;
+    const emailOwner = await findEmployeeByEmail(body.email);
+    if (emailOwner && emailOwner.id !== employeeId) throw new AppError("Email sudah dipakai karyawan lain", StatusCodes.CONFLICT);
+    return update(id, body, employeeId);
   }
 
   return update(id, body);

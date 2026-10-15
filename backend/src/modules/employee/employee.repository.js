@@ -4,6 +4,8 @@ const INCLUDE = {
   role:       { select: { id: true, code: true, name: true } },
   homeBranch: { select: { id: true, code: true, name: true } },
   division:   { select: { id: true, code: true, name: true } },
+  // Akun login — email-nya selalu sama dengan email karyawan
+  user:       { select: { id: true, email: true } },
   employeeBranches: {
     where:   { isActive: true },
     orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
@@ -32,6 +34,10 @@ const findLastEmployeeCode = () =>
 const findByEmail = (email) =>
   prisma.employee.findUnique({ where: { email } });
 
+/** Akun user yang memakai email ini */
+const findUserByEmail = (email) =>
+  prisma.user.findUnique({ where: { email }, select: { id: true, employeeId: true } });
+
 const findRoleById = (id) =>
   prisma.employeeRole.findUnique({ where: { id }, select: { id: true } });
 
@@ -47,14 +53,15 @@ const create = (data) => {
   });
 };
 
-const update = (id, data) => {
+/** syncUserId: bila email berubah, email login akun karyawan ikut diperbarui */
+const update = (id, data, syncUserId = null) => {
   const { roleId, homeBranchId, ...rest } = data;
 
   let homeBranchWrite;
   if (homeBranchId)          homeBranchWrite = { connect: { id: homeBranchId } };
   else if (homeBranchId === null) homeBranchWrite = { disconnect: true };
 
-  return prisma.employee.update({
+  const write = (tx) => tx.employee.update({
     where: { id },
     data: {
       ...rest,
@@ -62,6 +69,11 @@ const update = (id, data) => {
       ...(homeBranchWrite && { homeBranch: homeBranchWrite }),
     },
     include: INCLUDE,
+  });
+  if (!syncUserId || data.email === undefined) return write(prisma);
+  return prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: syncUserId }, data: { email: data.email } });
+    return write(tx);
   });
 };
 
@@ -154,7 +166,7 @@ const hardDelete = (id) =>
 
 module.exports = {
   findAll, count, findById,
-  findByEmployeeCode, findLastEmployeeCode, findByEmail,
+  findByEmployeeCode, findLastEmployeeCode, findByEmail, findUserByEmail,
   findRoleById,
   create, update, updateFiles, updateBranches, softDelete, hardDelete,
 };

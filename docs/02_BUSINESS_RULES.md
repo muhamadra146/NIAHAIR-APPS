@@ -4823,6 +4823,20 @@ Notifikasi muncul di **lonceng** aplikasi (diperbarui tiap 1 menit, ada tanda be
 Menu **Pengajuan** menampilkan jumlah pengajuan yang menunggu persetujuan si penyetuju.
 ---
 
+# EMP-034
+## Satu Email per Orang
+
+### Rule
+
+Email login (akun user) **sama dengan** email di data karyawan (keputusan user 2026-10-15). Email ini dipakai untuk login, notifikasi email, dan reset password.
+
+- Email bisa diubah dari **Pengaturan → User** atau dari **form Karyawan**; yang satu otomatis ikut berubah.
+- Saat membuat akun user, email karyawan terisi otomatis dan disimpan juga di data karyawan.
+- Email yang sudah dipakai orang lain (sebagai email login maupun email karyawan) ditolak.
+- Karyawan yang punya akun tidak boleh mengosongkan email.
+
+---
+
 # CHAPTER 8 SUMMARY
 
 Employee merupakan pusat seluruh Human Resource pada NIAHAIR ERP.

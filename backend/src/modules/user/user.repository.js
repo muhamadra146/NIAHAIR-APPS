@@ -62,28 +62,44 @@ const findUserRoleById = (id) =>
 const findEmployeeById = (id) =>
   prisma.employee.findUnique({ where: { id }, select: { id: true, name: true } });
 
+/** Karyawan yang memakai email ini (email karyawan juga unik) */
+const findEmployeeByEmail = (email) =>
+  prisma.employee.findUnique({ where: { email }, select: { id: true } });
+
 // ── Write ─────────────────────────────────────────────────────────────
 
+// Email login disalin ke data karyawan (satu email per orang)
 const create = ({ username, email, passwordHash, userRoleId, employeeId }) =>
-  prisma.user.create({
-    data: {
-      username,
-      email,
-      passwordHash,
-      userRoleId,
-      employeeId,
-      isActive: true,
-    },
-    select: USER_SELECT,
+  prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        username,
+        email,
+        passwordHash,
+        userRoleId,
+        employeeId,
+        isActive: true,
+      },
+      select: USER_SELECT,
+    });
+    await tx.employee.update({ where: { id: employeeId }, data: { email } });
+    return user;
   });
 
 // API field is roleId; Prisma column is userRoleId — translate before writing.
-const update = (id, data) => {
+/** syncEmployeeId: bila email berubah, email karyawan ikut diperbarui */
+const update = (id, data, syncEmployeeId = null) => {
   const { roleId, ...rest } = data;
-  return prisma.user.update({
+  const write = (tx) => tx.user.update({
     where:  { id },
     data:   { ...rest, ...(roleId !== undefined && { userRoleId: roleId }) },
     select: USER_SELECT,
+  });
+  if (!syncEmployeeId || data.email === undefined) return write(prisma);
+  return prisma.$transaction(async (tx) => {
+    const user = await write(tx);
+    await tx.employee.update({ where: { id: syncEmployeeId }, data: { email: data.email } });
+    return user;
   });
 };
 
@@ -98,6 +114,6 @@ const deleteById = (id) =>
 
 module.exports = {
   findAll, count, findById, findByEmail, findByUsername, findByEmployeeId, findByIdWithPassword,
-  findUserRoleById, findEmployeeById,
+  findUserRoleById, findEmployeeById, findEmployeeByEmail,
   create, update, updatePassword, deactivate, deleteById,
 };

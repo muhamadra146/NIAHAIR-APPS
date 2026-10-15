@@ -32,6 +32,7 @@ const {
   findByEmployeeCode,
   findLastEmployeeCode,
   findByEmail,
+  findUserByEmail,
   findRoleById,
   create,
   update,
@@ -142,6 +143,8 @@ const createEmployee = async (body, actor) => {
   if (body.email) {
     const existing = await findByEmail(body.email);
     if (existing) throw new AppError("Email sudah digunakan", StatusCodes.CONFLICT);
+    // Satu email per orang — tidak boleh sama dengan email login orang lain
+    if (await findUserByEmail(body.email)) throw new AppError("Email sudah dipakai akun login lain", StatusCodes.CONFLICT);
   }
 
   if (body.hireDate)   body.hireDate   = new Date(body.hireDate);
@@ -174,16 +177,26 @@ const updateEmployee = async (id, body, actor) => {
     if (existing) throw new AppError("Kode karyawan sudah digunakan", StatusCodes.CONFLICT);
   }
 
-  if (body.email && body.email !== employee.email) {
-    const existing = await findByEmail(body.email);
-    if (existing) throw new AppError("Email sudah digunakan", StatusCodes.CONFLICT);
+  // Satu email per orang: email karyawan = email login akunnya (keputusan user 2026-10-15)
+  const linkedUser = employee.user ?? null;
+  const emailChanged = body.email !== undefined && (body.email || null) !== (employee.email ?? null);
+  if (emailChanged) {
+    if (!body.email && linkedUser) {
+      throw new AppError("Email wajib diisi karena dipakai untuk login karyawan ini", StatusCodes.BAD_REQUEST);
+    }
+    if (body.email) {
+      const existing = await findByEmail(body.email);
+      if (existing && existing.id !== id) throw new AppError("Email sudah digunakan", StatusCodes.CONFLICT);
+      const userOwner = await findUserByEmail(body.email);
+      if (userOwner && userOwner.employeeId !== id) throw new AppError("Email sudah dipakai akun login lain", StatusCodes.CONFLICT);
+    }
   }
 
   if (body.hireDate)   body.hireDate   = new Date(body.hireDate);
   if (body.birthDate)  body.birthDate  = new Date(body.birthDate);
   if (body.resignDate) body.resignDate = new Date(body.resignDate);
 
-  return update(id, body);
+  return update(id, body, emailChanged && linkedUser ? linkedUser.id : null);
 };
 
 const updateEmployeeBranches = async (id, branchIds) => {

@@ -10,6 +10,8 @@ const createUserSchema = object({
 
 const updateUserSchema = object({
   username:   optional(pipe(string(), minLength(3, "Username minimal 3 karakter"))),
+  // Email login = email karyawan — ikut diperbarui di data karyawan
+  email:      optional(pipe(string(), email("Invalid email address"))),
   roleId:     optional(pipe(string(), minLength(1, "roleId cannot be empty"))),
   employeeId: optional(pipe(string(), minLength(1, "employeeId cannot be empty"))),
   isActive:   optional(boolean()),
