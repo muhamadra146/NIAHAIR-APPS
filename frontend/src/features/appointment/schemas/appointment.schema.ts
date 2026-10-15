@@ -6,15 +6,15 @@ const serviceLineSchema = z.object({
   itemId:      z.string().min(1),
   serviceName: z.string(),
   serviceCode: z.string(),
-  qty:         z.coerce.number().min(1, "Min 1"),
-  price:       z.coerce.number().min(0, "Min 0"),
+  qty:         z.coerce.number().min(1, "Minimal 1"),
+  price:       z.coerce.number().min(0, "Minimal 0"),
 });
 
 export const createAppointmentSchema = z.object({
-  customerId:          z.string().min(1, "Customer is required"),
-  visitDate:           z.string().min(1, "Visit date is required"),
-  startTime:           z.string().regex(timeRegex, "Enter time as HH:MM (e.g. 09:00)"),
-  endTime:             z.string().regex(timeRegex, "Enter time as HH:MM (e.g. 12:00)"),
+  customerId:          z.string().min(1, "Pelanggan wajib dipilih"),
+  visitDate:           z.string().min(1, "Tanggal kunjungan wajib diisi"),
+  startTime:           z.string().regex(timeRegex, "Isi jam dengan format JJ:MM (mis. 09:00)"),
+  endTime:             z.string().regex(timeRegex, "Isi jam dengan format JJ:MM (mis. 12:00)"),
   type:                z.enum(["SALON", "HOME_SERVICE"]).default("SALON"),
   homeServiceAddress:  z.string().optional().or(z.literal("")),
   notes:               z.string().optional().or(z.literal("")),
@@ -28,8 +28,8 @@ export const createAppointmentSchema = z.object({
 
 export const updateAppointmentSchema = z.object({
   visitDate:           z.string().optional().or(z.literal("")),
-  startTime:           z.string().regex(timeRegex, "Enter time as HH:MM").optional().or(z.literal("")),
-  endTime:             z.string().regex(timeRegex, "Enter time as HH:MM").optional().or(z.literal("")),
+  startTime:           z.string().regex(timeRegex, "Isi jam dengan format JJ:MM").optional().or(z.literal("")),
+  endTime:             z.string().regex(timeRegex, "Isi jam dengan format JJ:MM").optional().or(z.literal("")),
   type:                z.enum(["SALON", "HOME_SERVICE"]).optional(),
   homeServiceAddress:  z.string().optional().or(z.literal("")),
   notes:               z.string().optional().or(z.literal("")),

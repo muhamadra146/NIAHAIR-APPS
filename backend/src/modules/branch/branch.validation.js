@@ -1,8 +1,8 @@
 const { object, string, pipe, optional, boolean, minLength, number, integer, minValue } = require("valibot");
 
 const createBranchSchema = object({
-  code:         pipe(string(), minLength(1, "Code is required")),
-  name:         pipe(string(), minLength(1, "Name is required")),
+  code:         pipe(string(), minLength(1, "Kode wajib diisi")),
+  name:         pipe(string(), minLength(1, "Nama wajib diisi")),
   address:      optional(string()),
   city:         optional(string()),
   province:     optional(string()),
@@ -13,8 +13,8 @@ const createBranchSchema = object({
 });
 
 const updateBranchSchema = object({
-  code:         optional(pipe(string(), minLength(1, "Code cannot be empty"))),
-  name:         optional(pipe(string(), minLength(1, "Name cannot be empty"))),
+  code:         optional(pipe(string(), minLength(1, "Kode tidak boleh kosong"))),
+  name:         optional(pipe(string(), minLength(1, "Nama tidak boleh kosong"))),
   address:      optional(string()),
   city:         optional(string()),
   province:     optional(string()),

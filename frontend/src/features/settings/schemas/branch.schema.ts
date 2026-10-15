@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 export const branchSchema = z.object({
-  code:         z.string().min(1, "Code is required"),
-  name:         z.string().min(1, "Name is required"),
+  code:         z.string().min(1, "Kode wajib diisi"),
+  name:         z.string().min(1, "Nama wajib diisi"),
   address:      z.string().optional().or(z.literal("")),
   city:         z.string().optional().or(z.literal("")),
   province:     z.string().optional().or(z.literal("")),

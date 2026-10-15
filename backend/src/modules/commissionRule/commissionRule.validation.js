@@ -3,26 +3,26 @@ const { object, string, pipe, optional, nullable, boolean, minLength, picklist, 
 const BASE_OPTIONS = ["BEFORE_DISCOUNT_BEFORE_TAX", "AFTER_DISCOUNT_BEFORE_TAX", "BEFORE_DISCOUNT_AFTER_TAX", "AFTER_DISCOUNT_AFTER_TAX", "BEFORE_DISCOUNT", "AFTER_DISCOUNT"];
 
 const createCommissionRuleSchema = object({
-  employeeId:           pipe(string(), minLength(1, "Employee ID is required")),
-  commissionCategoryId: pipe(string(), minLength(1, "Commission category ID is required")),
+  employeeId:           pipe(string(), minLength(1, "Karyawan wajib dipilih")),
+  commissionCategoryId: pipe(string(), minLength(1, "Kategori komisi wajib dipilih")),
   slotKey:              optional(nullable(string())),          // null = tidak ada slot (job baru)
   commissionJobId:      optional(nullable(string())),          // null = rule untuk kategori umum
-  commissionType:       picklist(["PERCENTAGE", "FIXED"], "Commission type must be PERCENTAGE or FIXED"),
-  commissionValue:      pipe(number("Commission value must be a number"), minValue(0.01, "Commission value must be positive")),
-  commissionBase:       optional(nullable(picklist(BASE_OPTIONS, "Invalid commission base"))),
-  effectiveDate:        pipe(string(), minLength(1, "Effective date is required")),
+  commissionType:       picklist(["PERCENTAGE", "FIXED"], "Tipe komisi harus persentase atau nominal"),
+  commissionValue:      pipe(number("Nilai komisi harus berupa angka"), minValue(0.01, "Nilai komisi harus lebih dari 0")),
+  commissionBase:       optional(nullable(picklist(BASE_OPTIONS, "Dasar komisi tidak valid"))),
+  effectiveDate:        pipe(string(), minLength(1, "Tanggal berlaku wajib diisi")),
   endDate:              optional(nullable(string())),
   isActive:             optional(boolean()),
 });
 
 const updateCommissionRuleSchema = object({
-  employeeId:           optional(pipe(string(), minLength(1, "Employee ID cannot be empty"))),
-  commissionCategoryId: optional(pipe(string(), minLength(1, "Commission category ID cannot be empty"))),
+  employeeId:           optional(pipe(string(), minLength(1, "Karyawan tidak boleh kosong"))),
+  commissionCategoryId: optional(pipe(string(), minLength(1, "Kategori komisi tidak boleh kosong"))),
   commissionJobId:      optional(nullable(string())),
-  commissionType:       optional(picklist(["PERCENTAGE", "FIXED"], "Commission type must be PERCENTAGE or FIXED")),
-  commissionValue:      optional(pipe(number("Commission value must be a number"), minValue(0.01, "Commission value must be positive"))),
-  commissionBase:       optional(nullable(picklist(BASE_OPTIONS, "Invalid commission base"))),
-  effectiveDate:        optional(pipe(string(), minLength(1, "Effective date cannot be empty"))),
+  commissionType:       optional(picklist(["PERCENTAGE", "FIXED"], "Tipe komisi harus persentase atau nominal")),
+  commissionValue:      optional(pipe(number("Nilai komisi harus berupa angka"), minValue(0.01, "Nilai komisi harus lebih dari 0"))),
+  commissionBase:       optional(nullable(picklist(BASE_OPTIONS, "Dasar komisi tidak valid"))),
+  effectiveDate:        optional(pipe(string(), minLength(1, "Tanggal berlaku tidak boleh kosong"))),
   endDate:              optional(nullable(string())),
   isActive:             optional(boolean()),
 });

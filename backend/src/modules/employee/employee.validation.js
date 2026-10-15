@@ -1,11 +1,11 @@
 const { object, string, pipe, email, optional, nullable, boolean, minLength, array, number, integer, minValue, maxValue } = require("valibot");
 
 const createEmployeeSchema = object({
-  name:              pipe(string(), minLength(1, "Name is required")),
-  roleId:            pipe(string(), minLength(1, "Role ID is required")),
+  name:              pipe(string(), minLength(1, "Nama wajib diisi")),
+  roleId:            pipe(string(), minLength(1, "Role wajib dipilih")),
   employeeCode:      optional(string()),
   phone:             optional(string()),
-  email:             optional(pipe(string(), email("Invalid email address"))),
+  email:             optional(pipe(string(), email("Format email tidak valid"))),
   hireDate:          optional(string()),
   birthDate:         optional(string()),
   address:           optional(string()),
@@ -20,11 +20,11 @@ const createEmployeeSchema = object({
 });
 
 const updateEmployeeSchema = object({
-  name:              optional(pipe(string(), minLength(1, "Name cannot be empty"))),
+  name:              optional(pipe(string(), minLength(1, "Nama tidak boleh kosong"))),
   roleId:            optional(string()),
   employeeCode:      optional(string()),
   phone:             optional(string()),
-  email:             optional(pipe(string(), email("Invalid email address"))),
+  email:             optional(pipe(string(), email("Format email tidak valid"))),
   hireDate:          optional(string()),
   birthDate:         optional(string()),
   address:           optional(string()),
@@ -40,7 +40,7 @@ const updateEmployeeSchema = object({
 });
 
 const updateEmployeeBranchesSchema = object({
-  branchIds: array(pipe(string(), minLength(1, "Branch ID is required"))),
+  branchIds: array(pipe(string(), minLength(1, "Cabang wajib dipilih"))),
 });
 
 module.exports = { createEmployeeSchema, updateEmployeeSchema, updateEmployeeBranchesSchema };

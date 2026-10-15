@@ -475,7 +475,7 @@ function CancelDialog({
 
         <div className="space-y-4 py-1">
           <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">
-            Tindakan ini tidak dapat dibatalkan. Booking akan berstatus <strong>Cancelled</strong>.
+            Tindakan ini tidak dapat dibatalkan. Booking akan berstatus <strong>Dibatalkan</strong>.
           </div>
 
           <div>

@@ -1,9 +1,9 @@
 const { object, string, array, boolean, optional, pipe, minLength, number, minValue, maxValue, picklist, record } = require("valibot");
 
 const itemSchema = object({
-  itemId:          pipe(string(), minLength(1, "itemId is required")),
-  unitId:          pipe(string(), minLength(1, "unitId is required")),
-  qty:             pipe(number(), minValue(0.01, "qty must be greater than 0")),
+  itemId:          pipe(string(), minLength(1, "Item wajib dipilih")),
+  unitId:          pipe(string(), minLength(1, "Satuan wajib dipilih")),
+  qty:             pipe(number(), minValue(0.01, "Jumlah harus lebih dari 0")),
   price:           optional(number()),
   discountType:    optional(picklist(["AMOUNT", "PERCENT"])),
   discountAmount:  optional(pipe(number(), minValue(0))),
@@ -16,28 +16,28 @@ const itemSchema = object({
 });
 
 const createInvoiceSchema = object({
-  customerId:             pipe(string(), minLength(1, "customerId is required")),
+  customerId:             pipe(string(), minLength(1, "Pelanggan wajib dipilih")),
   branchId:               optional(string()),
   appointmentId:          optional(string()),
   treatmentSessionIds:    optional(array(string())),
   deposits:               optional(array(object({
-    depositId: pipe(string(), minLength(1, "depositId is required")),
-    amount:    pipe(number(), minValue(0.01, "deposit amount must be greater than 0")),
+    depositId: pipe(string(), minLength(1, "Deposit wajib dipilih")),
+    amount:    pipe(number(), minValue(0.01, "Jumlah deposit harus lebih dari 0")),
   }))),
   notes:                  optional(string()),
   taxable:                optional(boolean()),
   inclusiveTax:           optional(boolean()),
   membershipDiscountTotal: optional(pipe(number(), minValue(0))),
-  items:                  pipe(array(itemSchema), minLength(1, "At least one item is required")),
+  items:                  pipe(array(itemSchema), minLength(1, "Minimal satu item wajib diisi")),
 });
 
 const applyDepositSchema = object({
-  depositId: pipe(string(), minLength(1, "depositId is required")),
-  amount:    pipe(number(), minValue(0.01, "amount must be greater than 0")),
+  depositId: pipe(string(), minLength(1, "Deposit wajib dipilih")),
+  amount:    pipe(number(), minValue(0.01, "Jumlah harus lebih dari 0")),
 });
 
 const updateInvoiceSchema = object({
-  items:        pipe(array(itemSchema), minLength(1, "At least one item is required")),
+  items:        pipe(array(itemSchema), minLength(1, "Minimal satu item wajib diisi")),
   notes:        optional(string()),
   taxable:      optional(boolean()),
   inclusiveTax: optional(boolean()),

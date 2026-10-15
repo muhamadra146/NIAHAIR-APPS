@@ -72,7 +72,7 @@ export function CustomerDetailPage() {
       });
       setFormOpen(false);
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to update customer");
+      setFormError(err instanceof Error ? err.message : "Gagal memperbarui pelanggan");
     }
   }
 

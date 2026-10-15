@@ -3,11 +3,11 @@
 const { object, string, optional, pipe, minLength, picklist } = require('valibot');
 
 const createCorrectionSchema = object({
-  staffScheduleId:   pipe(string(), minLength(1, 'staffScheduleId is required')),
+  staffScheduleId:   pipe(string(), minLength(1, 'Jadwal wajib dipilih')),
   attendanceId:      optional(string()),
   requestedCheckIn:  optional(string()),
   requestedCheckOut: optional(string()),
-  reason:            pipe(string(), minLength(1, 'reason is required')),
+  reason:            pipe(string(), minLength(1, 'Alasan wajib diisi')),
   branchId:          optional(string()),
 });
 

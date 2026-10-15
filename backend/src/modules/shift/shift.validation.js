@@ -1,8 +1,8 @@
 const { object, string, pipe, minLength, optional, boolean } = require("valibot");
 
 const createShiftSchema = object({
-  code:      pipe(string(), minLength(1, "Code is required")),
-  name:      pipe(string(), minLength(1, "Name is required")),
+  code:      pipe(string(), minLength(1, "Kode wajib diisi")),
+  name:      pipe(string(), minLength(1, "Nama wajib diisi")),
   startTime: optional(string()),
   endTime:   optional(string()),
   color:     optional(string()),

@@ -1,8 +1,8 @@
 const { object, string, number, pipe, minLength, optional, boolean, minValue } = require("valibot");
 
 const createSalarySchema = object({
-  employeeId:                    pipe(string(), minLength(1, "Employee ID is required")),
-  baseSalary:                    pipe(number(), minValue(0, "Must be >= 0")),
+  employeeId:                    pipe(string(), minLength(1, "Karyawan wajib dipilih")),
+  baseSalary:                    pipe(number(), minValue(0, "Tidak boleh negatif")),
   mealAllowancePerDay:           optional(pipe(number(), minValue(0))),
   tunjangan:                     optional(pipe(number(), minValue(0))),
   transportAllowance:            optional(pipe(number(), minValue(0))),
@@ -20,7 +20,7 @@ const createSalarySchema = object({
   bpjsJpEmployerPercent:         optional(pipe(number(), minValue(0))),
   bpjsKesehatanEmployeePercent:  optional(pipe(number(), minValue(0))),
   bpjsKesehatanEmployerPercent:  optional(pipe(number(), minValue(0))),
-  effectiveDate:                 pipe(string(), minLength(1, "Effective date is required")),
+  effectiveDate:                 pipe(string(), minLength(1, "Tanggal berlaku wajib diisi")),
   endDate:                       optional(string()),
   isActive:                      optional(boolean()),
   notes:                         optional(string()),

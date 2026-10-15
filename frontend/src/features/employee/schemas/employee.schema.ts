@@ -25,7 +25,7 @@ export const updateEmployeeSchema = createEmployeeSchema.partial().extend({
 });
 
 export const salarySettingSchema = z.object({
-  baseSalary:                    z.coerce.number().min(0, "Min 0"),
+  baseSalary:                    z.coerce.number().min(0, "Minimal 0"),
   mealAllowancePerDay:           z.coerce.number().min(0).default(0),
   tunjangan:                     z.coerce.number().min(0).default(0),
   transportAllowance:            z.coerce.number().min(0).default(0),

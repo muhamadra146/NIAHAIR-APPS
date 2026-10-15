@@ -16,7 +16,7 @@ const validate = (schema, target = "body") => {
       message: issue.message,
     }));
 
-    return next(new AppError("Validation failed", StatusCodes.UNPROCESSABLE_ENTITY, errors));
+    return next(new AppError("Data tidak valid", StatusCodes.UNPROCESSABLE_ENTITY, errors));
   };
 };
 

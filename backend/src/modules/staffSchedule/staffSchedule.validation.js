@@ -3,15 +3,15 @@ const {
 } = require("valibot");
 
 const scheduleItemSchema = object({
-  employeeId: pipe(string(), minLength(1, "employeeId is required")),
-  date:       pipe(string(), minLength(1, "date is required")),
+  employeeId: pipe(string(), minLength(1, "Karyawan wajib dipilih")),
+  date:       pipe(string(), minLength(1, "Tanggal wajib diisi")),
   shiftId:    optional(nullable(string())),
   status:     optional(nullable(picklist(["WORKING", "OFF", "LEAVE"]))),
   notes:      optional(nullable(string())),
 });
 
 const bulkScheduleSchema = object({
-  branchId:  pipe(string(), minLength(1, "branchId is required")),
+  branchId:  pipe(string(), minLength(1, "Cabang wajib dipilih")),
   schedules: array(scheduleItemSchema),
 });
 

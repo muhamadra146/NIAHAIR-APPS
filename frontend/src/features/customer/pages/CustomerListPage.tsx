@@ -102,7 +102,7 @@ export function CustomerListPage() {
       });
       setFormOpen(false);
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to create customer");
+      setFormError(err instanceof Error ? err.message : "Gagal menambah pelanggan");
     }
   }
 

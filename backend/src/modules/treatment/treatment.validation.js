@@ -1,8 +1,8 @@
 const { object, string, optional, pipe, minLength } = require("valibot");
 
 const createSessionSchema = object({
-  customerId:    pipe(string(), minLength(1, "customerId is required")),
-  branchId:      pipe(string(), minLength(1, "branchId is required")),
+  customerId:    pipe(string(), minLength(1, "Pelanggan wajib dipilih")),
+  branchId:      pipe(string(), minLength(1, "Cabang wajib dipilih")),
   appointmentId: optional(string()),
   startedAt:     optional(string()),
   notes:         optional(string()),

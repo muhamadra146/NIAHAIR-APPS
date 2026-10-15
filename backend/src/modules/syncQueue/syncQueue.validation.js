@@ -5,9 +5,9 @@ const DIRECTIONS   = ["APP_TO_ACCURATE", "ACCURATE_TO_APP"];
 const STATUSES     = ["PENDING", "PROCESSING", "SUCCESS", "FAILED"];
 
 const createSyncJobSchema = object({
-  entityType: picklist(ENTITY_TYPES, "Invalid entityType"),
+  entityType: picklist(ENTITY_TYPES, "Jenis data tidak valid"),
   entityId:   optional(string()),
-  direction:  picklist(DIRECTIONS, "Invalid direction"),
+  direction:  picklist(DIRECTIONS, "Arah sinkron tidak valid"),
   payload:    optional(object({})),
 });
 

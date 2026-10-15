@@ -17,12 +17,12 @@ const noteFields = {
   reasonSwitchToNia:      optional(string()),
   issuesDuringUse:        optional(string()),
   changesAfterUse:        optional(string()),
-  interestingNote:        pipe(string(), minLength(1, "interestingNote is required")),
+  interestingNote:        pipe(string(), minLength(1, "Catatan wajib diisi")),
   additionalNotes:        optional(string()),
 };
 
 const createNoteSchema = object({
-  invoiceId: pipe(string(), minLength(1, "invoiceId is required")),
+  invoiceId: pipe(string(), minLength(1, "Invoice wajib dipilih")),
   ...noteFields,
 });
 

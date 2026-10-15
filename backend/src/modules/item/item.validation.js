@@ -1,17 +1,17 @@
 const { object, string, pipe, optional, nullable, picklist, minLength, boolean } = require("valibot");
 
 const createItemSchema = object({
-  itemCode: pipe(string(), minLength(1, "Item code is required")),
-  name: pipe(string(), minLength(1, "Name is required")),
-  itemType: picklist(["INVENTORY", "SERVICE"], "Item type must be INVENTORY or SERVICE"),
+  itemCode: pipe(string(), minLength(1, "Kode item wajib diisi")),
+  name: pipe(string(), minLength(1, "Nama wajib diisi")),
+  itemType: picklist(["INVENTORY", "SERVICE"], "Tipe item harus barang atau jasa"),
   categoryId: optional(string()),
   defaultUnitId: optional(string()),
 });
 
 const updateItemSchema = object({
-  itemCode:             optional(pipe(string(), minLength(1, "Item code cannot be empty"))),
-  name:                 optional(pipe(string(), minLength(1, "Name cannot be empty"))),
-  itemType:             optional(picklist(["INVENTORY", "SERVICE"], "Item type must be INVENTORY or SERVICE")),
+  itemCode:             optional(pipe(string(), minLength(1, "Kode item tidak boleh kosong"))),
+  name:                 optional(pipe(string(), minLength(1, "Nama tidak boleh kosong"))),
+  itemType:             optional(picklist(["INVENTORY", "SERVICE"], "Tipe item harus barang atau jasa")),
   categoryId:           optional(string()),
   defaultUnitId:        optional(string()),
   commissionCategoryId: optional(nullable(string())),

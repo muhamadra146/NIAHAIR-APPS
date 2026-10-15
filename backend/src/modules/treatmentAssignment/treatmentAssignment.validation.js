@@ -3,15 +3,15 @@ const { object, string, pipe, number, optional, minLength, minValue, picklist } 
 const SLOT_KEYS = ["pemasang", "asisten", "colorist"];
 
 const createAssignmentSchema = object({
-  employeeId: pipe(string(), minLength(1, "employeeId is required")),
-  slotKey:    optional(picklist(SLOT_KEYS, "Invalid slotKey")),
-  workQty:    optional(pipe(number("workQty must be a number"), minValue(0.01, "workQty must be greater than 0"))),
+  employeeId: pipe(string(), minLength(1, "Karyawan wajib dipilih")),
+  slotKey:    optional(picklist(SLOT_KEYS, "Slot tidak valid")),
+  workQty:    optional(pipe(number("Jumlah kerja harus berupa angka"), minValue(0.01, "Jumlah kerja harus lebih dari 0"))),
   notes:      optional(string()),
 });
 
 const updateAssignmentSchema = object({
-  slotKey: optional(picklist(SLOT_KEYS, "Invalid slotKey")),
-  workQty: optional(pipe(number("workQty must be a number"), minValue(0.01, "workQty must be greater than 0"))),
+  slotKey: optional(picklist(SLOT_KEYS, "Slot tidak valid")),
+  workQty: optional(pipe(number("Jumlah kerja harus berupa angka"), minValue(0.01, "Jumlah kerja harus lebih dari 0"))),
   notes:   optional(string()),
 });
 

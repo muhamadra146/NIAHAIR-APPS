@@ -2,7 +2,7 @@ const { object, string, pipe, minLength, email } = require("valibot");
 
 const loginSchema = object({
   identifier: pipe(string(), minLength(1, "Email atau username wajib diisi")),
-  password:   pipe(string(), minLength(1, "Password is required")),
+  password:   pipe(string(), minLength(1, "Password wajib diisi")),
 });
 
 const forgotPasswordSchema = object({

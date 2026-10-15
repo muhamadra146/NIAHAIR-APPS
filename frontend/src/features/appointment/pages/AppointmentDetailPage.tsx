@@ -78,7 +78,7 @@ export function AppointmentDetailPage() {
       });
       setEditOpen(false);
     } catch (err: unknown) {
-      setEditError(err instanceof Error ? err.message : "Failed to update");
+      setEditError(err instanceof Error ? err.message : "Gagal memperbarui");
     }
   }
 
@@ -91,7 +91,7 @@ export function AppointmentDetailPage() {
       });
       setStatusOpen(false);
     } catch (err: unknown) {
-      setStatusError(err instanceof Error ? err.message : "Failed to update status");
+      setStatusError(err instanceof Error ? err.message : "Gagal memperbarui status");
     }
   }
 

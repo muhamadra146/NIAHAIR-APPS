@@ -74,7 +74,7 @@ export function AppointmentListPage() {
         }
       }
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to create appointment");
+      setFormError(err instanceof Error ? err.message : "Gagal membuat booking");
     }
   }
 

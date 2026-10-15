@@ -1,7 +1,7 @@
 const { object, string, pipe, minLength, optional, number } = require("valibot");
 
 const checkInSchema = object({
-  staffScheduleId: pipe(string(), minLength(1, "staffScheduleId is required")),
+  staffScheduleId: pipe(string(), minLength(1, "Jadwal wajib dipilih")),
   latitude:        optional(number()),
   longitude:       optional(number()),
   photoUrl:        optional(string()),
@@ -9,7 +9,7 @@ const checkInSchema = object({
 });
 
 const checkOutSchema = object({
-  staffScheduleId: pipe(string(), minLength(1, "staffScheduleId is required")),
+  staffScheduleId: pipe(string(), minLength(1, "Jadwal wajib dipilih")),
   latitude:        optional(number()),
   longitude:       optional(number()),
   photoUrl:        optional(string()),
@@ -17,7 +17,7 @@ const checkOutSchema = object({
 });
 
 const manualSetSchema = object({
-  staffScheduleId: pipe(string(), minLength(1, "staffScheduleId is required")),
+  staffScheduleId: pipe(string(), minLength(1, "Jadwal wajib dipilih")),
   status:          optional(string()),
   checkInAt:       optional(string()),
   checkOutAt:      optional(string()),

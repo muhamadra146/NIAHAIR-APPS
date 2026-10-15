@@ -87,7 +87,7 @@ export function ScheduleTab() {
       }
       setFormOpen(false);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "An error occurred";
+      const msg = err instanceof Error ? err.message : "Terjadi kesalahan";
       setFormError(msg);
     }
   }, [editing, createMut, updateMut]);
