@@ -4171,6 +4171,8 @@ Finance dianggap valid apabila.
 
 Semua angka dashboard **per cabang** (cabang aktif di header, bisa diganti ke cabang lain atau "Semua cabang"). Setiap kartu bisa diklik ke data di baliknya.
 
+**Finance** dapat membuka Daftar Invoice, detail invoice, dan Pembayaran Invoice dalam mode **lihat saja** (tanpa buat/ubah/bayar/deposit/hapus), supaya kartu dan rincian dashboard bisa ditelusuri ke invoice-nya (keputusan user 2026-10-15). Ubah, batal, pasang DP, dan setup treatment invoice hanya untuk SA, Owner, Manager, dan Kasir.
+
 (Keputusan user 2026-10-13, diperbarui 2026-10-14: "Kas Masuk" digantikan Pendapatan Kotor.)
 
 ---
