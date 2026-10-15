@@ -48,11 +48,12 @@ router.get("/commission-generate",     authenticate, authorize(...KOMISI_GEN_ROL
 router.get("/job-assignments",         authenticate, authorize(...DAILY_ASSIGN_ROLES, ROLES.FINANCE), jobAssignmentsController);
 router.get("/:id",              authenticate, getByIdController);
 router.post("/",   authenticate, requireBranch, authorize(...POS_ROLES), validate(createInvoiceSchema), createController);
-router.patch("/:id", authenticate, validate(updateInvoiceSchema), updateController);
-router.post("/:invoiceId/deposits", authenticate, validate(applyDepositSchema), applyDepositController);
-router.patch("/:id/cancel",             authenticate, cancelController);
+// Ubah / batal / pasang DP / setup treatment — hanya peran yang memakai halaman Invoice (POS)
+router.patch("/:id", authenticate, authorize(...POS_ROLES), validate(updateInvoiceSchema), updateController);
+router.post("/:invoiceId/deposits", authenticate, authorize(...POS_ROLES), validate(applyDepositSchema), applyDepositController);
+router.patch("/:id/cancel",             authenticate, authorize(...POS_ROLES), cancelController);
 router.delete("/:id",                   authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER), deleteController);
-router.post("/:id/setup-treatment",     authenticate, setupTreatmentController);
+router.post("/:id/setup-treatment",     authenticate, authorize(...POS_ROLES), setupTreatmentController);
 router.post("/:id/generate-commission",      authenticate, authorize(...KOMISI_GEN_ROLES), generateCommissionController);
 router.post("/:id/submit-job-assignments",   authenticate, authorize(...DAILY_ASSIGN_ROLES), submitJobAssignmentsController);
 router.get( "/:id/commission-worksheet",     authenticate, authorize(...COMMISSION_CALC_ROLES), commissionWorksheetController);
