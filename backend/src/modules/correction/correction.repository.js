@@ -68,4 +68,11 @@ const update = async (id, data) => {
   return normalize(row);
 };
 
-module.exports = { findAll, count, findById, create, update };
+/** Pemilik jadwal & absensi yang dikoreksi */
+const findScheduleOwner = (staffScheduleId) =>
+  prisma.staffSchedule.findUnique({ where: { id: staffScheduleId }, select: { id: true, employeeId: true } });
+
+const findAttendanceSchedule = (attendanceId) =>
+  prisma.attendance.findUnique({ where: { id: attendanceId }, select: { id: true, staffScheduleId: true } });
+
+module.exports = { findAll, count, findById, create, update, findScheduleOwner, findAttendanceSchedule };

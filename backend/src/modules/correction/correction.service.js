@@ -39,7 +39,20 @@ const create = async (employeeId, branchId, { staffScheduleId, attendanceId, req
   if (!staffScheduleId)  throw new AppError("staffScheduleId is required", StatusCodes.BAD_REQUEST);
   if (!reason)           throw new AppError("reason is required", StatusCodes.BAD_REQUEST);
   if (!requestedCheckIn && !requestedCheckOut)
-    throw new AppError("At least one of requestedCheckIn or requestedCheckOut is required", StatusCodes.BAD_REQUEST);
+    throw new AppError("Isi minimal jam masuk atau jam keluar yang dikoreksi", StatusCodes.BAD_REQUEST);
+  if (requestedCheckIn && requestedCheckOut && new Date(requestedCheckOut) <= new Date(requestedCheckIn))
+    throw new AppError("Jam keluar harus setelah jam masuk", StatusCodes.BAD_REQUEST);
+
+  // Koreksi hanya untuk jadwal & absensi milik sendiri (bukan menimpa absensi rekan)
+  const schedule = await repo.findScheduleOwner(staffScheduleId);
+  if (!schedule) throw new AppError("Jadwal tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (schedule.employeeId !== employeeId)
+    throw new AppError("Hanya bisa mengajukan koreksi untuk jadwal sendiri", StatusCodes.FORBIDDEN);
+  if (attendanceId) {
+    const att = await repo.findAttendanceSchedule(attendanceId);
+    if (!att || att.staffScheduleId !== staffScheduleId)
+      throw new AppError("Data absensi tidak sesuai dengan jadwal", StatusCodes.BAD_REQUEST);
+  }
 
   return repo.create({
     employeeId,
@@ -61,15 +74,7 @@ const review = async (id, reviewerId, { status, reviewNote }, actor = null) => {
   if (!["APPROVED", "REJECTED"].includes(status))
     throw new AppError("Status harus APPROVED atau REJECTED", StatusCodes.BAD_REQUEST);
 
-  const updated = await repo.update(id, {
-    status,
-    reviewedBy: reviewerId,
-    reviewedAt: new Date(),
-    reviewNote: reviewNote ?? null,
-  });
-
-  // BUG 1 FIX: When APPROVED, apply the corrected times to the actual Attendance record.
-  // Previously this was a no-op — the correction was marked APPROVED but attendance was never updated.
+  // Disetujui: terapkan jam koreksi ke absensi DULU — bila gagal, status tetap PENDING
   if (status === "APPROVED" && cr.staffScheduleId) {
     await attendanceSvc.manualSet({
       staffScheduleId: cr.staffScheduleId,
@@ -78,7 +83,12 @@ const review = async (id, reviewerId, { status, reviewNote }, actor = null) => {
     });
   }
 
-  return updated;
+  return repo.update(id, {
+    status,
+    reviewedBy: reviewerId,
+    reviewedAt: new Date(),
+    reviewNote: reviewNote ?? null,
+  });
 };
 
 // ── Notifikasi (lihat notification.service) ─────────────────────────

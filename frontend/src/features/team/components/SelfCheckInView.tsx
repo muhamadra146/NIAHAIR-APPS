@@ -138,7 +138,7 @@ function HeroCheckInCard() {
       await checkInMut.mutateAsync({ staffScheduleId: today!.scheduleId, ...coords });
     } catch (err) {
       const msg = extractApiMsg(err);
-      if (msg.toLowerCase().includes("terlalu jauh") || msg.toLowerCase().includes("radius")) {
+      if (/terlalu jauh|radius|gps/i.test(msg)) {
         setGeofenceMsg(msg);
       }
     }
@@ -153,7 +153,7 @@ function HeroCheckInCard() {
       await checkOutMut.mutateAsync({ staffScheduleId: today!.scheduleId, ...coords });
     } catch (err) {
       const msg = extractApiMsg(err);
-      if (msg.toLowerCase().includes("terlalu jauh") || msg.toLowerCase().includes("radius")) {
+      if (/terlalu jauh|radius|gps/i.test(msg)) {
         setGeofenceMsg(msg);
       }
     }
@@ -283,7 +283,7 @@ function HeroCheckInCard() {
         {geoError && !geofenceMsg && (
           <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2.5 text-xs text-amber-700">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Lokasi tidak terdeteksi. Absen tetap dicatat tanpa koordinat.
+            Lokasi tidak terdeteksi. Aktifkan izin lokasi (GPS) di browser lalu coba lagi.
           </div>
         )}
 

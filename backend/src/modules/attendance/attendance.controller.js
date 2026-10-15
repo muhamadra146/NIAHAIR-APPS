@@ -26,14 +26,14 @@ const getByIdController = async (req, res, next) => {
 
 const checkInController = async (req, res, next) => {
   try {
-    const result = await checkIn(req.body);
+    const result = await checkIn(req.body, req.user);
     return created(res, result, "Checked in successfully");
   } catch (err) { next(err); }
 };
 
 const checkOutController = async (req, res, next) => {
   try {
-    const result = await checkOut(req.body);
+    const result = await checkOut(req.body, req.user);
     return success(res, result, "Checked out successfully");
   } catch (err) { next(err); }
 };

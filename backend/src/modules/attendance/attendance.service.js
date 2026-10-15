@@ -1,7 +1,7 @@
 const { StatusCodes }                    = require("http-status-codes");
 const AppError                           = require("../../common/errors/AppError");
 const { paginate, paginationMeta }       = require("../../utils/pagination");
-const { toDateOnly }                     = require("../../utils/date");
+const { toDateOnly, wibDateStr }         = require("../../utils/date");
 const prisma                             = require("../../config/prisma");
 const repo                               = require("./attendance.repository");
 const settingRepo                        = require("../setting/setting.repository");
@@ -18,7 +18,6 @@ const haversineMeters = (lat1, lon1, lat2, lon2) => {
 };
 
 const checkGeofence = async (branchId, employeeId, latitude, longitude) => {
-  if (!latitude || !longitude) return; // no GPS, allow
   const [branch, exemptSetting] = await Promise.all([
     prisma.branch.findUnique({ where: { id: branchId }, select: { latitude: true, longitude: true, radiusMeters: true } }),
     settingRepo.findByKey(GEOFENCE_EXEMPT_KEY),
@@ -30,6 +29,11 @@ const checkGeofence = async (branchId, employeeId, latitude, longitude) => {
     (e) => e.employeeId === employeeId && (e.branchId === null || e.branchId === branchId)
   );
   if (isExempt) return;
+  // Cabang punya titik lokasi → GPS wajib (koordinat kosong/0 tidak lagi dianggap "tanpa GPS")
+  const lat = Number(latitude), lng = Number(longitude);
+  if (latitude == null || longitude == null || !Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
+    throw new AppError("Lokasi (GPS) wajib aktif untuk absen di cabang ini", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
   const dist = haversineMeters(
     Number(branch.latitude), Number(branch.longitude),
     Number(latitude), Number(longitude)
@@ -153,12 +157,28 @@ const getById = async (id) => {
 
 // ── Check-in ──────────────────────────────────────────────────────────────────
 
-const checkIn = async ({ staffScheduleId, latitude, longitude, photoUrl, notes }) => {
+/** Absen hanya untuk jadwal milik sendiri (bukan menitipkan absen ke rekan) */
+const assertOwnSchedule = (schedule, actor) => {
+  if (actor && schedule.employeeId !== actor.employeeId) {
+    throw new AppError("Hanya bisa absen untuk jadwal sendiri", StatusCodes.FORBIDDEN);
+  }
+};
+
+const checkIn = async ({ staffScheduleId, latitude, longitude, photoUrl, notes }, actor = null) => {
   const schedule = await prisma.staffSchedule.findUnique({
     where:   { id: staffScheduleId },
     include: { shift: true },
   });
   if (!schedule) throw new AppError("Jadwal tidak ditemukan", StatusCodes.NOT_FOUND);
+  assertOwnSchedule(schedule, actor);
+
+  // Absen masuk hanya pada tanggal jadwalnya (WIB) dan hanya sekali
+  // workDate (@db.Date) disimpan sebagai 00:00 UTC dari tanggal WIB
+  if (schedule.workDate.toISOString().slice(0, 10) !== wibDateStr(new Date())) {
+    throw new AppError("Absen hanya bisa dilakukan pada tanggal jadwal", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+  const existing = await repo.findBySchedule(staffScheduleId);
+  if (existing?.checkInAt) throw new AppError("Sudah absen masuk untuk jadwal ini", StatusCodes.CONFLICT);
 
   await checkGeofence(schedule.branchId, schedule.employeeId, latitude, longitude);
 
@@ -199,11 +219,14 @@ const checkIn = async ({ staffScheduleId, latitude, longitude, photoUrl, notes }
 
 // ── Check-out ─────────────────────────────────────────────────────────────────
 
-const checkOut = async ({ staffScheduleId, latitude, longitude, photoUrl, notes }) => {
+const checkOut = async ({ staffScheduleId, latitude, longitude, photoUrl, notes }, actor = null) => {
   const record = await repo.findBySchedule(staffScheduleId);
-  if (!record)            throw new AppError("No check-in found for this schedule", StatusCodes.BAD_REQUEST);
-  if (!record.checkInAt)  throw new AppError("Not checked in yet", StatusCodes.BAD_REQUEST);
-  if (record.checkOutAt)  throw new AppError("Already checked out", StatusCodes.CONFLICT);
+  if (!record)            throw new AppError("Belum ada absen masuk untuk jadwal ini", StatusCodes.BAD_REQUEST);
+  if (actor && record.employeeId !== actor.employeeId) {
+    throw new AppError("Hanya bisa absen untuk jadwal sendiri", StatusCodes.FORBIDDEN);
+  }
+  if (!record.checkInAt)  throw new AppError("Belum absen masuk", StatusCodes.BAD_REQUEST);
+  if (record.checkOutAt)  throw new AppError("Sudah absen keluar", StatusCodes.CONFLICT);
 
   const now      = new Date();
   const computed = computeStatus(record.checkInAt, now, record.staffSchedule?.shift);

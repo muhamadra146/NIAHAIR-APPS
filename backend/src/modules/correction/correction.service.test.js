@@ -69,6 +69,26 @@ describe('create', () => {
     requestedCheckIn: '2024-06-01T08:00:00Z',
   };
 
+  // Jadwal ss1 milik e1 (pengaju)
+  beforeEach(() => repo.findScheduleOwner.mockResolvedValue({ id: 'ss1', employeeId: 'e1' }));
+
+  // Regression G3-02 (QA 2026-10-15): koreksi untuk jadwal rekan menimpa absensinya
+  test('rejects a correction for another employee schedule (403)', async () => {
+    repo.findScheduleOwner.mockResolvedValue({ id: 'ss1', employeeId: 'e2' });
+    await expect(svc.create('e1', 'b1', VALID_BODY)).rejects.toMatchObject({ statusCode: 403 });
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  test('rejects check-out earlier than check-in (G3-29)', async () => {
+    await expect(svc.create('e1', 'b1', { ...VALID_BODY, requestedCheckOut: '2024-06-01T07:00:00Z' }))
+      .rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  test('rejects an attendanceId from another schedule', async () => {
+    repo.findAttendanceSchedule.mockResolvedValue({ id: 'a9', staffScheduleId: 'ss9' });
+    await expect(svc.create('e1', 'b1', { ...VALID_BODY, attendanceId: 'a9' })).rejects.toMatchObject({ statusCode: 400 });
+  });
+
   test('throws 400 when employeeId is missing', async () => {
     await expect(svc.create(null, 'b1', VALID_BODY)).rejects.toMatchObject({ statusCode: 400 });
   });
