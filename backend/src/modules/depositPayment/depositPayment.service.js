@@ -121,6 +121,24 @@ const deleteDepositPayment = async (id) => {
   const dp = await findById(id);
   if (!dp) throw new AppError("Pembayaran deposit tidak ditemukan", StatusCodes.NOT_FOUND);
 
+  // Deposit yang sudah di-refund/dibatalkan atau sudah dipakai di invoice tidak boleh
+  // dikembalikan ke UNPAID — riwayat pemakaian/refund jadi tidak konsisten (G1-05)
+  const deposit = await findDepositForPayment(dp.depositId);
+  if (deposit) {
+    if (["REFUNDED", "CANCELLED"].includes(deposit.status)) {
+      throw new AppError(
+        "Pembayaran tidak bisa dihapus karena deposit sudah di-refund atau dibatalkan",
+        StatusCodes.UNPROCESSABLE_ENTITY
+      );
+    }
+    if (["PARTIAL_USED", "USED"].includes(deposit.status) || (deposit._count?.invoiceDeposits ?? 0) > 0) {
+      throw new AppError(
+        "Pembayaran tidak bisa dihapus karena deposit sudah dipakai di invoice",
+        StatusCodes.UNPROCESSABLE_ENTITY
+      );
+    }
+  }
+
   // Best-effort: hapus dari Accurate jika sudah di-sync
   if (dp.accurateReceiptId) {
     await deleteDepositPaymentFromAccurate(dp.accurateReceiptId);

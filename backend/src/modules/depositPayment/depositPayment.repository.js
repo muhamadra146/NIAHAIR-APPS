@@ -74,6 +74,7 @@ const findDepositForPayment = (id) =>
       id:     true,
       amount: true,
       status: true,
+      _count: { select: { invoiceDeposits: true } },
     },
   });
 

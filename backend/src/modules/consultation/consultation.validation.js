@@ -28,7 +28,8 @@ const createNoteSchema = object({
 
 const updateNoteSchema = object({
   ...noteFields,
-  interestingNote: optional(string()),
+  // Bila dikirim tidak boleh kosong — sama dengan saat dibuat (G1-26)
+  interestingNote: optional(pipe(string(), minLength(1, "Catatan wajib diisi"))),
 });
 
 module.exports = { createNoteSchema, updateNoteSchema };

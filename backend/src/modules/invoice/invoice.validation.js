@@ -4,10 +4,10 @@ const itemSchema = object({
   itemId:          pipe(string(), minLength(1, "Item wajib dipilih")),
   unitId:          pipe(string(), minLength(1, "Satuan wajib dipilih")),
   qty:             pipe(number(), minValue(0.01, "Jumlah harus lebih dari 0")),
-  price:           optional(number()),
+  price:           optional(pipe(number(), minValue(0, "Harga tidak boleh negatif"))),
   discountType:    optional(picklist(["AMOUNT", "PERCENT"])),
-  discountAmount:  optional(pipe(number(), minValue(0))),
-  discountPercent: optional(pipe(number(), minValue(0))),
+  discountAmount:  optional(pipe(number(), minValue(0, "Diskon tidak boleh negatif"))),
+  discountPercent: optional(pipe(number(), minValue(0, "Diskon tidak boleh negatif"), maxValue(100, "Diskon persen maksimal 100"))),
   taxable:         optional(boolean()),
   // true = bahan baku (internal COGS) — tidak masuk grand total & struk client
   isMaterial:      optional(boolean()),

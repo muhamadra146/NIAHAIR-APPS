@@ -9,13 +9,20 @@ const {
 } = require("./invoice.sync.repository");
 const { mapInvoiceToAccurate } = require("./invoice.sync.mapper");
 
-const ACCURATE_INVOICE_SAVE = "/sales-invoice/save.do";
+const ACCURATE_INVOICE_SAVE   = "/sales-invoice/save.do";
+const ACCURATE_INVOICE_DETAIL = "/sales-invoice/detail.do";
 
 const syncInvoiceToAccurate = async (invoiceId) => {
   logger.info(`[invoice sync] start invoiceId=${invoiceId}`);
 
   const invoice = await findInvoiceForSync(invoiceId);
   if (!invoice) throw new Error(`Invoice tidak ditemukan: ${invoiceId}`);
+
+  // Invoice batal tidak boleh dikirim (lagi) ke Accurate — job tertunda/retry dilewati (G1-06)
+  if (invoice.status === "CANCELLED") {
+    logger.info(`[invoice sync] skip cancelled invoiceId=${invoiceId}`);
+    return { synced: false, skipped: true, reason: "CANCELLED" };
+  }
 
   const isUpdate = !!invoice.accurateInvoiceId;
 
@@ -60,6 +67,8 @@ const syncInvoiceToAccurate = async (invoiceId) => {
   // This is the only reliable way — DB accurateInvoiceDetailId becomes stale
   // when invoice items are deleted and recreated during an edit.
   let currentAccurateItemIds = [];
+  // ID faktur DP yang sudah terpasang di Accurate — null bila respons tidak memuatnya
+  let currentDownPaymentIds = null;
   if (isUpdate) {
     const currentResp = await accurateRequest(ACCURATE_INVOICE_SAVE, {
       method: "POST",
@@ -67,12 +76,26 @@ const syncInvoiceToAccurate = async (invoiceId) => {
     });
     currentAccurateItemIds = (currentResp.r?.detailItem ?? []).map((i) => i.id);
     logger.info(`[invoice sync] current Accurate items: ${currentAccurateItemIds.join(",")}`);
+
+    // Deposit yang diterapkan SETELAH sync pertama harus ikut dikirim (G1-07),
+    // kalau tidak pembayaran berikutnya ditolak Accurate "melebihi nilai piutang"
+    let currentDp = currentResp.r?.detailDownPayment;
+    if (!Array.isArray(currentDp)) {
+      // Fallback baca-saja: detail.do selalu memuat detailDownPayment
+      const detailResp = await accurateRequest(`${ACCURATE_INVOICE_DETAIL}?id=${invoice.accurateInvoiceId}`, { method: "GET" });
+      currentDp = detailResp.d?.detailDownPayment;
+    }
+    if (Array.isArray(currentDp)) {
+      currentDownPaymentIds = currentDp
+        .map((d) => d.invoiceId ?? d.invoice?.id)
+        .filter((v) => v != null);
+    }
   }
 
   // Look up Accurate branch ID for this invoice's branch
   const accurateBranchId = await getAccurateBranchId(invoice.branchId);
 
-  const payload = mapInvoiceToAccurate(invoice, warehouse, isUpdate ? invoice.accurateInvoiceId : null, currentAccurateItemIds, accurateBranchId);
+  const payload = mapInvoiceToAccurate(invoice, warehouse, isUpdate ? invoice.accurateInvoiceId : null, currentAccurateItemIds, accurateBranchId, currentDownPaymentIds);
 
   const response = await accurateRequest(ACCURATE_INVOICE_SAVE, {
     method: "POST",

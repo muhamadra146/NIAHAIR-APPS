@@ -39,4 +39,11 @@ const update = (id, data) => prisma.complaint.update({ where: { id }, data, incl
 
 const remove = (id) => prisma.complaint.delete({ where: { id } });
 
-module.exports = { findAll, count, findById, findByNo, findMaxSeqToday, create, update, remove };
+const findInvoiceById = (id) =>
+  prisma.invoice.findUnique({ where: { id }, select: { id: true, customerId: true } });
+
+// Akses cabang karyawan (aturan sama dengan branch middleware)
+const findEmployeeBranchAccess = (employeeId, branchId) =>
+  prisma.employeeBranch.findFirst({ where: { employeeId, branchId, isActive: true }, select: { id: true } });
+
+module.exports = { findAll, count, findById, findByNo, findMaxSeqToday, create, update, remove, findInvoiceById, findEmployeeBranchAccess };

@@ -16,7 +16,7 @@ const svc       = require('./materialUsage.service');
 
 const SESSION = { id: 'ts1' };
 const USAGE   = { id: 'mu1', treatmentItemId: 'ti1' };
-const USAGE_ITEM = { id: 'ui1', qty: 2, inventoryMovementId: null };
+const USAGE_ITEM = { id: 'ui1', qty: 2, inventoryMovementId: null, materialUsage: { treatmentItemId: 'ti1' } };
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -63,7 +63,7 @@ describe('bulkSave', () => {
 
   test('updates existing item when row.id provided', async () => {
     repo.findSessionById.mockResolvedValue(SESSION);
-    repo.findTreatmentItem.mockResolvedValue({ id: 'ti1' });
+    repo.findTreatmentItem.mockResolvedValue({ id: 'ti1', treatmentSessionId: 'ts1' });
     repo.findOrCreateUsage.mockResolvedValue(USAGE);
     repo.findUsageItemById.mockResolvedValue(USAGE_ITEM);
     repo.updateUsageItemQty.mockResolvedValue({ ...USAGE_ITEM, qty: 5 });
@@ -77,7 +77,8 @@ describe('bulkSave', () => {
 
   test('creates new item when no row.id', async () => {
     repo.findSessionById.mockResolvedValue(SESSION);
-    repo.findTreatmentItem.mockResolvedValue({ id: 'ti1' });
+    repo.findTreatmentItem.mockResolvedValue({ id: 'ti1', treatmentSessionId: 'ts1' });
+    repo.findItemUnit.mockResolvedValue({ id: 'iu1' });
     repo.findOrCreateUsage.mockResolvedValue(USAGE);
     repo.createUsageItem.mockResolvedValue({ ...USAGE_ITEM, qty: 3 });
 

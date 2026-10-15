@@ -14,7 +14,11 @@ const {
 
 const getAllController = async (req, res, next) => {
   try {
-    const result = await listDeposits(req.query);
+    // Route param wins over query (nested route /appointments/:appointmentId/deposits — G1-12)
+    const result = await listDeposits({
+      ...req.query,
+      ...(req.params.appointmentId && { appointmentId: req.params.appointmentId }),
+    });
     return success(res, result, "Deposits fetched");
   } catch (err) {
     next(err);

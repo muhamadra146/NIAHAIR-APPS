@@ -40,6 +40,6 @@ router.put(   "/:id/notes/:noteId",   authenticate, authorize(...WRITE_ROLES), v
 router.delete("/:id/notes/:noteId",   authenticate, authorize(...WRITE_ROLES), deleteNoteController);
 
 // Manual push sync retry
-router.post("/:id/sync/accurate", authenticate, syncToAccurateController);
+router.post("/:id/sync/accurate", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER), syncToAccurateController);
 
 module.exports = router;

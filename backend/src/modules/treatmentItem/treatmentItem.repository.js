@@ -36,6 +36,25 @@ const update = (id, data) =>
 const deleteById = (id) =>
   prisma.treatmentItem.delete({ where: { id } });
 
+// Data turunan yang menahan FK treatmentItem (untuk guard hapus)
+const findDeleteDependencies = (id) =>
+  prisma.treatmentItem.findUnique({
+    where:  { id },
+    select: {
+      materialUsages: { select: { id: true, _count: { select: { usageItems: true } } } },
+      _count:         { select: { jobAssignments: true } },
+    },
+  });
+
+// Hapus MaterialUsage induk yang sudah kosong lalu item-nya, dalam satu transaksi
+const deleteWithEmptyUsages = (id, emptyUsageIds) =>
+  prisma.$transaction(async (tx) => {
+    if (emptyUsageIds.length > 0) {
+      await tx.materialUsage.deleteMany({ where: { id: { in: emptyUsageIds }, usageItems: { none: {} } } });
+    }
+    await tx.treatmentItem.delete({ where: { id } });
+  });
+
 // ── Lookups for create validation ─────────────────────────────────────
 
 const findSessionById = (id) =>
@@ -66,6 +85,8 @@ module.exports = {
   create,
   update,
   deleteById,
+  findDeleteDependencies,
+  deleteWithEmptyUsages,
   findSessionById,
   findItemById,
   findItemUnit,

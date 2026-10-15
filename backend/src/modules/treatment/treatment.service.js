@@ -10,10 +10,12 @@ const {
   findCustomerById,
   findBranchById,
   findAppointmentById,
+  findEmployeeBranchAccess,
   create,
   update,
 } = require("./treatment.repository");
 const { syncInvoiceToAccurate } = require("../invoice/invoice.sync.service");
+const { ROLES } = require("../../common/constants/role.constant");
 
 const getAll = async ({ page, limit, customerId, branchId, invoiceId, startDate, endDate }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -54,7 +56,7 @@ const getById = async (id) => {
   return session;
 };
 
-const createSession = async (body) => {
+const createSession = async (body, user = null) => {
   const { customerId, branchId, appointmentId, startedAt, notes } = body;
 
   const customer = await findCustomerById(customerId);
@@ -63,9 +65,18 @@ const createSession = async (body) => {
   const branch = await findBranchById(branchId);
   if (!branch) throw new AppError("Cabang tidak ditemukan", StatusCodes.NOT_FOUND);
 
+  // branchId dari body — cek akses cabang dengan aturan yang sama seperti branch middleware (G1-13)
+  if (user && user.roleCode !== ROLES.SUPER_ADMIN) {
+    const access = user.employeeId ? await findEmployeeBranchAccess(user.employeeId, branchId) : null;
+    if (!access) throw new AppError("Akses ke cabang ini tidak diizinkan", StatusCodes.FORBIDDEN);
+  }
+
   if (appointmentId) {
     const appointment = await findAppointmentById(appointmentId);
     if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
+    if (appointment.customerId !== customerId) {
+      throw new AppError("Booking bukan milik pelanggan ini", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
   }
 
   const data = {
@@ -84,6 +95,11 @@ const updateSession = async (id, body) => {
   if (!session) throw new AppError("Sesi treatment tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const { completedAt, notes } = body;
+
+  // Waktu selesai tidak boleh sebelum waktu mulai (G1-27)
+  if (completedAt && session.startedAt && new Date(completedAt) < new Date(session.startedAt)) {
+    throw new AppError("Waktu selesai tidak boleh sebelum waktu mulai", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
 
   // Blokir uncomplete jika invoice sudah di-sync ke Accurate (material sudah masuk Accurate)
   const isBeingUncompleted = completedAt === null && session.completedAt && session.invoiceId;

@@ -22,7 +22,9 @@ const formatDate = (date) => {
 // accurateId: Int — pass to UPDATE an existing Accurate invoice, null to CREATE
 // currentAccurateItemIds: Int[] — Accurate line item IDs to delete before re-adding
 // accurateBranchId: Int — Accurate branch ID; required for multi-branch Accurate setup
-const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccurateItemIds = [], accurateBranchId = null) => {
+// currentDownPaymentIds: ID faktur DP Accurate yang SUDAH terpasang di faktur (hanya saat UPDATE).
+//   null = tidak diketahui → DP tidak dikirim ulang (hindari double-apply).
+const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccurateItemIds = [], accurateBranchId = null, currentDownPaymentIds = null) => {
   // On UPDATE: delete ALL current Accurate line items (fetched live from Accurate in service),
   // then add all current items fresh. "Replace all" strategy — reliable regardless of DB state.
   const deleteEntries = currentAccurateItemIds.map((id) => ({ id, _status: "DELETE" }));
@@ -232,14 +234,18 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
     detailItem,
   };
 
-  // Apply synced down payments — only on CREATE (not UPDATE).
-  // On update, Accurate already has the deposit link from initial creation;
-  // re-sending it would double-apply and exceed the deposit amount.
-  if (!accurateId) {
-    const detailDownPayment = (invoice.invoiceDeposits ?? []).map((row) => ({
-      invoiceId:     Number(row.deposit.accurateDepositId),
-      paymentAmount: Number(row.amountApplied),
-    }));
+  // Down payment (deposit) yang diterapkan ke invoice.
+  // CREATE: kirim semua. UPDATE: kirim hanya deposit yang BELUM terpasang di Accurate
+  // (deposit yang diterapkan setelah sync pertama — G1-07). DP yang sudah terpasang tidak
+  // dikirim ulang agar tidak double-apply dan melebihi nilai deposit.
+  if (!accurateId || Array.isArray(currentDownPaymentIds)) {
+    const already = new Set((currentDownPaymentIds ?? []).map(Number));
+    const detailDownPayment = (invoice.invoiceDeposits ?? [])
+      .map((row) => ({
+        invoiceId:     Number(row.deposit.accurateDepositId),
+        paymentAmount: Number(row.amountApplied),
+      }))
+      .filter((dp) => !accurateId || !already.has(dp.invoiceId));
 
     if (detailDownPayment.length > 0) {
       payload.detailDownPayment = detailDownPayment;

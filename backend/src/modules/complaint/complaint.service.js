@@ -5,6 +5,7 @@ const { paginate, paginationMeta } = require("../../utils/pagination");
 const { wibDayStart, wibDayEnd }   = require("../../utils/date");
 const prisma          = require("../../config/prisma");
 const repo            = require("./complaint.repository");
+const { ROLES }       = require("../../common/constants/role.constant");
 
 const D = (v) => new Prisma.Decimal(String(v));
 
@@ -118,7 +119,7 @@ const getById = async (id) => {
 };
 
 // ── Create ────────────────────────────────────────────────────────────
-const create = async (body, userId) => {
+const create = async (body, userId, user = null) => {
   const {
     branchId, appointmentId, invoiceId, employeeId,
     category, severity = "MEDIUM", description,
@@ -129,9 +130,24 @@ const create = async (body, userId) => {
   // Pastikan appointment ada
   const appointment = await prisma.appointment.findUnique({
     where:  { id: appointmentId },
-    select: { id: true, branchId: true },
+    select: { id: true, branchId: true, customerId: true },
   });
   if (!appointment) throw new AppError("Appointment tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  // branchId dari body — cek akses cabang, aturan sama dengan branch middleware (G1-20)
+  if (branchId && user && user.roleCode !== ROLES.SUPER_ADMIN) {
+    const access = user.employeeId ? await repo.findEmployeeBranchAccess(user.employeeId, branchId) : null;
+    if (!access) throw new AppError("Akses ke cabang ini tidak diizinkan", StatusCodes.FORBIDDEN);
+  }
+
+  // Invoice harus milik pelanggan booking yang sama (G1-20)
+  if (invoiceId) {
+    const invoice = await repo.findInvoiceById(invoiceId);
+    if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
+    if (invoice.customerId !== appointment.customerId) {
+      throw new AppError("Invoice bukan milik pelanggan booking ini", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+  }
 
   const complaintNo = await buildComplaintNo();
 
@@ -174,6 +190,11 @@ const updateComplaint = async (id, body, userId) => {
     correctedStrands, totalStrands, commissionId,
   } = body;
 
+  // Helaian diperbaiki tidak boleh melebihi total helaian (G1-20)
+  if (correctedStrands != null && totalStrands != null && Number(correctedStrands) > Number(totalStrands)) {
+    throw new AppError("Helaian diperbaiki tidak boleh melebihi total helaian", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
   const data = {};
 
   if (status)          data.status    = status;
@@ -196,6 +217,10 @@ const updateComplaint = async (id, body, userId) => {
   // Auto-set resolvedAt saat status → RESOLVED
   if (status === "RESOLVED" && complaint.status !== "RESOLVED") {
     data.resolvedAt = new Date();
+  }
+  // Dibuka kembali → belum selesai, resolvedAt dikosongkan (G1-29)
+  if (["OPEN", "IN_PROGRESS"].includes(status)) {
+    data.resolvedAt = null;
   }
 
   // Pemotongan komisi — hanya saat RESOLVED

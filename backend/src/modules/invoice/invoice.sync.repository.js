@@ -11,6 +11,7 @@ const findInvoiceForSync = async (id) => {
       notes:             true,
       branchId:          true,
       accurateInvoiceId: true,
+      status:            true,
       taxable:           true,
       inclusiveTax:      true,
       customer: {

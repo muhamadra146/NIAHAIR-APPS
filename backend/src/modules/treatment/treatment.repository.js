@@ -44,7 +44,11 @@ const findBranchById = (id) =>
   prisma.branch.findUnique({ where: { id }, select: { id: true } });
 
 const findAppointmentById = (id) =>
-  prisma.appointment.findUnique({ where: { id }, select: { id: true } });
+  prisma.appointment.findUnique({ where: { id }, select: { id: true, customerId: true } });
+
+// Akses cabang karyawan (aturan sama dengan branch middleware)
+const findEmployeeBranchAccess = (employeeId, branchId) =>
+  prisma.employeeBranch.findFirst({ where: { employeeId, branchId, isActive: true }, select: { id: true } });
 
 const create = (data) =>
   prisma.treatmentSession.create({ data, include: INCLUDE });
@@ -59,6 +63,7 @@ module.exports = {
   findCustomerById,
   findBranchById,
   findAppointmentById,
+  findEmployeeBranchAccess,
   create,
   update,
 };

@@ -74,7 +74,11 @@ const deleteUsageItem = (id) =>
   prisma.materialUsageItem.delete({ where: { id } });
 
 const findTreatmentItem = (id) =>
-  prisma.treatmentItem.findUnique({ where: { id }, select: { id: true } });
+  prisma.treatmentItem.findUnique({ where: { id }, select: { id: true, treatmentSessionId: true } });
+
+// Satuan terdaftar untuk bahan (sekaligus memastikan bahan & satuan ada)
+const findItemUnit = (itemId, unitId) =>
+  prisma.itemUnit.findUnique({ where: { itemId_unitId: { itemId, unitId } }, select: { id: true } });
 
 const findSessionById = (id) =>
   prisma.treatmentSession.findUnique({ where: { id }, select: { id: true, completedAt: true, invoiceId: true } });
@@ -88,5 +92,6 @@ module.exports = {
   updateUsageItemQty,
   deleteUsageItem,
   findTreatmentItem,
+  findItemUnit,
   findSessionById,
 };

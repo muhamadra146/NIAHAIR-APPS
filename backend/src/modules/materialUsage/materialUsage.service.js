@@ -11,6 +11,7 @@ const {
   updateUsageItemQty,
   deleteUsageItem,
   findTreatmentItem,
+  findItemUnit,
   findSessionById,
 } = require("./materialUsage.repository");
 const { generateServiceMovement, reverseServiceUsageMovement } = require("../inventory/inventory.service");
@@ -37,24 +38,43 @@ const bulkSave = async (sessionId, rows) => {
   const session = await findSessionById(sessionId);
   if (!session) throw new AppError("Sesi treatment tidak ditemukan", StatusCodes.NOT_FOUND);
 
+  // Validasi SEMUA baris dulu sebelum menulis apa pun — tidak ada simpan sebagian
+  const existingById = new Map();
+  for (const row of rows) {
+    // Item treatment harus milik sesi ini (G1-15)
+    const ti = await findTreatmentItem(row.treatmentItemId);
+    if (!ti || ti.treatmentSessionId !== sessionId) {
+      throw new AppError("Item treatment tidak ditemukan di sesi ini", StatusCodes.NOT_FOUND);
+    }
+
+    if (row.id) {
+      // Baris pemakaian yang diubah harus milik item treatment yang sama
+      const existing = await findUsageItemById(row.id);
+      if (!existing || existing.materialUsage?.treatmentItemId !== row.treatmentItemId) {
+        throw new AppError("Data pemakaian bahan tidak ditemukan", StatusCodes.NOT_FOUND);
+      }
+      existingById.set(row.id, existing);
+    } else {
+      // Baris baru wajib bahan & satuan yang valid (G1-21 — sebelumnya 500 / 409)
+      if (!row.materialItemId || !row.unitId) {
+        throw new AppError("Bahan dan satuan wajib dipilih", StatusCodes.UNPROCESSABLE_ENTITY);
+      }
+      const itemUnit = await findItemUnit(row.materialItemId, row.unitId);
+      if (!itemUnit) {
+        throw new AppError("Bahan atau satuan tidak valid", StatusCodes.UNPROCESSABLE_ENTITY);
+      }
+    }
+  }
+
   const results = [];
 
   for (const row of rows) {
-    // Validate treatment item belongs to this session
-    const ti = await findTreatmentItem(row.treatmentItemId);
-    if (!ti) {
-      throw new AppError(
-        `Treatment item ${row.treatmentItemId} not found`,
-        StatusCodes.NOT_FOUND,
-      );
-    }
-
     // Find or create MaterialUsage for this treatment item
     const usage = await findOrCreateUsage(row.treatmentItemId);
 
     if (row.id) {
       // Reverse existing movement first so generateServiceMovement can recreate with new qty
-      const existing = await findUsageItemById(row.id);
+      const existing = existingById.get(row.id);
       if (existing?.inventoryMovementId) {
         await reverseServiceUsageMovement(existing.inventoryMovementId, row.id);
       }

@@ -35,7 +35,7 @@ router.delete(
 router.post(
   "/",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER),
   uploadDeposit.single("transferProof"), // multer sebelum validate agar FormData ter-parse
   validate(createDepositPaymentSchema),
   createController

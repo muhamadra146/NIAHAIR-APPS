@@ -55,7 +55,7 @@ router.delete(
 router.patch(
   "/:id/link-appointment",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER),
   validate(linkAppointmentSchema),
   linkAppointmentController
 );
@@ -63,14 +63,14 @@ router.patch(
 router.patch(
   "/:id/refund",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER),
   refundController
 );
 
 router.patch(
   "/:id/cancel",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER),
   cancelController
 );
 

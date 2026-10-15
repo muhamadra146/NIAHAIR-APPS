@@ -243,6 +243,11 @@ const linkAppointmentToDeposit = async (id, appointmentId) => {
   const deposit = await findById(id);
   if (!deposit) throw new AppError("Deposit tidak ditemukan", StatusCodes.NOT_FOUND);
 
+  // Deposit batal tidak bisa ditautkan ke booking (G1-28)
+  if (deposit.status === "CANCELLED") {
+    throw new AppError("Deposit yang sudah dibatalkan tidak bisa ditautkan ke booking", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
   const appointment = await findAppointmentById(appointmentId);
   if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
 

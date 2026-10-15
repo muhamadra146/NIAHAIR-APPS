@@ -45,7 +45,7 @@ describe('createSession', () => {
   beforeEach(() => {
     repo.findCustomerById.mockResolvedValue({ id: 'c1' });
     repo.findBranchById.mockResolvedValue({ id: 'b1' });
-    repo.findAppointmentById.mockResolvedValue({ id: 'a1' });
+    repo.findAppointmentById.mockResolvedValue({ id: 'a1', customerId: 'c1' });
     repo.create.mockResolvedValue(SESSION);
   });
 

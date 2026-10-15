@@ -110,6 +110,19 @@ const getAppointmentById = async (id) => {
 const combineDatetime = (dateStr, timeStr) =>
   new Date(`${dateStr.split("T")[0]}T${timeStr}:00+07:00`);
 
+// DateTime tersimpan → "HH:MM" jam WIB
+const toWibHHMM = (date) => {
+  const d = new Date(new Date(date).getTime() + 7 * 3600 * 1000);
+  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+};
+
+// Jam selesai harus setelah jam mulai (G1-10). Format "HH:MM" bisa dibandingkan sebagai string.
+const assertTimeRange = (startTime, endTime) => {
+  if (startTime && endTime && endTime <= startTime) {
+    throw new AppError("Jam selesai harus setelah jam mulai", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+};
+
 // ── Staff per peran ───────────────────────────────────────────────────
 // Satu karyawan boleh memegang beberapa peran (pemasang/asisten/colorist) di booking yang sama
 // — diatur manager. Pasangan karyawan+peran yang sama persis dibuang (unik di database).
@@ -132,6 +145,8 @@ const createAppointment = async (body, userId, createdByEmployeeId = null) => {
     type = "SALON", homeServiceAddress,
     notes, estimatedTotal, services = [], staffsBySlot = [],
   } = body;
+
+  assertTimeRange(startTime, endTime);
 
   const customer = await findCustomerById(customerId);
   if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
@@ -199,6 +214,14 @@ const updateAppointmentById = async (id, body, userId) => {
 
   if (!hasUpdate) {
     throw new AppError("No fields to update", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
+  // Bandingkan dengan jam tersimpan bila hanya salah satu yang diubah
+  if (startTime !== undefined || endTime !== undefined) {
+    assertTimeRange(
+      startTime ?? (appointment.startTime ? toWibHHMM(appointment.startTime) : undefined),
+      endTime   ?? (appointment.endTime   ? toWibHHMM(appointment.endTime)   : undefined),
+    );
   }
 
   // Use the new visitDate if provided, otherwise keep the existing one as base for time combination
@@ -294,6 +317,7 @@ const rescheduleAppointment = async (id, body, userId) => {
   }
 
   const { visitDate, startTime, endTime, reason } = body;
+  assertTimeRange(startTime, endTime);
 
   const newVisitDate  = new Date(visitDate);
   const newStartTime  = combineDatetime(visitDate, startTime);
@@ -320,6 +344,7 @@ const updateRescheduleById = async (appointmentId, historyId, body) => {
   if (!history) throw new AppError("Riwayat reschedule tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const { visitDate, startTime, endTime, reason } = body;
+  assertTimeRange(startTime, endTime);
   const newVisitDate = new Date(visitDate);
   const newStartTime = combineDatetime(visitDate, startTime);
   const newEndTime   = combineDatetime(visitDate, endTime);

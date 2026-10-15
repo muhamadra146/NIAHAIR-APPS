@@ -31,7 +31,7 @@ router.post(
   "/",
   authenticate,
   requireBranch,
-  authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.CASHIER),
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER),
   validate(createPaymentSchema),
   createController
 );

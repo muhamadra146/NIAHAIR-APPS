@@ -1,4 +1,4 @@
-const { object, string, optional, pipe, minLength } = require("valibot");
+const { object, string, optional, nullable, pipe, minLength } = require("valibot");
 
 const createSessionSchema = object({
   customerId:    pipe(string(), minLength(1, "Pelanggan wajib dipilih")),
@@ -9,7 +9,8 @@ const createSessionSchema = object({
 });
 
 const updateSessionSchema = object({
-  completedAt: optional(string()),
+  // null = batalkan status selesai (didukung service)
+  completedAt: optional(nullable(string())),
   notes:       optional(string()),
 });
 

@@ -1,6 +1,8 @@
 const { Router } = require("express");
 const authenticate = require("../../middlewares/auth.middleware");
 const validate = require("../../middlewares/validate.middleware");
+const authorize    = require("../../middlewares/role.middleware");
+const { ROLES }    = require("../../common/constants/role.constant");
 const { createItemSchema, updateItemSchema } = require("./treatmentItem.validation");
 const {
   getBySessionController,
@@ -13,9 +15,12 @@ const {
 // when mounted as router.use("/:sessionId/items", treatmentItemRouter).
 const router = Router({ mergeParams: true });
 
+// Tulis — sama dengan sesi treatment (POS) (G1-11)
+const MUTATE_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER];
+
 router.get("/",       authenticate, getBySessionController);
-router.post("/",      authenticate, validate(createItemSchema), createController);
-router.put("/:id",    authenticate, validate(updateItemSchema), updateController);
-router.delete("/:id", authenticate, deleteController);
+router.post("/",      authenticate, authorize(...MUTATE_ROLES), validate(createItemSchema), createController);
+router.put("/:id",    authenticate, authorize(...MUTATE_ROLES), validate(updateItemSchema), updateController);
+router.delete("/:id", authenticate, authorize(...MUTATE_ROLES), deleteController);
 
 module.exports = router;

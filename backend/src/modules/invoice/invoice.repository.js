@@ -201,6 +201,9 @@ const findMaxInvoiceSeqToday = async (prefix) => {
 const findCustomerById = (id) =>
   prisma.customer.findUnique({ where: { id }, select: { id: true, name: true } });
 
+const findAppointmentById = (id) =>
+  prisma.appointment.findUnique({ where: { id }, select: { id: true, customerId: true } });
+
 const findBranchById = (id) =>
   prisma.branch.findUnique({ where: { id }, select: { id: true, name: true } });
 
@@ -389,9 +392,39 @@ const updateWithTransaction = ({ invoiceId, invoiceData, itemsData, oldStatus, u
     return tx.invoice.findUnique({ where: { id: invoiceId }, include: INCLUDE });
   });
 
+// ── Lepas deposit dari invoice (dipakai cancel & delete) ─────────────
+//
+// Hapus link InvoiceDeposit lalu set ulang status tiap deposit terkait.
+// resolveDepositStatus(deposit) disediakan service (aturan status ada di service);
+// deposit = { id, amount, status, invoiceDeposits: [{ amountApplied }] } SETELAH link dihapus.
+// Return null = status tidak diubah.
+
+const releaseInvoiceDepositsTx = async (tx, invoiceId, resolveDepositStatus) => {
+  const links = await tx.invoiceDeposit.findMany({
+    where:  { invoiceId },
+    select: { depositId: true },
+  });
+  if (links.length === 0) return;
+
+  await tx.invoiceDeposit.deleteMany({ where: { invoiceId } });
+
+  const depositIds = [...new Set(links.map((l) => l.depositId))];
+  const deposits = await tx.deposit.findMany({
+    where:  { id: { in: depositIds } },
+    select: { id: true, amount: true, status: true, invoiceDeposits: { select: { amountApplied: true } } },
+  });
+
+  for (const deposit of deposits) {
+    const status = resolveDepositStatus(deposit);
+    if (status && status !== deposit.status) {
+      await tx.deposit.update({ where: { id: deposit.id }, data: { status } });
+    }
+  }
+};
+
 // ── Delete ────────────────────────────────────────────────────────────
 
-const deleteWithTransaction = (invoiceId) =>
+const deleteWithTransaction = (invoiceId, { resolveDepositStatus } = {}) =>
   prisma.$transaction(async (tx) => {
     // Get treatment session IDs linked to this invoice
     const sessions = await tx.treatmentSession.findMany({
@@ -454,7 +487,11 @@ const deleteWithTransaction = (invoiceId) =>
     // ClientConsultationNote — punya FK invoiceId
     await tx.clientConsultationNote.deleteMany({ where: { invoiceId } });
 
-    await tx.invoiceDeposit.deleteMany({ where: { invoiceId } });
+    if (resolveDepositStatus) {
+      await releaseInvoiceDepositsTx(tx, invoiceId, resolveDepositStatus);
+    } else {
+      await tx.invoiceDeposit.deleteMany({ where: { invoiceId } });
+    }
     await tx.invoiceStatusHistory.deleteMany({ where: { invoiceId } });
     await tx.payment.deleteMany({ where: { invoiceId } });
     await tx.invoiceItem.deleteMany({ where: { invoiceId } });
@@ -463,11 +500,16 @@ const deleteWithTransaction = (invoiceId) =>
 
 // ── Cancel ────────────────────────────────────────────────────────────
 
-const cancelWithTransaction = ({ invoice, userId }) =>
+// invoiceData: field tambahan saat batal (mis. totalDeposit / outstandingAmount)
+const cancelWithTransaction = ({ invoice, userId, invoiceData = {}, resolveDepositStatus }) =>
   prisma.$transaction(async (tx) => {
+    if (resolveDepositStatus) {
+      await releaseInvoiceDepositsTx(tx, invoice.id, resolveDepositStatus);
+    }
+
     await tx.invoice.update({
       where: { id: invoice.id },
-      data:  { status: "CANCELLED" },
+      data:  { ...invoiceData, status: "CANCELLED" },
     });
 
     await tx.invoiceStatusHistory.create({
@@ -481,6 +523,13 @@ const cancelWithTransaction = ({ invoice, userId }) =>
     });
 
     return tx.invoice.findUnique({ where: { id: invoice.id }, include: INCLUDE });
+  });
+
+// Faktur sudah dihapus di Accurate (invoice batal) — lepas referensinya
+const markInvoiceAccurateRemoved = (id) =>
+  prisma.invoice.update({
+    where: { id },
+    data:  { accurateInvoiceId: null, accurateInvoiceNumber: null },
   });
 
 // ── Commission Worksheet: single invoice with job assignments ────────
@@ -545,6 +594,7 @@ module.exports = {
   countToday,
   findMaxInvoiceSeqToday,
   findCustomerById,
+  findAppointmentById,
   findBranchById,
   findItemById,
   findItemUnit,
@@ -559,6 +609,7 @@ module.exports = {
   applyDepositWithTransaction,
   updateWithTransaction,
   cancelWithTransaction,
+  markInvoiceAccurateRemoved,
   findDailyAssignment,
   findCommissionGenerateList,
   findAllPaidForJobAssignment,

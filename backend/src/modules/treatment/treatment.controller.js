@@ -21,7 +21,7 @@ const getByIdController = async (req, res, next) => {
 
 const createController = async (req, res, next) => {
   try {
-    const result = await createSession(req.body);
+    const result = await createSession(req.body, req.user);
     return created(res, result, "Treatment session created");
   } catch (err) {
     next(err);

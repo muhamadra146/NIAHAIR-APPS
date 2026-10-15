@@ -8,6 +8,8 @@ const {
   create,
   update,
   deleteById,
+  findDeleteDependencies,
+  deleteWithEmptyUsages,
   findSessionById,
   findItemById,
   findItemUnit,
@@ -73,9 +75,17 @@ const createTreatmentItem = async (sessionId, body) => {
   });
 };
 
-const updateTreatmentItem = async (id, body) => {
+// Item harus ada DAN milik sesi di URL (G1-16) — item sesi lain diperlakukan tidak ditemukan
+const findItemInSession = async (id, sessionId) => {
   const item = await findById(id);
-  if (!item) throw new AppError("Item treatment tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (!item || (sessionId && item.treatmentSessionId !== sessionId)) {
+    throw new AppError("Item treatment tidak ditemukan", StatusCodes.NOT_FOUND);
+  }
+  return item;
+};
+
+const updateTreatmentItem = async (id, body, sessionId) => {
+  await findItemInSession(id, sessionId);
 
   // Snapshots are never updated — only qty and notes are mutable.
   const data = {};
@@ -85,9 +95,8 @@ const updateTreatmentItem = async (id, body) => {
   return update(id, data);
 };
 
-const deleteTreatmentItem = async (id) => {
-  const item = await findById(id);
-  if (!item) throw new AppError("Item treatment tidak ditemukan", StatusCodes.NOT_FOUND);
+const deleteTreatmentItem = async (id, sessionId) => {
+  const item = await findItemInSession(id, sessionId);
 
   // Guard: cannot delete if employees are already assigned
   if (item._count.assignments > 0) {
@@ -97,7 +106,28 @@ const deleteTreatmentItem = async (id) => {
     );
   }
 
-  await deleteById(id);
+  // Data turunan yang menahan FK → sebelumnya jatuh jadi 500 (G1-17)
+  const deps = await findDeleteDependencies(id);
+  const usages = deps?.materialUsages ?? [];
+  if (usages.some((u) => u._count.usageItems > 0)) {
+    throw new AppError(
+      "Item tidak bisa dihapus karena masih ada pemakaian bahan. Hapus pemakaian bahan terlebih dahulu.",
+      StatusCodes.CONFLICT
+    );
+  }
+  if ((deps?._count?.jobAssignments ?? 0) > 0) {
+    throw new AppError(
+      "Item tidak bisa dihapus karena sudah ada input pengerjaan (job). Hapus pengerjaan terlebih dahulu.",
+      StatusCodes.CONFLICT
+    );
+  }
+
+  // Induk MaterialUsage yang sudah kosong ikut dihapus
+  if (usages.length > 0) {
+    await deleteWithEmptyUsages(id, usages.map((u) => u.id));
+  } else {
+    await deleteById(id);
+  }
 };
 
 module.exports = {

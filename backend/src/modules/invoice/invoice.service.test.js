@@ -170,7 +170,7 @@ describe('deleteInvoice', () => {
 
     expect(inventory.reverseInvoiceSaleMovements).toHaveBeenCalledWith('INV-001');
     expect(inventory.reverseInvoiceServiceMovements).toHaveBeenCalledWith('inv1');
-    expect(repo.deleteWithTransaction).toHaveBeenCalledWith('inv1');
+    expect(repo.deleteWithTransaction).toHaveBeenCalledWith('inv1', expect.objectContaining({ resolveDepositStatus: expect.any(Function) }));
   });
 });
 

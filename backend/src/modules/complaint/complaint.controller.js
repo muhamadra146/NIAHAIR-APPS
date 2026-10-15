@@ -30,7 +30,7 @@ const getByIdController = async (req, res, next) => {
 
 const createController = async (req, res, next) => {
   try {
-    const result = await svc.create(req.body, req.user?.id);
+    const result = await svc.create(req.body, req.user?.id, req.user);
     return created(res, result, "Komplain berhasil dibuat");
   } catch (err) { next(err); }
 };

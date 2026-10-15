@@ -19,7 +19,7 @@ const { createSyncJob }            = require("../syncQueue/syncQueue.service");
 const { generateSaleMovement, reverseInvoiceSaleMovements, reverseInvoiceServiceMovements } = require("../inventory/inventory.service");
 const { accurateRequest }          = require("../accurate/accurate.client");
 const { resolveInvoiceStatus }     = require("./invoice.status");
-const prisma                       = require("../../config/prisma");
+const prisma                       = require("../../config/prisma");
 const notification = require("../notification/notification.service");
 const {
   findAll,
@@ -27,6 +27,7 @@ const {
   findById,
   countToday,
   findCustomerById,
+  findAppointmentById,
   findBranchById,
   findItemById,
   findItemUnit,
@@ -40,6 +41,7 @@ const {
   applyDepositWithTransaction,
   updateWithTransaction,
   cancelWithTransaction,
+  markInvoiceAccurateRemoved,
   deleteWithTransaction,
   findMaxInvoiceSeqToday,
   findDailyAssignment,
@@ -53,6 +55,26 @@ const { isMemberDiscountEligible } = require("../membership/membership.discount"
 const { findJobQtyLimitViolations } = require("../commission/commission.calc");
 
 const D = (v) => new Prisma.Decimal(String(v));
+
+// Guard nominal baris invoice (G1-01): harga tidak negatif, diskon item ≤ harga × qty.
+// Dipakai create & update supaya grandTotal tidak pernah negatif.
+const assertLineAmounts = ({ price, qty, discount }) => {
+  if (price.lt(D("0"))) {
+    throw new AppError("Harga tidak boleh negatif", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+  if (discount.lt(D("0"))) {
+    throw new AppError("Diskon tidak boleh negatif", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+  if (discount.gt(price.mul(qty))) {
+    throw new AppError("Diskon tidak boleh melebihi harga", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+};
+
+const assertGrandTotal = (grandTotal) => {
+  if (grandTotal.lt(D("0"))) {
+    throw new AppError("Total invoice tidak boleh negatif", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+};
 
 // ── List ──────────────────────────────────────────────────────────────
 
@@ -112,6 +134,15 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
 
   const customer = await findCustomerById(customerId);
   if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  // Booking harus ada & milik pelanggan yang sama (G1-14)
+  if (appointmentId) {
+    const appointment = await findAppointmentById(appointmentId);
+    if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
+    if (appointment.customerId !== customerId) {
+      throw new AppError("Booking bukan milik pelanggan ini", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+  }
 
   const branch = await findBranchById(branchId);
   if (!branch) throw new AppError("Cabang tidak ditemukan", StatusCodes.NOT_FOUND);
@@ -190,6 +221,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
     let discount          = discountType === "PERCENT"
       ? price.mul(qty).mul(discountPercent).div(D("100")).toDecimalPlaces(2)
       : D(line.discountAmount ?? 0);
+    assertLineAmounts({ price, qty, discount });
 
     // Apply PERCENTAGE membership discount hanya pada item yang dapat diskon member
     if (
@@ -282,6 +314,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
         ? preDiscountGrandTotal.sub(membershipDiscountTotal)
         : D("0"))
     : preDiscountGrandTotal;
+  assertGrandTotal(grandTotal);
 
   // ── Validate and apply deposits ───────────────────────────────────────
   let totalDeposit = D("0");
@@ -528,6 +561,7 @@ const updateInvoice = async (id, body, userId) => {
     let discount          = discountType === "PERCENT"
       ? price.mul(qty).mul(discountPercent).div(D("100")).toDecimalPlaces(2)
       : D(line.discountAmount ?? 0);
+    assertLineAmounts({ price, qty, discount });
 
     // Membership discount hanya untuk item yang dapat diskon member
     if (
@@ -611,6 +645,7 @@ const updateInvoice = async (id, body, userId) => {
         ? preDiscountGrandTotal.sub(membershipDiscountTotal)
         : D("0"))
     : preDiscountGrandTotal;
+  assertGrandTotal(grandTotal);
 
   // Keep existing deposits and payments; recalculate outstanding
   const existingTotalDeposit = D(existing.totalDeposit);
@@ -897,7 +932,60 @@ const cancelInvoice = async (id, userId) => {
   }
 
   await reverseInvoiceSaleMovements(invoice.invoiceNo);
-  return cancelWithTransaction({ invoice, userId });
+
+  // Deposit yang terpakai dilepas & statusnya dihitung ulang dalam transaksi yang sama (G1-03).
+  // Invoice batal tidak lagi menahan deposit → totalDeposit 0, sisa tagihan dihitung ulang.
+  const grandTotal  = D(invoice.grandTotal ?? 0);
+  const paidAmount  = D(invoice.paidAmount ?? 0);
+  const outstanding = grandTotal.sub(paidAmount);
+  const cancelled = await cancelWithTransaction({
+    invoice,
+    userId,
+    invoiceData: {
+      totalDeposit:      D("0"),
+      outstandingAmount: outstanding.gt(D("0")) ? outstanding : D("0"),
+    },
+    resolveDepositStatus: resolveReleasedDepositStatus,
+  });
+
+  // Faktur yang sudah tersinkron dihapus juga di Accurate (G1-06) — jalur sama dengan deleteInvoice
+  if (invoice.accurateInvoiceId) {
+    const removed = await deleteInvoiceFromAccurate(invoice.accurateInvoiceId, "invoice cancel");
+    if (removed) await markInvoiceAccurateRemoved(id);
+  }
+
+  return cancelled;
+};
+
+// ── Status deposit setelah dilepas dari invoice (cancel / delete) ────
+// Sisa = amount − total terpakai di invoice lain.
+//   belum terpakai → PAID, terpakai sebagian → PARTIAL_USED, habis → USED.
+// Deposit REFUNDED / CANCELLED / UNPAID tidak diubah.
+const resolveReleasedDepositStatus = (deposit) => {
+  if (!["PAID", "PARTIAL_USED", "USED"].includes(deposit.status)) return null;
+  const used = (deposit.invoiceDeposits ?? []).reduce((sum, d) => sum.add(D(d.amountApplied)), D("0"));
+  if (used.lte(D("0"))) return "PAID";
+  return D(deposit.amount).sub(used).gt(D("0")) ? "PARTIAL_USED" : "USED";
+};
+
+// Hapus faktur penjualan di Accurate. Gagal tidak menghentikan proses lokal (hanya dicatat).
+// Return true bila Accurate mengonfirmasi penghapusan.
+const deleteInvoiceFromAccurate = async (accurateInvoiceId, tag) => {
+  try {
+    const resp = await accurateRequest("/sales-invoice/delete.do", {
+      method: "POST",
+      body:   { id: accurateInvoiceId },
+    });
+    if (!resp.s) {
+      logger.warn(`[${tag}] Accurate delete failed for accurateId=${accurateInvoiceId}:`, resp.d ?? resp);
+      return false;
+    }
+    logger.info(`[${tag}] Accurate delete ok accurateId=${accurateInvoiceId}`);
+    return true;
+  } catch (err) {
+    logger.warn(`[${tag}] Accurate delete error (continuing locally): ${err.message}`);
+    return false;
+  }
 };
 
 const deleteInvoice = async (id) => {
@@ -924,22 +1012,11 @@ const deleteInvoice = async (id) => {
 
   // Delete from Accurate first if it was synced
   if (invoice.accurateInvoiceId) {
-    try {
-      const resp = await accurateRequest("/sales-invoice/delete.do", {
-        method: "POST",
-        body:   { id: invoice.accurateInvoiceId },
-      });
-      if (!resp.s) {
-        logger.warn(`[invoice delete] Accurate delete failed for accurateId=${invoice.accurateInvoiceId}:`, resp.d ?? resp);
-      } else {
-        logger.info(`[invoice delete] Accurate delete ok accurateId=${invoice.accurateInvoiceId}`);
-      }
-    } catch (err) {
-      logger.warn(`[invoice delete] Accurate delete error (continuing with local delete): ${err.message}`);
-    }
+    await deleteInvoiceFromAccurate(invoice.accurateInvoiceId, "invoice delete");
   }
 
-  await deleteWithTransaction(id);
+  // Lepas deposit & hitung ulang statusnya (G1-04)
+  await deleteWithTransaction(id, { resolveDepositStatus: resolveReleasedDepositStatus });
 };
 
 // ── Daily Assignment ─────────────────────────────────────────────────

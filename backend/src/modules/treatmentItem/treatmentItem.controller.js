@@ -26,7 +26,7 @@ const createController = async (req, res, next) => {
 
 const updateController = async (req, res, next) => {
   try {
-    const result = await updateTreatmentItem(req.params.id, req.body);
+    const result = await updateTreatmentItem(req.params.id, req.body, req.params.sessionId);
     return success(res, result, "Treatment item updated");
   } catch (err) {
     next(err);
@@ -35,7 +35,7 @@ const updateController = async (req, res, next) => {
 
 const deleteController = async (req, res, next) => {
   try {
-    await deleteTreatmentItem(req.params.id);
+    await deleteTreatmentItem(req.params.id, req.params.sessionId);
     return success(res, null, "Treatment item deleted");
   } catch (err) {
     next(err);

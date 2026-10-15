@@ -151,11 +151,19 @@ const createPayment = async (
     throw new AppError("Metode pembayaran tidak aktif", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
+  // Pembayaran tidak boleh melebihi sisa tagihan (G1-08, keputusan owner) —
+  // uang kembalian ditangani kasir, tidak dicatat
+  const remaining = D(invoice.grandTotal).sub(D(invoice.totalDeposit)).sub(D(invoice.paidAmount));
+  if (D(amount).gt(remaining)) {
+    const label = Number(Prisma.Decimal.max(D("0"), remaining)).toLocaleString("id-ID");
+    throw new AppError(`Pembayaran melebihi sisa tagihan (Rp ${label})`, StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
   const paymentNo = await buildPaymentNo();
 
   const newPaidAmount = D(invoice.paidAmount).add(D(amount));
 
-  // Overpayment allowed — floor at 0
+  // Floor at 0 (pengaman — overpayment sudah ditolak di atas)
   const outstandingAmount = Prisma.Decimal.max(
     D("0"),
     D(invoice.grandTotal).sub(D(invoice.totalDeposit)).sub(newPaidAmount)
