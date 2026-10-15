@@ -12,7 +12,7 @@ jest.mock('./payment.repository', () => ({
   count:                  jest.fn(),
   findById:               jest.fn(),
   findPaymentById:        jest.fn(),
-  countToday:             jest.fn(),
+  findLastNumber:             jest.fn(),
   findInvoiceForPayment:  jest.fn(),
   findInvoiceForDelete:   jest.fn(),
   findPaymentMethodById:  jest.fn(),
@@ -83,7 +83,7 @@ describe('createPayment', () => {
   beforeEach(() => {
     repo.findInvoiceForPayment.mockResolvedValue(baseInvoice);
     repo.findPaymentMethodById.mockResolvedValue(baseMethod);
-    repo.countToday.mockResolvedValue(0);
+    repo.findLastNumber.mockResolvedValue(null);
     repo.createWithTransaction.mockResolvedValue({ id: 'pay1' });
     repo.findPaymentById.mockResolvedValue({ id: 'pay1', ...baseBody });
   });

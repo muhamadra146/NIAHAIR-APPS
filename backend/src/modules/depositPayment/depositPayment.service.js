@@ -1,4 +1,5 @@
 const { Prisma }      = require("@prisma/client");
+const { dailyPrefix, nextDailyNumber } = require("../../utils/dailyNumber");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const cloudinary      = require("../../config/cloudinary");
@@ -12,7 +13,7 @@ const {
   count,
   findById,
   findByDepositId,
-  countToday,
+  findLastNumber,
   findDepositForPayment,
   findPaymentMethodById,
   create,
@@ -26,13 +27,9 @@ const D = (v) => new Prisma.Decimal(String(v));
 // ── Payment number generator: DPAY-YYYYMMDD-XXXX ─────────────────────
 
 const buildPaymentNo = async () => {
-  const now        = new Date(Date.now() + 7 * 3600 * 1000); // WIB (UTC+7)
-  const yyyy       = now.getUTCFullYear();
-  const mm         = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const dd         = String(now.getUTCDate()).padStart(2, "0");
-  const startOfDay = new Date(Date.UTC(yyyy, now.getUTCMonth(), now.getUTCDate()) - 7 * 3600 * 1000);
-  const todayCount = await countToday(startOfDay);
-  return `DPAY-${yyyy}${mm}${dd}-${String(todayCount + 1).padStart(4, "0")}`;
+  // Nomor terbesar hari ini + 1 (bukan jumlah + 1 — bentrok setelah ada yang dihapus)
+  const prefix = dailyPrefix("DPAY");
+  return nextDailyNumber(prefix, await findLastNumber(prefix));
 };
 
 // ── List ──────────────────────────────────────────────────────────────

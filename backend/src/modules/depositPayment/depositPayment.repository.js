@@ -57,8 +57,15 @@ const findById = (id) =>
 const findByDepositId = (depositId) =>
   prisma.depositPayment.findMany({ where: { depositId }, select: SELECT, orderBy: { createdAt: "asc" } });
 
-const countToday = (startOfDay) =>
-  prisma.depositPayment.count({ where: { createdAt: { gte: startOfDay } } });
+/** Nomor terbesar berawalan prefix (mis. "PAY-20261015-") — dasar nomor berikutnya */
+const findLastNumber = async (prefix) => {
+  const row = await prisma.depositPayment.findFirst({
+    where:   { paymentNo: { startsWith: prefix } },
+    orderBy: { paymentNo: "desc" },
+    select:  { paymentNo: true },
+  });
+  return row?.paymentNo ?? null;
+};
 
 const findDepositForPayment = (id) =>
   prisma.deposit.findUnique({
@@ -100,7 +107,7 @@ module.exports = {
   count,
   findById,
   findByDepositId,
-  countToday,
+  findLastNumber,
   findDepositForPayment,
   findPaymentMethodById,
   create,

@@ -55,7 +55,7 @@ describe('createAppointment', () => {
   beforeEach(() => {
     repo.findCustomerById.mockResolvedValue({ id: 'c1' });
     repo.findBranchById.mockResolvedValue({ id: 'b1' });
-    repo.countToday.mockResolvedValue(0);
+    repo.findLastNumber.mockResolvedValue(null);
     repo.createWithTransaction.mockResolvedValue(APPOINTMENT);
   });
 

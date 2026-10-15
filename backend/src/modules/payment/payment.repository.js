@@ -24,8 +24,15 @@ const count = (where) => prisma.payment.count({ where });
 const findById = (id) =>
   prisma.payment.findUnique({ where: { id }, include: INCLUDE });
 
-const countToday = (startOfDay) =>
-  prisma.payment.count({ where: { createdAt: { gte: startOfDay } } });
+/** Nomor terbesar berawalan prefix (mis. "PAY-20261015-") — dasar nomor berikutnya */
+const findLastNumber = async (prefix) => {
+  const row = await prisma.payment.findFirst({
+    where:   { paymentNo: { startsWith: prefix } },
+    orderBy: { paymentNo: "desc" },
+    select:  { paymentNo: true },
+  });
+  return row?.paymentNo ?? null;
+};
 
 // ── Lookup helpers ────────────────────────────────────────────────────
 
@@ -214,7 +221,7 @@ module.exports = {
   count,
   findById,
   findPaymentById,
-  countToday,
+  findLastNumber,
   findInvoiceForPayment,
   findInvoiceForDelete,
   deleteWithTransaction,

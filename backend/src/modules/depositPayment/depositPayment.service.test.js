@@ -60,7 +60,7 @@ describe('createDepositPayment', () => {
   beforeEach(() => {
     repo.findDepositForPayment.mockResolvedValue(DEPOSIT_UNPAID);
     repo.findPaymentMethodById.mockResolvedValue(PAYMENT_METHOD_ACTIVE);
-    repo.countToday.mockResolvedValue(0);
+    repo.findLastNumber.mockResolvedValue(null);
     repo.create.mockResolvedValue(DP);
     repo.markDepositPaid.mockResolvedValue(undefined);
     repo.findById.mockResolvedValue(DP);

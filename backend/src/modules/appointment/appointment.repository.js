@@ -46,8 +46,15 @@ const count = (where) => prisma.appointment.count({ where });
 const findById = (id) =>
   prisma.appointment.findUnique({ where: { id }, include: INCLUDE });
 
-const countToday = (startOfDay) =>
-  prisma.appointment.count({ where: { createdAt: { gte: startOfDay } } });
+/** Nomor terbesar berawalan prefix (mis. "PAY-20261015-") — dasar nomor berikutnya */
+const findLastNumber = async (prefix) => {
+  const row = await prisma.appointment.findFirst({
+    where:   { bookingNo: { startsWith: prefix } },
+    orderBy: { bookingNo: "desc" },
+    select:  { bookingNo: true },
+  });
+  return row?.bookingNo ?? null;
+};
 
 // ── Lookup helpers ────────────────────────────────────────────────────
 
@@ -208,7 +215,7 @@ module.exports = {
   findAll,
   count,
   findById,
-  countToday,
+  findLastNumber,
   findCustomerById,
   findBranchById,
   createWithTransaction,
