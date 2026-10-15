@@ -199,7 +199,7 @@ function UserTab() {
     try {
       if (editUser) {
         const v = values as UpdateUserFormValues;
-        await updateMut.mutateAsync({ email: v.email || undefined, userRoleId: v.userRoleId });
+        await updateMut.mutateAsync({ username: v.username || undefined, email: v.email || undefined, roleId: v.userRoleId });
       } else {
         const v = values as CreateUserFormValues;
         await createMut.mutateAsync(v);

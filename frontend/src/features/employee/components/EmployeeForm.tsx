@@ -251,6 +251,7 @@ function EmployeeFormFields({
       {/* Email */}
       <Field label="Email" error={errs.email?.message} full>
         <Input {...register("email")} type="email" placeholder="email@contoh.com" />
+        <p className="mt-1 text-xs text-muted-foreground">Satu email per orang: bila karyawan punya akun, email login ikut berubah (dipakai untuk login, notifikasi, dan reset password).</p>
       </Field>
 
       {/* Tanggal Masuk */}

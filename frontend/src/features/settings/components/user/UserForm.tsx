@@ -88,6 +88,8 @@ export function UserForm({ open, onOpenChange, onSubmit, isPending, defaultValue
     setEmpSearch(emp.name);
     setEmpDropOpen(false);
     createForm.setValue("employeeId", emp.id);
+    // Satu email per orang: pakai email karyawan bila sudah ada
+    if (emp.email && !createForm.getValues("email")) createForm.setValue("email", emp.email);
   }
 
   const { errors: createErrors } = createForm.formState;
@@ -180,6 +182,7 @@ export function UserForm({ open, onOpenChange, onSubmit, isPending, defaultValue
                   ? <Input type="email" {...editForm.register("email")} placeholder="email@example.com" />
                   : <Input type="email" {...createForm.register("email")} placeholder="email@example.com" />
                 }
+                <p className="text-xs text-muted-foreground">Dipakai untuk login, notifikasi email, dan reset password. Otomatis sama dengan email di data karyawan.</p>
                 {(isEdit ? editErrors.email : createErrors.email) && (
                   <p className="text-xs text-destructive">
                     {(isEdit ? editErrors.email : createErrors.email)?.message}

@@ -293,7 +293,8 @@ export interface CreateEmployeeRoleInput { code: string; name: string }
 export type UpdateEmployeeRoleInput = Partial<CreateEmployeeRoleInput> & { isActive?: boolean };
 
 export interface CreateUserInput { username: string; employeeId: string; email: string; password: string; userRoleId: string }
-export interface UpdateUserInput { username?: string; email?: string; userRoleId?: string }
+// Backend menerima roleId (bukan userRoleId); email ikut tersimpan di data karyawan
+export interface UpdateUserInput { username?: string; email?: string; roleId?: string }
 export interface ResetPasswordInput { password: string }
 
 export interface CreateBranchInput { code: string; name: string; address?: string; city?: string; province?: string; phone?: string; latitude?: number | null; longitude?: number | null; radiusMeters?: number }
