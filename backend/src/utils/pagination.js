@@ -10,11 +10,10 @@ const paginate = (page, limit) => {
   };
 };
 
-const paginationMeta = (total, page, limit) => ({
-  total,
-  page,
-  limit,
-  totalPages: Math.ceil(total / limit),
-});
+// page/limit dinormalisasi sama seperti paginate() — "abc"/0 tidak menghasilkan null/Infinity
+const paginationMeta = (total, page, limit) => {
+  const { page: p, limit: l } = paginate(page, limit);
+  return { total, page: p, limit: l, totalPages: Math.ceil(total / l) };
+};
 
 module.exports = { paginate, paginationMeta };

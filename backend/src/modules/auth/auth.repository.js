@@ -109,7 +109,15 @@ const deleteAllUserRefreshTokens = (userId) =>
 const deleteExpiredRefreshTokens = () =>
   prisma.refreshToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
 
+/** Status aktif akun & karyawannya — dicek setiap request terautentikasi */
+const findActiveStatus = (id) =>
+  prisma.user.findUnique({
+    where:  { id },
+    select: { isActive: true, employee: { select: { isActive: true } } },
+  });
+
 module.exports = {
+  findActiveStatus,
   findUserByEmail,
   findUserByUsername,
   findUserById,

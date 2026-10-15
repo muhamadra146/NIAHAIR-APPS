@@ -1,8 +1,9 @@
 const jwt = require("jsonwebtoken");
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../common/errors/AppError");
+const { findActiveStatus } = require("../modules/auth/auth.repository");
 
-const authenticate = (req, res, next) => {
+const authenticate = async (req, res, next) => {
   const header = req.headers.authorization;
 
   if (!header || !header.startsWith("Bearer ")) {
@@ -11,13 +12,26 @@ const authenticate = (req, res, next) => {
 
   const token = header.slice(7);
 
+  let payload;
   try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
-    next();
+    payload = jwt.verify(token, process.env.JWT_SECRET);
   } catch (err) {
-    const message = err.name === "TokenExpiredError" ? "Token expired" : "Invalid token";
-    next(new AppError(message, StatusCodes.UNAUTHORIZED));
+    const message = err.name === "TokenExpiredError" ? "Sesi berakhir, silakan login lagi" : "Token tidak valid";
+    return next(new AppError(message, StatusCodes.UNAUTHORIZED));
   }
+
+  // Akun atau karyawan yang dinonaktifkan langsung tidak bisa dipakai, walau token belum kedaluwarsa
+  try {
+    const status = await findActiveStatus(payload.id);
+    if (!status || !status.isActive || status.employee?.isActive === false) {
+      return next(new AppError("Akun tidak aktif", StatusCodes.UNAUTHORIZED));
+    }
+  } catch (err) {
+    return next(err);
+  }
+
+  req.user = payload;
+  next();
 };
 
 module.exports = authenticate;

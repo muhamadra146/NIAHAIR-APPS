@@ -1,3 +1,5 @@
+const { StatusCodes } = require("http-status-codes");
+const AppError = require("../../common/errors/AppError");
 const { success, created } = require("../../common/responses/apiResponse");
 const { listPhotos, addPhoto, deletePhoto } = require("./appointmentPhoto.service");
 
@@ -10,7 +12,7 @@ const listController = async (req, res, next) => {
 
 const uploadController = async (req, res, next) => {
   try {
-    if (!req.file) throw new Error("No file uploaded");
+    if (!req.file) throw new AppError("File foto wajib diunggah", StatusCodes.BAD_REQUEST);
 
     const { type = "REFERENCE", notes } = req.body;
     const photo = await addPhoto({

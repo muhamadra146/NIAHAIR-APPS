@@ -1,4 +1,5 @@
 const multer = require("multer");
+const AppError = require("../common/errors/AppError");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../config/cloudinary");
 
@@ -20,7 +21,7 @@ const upload = multer({
     if (ALLOWED_IMAGE_MIMES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error(`Tipe file tidak diizinkan: ${file.mimetype}. Hanya JPG, PNG, WEBP, HEIC.`));
+      cb(new AppError(`Tipe file tidak diizinkan: ${file.mimetype}. Hanya JPG, PNG, WEBP, HEIC.`, 400));
     }
   },
 });

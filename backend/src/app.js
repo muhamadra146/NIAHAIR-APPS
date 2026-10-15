@@ -91,6 +91,8 @@ app.use(cors({
 app.use(helmet());
 app.use(morgan(isProd ? "combined" : "dev"));
 app.use(express.json());
+// Express 5 membiarkan req.body undefined untuk request tanpa body — samakan dengan objek kosong
+app.use((req, _res, next) => { if (req.body === undefined) req.body = {}; next(); });
 
 
 app.get("/", (req, res) => {
