@@ -1,4 +1,6 @@
-const { findAll, upsertMany } = require("./payrollGlAccount.repository");
+const { StatusCodes } = require("http-status-codes");
+const AppError = require("../../common/errors/AppError");
+const { findAll, upsertMany, seedMissing } = require("./payrollGlAccount.repository");
 
 /**
  * Default mapping definitions — category, label, type.
@@ -22,10 +24,9 @@ const DEFAULT_MAPPINGS = [
  * seed it first so the frontend always sees all 8 rows.
  */
 const getPayrollGlAccounts = async () => {
-  // Seed defaults (upsert won't overwrite existing glAccountId)
-  await upsertMany(
-    DEFAULT_MAPPINGS.map((m) => ({ ...m, glAccountId: null }))
-  );
+  // Buat kategori yang belum ada saja. Dulu memakai upsert yang MENIMPA glAccountId → setiap kali
+  // halaman Akun Gaji dibuka, semua pemetaan terhapus dan jurnal gaji gagal sinkron (QA G5-01).
+  await seedMissing(DEFAULT_MAPPINGS);
   return findAll();
 };
 
@@ -34,9 +35,12 @@ const getPayrollGlAccounts = async () => {
  * body.mappings: Array<{ category: string; glAccountId: string | null }>
  */
 const savePayrollGlAccounts = async (mappings) => {
+  if (!Array.isArray(mappings) || mappings.some((m) => !m || typeof m !== "object")) {
+    throw new AppError("Format pemetaan akun gaji tidak valid", StatusCodes.BAD_REQUEST);
+  }
   const items = mappings.map(({ category, glAccountId }) => {
     const def = DEFAULT_MAPPINGS.find((d) => d.category === category);
-    if (!def) throw new Error(`Unknown payroll GL category: ${category}`);
+    if (!def) throw new AppError(`Kategori akun gaji tidak dikenal: ${category}`, StatusCodes.BAD_REQUEST);
     return { category, label: def.label, type: def.type, glAccountId: glAccountId || null };
   });
 

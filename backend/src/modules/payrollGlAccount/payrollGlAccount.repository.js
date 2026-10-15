@@ -42,4 +42,11 @@ const upsertMany = (items) =>
     )
   );
 
-module.exports = { findAll, findByCategory, upsert, upsertMany };
+/** Buat kategori yang belum ada — TIDAK menimpa pemetaan yang sudah diisi */
+const seedMissing = (items) =>
+  prisma.payrollGlAccount.createMany({
+    data: items.map(({ category, label, type }) => ({ category, label, type, glAccountId: null })),
+    skipDuplicates: true,
+  });
+
+module.exports = { findAll, findByCategory, upsert, upsertMany, seedMissing };
