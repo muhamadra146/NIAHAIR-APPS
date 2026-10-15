@@ -1,4 +1,5 @@
-const { findPending, markProcessing, markSuccess, markFailed } = require("../modules/syncQueue/syncQueue.repository");
+const { findPending, claimPending, markSkipped, entityExists, markSuccess, markFailed, reclaimStaleProcessing } = require("../modules/syncQueue/syncQueue.repository");
+const { pushItemToAccurate }      = require("../modules/item/item.push.service");
 const { pushCustomerToAccurate }  = require("../modules/customer/customer.push.service");
 const { syncDepositToAccurate }   = require("../modules/deposit/deposit.sync.service");
 const { syncInvoiceToAccurate }   = require("../modules/invoice/invoice.sync.service");
@@ -24,7 +25,11 @@ const HANDLERS = {
   // BRANCH sync is a bulk pull triggered via POST /branches/sync-accurate — not per-item queued
   BRANCH:     async (_job) => { /* bulk pull — handled by syncFromAccurateController */ },
   WAREHOUSE:  async (job) => { /* Phase 10G.2 */ },
-  ITEM:       async (job) => { /* Phase 10G.2 */ },
+  ITEM: async (job) => {
+    if (job.direction === "APP_TO_ACCURATE") {
+      await pushItemToAccurate(job.entityId);
+    }
+  },
   UNIT:       async (job) => { /* Phase 10G.2 */ },
   ITEM_UNIT:  async (job) => { /* Phase 10G.2 */ },
   ITEM_PRICE: async (job) => { /* Phase 10G.2 */ },
@@ -87,6 +92,10 @@ const processSyncQueue = async () => {
   running = true;
 
   try {
+    // Job PROCESSING yang macet (worker mati di tengah proses) → kembali ke PENDING (G5-03)
+    const reclaimed = await reclaimStaleProcessing();
+    if (reclaimed > 0) console.log(`[SyncWorker] reclaimed ${reclaimed} stale PROCESSING job(s)`);
+
     const jobs = await findPending(10);
 
     if (jobs.length === 0) {
@@ -101,10 +110,22 @@ const processSyncQueue = async () => {
     for (const job of jobs) {
       const label = `${job.entityType} ${job.id}`;
 
-      await markProcessing(job.id);
+      // Klaim atomik — jika runner lain (inline / interval) sudah mengambil job ini, lewati
+      const claimed = await claimPending(job.id);
+      if (!claimed) {
+        console.log(`[SyncWorker] ${label} already claimed — skipped`);
+        continue;
+      }
       console.log(`[SyncWorker] ${label} processing`);
 
       try {
+        // Data sumber sudah dihapus → selesaikan job, jangan retry sampai FAILED
+        if (await entityExists(job.entityType, job.entityId) === false) {
+          await markSkipped(job.id, "Dilewati: data sumber sudah dihapus");
+          console.log(`[SyncWorker] ${label} skipped — entity deleted`);
+          continue;
+        }
+
         const handler = HANDLERS[job.entityType];
         if (!handler) {
           throw new Error(`No handler registered for entityType: ${job.entityType}`);

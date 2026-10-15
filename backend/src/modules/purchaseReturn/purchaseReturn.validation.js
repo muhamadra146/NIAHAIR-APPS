@@ -2,7 +2,7 @@
 
 const {
   object, string, number, array,
-  pipe, minLength, minValue, maxValue, maxLength, optional, minSize,
+  pipe, minLength, minValue, maxValue, maxLength, optional,
   picklist,
 } = require('valibot');
 
@@ -24,7 +24,7 @@ const createPurchaseReturnSchema = object({
   notes:             optional(pipe(string(), maxLength(1000))),
   items:             pipe(
     array(purchaseReturnItemSchema),
-    minSize(1, "Minimal 1 item harus ditambahkan")
+    minLength(1, "Minimal 1 item harus ditambahkan")
   ),
 });
 

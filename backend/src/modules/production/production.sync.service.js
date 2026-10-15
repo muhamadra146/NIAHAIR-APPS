@@ -41,6 +41,9 @@ const extractAccurateError = (response) => {
   return JSON.stringify(response);
 };
 
+// Error validasi sync → 422 dengan pesan jelas (bukan 500)
+const fail = (message) => new AppError(message, StatusCodes.UNPROCESSABLE_ENTITY);
+
 const ACCURATE_PEKERJAAN_SAVE    = "/job-order/save.do";
 const ACCURATE_PENYELESAIAN_SAVE = "/roll-over/save.do";
 const ACCURATE_PEKERJAAN_DELETE    = "/job-order/delete.do";
@@ -55,7 +58,7 @@ const syncPekerjaanToAccurate = async (order, accurateBranchId) => {
 
   // Validasi bahan baku (materials)
   if (!order.materials?.length) {
-    throw new Error(
+    throw fail(
       "Production order tidak memiliki bahan baku untuk Pekerjaan Pesanan. " +
       "Tambahkan bahan baku (bukan barang jadi) di production order.",
     );
@@ -63,20 +66,20 @@ const syncPekerjaanToAccurate = async (order, accurateBranchId) => {
 
   for (const mat of order.materials) {
     if (!mat.item?.accurateItemId) {
-      throw new Error(
+      throw fail(
         `Bahan baku "${mat.item?.itemCode ?? mat.item?.name}" belum terhubung ke Accurate. ` +
         "Sync item terlebih dahulu.",
       );
     }
     if (!mat.unit?.accurateUnitId) {
-      throw new Error(
+      throw fail(
         `Satuan bahan baku "${mat.item?.itemCode ?? mat.item?.name}" belum terhubung ke Accurate.`,
       );
     }
   }
 
   if (!order.warehouse?.accurateWarehouseId) {
-    throw new Error(
+    throw fail(
       `Gudang "${order.warehouse?.name}" belum terhubung ke Accurate. ` +
       "Hubungkan gudang terlebih dahulu.",
     );
@@ -87,7 +90,7 @@ const syncPekerjaanToAccurate = async (order, accurateBranchId) => {
   const itemIds  = new Set((order.items ?? []).map((i) => i.item?.accurateItemId));
   const overlap  = (order.materials ?? []).filter((m) => itemIds.has(m.item?.accurateItemId));
   if (overlap.length > 0) {
-    throw new Error(
+    throw fail(
       `Bahan baku dan barang jadi tidak boleh item yang sama di Accurate. ` +
       `Item bentrok: ${overlap.map((m) => m.item?.itemCode ?? m.item?.name).join(", ")}. ` +
       "Perbaiki data production order terlebih dahulu.",
@@ -130,20 +133,20 @@ const syncPenyelesaianToAccurate = async (order, accuratePekerjaanId, accurateBr
   // Validasi barang jadi (items)
   for (const pItem of order.items) {
     if (!pItem.item?.accurateItemId) {
-      throw new Error(
+      throw fail(
         `Barang jadi "${pItem.item?.itemCode ?? pItem.item?.name}" belum terhubung ke Accurate. ` +
         "Sync item terlebih dahulu.",
       );
     }
     if (!pItem.unit?.accurateUnitId) {
-      throw new Error(
+      throw fail(
         `Satuan barang jadi "${pItem.item?.itemCode ?? pItem.item?.name}" belum terhubung ke Accurate.`,
       );
     }
   }
 
   if (!order.warehouse?.accurateWarehouseId) {
-    throw new Error(
+    throw fail(
       `Gudang produksi "${order.warehouse?.name}" belum terhubung ke Accurate.`,
     );
   }
@@ -177,31 +180,31 @@ const syncPenyelesaianToAccurate = async (order, accuratePekerjaanId, accurateBr
 // ── Entry point — dipanggil dari service (manual + auto) ─────────────────────
 const syncProductionToAccurate = async (productionOrderId) => {
   const order = await findProductionForSync(productionOrderId);
-  if (!order) throw new Error(`Production order tidak ditemukan: ${productionOrderId}`);
+  if (!order) throw new AppError("Production order tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (order.status !== "COMPLETED") {
-    throw new Error(
+    throw fail(
       `Production order harus berstatus COMPLETED sebelum sync ke Accurate. ` +
       `Status saat ini: ${order.status}`,
     );
   }
 
   if (!order.warehouse?.accurateWarehouseId) {
-    throw new Error(
+    throw fail(
       `Gudang "${order.warehouse?.name}" belum terhubung ke Accurate. ` +
       "Hubungkan gudang terlebih dahulu.",
     );
   }
 
   if (!order.materials?.length) {
-    throw new Error(
+    throw fail(
       "Production order tidak memiliki bahan baku. " +
       "Tambahkan bahan baku (bukan barang jadi) sebelum sync.",
     );
   }
 
   if (!order.items?.length) {
-    throw new Error("Production order tidak memiliki barang jadi untuk di-sync.");
+    throw fail("Production order tidak memiliki barang jadi untuk di-sync.");
   }
 
   // Validasi alokasi biaya: setiap item harus > 0 DAN total harus = 100

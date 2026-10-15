@@ -22,7 +22,8 @@ router.post("/sync/accurate",          authenticate, authorize(ROLES.SUPER_ADMIN
 router.get( "/debug/accurate-detail",  authenticate, authorize(ROLES.SUPER_ADMIN), debugAccurateItemController);
 
 // 2. Special parameter routes second
-router.post("/:id/sync/accurate",       authenticate, syncToAccurateController);
+// Push item ke Accurate — hanya peran pengelola master item (G4-11)
+router.post("/:id/sync/accurate",       authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.INVENTORY), syncToAccurateController);
 router.get( "/:id/service-materials",   authenticate, getServiceMaterialsController);
 
 // 3. CRUD routes last

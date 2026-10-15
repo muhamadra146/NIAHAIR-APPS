@@ -180,6 +180,18 @@ const post = async (opnameId, postedByEmployeeId) => {
   }
 
   return prisma.$transaction(async (tx) => {
+    // Guard race condition: tandai POSTED bersyarat status belum diposting.
+    // Request paralel kedua mendapat count = 0 → 409, stok tidak disesuaikan dua kali.
+    const { count } = await tx.stockOpname.updateMany({
+      where: { id: opnameId, status: { in: ["DRAFT", "IN_PROGRESS"] } },
+      data: {
+        status:             "POSTED",
+        postedByEmployeeId: postedByEmployeeId ?? null,
+        postedAt:           new Date(),
+      },
+    });
+    if (count === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
+
     let adjustedCount = 0; // hanya item yang benar-benar ada selisih
 
     for (const item of opname.items) {
@@ -252,16 +264,6 @@ const post = async (opnameId, postedByEmployeeId) => {
       adjustedCount++;
     }
 
-    // Tandai opname sebagai POSTED
-    await tx.stockOpname.update({
-      where: { id: opnameId },
-      data: {
-        status:             "POSTED",
-        postedByEmployeeId: postedByEmployeeId ?? null,
-        postedAt:           new Date(),
-      },
-    });
-
     return { adjustedCount, opnameNo: opname.opnameNo };
   });
 };
@@ -277,10 +279,12 @@ const cancel = async (opnameId) => {
     throw new AppError("Opname sudah dibatalkan", StatusCodes.CONFLICT);
   }
 
-  await prisma.stockOpname.update({
-    where: { id: opnameId },
+  // Bersyarat status belum diposting — cegah batal bersamaan dengan posting
+  const { count } = await prisma.stockOpname.updateMany({
+    where: { id: opnameId, status: { in: ["DRAFT", "IN_PROGRESS"] } },
     data:  { status: "CANCELLED" },
   });
+  if (count === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
 
   return { cancelled: true };
 };

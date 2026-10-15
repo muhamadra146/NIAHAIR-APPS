@@ -42,6 +42,47 @@ const markProcessing = (id) =>
     data:  { status: "PROCESSING", startedAt: new Date() },
   });
 
+// Klaim job secara atomik: PENDING → PROCESSING bersyarat.
+// Return true jika berhasil diklaim; false jika runner lain sudah mengambilnya (G4-19).
+const claimPending = async (id) => {
+  const { count } = await prisma.syncQueue.updateMany({
+    where: { id, status: "PENDING" },
+    data:  { status: "PROCESSING", startedAt: new Date() },
+  });
+  return count === 1;
+};
+
+// Job untuk data yang sudah dihapus — selesai tanpa diproses (G1-30).
+// Enum tidak punya SKIPPED, jadi ditandai SUCCESS + catatan di errorMessage.
+const markSkipped = (id, reason) =>
+  prisma.syncQueue.update({
+    where: { id },
+    data:  { status: "SUCCESS", errorMessage: String(reason).slice(0, 1000), processedAt: new Date() },
+  });
+
+// Model Prisma sumber per entityType — untuk cek data masih ada
+const ENTITY_MODEL = {
+  CUSTOMER:               "customer",
+  ITEM:                   "item",
+  DEPOSIT:                "deposit",
+  INVOICE:                "invoice",
+  PAYMENT:                "payment",
+  DEPOSIT_PAYMENT:        "depositPayment",
+  STOCK_TRANSFER:         "stockTransfer",
+  STOCK_TRANSFER_RECEIVE: "stockTransfer",
+  PURCHASE_INVOICE:       "purchaseInvoice",
+  PURCHASE_RETURN:        "purchaseReturn",
+  PAYROLL:                "payroll",
+};
+
+// true/false jika entityType dikenal; null jika tidak bisa dicek
+const entityExists = async (entityType, entityId) => {
+  const model = ENTITY_MODEL[entityType];
+  if (!model || !entityId) return null;
+  const row = await prisma[model].findUnique({ where: { id: entityId }, select: { id: true } });
+  return !!row;
+};
+
 const markSuccess = (id) =>
   prisma.syncQueue.update({
     where: { id },
@@ -76,11 +117,33 @@ const markFailed = async (id, errorMessage) => {
   });
 };
 
+// ── Job PROCESSING yang macet (worker mati di tengah proses, mis. nodemon restart) ──
+// Dianggap macet jika tidak diperbarui lebih dari STALE_PROCESSING_MINUTES (G5-03).
+const STALE_PROCESSING_MINUTES = 10;
+const staleCutoff = () => new Date(Date.now() - STALE_PROCESSING_MINUTES * 60 * 1000);
+
+// Kembalikan job PROCESSING yang macet ke PENDING agar diambil worker lagi
+const reclaimStaleProcessing = async () => {
+  const { count } = await prisma.syncQueue.updateMany({
+    where: { status: "PROCESSING", updatedAt: { lt: staleCutoff() } },
+    data:  { status: "PENDING", startedAt: null },
+  });
+  return count;
+};
+
 // Manual retry reset — resets full execution state so findPending picks it up again.
 // attempt resets to 0 so the job gets maxAttempt fresh retries.
-const retry = (id) =>
-  prisma.syncQueue.update({
-    where: { id },
+// Bersyarat: hanya FAILED atau PROCESSING yang macet (G5-04) — SUCCESS tidak boleh di-reset
+// karena akan push ulang ke Accurate (duplikat). Return true jika berhasil.
+const retry = async (id) => {
+  const { count } = await prisma.syncQueue.updateMany({
+    where: {
+      id,
+      OR: [
+        { status: "FAILED" },
+        { status: "PROCESSING", updatedAt: { lt: staleCutoff() } },
+      ],
+    },
     data: {
       status:       "PENDING",
       attempt:      0,
@@ -89,9 +152,13 @@ const retry = (id) =>
       processedAt:  null,
     },
   });
+  return count === 1;
+};
 
 module.exports = {
   create, findPending, findById, findAll, count,
   findExistingPending,
-  markProcessing, markSuccess, markFailed, retry,
+  markProcessing, claimPending, markSkipped, entityExists,
+  markSuccess, markFailed, retry,
+  reclaimStaleProcessing, STALE_PROCESSING_MINUTES,
 };

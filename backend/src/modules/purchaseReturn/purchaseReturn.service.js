@@ -10,7 +10,62 @@ const { createSyncJob }      = require("../syncQueue/syncQueue.service");
 const { validatePeriodOpen } = require("../inventory/inventory.period.service");
 const { toDateOnly }         = require("../../utils/date");
 
+const { toBaseQty }          = require("../inventory/inventory.conversion");
+
 const D = (v) => new Prisma.Decimal(String(v));
+
+// ── Subtotal baris = qty × harga − diskon% (sama dengan faktur pembelian, G4-18) ──
+const lineSubtotal = (qty, price, discountPct) => {
+  const gross = D(qty).mul(D(price));
+  return gross.sub(gross.mul(D(discountPct ?? 0)).div(D(100)));
+};
+
+// ── Validasi qty retur vs sisa yang bisa diretur (G4-08) ─────────────────────
+// Dibandingkan dalam satuan dasar per item:
+//   sisa = qty di faktur − qty retur POSTED sebelumnya (kecuali excludeReturnId).
+// client = prisma atau tx.
+const assertReturnable = async (client, invoiceId, invoiceItems, returnItems, excludeReturnId = null) => {
+  const sumBase = async (rows) => {
+    const map = new Map();
+    for (const r of rows) {
+      const base = await toBaseQty(client, r.itemId, r.unitId, r.qty);
+      map.set(r.itemId, (map.get(r.itemId) ?? D(0)).add(base));
+    }
+    return map;
+  };
+
+  const postedRows = await client.purchaseReturnItem.findMany({
+    where: {
+      purchaseReturn: {
+        purchaseInvoiceId: invoiceId,
+        status:            "POSTED",
+        ...(excludeReturnId ? { id: { not: excludeReturnId } } : {}),
+      },
+    },
+    select: { itemId: true, unitId: true, qty: true },
+  });
+
+  const purchased = await sumBase(invoiceItems);
+  const returned  = await sumBase(postedRows);
+  const requested = await sumBase(returnItems);
+
+  for (const [itemId, qty] of requested) {
+    const name = returnItems.find((r) => r.itemId === itemId)?.item?.name;
+    if (!purchased.has(itemId)) {
+      throw new AppError(
+        `Item ${name ? `"${name}" ` : ""}tidak ada di faktur pembelian ini`,
+        StatusCodes.UNPROCESSABLE_ENTITY,
+      );
+    }
+    const remaining = purchased.get(itemId).sub(returned.get(itemId) ?? D(0));
+    if (qty.greaterThan(remaining)) {
+      throw new AppError(
+        `Qty retur ${name ? `"${name}" ` : ""}melebihi sisa yang bisa diretur (sisa ${remaining} satuan dasar)`,
+        StatusCodes.UNPROCESSABLE_ENTITY,
+      );
+    }
+  }
+};
 
 // ── Auto-number: PR-YYYYMMDD-XXXX ────────────────────────────────────────────
 const buildReturnNo = async () => {
@@ -64,20 +119,23 @@ const createPurchaseReturn = async (body, createdByEmployeeId) => {
 
   await validatePeriodOpen(returnDate);
 
+  // Item harus ada di faktur dan qty tidak melebihi sisa yang bisa diretur
+  await assertReturnable(prisma, purchaseInvoiceId, invoice.items, items);
+
   const returnNo = await buildReturnNo();
 
-  // Hitung subtotal dan grandTotal dari items
+  // Hitung subtotal dan grandTotal dari items (setelah diskon baris)
   let subtotal   = D(0);
   const mappedItems = items.map((item) => {
-    const lineSubtotal = D(item.qty).mul(D(item.price));
-    subtotal = subtotal.add(lineSubtotal);
+    const netSubtotal = lineSubtotal(item.qty, item.price, item.discount);
+    subtotal = subtotal.add(netSubtotal);
     return {
       itemId:   item.itemId,
       unitId:   item.unitId,
       qty:      D(item.qty),
       price:    D(item.price),
       discount: D(item.discount ?? 0),
-      subtotal: lineSubtotal,
+      subtotal: netSubtotal,
       notes:    item.notes || undefined,
     };
   });
@@ -121,14 +179,32 @@ const postPurchaseReturn = async (id, employeeId) => {
     throw new AppError("Hanya retur DRAFT yang dapat di-posting", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
-  const invoice = await prisma.purchaseInvoice.findUnique({
-    where:  { id: ret.purchaseInvoiceId },
-    select: { warehouseId: true },
-  });
-
   await validatePeriodOpen(ret.returnDate);
 
   await prisma.$transaction(async (tx) => {
+    // Guard race condition: DRAFT → POSTED bersyarat. Request paralel kedua → count 0 → 409.
+    const { count } = await tx.purchaseReturn.updateMany({
+      where: { id, status: "DRAFT" },
+      data:  { status: "POSTED" },
+    });
+    if (count === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
+
+    // Kunci baris faktur induk (serialisasi dengan retur lain & batal faktur), harus masih POSTED
+    const [invoice] = await tx.$queryRawUnsafe(
+      `SELECT "warehouseId", status FROM "purchase_invoices" WHERE id = $1 FOR UPDATE`,
+      ret.purchaseInvoiceId,
+    );
+    if (!invoice || invoice.status !== "POSTED") {
+      throw new AppError("Faktur pembelian induk sudah tidak POSTED", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+
+    // Cek ulang sisa qty yang bisa diretur di dalam transaksi (retur lain mungkin sudah diposting)
+    const invoiceItems = await tx.purchaseInvoiceItem.findMany({
+      where:  { purchaseInvoiceId: ret.purchaseInvoiceId },
+      select: { itemId: true, unitId: true, qty: true },
+    });
+    await assertReturnable(tx, ret.purchaseInvoiceId, invoiceItems, ret.items, id);
+
     for (const item of ret.items) {
       if (!item.item || item.item.itemType !== "INVENTORY") continue;
 
@@ -139,7 +215,8 @@ const postPurchaseReturn = async (id, employeeId) => {
       if (!inventory) continue; // tidak mungkin retur barang yang belum ada di stok
 
       const qtyBefore = D(inventory.qtyOnHand);
-      const qtyChange = D(item.qty).negated(); // retur = keluar dari gudang
+      // retur = keluar dari gudang, dalam satuan dasar (G4-05)
+      const qtyChange = (await toBaseQty(tx, item.itemId, item.unitId, item.qty)).negated();
       const qtyAfter  = qtyBefore.add(qtyChange);
 
       // Stok tidak boleh negatif setelah retur
@@ -147,7 +224,7 @@ const postPurchaseReturn = async (id, employeeId) => {
         throw new AppError(
           `Stok ${item.item.name} tidak cukup untuk diretur. ` +
           `Stok saat ini: ${Number(qtyBefore).toLocaleString("id-ID")}, ` +
-          `qty retur: ${Number(item.qty).toLocaleString("id-ID")}`,
+          `qty retur: ${Number(qtyChange.abs()).toLocaleString("id-ID")}`,
           StatusCodes.UNPROCESSABLE_ENTITY
         );
       }
@@ -185,8 +262,6 @@ const postPurchaseReturn = async (id, employeeId) => {
         },
       });
     }
-
-    await tx.purchaseReturn.update({ where: { id }, data: { status: "POSTED" } });
   });
 
   // Enqueue Accurate sync — worker retry + tampil di monitor sync
@@ -199,23 +274,32 @@ const postPurchaseReturn = async (id, employeeId) => {
 const cancelPurchaseReturn = async (id) => {
   const ret = await repo.findById(id);
   if (!ret) throw new AppError("Retur pembelian tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (ret.status === "CANCELLED") {
+    throw new AppError("Retur sudah dibatalkan", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
   if (ret.status !== "DRAFT") {
     throw new AppError(
       "Hanya retur DRAFT yang dapat dibatalkan. Retur POSTED tidak bisa dibatalkan.",
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
-  return repo.updateStatus(id, "CANCELLED");
+  // Bersyarat status DRAFT — cegah batal bersamaan dengan posting
+  const { count } = await prisma.purchaseReturn.updateMany({ where: { id, status: "DRAFT" }, data: { status: "CANCELLED" } });
+  if (count === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
+  return repo.findById(id);
 };
 
-// ── Delete (DRAFT only) ───────────────────────────────────────────────────────
+// ── Delete (DRAFT / CANCELLED) ────────────────────────────────────────────────
 const deletePurchaseReturn = async (id) => {
   const ret = await repo.findById(id);
   if (!ret) throw new AppError("Retur pembelian tidak ditemukan", StatusCodes.NOT_FOUND);
-  if (ret.status !== "DRAFT") {
-    throw new AppError("Hanya retur DRAFT yang dapat dihapus", StatusCodes.UNPROCESSABLE_ENTITY);
+  if (ret.status !== "DRAFT" && ret.status !== "CANCELLED") {
+    throw new AppError("Hanya retur DRAFT atau Dibatalkan yang dapat dihapus", StatusCodes.UNPROCESSABLE_ENTITY);
   }
-  return repo.remove(id);
+  // Bersyarat status — retur yang paralel diposting tidak ikut terhapus
+  const { count } = await prisma.purchaseReturn.deleteMany({ where: { id, status: { in: ["DRAFT", "CANCELLED"] } } });
+  if (count === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
+  return ret;
 };
 
 // ── Sync to Accurate (manual trigger) ────────────────────────────────────────

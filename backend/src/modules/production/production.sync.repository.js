@@ -98,7 +98,7 @@ const markPekerjaanSynced = ({ id, accuratePekerjaanId, accuratePekerjaanNumber 
     `UPDATE "production_orders"
      SET    "accurate_pekerjaan_id"     = $1,
             "accurate_pekerjaan_number" = $2,
-            "last_sync_at"              = NOW()
+            "last_sync_at"              = (NOW() AT TIME ZONE 'UTC')
      WHERE  id = $3`,
     accuratePekerjaanId,
     accuratePekerjaanNumber ?? null,
@@ -111,7 +111,7 @@ const markPenyelesaianSynced = ({ id, accuratePenyelesaianId, accuratePenyelesai
     `UPDATE "production_orders"
      SET    "accurate_penyelesaian_id"     = $1,
             "accurate_penyelesaian_number" = $2,
-            "last_sync_at"                 = NOW()
+            "last_sync_at"                 = (NOW() AT TIME ZONE 'UTC')
      WHERE  id = $3`,
     accuratePenyelesaianId,
     accuratePenyelesaianNumber ?? null,

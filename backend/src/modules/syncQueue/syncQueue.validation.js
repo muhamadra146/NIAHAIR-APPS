@@ -1,14 +1,17 @@
-const { object, string, pipe, optional, picklist, minLength } = require("valibot");
+const { object, string, optional, picklist, record, unknown } = require("valibot");
+const { SyncEntityType, SyncDirection, SyncQueueStatus } = require("@prisma/client");
 
-const ENTITY_TYPES = ["CUSTOMER","WAREHOUSE","ITEM","UNIT","ITEM_UNIT","ITEM_PRICE","INVENTORY","DEPOSIT","INVOICE","PAYMENT"];
-const DIRECTIONS   = ["APP_TO_ACCURATE", "ACCURATE_TO_APP"];
-const STATUSES     = ["PENDING", "PROCESSING", "SUCCESS", "FAILED"];
+// Diturunkan dari enum Prisma agar selalu sama dengan schema (G5-12)
+const ENTITY_TYPES = Object.values(SyncEntityType);
+const DIRECTIONS   = Object.values(SyncDirection);
+const STATUSES     = Object.values(SyncQueueStatus);
 
 const createSyncJobSchema = object({
   entityType: picklist(ENTITY_TYPES, "Jenis data tidak valid"),
   entityId:   optional(string()),
   direction:  picklist(DIRECTIONS, "Arah sinkron tidak valid"),
-  payload:    optional(object({})),
+  // record — object({}) membuang semua key sehingga payload tersimpan {} (G5-11)
+  payload:    optional(record(string(), unknown())),
 });
 
 module.exports = { createSyncJobSchema, ENTITY_TYPES, DIRECTIONS, STATUSES };

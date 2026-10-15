@@ -3,7 +3,7 @@ const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const {
   create, findAll, count, findById,
-  findExistingPending, retry,
+  findExistingPending, retry, STALE_PROCESSING_MINUTES,
 } = require("./syncQueue.repository");
 
 // ── Create ────────────────────────────────────────────────────────────
@@ -25,14 +25,23 @@ const retrySync = async (id) => {
   const job = await findById(id);
   if (!job) throw new AppError("Antrian sync tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  if (job.status === "PENDING" || job.status === "PROCESSING") {
+  // Hanya FAILED, atau PROCESSING yang macet > STALE_PROCESSING_MINUTES (G5-03/G5-04).
+  // SUCCESS tidak boleh diulang — akan push ulang ke Accurate (dokumen duplikat).
+  const staleMs  = STALE_PROCESSING_MINUTES * 60 * 1000;
+  const isStale  = job.status === "PROCESSING" && new Date(job.updatedAt).getTime() < Date.now() - staleMs;
+  if (job.status !== "FAILED" && !isStale) {
     throw new AppError(
-      `Cannot retry a job with status ${job.status}`,
+      job.status === "PROCESSING"
+        ? "Job sedang diproses, belum bisa diulang"
+        : "Hanya job berstatus FAILED yang bisa diulang",
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
 
-  return retry(id);
+  // Update bersyarat — jika status berubah di antara cek dan reset, tolak
+  const reset = await retry(id);
+  if (!reset) throw new AppError("Status job sudah berubah, muat ulang data", StatusCodes.CONFLICT);
+  return findById(id);
 };
 
 // ── List ──────────────────────────────────────────────────────────────

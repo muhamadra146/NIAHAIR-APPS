@@ -16,6 +16,7 @@ const { createSyncJob }      = require("../syncQueue/syncQueue.service");
 const { processSyncQueue }   = require("../../workers/accurateSync.worker");
 const { validatePeriodOpen } = require("../inventory/inventory.period.service");
 const { accurateRequest }    = require("../accurate/accurate.client");
+const { toBaseQty }          = require("../inventory/inventory.conversion");
 
 const D = (v) => new Prisma.Decimal(String(v));
 
@@ -48,6 +49,50 @@ const getPurchaseInvoice = async (id) => {
   const invoice = await findPurchaseInvoiceById(id);
   if (!invoice) throw new AppError("Faktur pembelian tidak ditemukan", StatusCodes.NOT_FOUND);
   return invoice;
+};
+
+// ── Validasi satuan: unitId harus satuan milik item (G4-17) ─────────────────
+const assertUnitsBelongToItems = async (items) => {
+  const itemIds = [...new Set(items.map((i) => i.itemId))];
+  const rows = await prisma.item.findMany({
+    where:  { id: { in: itemIds } },
+    select: {
+      id: true, name: true, defaultUnitId: true, purchaseUnitId: true,
+      itemUnits: { select: { unitId: true } },
+    },
+  });
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  for (const line of items) {
+    const it = byId.get(line.itemId);
+    if (!it) throw new AppError("Item tidak ditemukan", StatusCodes.UNPROCESSABLE_ENTITY);
+    const validUnits = new Set([it.defaultUnitId, it.purchaseUnitId, ...it.itemUnits.map((u) => u.unitId)]);
+    if (!validUnits.has(line.unitId)) {
+      throw new AppError(`Satuan tidak valid untuk item "${it.name}"`, StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+  }
+};
+
+// ── Retur POSTED memblokir batal/hapus faktur (G4-09) ────────────────────────
+const assertNoPostedReturns = async (client, invoiceId) => {
+  const posted = await client.purchaseReturn.count({ where: { purchaseInvoiceId: invoiceId, status: "POSTED" } });
+  if (posted > 0) {
+    throw new AppError(
+      "Faktur sudah punya retur pembelian yang diposting, tidak bisa dibatalkan atau dihapus",
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
+};
+
+// ── Qty yang dulu benar-benar masuk stok untuk satu baris faktur ─────────────
+// Dibaca dari movement PURCHASE aslinya (satuan dasar) agar pembalikan persis sama;
+// fallback ke konversi satuan jika movement tidak ditemukan.
+const purchasedBaseQty = async (tx, item) => {
+  const agg = await tx.inventoryMovement.aggregate({
+    _sum:  { qtyChange: true },
+    where: { purchaseInvoiceItemId: item.id, movementType: "PURCHASE" },
+  });
+  if (agg?._sum?.qtyChange != null) return D(agg._sum.qtyChange);
+  return toBaseQty(tx, item.itemId, item.unitId, item.qty);
 };
 
 // ── Compute totals (discount stored as percentage 0-100, matching Accurate) ───
@@ -101,6 +146,7 @@ const createPurchaseInvoice = async (body, createdByEmployeeId) => {
   }
 
   await validatePeriodOpen(invoiceDate);
+  await assertUnitsBelongToItems(items);
 
   const invoiceNo = await buildPurchaseInvoiceNo();
 
@@ -180,7 +226,8 @@ const createPurchaseInvoice = async (body, createdByEmployeeId) => {
       }
 
       const qtyBefore = D(inventory.qtyOnHand);
-      const qtyChange = D(item.qty);
+      // Stok dalam satuan dasar (G4-05) — 1 TUBE (=80 GRAM) menambah 80
+      const qtyChange = await toBaseQty(tx, item.itemId, item.unitId, item.qty);
       const qtyAfter  = qtyBefore.add(qtyChange);
 
       await tx.inventoryMovement.create({
@@ -256,6 +303,7 @@ const updatePurchaseInvoice = async (id, body) => {
   const effectiveInclusiveTax = inclusiveTax ?? existing.inclusiveTax;
 
   if (items) {
+    await assertUnitsBelongToItems(items);
     const mappedItems = items.map((item) => ({
       ...item,
       discount: item.discount ?? 0,
@@ -296,6 +344,7 @@ const cancelPurchaseInvoice = async (id) => {
 
   if (invoice.status === "POSTED") {
     await validatePeriodOpen(invoice.invoiceDate);
+    await assertNoPostedReturns(prisma, id);
 
     // Void di Accurate sebelum menyentuh data lokal
     if (invoice.accuratePurchaseInvoiceId) {
@@ -315,6 +364,20 @@ const cancelPurchaseInvoice = async (id) => {
     }
 
     await prisma.$transaction(async (tx) => {
+      // Guard race condition: transisi bersyarat POSTED → CANCELLED (mengunci baris faktur),
+      // lalu cek ulang retur POSTED di dalam transaksi.
+      const { count } = await tx.purchaseInvoice.updateMany({
+        where: { id, status: "POSTED" },
+        data:  {
+          status:                      "CANCELLED",
+          // Hapus referensi Accurate karena sudah di-void
+          accuratePurchaseInvoiceId:     null,
+          accuratePurchaseInvoiceNumber: null,
+        },
+      });
+      if (count === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
+      await assertNoPostedReturns(tx, id);
+
       // Balik setiap inventory movement yang dibuat saat posting
       for (const item of invoice.items) {
         if (item.item.itemType !== "INVENTORY") continue;
@@ -325,7 +388,7 @@ const cancelPurchaseInvoice = async (id) => {
         if (!inventory) continue;
 
         const qtyBefore = D(inventory.qtyOnHand);
-        const qtyChange = D(item.qty).negated();
+        const qtyChange = (await purchasedBaseQty(tx, item)).negated(); // satuan dasar (G4-05)
         const qtyAfter  = qtyBefore.add(qtyChange);
 
         await tx.inventoryMovement.create({
@@ -356,15 +419,6 @@ const cancelPurchaseInvoice = async (id) => {
         });
       }
 
-      await tx.purchaseInvoice.update({
-        where: { id },
-        data:  {
-          status:                      "CANCELLED",
-          // Hapus referensi Accurate karena sudah di-void
-          accuratePurchaseInvoiceId:     null,
-          accuratePurchaseInvoiceNumber: null,
-        },
-      });
     });
 
     return { invoiceId: id, cancelled: true };
@@ -379,6 +433,8 @@ const cancelPurchaseInvoice = async (id) => {
 const deletePurchaseInvoice = async (id) => {
   const invoice = await findPurchaseInvoiceById(id);
   if (!invoice) throw new AppError("Faktur pembelian tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  if (invoice.status === "POSTED") await assertNoPostedReturns(prisma, id);
 
   // Cek Accurate dulu sebelum menyentuh data lokal —
   // jika sudah ada pembayaran di Accurate, delete ditolak dan kita block di sini.
@@ -410,6 +466,11 @@ const deletePurchaseInvoice = async (id) => {
 
     // Reversal stok + hapus invoice dalam satu transaksi agar atomic
     await prisma.$transaction(async (tx) => {
+      // Guard race condition: kunci baris faktur yang masih POSTED, cek ulang retur POSTED
+      const { count } = await tx.purchaseInvoice.updateMany({ where: { id, status: "POSTED" }, data: { status: "POSTED" } });
+      if (count === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
+      await assertNoPostedReturns(tx, id);
+
       for (const item of invoice.items) {
         if (item.item.itemType !== "INVENTORY") continue;
 
@@ -419,7 +480,7 @@ const deletePurchaseInvoice = async (id) => {
         if (!inventory) continue;
 
         const qtyBefore = D(inventory.qtyOnHand);
-        const qtyChange = D(item.qty).negated();
+        const qtyChange = (await purchasedBaseQty(tx, item)).negated(); // satuan dasar (G4-05)
         const qtyAfter  = qtyBefore.add(qtyChange);
 
         await tx.inventoryMovement.create({

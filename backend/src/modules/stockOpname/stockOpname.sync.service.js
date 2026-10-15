@@ -10,6 +10,8 @@
 //   - Jika accurateOrderId sudah ada → skip Perintah, lanjut ke Hasil
 //   - Jika accurateResultId sudah ada → skip Hasil, return skipped
 //
+const { StatusCodes }                         = require("http-status-codes");
+const AppError                                = require("../../common/errors/AppError");
 const { accurateRequest }                     = require("../accurate/accurate.client");
 const { getAccurateBranchId }                 = require("../branch/branch.repository");
 const { mapOpnameOrderToAccurate,
@@ -19,6 +21,17 @@ const {
   markOpnameOrderSynced,
   markOpnameResultSynced,
 } = require("./stockOpname.sync.repository");
+
+// Error validasi / respon Accurate → 422 dengan pesan Accurate (bukan 500) — G4-15
+const fail = (message) => new AppError(message, StatusCodes.UNPROCESSABLE_ENTITY);
+
+// Ekstrak pesan error dari respons Accurate — bisa berupa array atau string
+const extractAccurateError = (response) => {
+  if (Array.isArray(response?.d) && response.d.length > 0) return response.d.join("; ");
+  if (typeof response?.d === "string" && response.d)       return response.d;
+  if (typeof response?.m === "string" && response.m)       return response.m;
+  return JSON.stringify(response);
+};
 
 const ACCURATE_ORDER_SAVE  = "/stock-opname-order/save.do";
 const ACCURATE_RESULT_SAVE = "/stock-opname-result/save.do";
@@ -42,7 +55,7 @@ const syncOpnameOrderToAccurate = async (opname, accurateBranchId) => {
   logger.info("[opname sync] Perintah response", JSON.stringify(response));
 
   if (!response.s || !response.r?.id) {
-    throw new Error(`Accurate API error (Perintah SO): ${JSON.stringify(response)}`);
+    throw fail(`Gagal membuat Perintah Stok Opname di Accurate: ${extractAccurateError(response)}`);
   }
 
   const accurateOrderId     = response.r.id;
@@ -77,12 +90,12 @@ const syncOpnameResultToAccurate = async (opname, accurateOrderId, accurateBranc
   for (const item of itemsWithDiff) {
     const it = item.inventory?.item;
     if (!it?.accurateItemId) {
-      throw new Error(
+      throw fail(
         `Item belum terhubung ke Accurate: ${it?.itemCode ?? item.id}. Sync item terlebih dahulu.`
       );
     }
     if (!it?.defaultUnit?.accurateUnitId) {
-      throw new Error(
+      throw fail(
         `Satuan item belum terhubung ke Accurate: ${it?.itemCode ?? item.id}. Sync satuan terlebih dahulu.`
       );
     }
@@ -99,7 +112,7 @@ const syncOpnameResultToAccurate = async (opname, accurateOrderId, accurateBranc
   logger.info("[opname sync] Hasil response", JSON.stringify(response));
 
   if (!response.s || !response.r?.id) {
-    throw new Error(`Accurate API error (Hasil SO): ${JSON.stringify(response)}`);
+    throw fail(`Gagal membuat Hasil Stok Opname di Accurate: ${extractAccurateError(response)}`);
   }
 
   const accurateResultId     = response.r.id;
@@ -114,16 +127,16 @@ const syncOpnameResultToAccurate = async (opname, accurateOrderId, accurateBranc
 // ── Entry point — dipanggil dari service ─────────────────────────────────────
 const syncOpnameToAccurate = async (opnameId) => {
   const opname = await findOpnameForSync(opnameId);
-  if (!opname) throw new Error(`Stock opname not found: ${opnameId}`);
+  if (!opname) throw new AppError("Opname tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (opname.status !== "POSTED") {
-    throw new Error(
+    throw fail(
       `Opname harus berstatus POSTED sebelum sync ke Accurate, status saat ini: ${opname.status}`
     );
   }
 
   if (!opname.warehouse?.accurateWarehouseId) {
-    throw new Error(
+    throw fail(
       `Gudang "${opname.warehouse?.name}" belum terhubung ke Accurate. Hubungkan gudang terlebih dahulu.`
     );
   }

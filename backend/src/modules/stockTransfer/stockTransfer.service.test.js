@@ -6,7 +6,7 @@ jest.mock('../inventory/inventory.period.service');
 jest.mock('../../config/prisma', () => ({
   warehouse:     { findUnique: jest.fn() },
   $transaction:  jest.fn((fn, _opts) => fn({
-    stockTransfer:     { update: jest.fn() },
+    stockTransfer:     { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     inventory:         { upsert: jest.fn(), update: jest.fn() },
     inventoryMovement: { create: jest.fn() },
   })),
@@ -65,7 +65,7 @@ describe('create', () => {
     repo.findMaxSeqToday.mockResolvedValue(0);
     repo.create.mockResolvedValue(TRANSFER_PENDING);
     prisma.$transaction.mockImplementation((fn) => fn({
-      stockTransfer: { update: jest.fn() }, inventory: { upsert: jest.fn(), update: jest.fn() },
+      stockTransfer: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) }, inventory: { upsert: jest.fn(), update: jest.fn() },
       inventoryMovement: { create: jest.fn() },
     }));
   });
@@ -121,7 +121,7 @@ describe('updateStatus', () => {
     createSyncJob.mockResolvedValue(undefined);
     repo.findById.mockResolvedValue(TRANSFER_PENDING);
     prisma.$transaction.mockImplementation((fn) => fn({
-      stockTransfer: { update: jest.fn() }, inventory: { upsert: jest.fn(), update: jest.fn() },
+      stockTransfer: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) }, inventory: { upsert: jest.fn(), update: jest.fn() },
       inventoryMovement: { create: jest.fn() },
     }));
   });

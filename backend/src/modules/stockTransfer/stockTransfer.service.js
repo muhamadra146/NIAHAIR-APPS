@@ -93,6 +93,33 @@ const create = async (body, userId) => {
 };
 
 const BYPASS_ROLES = ["SUPER_ADMIN", "OWNER"];
+// Gudang tanpa cabang hanya boleh diproses oleh peran pusat (G4-21)
+const NO_BRANCH_ROLES = [...BYPASS_ROLES, "INVENTORY"];
+
+// ── Helper: cek wewenang cabang atas gudang transfer ──────────────────
+const assertBranchAccess = (userRole, actingBranchId, warehouseBranchId, message) => {
+  if (BYPASS_ROLES.includes(userRole)) return;
+  if (!warehouseBranchId) {
+    if (!NO_BRANCH_ROLES.includes(userRole)) {
+      throw new AppError(
+        "Gudang tanpa cabang hanya bisa diproses oleh Owner atau tim Inventory",
+        StatusCodes.FORBIDDEN,
+      );
+    }
+    return;
+  }
+  if (actingBranchId && warehouseBranchId !== actingBranchId) {
+    throw new AppError(message, StatusCodes.FORBIDDEN);
+  }
+};
+
+// ── Helper: transisi status bersyarat (guard race condition) ─────────
+// updateMany dengan where status lama — jika request paralel sudah memproses
+// dokumen ini lebih dulu, count = 0 dan transaksi dibatalkan.
+const transitionStatus = async (tx, id, fromStatus, data) => {
+  const { count } = await tx.stockTransfer.updateMany({ where: { id, status: fromStatus }, data });
+  if (count === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
+};
 
 // ── Update status ─────────────────────────────────────────────────────
 const updateStatus = async (id, newStatus, userRole, actingBranchId, receivedItems = null) => {
@@ -120,17 +147,26 @@ const updateStatus = async (id, newStatus, userRole, actingBranchId, receivedIte
   }
 
   // Branch authorization — non-super users can only act on their own branch's transfers
-  if (!BYPASS_ROLES.includes(userRole) && actingBranchId) {
-    if (newStatus === "IN_TRANSIT") {
-      const srcBranchId = transfer.sourceWarehouse?.branchId;
-      if (srcBranchId && srcBranchId !== actingBranchId) {
-        throw new AppError("Hanya cabang asal yang bisa mengirim transfer ini", StatusCodes.FORBIDDEN);
+  if (newStatus === "IN_TRANSIT") {
+    assertBranchAccess(userRole, actingBranchId, transfer.sourceWarehouse?.branchId,
+      "Hanya cabang asal yang bisa mengirim transfer ini");
+  }
+  if (newStatus === "RECEIVED") {
+    assertBranchAccess(userRole, actingBranchId, transfer.destinationWarehouse?.branchId,
+      "Hanya cabang tujuan yang bisa menerima transfer ini");
+
+    // Qty diterima tidak boleh melebihi qty yang dikirim (G4-07)
+    const sentMap = new Map(transfer.items.map((i) => [i.itemId, i]));
+    for (const r of receivedItems ?? []) {
+      const sent = sentMap.get(r.itemId);
+      if (!sent) {
+        throw new AppError("Item yang diterima tidak ada di transfer ini", StatusCodes.UNPROCESSABLE_ENTITY);
       }
-    }
-    if (newStatus === "RECEIVED") {
-      const dstBranchId = transfer.destinationWarehouse?.branchId;
-      if (dstBranchId && dstBranchId !== actingBranchId) {
-        throw new AppError("Hanya cabang tujuan yang bisa menerima transfer ini", StatusCodes.FORBIDDEN);
+      if (D(r.receivedQty).greaterThan(D(sent.qty))) {
+        throw new AppError(
+          `Qty diterima "${sent.item?.name ?? r.itemId}" (${r.receivedQty}) melebihi qty dikirim (${D(sent.qty)})`,
+          StatusCodes.UNPROCESSABLE_ENTITY,
+        );
       }
     }
   }
@@ -163,7 +199,7 @@ const generateTransferOutMovements = async (transfer) => {
   await validatePeriodOpen(new Date());
 
   await prisma.$transaction(async (tx) => {
-    await tx.stockTransfer.update({ where: { id: transfer.id }, data: { status: "IN_TRANSIT" } });
+    await transitionStatus(tx, transfer.id, "PENDING", { status: "IN_TRANSIT" });
 
     for (const item of transfer.items) {
       if (item.item.itemType !== "INVENTORY") continue;
@@ -214,6 +250,50 @@ const generateTransferOutMovements = async (transfer) => {
   });
 };
 
+// ── Helper: tulis satu movement transfer + update saldo inventory ────
+// qtyChange bertanda (+ masuk, − keluar). Stok dibaca di dalam tx.
+// Jika stok jadi minus dan insufficientMessage diisi → 400.
+const applyTransferMovement = async (tx, { transfer, item, warehouseId, movementType, qtyChange, notes, insufficientMessage }) => {
+  const inventory = await tx.inventory.upsert({
+    where:  { warehouseId_itemId: { warehouseId, itemId: item.itemId } },
+    create: { warehouseId, itemId: item.itemId, qtyOnHand: 0, qtyReserved: 0, qtyAvailable: 0 },
+    update: {},
+    select: { id: true, qtyOnHand: true, qtyReserved: true, qtyAvailable: true },
+  });
+
+  const qtyBefore = D(inventory.qtyOnHand);
+  const qtyAfter  = qtyBefore.add(qtyChange);
+
+  if (insufficientMessage && qtyAfter.lessThan(0)) {
+    throw new AppError(
+      `${insufficientMessage}. Tersedia: ${Number(qtyBefore).toLocaleString("id-ID")}, dibutuhkan: ${Number(qtyChange.abs()).toLocaleString("id-ID")}`,
+      StatusCodes.BAD_REQUEST,
+    );
+  }
+
+  await tx.inventoryMovement.create({
+    data: {
+      inventoryId:   inventory.id,
+      movementType,
+      sourceModule:  "TRANSFER",
+      createdSource: "USER",
+      warehouseId,
+      qtyBefore,
+      qtyChange,
+      qtyAfter,
+      referenceType: "TRANSFER",
+      referenceId:   transfer.id,
+      referenceNo:   transfer.transferNo,
+      notes,
+    },
+  });
+
+  await tx.inventory.update({
+    where: { id: inventory.id },
+    data:  { qtyOnHand: qtyAfter, qtyAvailable: qtyAfter.sub(D(inventory.qtyReserved ?? 0)) },
+  });
+};
+
 // ── Generate TRANSFER_IN movements (add to destination warehouse) ─────
 // receivedItems: [{ itemId, receivedQty }] — if provided, use receivedQty instead of qty
 // Status update is inside the transaction — if any movement fails the status stays IN_TRANSIT
@@ -226,7 +306,7 @@ const generateTransferInMovements = async (transfer, receivedItems = null) => {
   );
 
   await prisma.$transaction(async (tx) => {
-    await tx.stockTransfer.update({ where: { id: transfer.id }, data: { status: "RECEIVED" } });
+    await transitionStatus(tx, transfer.id, "IN_TRANSIT", { status: "RECEIVED" });
 
     for (const item of transfer.items) {
       if (item.item.itemType !== "INVENTORY") continue;
@@ -242,6 +322,19 @@ const generateTransferInMovements = async (transfer, receivedItems = null) => {
         qty.toFixed(6),
         item.id,
       );
+
+      // Sisa yang dikirim tapi tidak diterima → dikembalikan ke gudang asal (G4-23, keputusan owner)
+      const shortfall = D(item.qty).sub(qty);
+      if (shortfall.greaterThan(0)) {
+        await applyTransferMovement(tx, {
+          transfer,
+          item,
+          warehouseId:  transfer.sourceWarehouseId,
+          movementType: "TRANSFER_IN",
+          qtyChange:    shortfall,
+          notes:        `Pengembalian sisa transfer (tidak diterima di ${transfer.destinationWarehouse.name}): ${item.item.name}`,
+        });
+      }
 
       if (qty.lessThanOrEqualTo(0)) continue;
 
@@ -300,19 +393,17 @@ const deleteTransfer = async (id, userRole, actingBranchId) => {
   }
 
   // Authorization: only source branch (or super user)
-  if (!BYPASS_ROLES.includes(userRole) && actingBranchId) {
-    const srcBranchId = transfer.sourceWarehouse?.branchId;
-    if (srcBranchId && srcBranchId !== actingBranchId) {
-      throw new AppError("Hanya cabang asal yang bisa menghapus transfer ini", StatusCodes.FORBIDDEN);
-    }
-  }
+  assertBranchAccess(userRole, actingBranchId, transfer.sourceWarehouse?.branchId,
+    "Hanya cabang asal yang bisa menghapus transfer ini");
 
   if (transfer.status === "PENDING") {
-    // No movements — safe to hard delete
-    await prisma.$transaction([
-      prisma.stockTransferItem.deleteMany({ where: { transferId: id } }),
-      prisma.stockTransfer.delete({ where: { id } }),
-    ]);
+    // No movements — safe to hard delete.
+    // deleteMany bersyarat status PENDING: jika paralel sudah dikirim (IN_TRANSIT), batalkan.
+    await prisma.$transaction(async (tx) => {
+      await tx.stockTransferItem.deleteMany({ where: { transferId: id } });
+      const { count } = await tx.stockTransfer.deleteMany({ where: { id, status: "PENDING" } });
+      if (count === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
+    });
     return { deleted: true };
   }
 
@@ -330,13 +421,10 @@ const deleteTransfer = async (id, userRole, actingBranchId) => {
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.stockTransfer.update({
-      where: { id },
-      data:  {
-        status:                "CANCELLED",
-        accurateTransferId:    null,
-        accurateTransferNumber: null,
-      },
+    await transitionStatus(tx, id, "IN_TRANSIT", {
+      status:                "CANCELLED",
+      accurateTransferId:    null,
+      accurateTransferNumber: null,
     });
 
     for (const item of transfer.items) {
@@ -398,23 +486,10 @@ const undoReceive = async (id, userRole, actingBranchId) => {
   }
 
   // Authorization: only destination branch (or super user)
-  if (!BYPASS_ROLES.includes(userRole) && actingBranchId) {
-    const dstBranchId = transfer.destinationWarehouse?.branchId;
-    if (dstBranchId && dstBranchId !== actingBranchId) {
-      throw new AppError("Hanya cabang tujuan yang bisa membatalkan penerimaan ini", StatusCodes.FORBIDDEN);
-    }
-  }
+  assertBranchAccess(userRole, actingBranchId, transfer.destinationWarehouse?.branchId,
+    "Hanya cabang tujuan yang bisa membatalkan penerimaan ini");
 
   await validatePeriodOpen(new Date());
-
-  // Fetch receivedQty per item BEFORE the transaction (new field, not in Prisma client SELECT)
-  const receivedQtyRows = await prisma.$queryRawUnsafe(
-    `SELECT id, "receivedQty", qty FROM "stock_transfer_items" WHERE "transferId" = $1`,
-    id,
-  );
-  const receivedQtyMap = new Map(
-    receivedQtyRows.map((r) => [r.id, r.receivedQty != null ? D(r.receivedQty) : null]),
-  );
 
   // Delete Accurate TRANSFER_IN (best effort)
   const syncRepo = require("./stockTransfer.sync.repository");
@@ -429,12 +504,22 @@ const undoReceive = async (id, userRole, actingBranchId) => {
   }
 
   await prisma.$transaction(async (tx) => {
-    // Revert status and clear Accurate receive fields
-    await tx.$executeRawUnsafe(
+    // Revert status and clear Accurate receive fields — bersyarat status RECEIVED (guard paralel)
+    const reverted = await tx.$executeRawUnsafe(
       `UPDATE "stock_transfers"
        SET status = 'IN_TRANSIT', "accurateReceiveId" = NULL, "accurateReceiveNumber" = NULL, "lastReceiveSyncAt" = NULL
-       WHERE id = $1`,
+       WHERE id = $1 AND status = 'RECEIVED'`,
       id,
+    );
+    if (reverted === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
+
+    // Fetch receivedQty per item di dalam transaksi, setelah guard status (new field, not in Prisma client SELECT)
+    const receivedQtyRows = await tx.$queryRawUnsafe(
+      `SELECT id, "receivedQty", qty FROM "stock_transfer_items" WHERE "transferId" = $1`,
+      id,
+    );
+    const receivedQtyMap = new Map(
+      receivedQtyRows.map((r) => [r.id, r.receivedQty != null ? D(r.receivedQty) : null]),
     );
 
     // Reset receivedQty on items
@@ -443,8 +528,41 @@ const undoReceive = async (id, userRole, actingBranchId) => {
       id,
     );
 
+    const shortfallHandled = new Set();
+
     for (const item of transfer.items) {
       if (item.item.itemType !== "INVENTORY") continue;
+
+      // Tarik kembali sisa yang dulu dikembalikan ke gudang asal saat receive parsial (G4-23).
+      // Dihitung dari movement aktual: net movement transfer ini di gudang asal + total qty dikirim.
+      // Data lama (sebelum aturan ini) → hasil 0, tidak ada yang ditarik.
+      if (!shortfallHandled.has(item.itemId)) {
+        shortfallHandled.add(item.itemId);
+        const agg = await tx.inventoryMovement.aggregate({
+          _sum:  { qtyChange: true },
+          where: {
+            referenceType: "TRANSFER",
+            referenceId:   transfer.id,
+            warehouseId:   transfer.sourceWarehouseId,
+            inventory:     { itemId: item.itemId },
+          },
+        });
+        const sentTotal = transfer.items
+          .filter((i) => i.itemId === item.itemId)
+          .reduce((s, i) => s.add(D(i.qty)), D(0));
+        const outstanding = D(agg?._sum?.qtyChange ?? 0).add(sentTotal);
+        if (outstanding.greaterThan(0)) {
+          await applyTransferMovement(tx, {
+            transfer,
+            item,
+            warehouseId:         transfer.sourceWarehouseId,
+            movementType:        "TRANSFER_OUT",
+            qtyChange:           outstanding.negated(),
+            notes:               `Pembatalan pengembalian sisa transfer: ${item.item.name}`,
+            insufficientMessage: `Stok "${item.item.name}" di gudang asal tidak mencukupi untuk dibatalkan`,
+          });
+        }
+      }
 
       // Use pre-fetched receivedQty, fall back to item.qty
       const receivedQty = receivedQtyMap.get(item.id);
@@ -513,14 +631,25 @@ const syncToAccurate = async (id) => {
 
   const syncSvc = require("./stockTransfer.sync.service");
 
+  // Error mentah dari sync service (mapping gudang/item, respon Accurate) → 422 dengan pesan aslinya,
+  // bukan 500 (G4-16)
+  const run = async (fn) => {
+    try {
+      await fn(id);
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      throw new AppError(`Gagal sinkron ke Accurate: ${err.message}`, StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+  };
+
   // Sync TRANSFER_OUT jika belum ada accurateTransferId
   if (!transfer.accurateTransferId) {
-    await syncSvc.syncTransferToAccurate(id);
+    await run(syncSvc.syncTransferToAccurate);
   }
 
   // Sync TRANSFER_IN jika status RECEIVED dan belum ada accurateReceiveId
   if (transfer.status === "RECEIVED" && !transfer.accurateReceiveId) {
-    await syncSvc.syncTransferReceiveToAccurate(id);
+    await run(syncSvc.syncTransferReceiveToAccurate);
   }
 
   return repo.findById(id);

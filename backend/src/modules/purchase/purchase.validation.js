@@ -2,7 +2,7 @@
 
 const {
   object, string, number, array, pipe, boolean,
-  minLength, minValue, maxValue, maxLength, optional, minSize, isoDate,
+  minLength, minValue, maxValue, maxLength, optional, isoDate,
 } = require('valibot');
 
 const purchaseInvoiceItemSchema = object({
@@ -30,7 +30,7 @@ const createPurchaseInvoiceSchema = object({
   notes:              optional(string()),
   items:              pipe(
     array(purchaseInvoiceItemSchema),
-    minSize(1, "Minimal 1 item harus ditambahkan")
+    minLength(1, "Minimal 1 item harus ditambahkan")
   ),
 });
 
@@ -48,7 +48,7 @@ const updatePurchaseInvoiceSchema = object({
   taxTransactionType: optional(string()),
   taxInvoiceNo:       optional(string()),
   notes:              optional(string()),
-  items:              optional(pipe(array(purchaseInvoiceItemSchema), minSize(1))),
+  items:              optional(pipe(array(purchaseInvoiceItemSchema), minLength(1, "Minimal 1 item harus ditambahkan"))),
 });
 
 module.exports = { createPurchaseInvoiceSchema, updatePurchaseInvoiceSchema };

@@ -40,9 +40,11 @@ router.post("/periods/reopen",  authenticate, authorize(ROLES.SUPER_ADMIN), vali
 router.get("/movements", authenticate, getMovementsController);
 router.get("/",          authenticate, getInventoriesController);
 
+// Service movement — peran yang mencatat treatment / pemakaian material (G4-24b)
 router.post(
   "/service-movement/:treatmentSessionId",
   authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER, ROLES.INVENTORY),
   generateServiceMovementController,
 );
 

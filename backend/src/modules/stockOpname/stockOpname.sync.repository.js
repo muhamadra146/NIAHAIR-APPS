@@ -71,7 +71,7 @@ const markOpnameOrderSynced = ({ id, accurateOrderId, accurateOrderNumber }) =>
     `UPDATE "stock_opnames"
      SET    "accurateOrderId"     = $1,
             "accurateOrderNumber" = $2,
-            "lastSyncAt"          = NOW()
+            "lastSyncAt"          = (NOW() AT TIME ZONE 'UTC')
      WHERE  id = $3`,
     accurateOrderId,
     accurateOrderNumber ?? null,
@@ -84,7 +84,7 @@ const markOpnameResultSynced = ({ id, accurateResultId, accurateResultNumber }) 
     `UPDATE "stock_opnames"
      SET    "accurateResultId"     = $1,
             "accurateResultNumber" = $2,
-            "lastSyncAt"           = NOW()
+            "lastSyncAt"           = (NOW() AT TIME ZONE 'UTC')
      WHERE  id = $3`,
     accurateResultId,
     accurateResultNumber ?? null,

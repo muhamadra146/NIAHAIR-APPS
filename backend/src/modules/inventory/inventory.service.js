@@ -502,6 +502,19 @@ const reverseServiceUsageMovement = async (movementId, materialUsageItemId) => {
   ]);
 };
 
+// ── Helper: update saldo penyesuaian secara bersyarat ─────────────────
+// Penyesuaian menetapkan qty absolut, jadi qtyBefore/qtyChange hanya benar jika
+// saldo belum berubah sejak dibaca. Proses paralel → count = 0 → 409 (G4-12).
+const applyAdjustmentGuarded = async (tx, inventory, qtyAfter, newAvailable) => {
+  const { count } = await tx.inventory.updateMany({
+    where: { id: inventory.id, qtyOnHand: inventory.qtyOnHand },
+    data:  { qtyOnHand: qtyAfter, qtyAvailable: newAvailable },
+  });
+  if (count === 0) {
+    throw new AppError("Stok sedang diubah oleh proses lain, silakan coba lagi", StatusCodes.CONFLICT);
+  }
+};
+
 // ── Stock Adjustment (INV-013) ────────────────────────────────────────
 //
 // Creates an ADJUSTMENT movement: sets qtyOnHand to the physical count (qtyActual),
@@ -524,6 +537,9 @@ const createStockAdjustment = async (inventoryId, { qtyActual, reason, notes, gl
     const qtyChange    = qtyAfter.sub(qtyBefore);
     const newAvailable = computeAvailable(qtyAfter, inventory.qtyReserved);
 
+    // Guard lost update (G4-12): update bersyarat qtyOnHand masih sama dengan yang dibaca
+    await applyAdjustmentGuarded(tx, inventory, qtyAfter, newAvailable);
+
     const movement = await tx.inventoryMovement.create({
       data: {
         inventoryId:         inventory.id,
@@ -541,11 +557,6 @@ const createStockAdjustment = async (inventoryId, { qtyActual, reason, notes, gl
         createdByEmployeeId: createdByEmployeeId ?? null,
       },
       select: { id: true },
-    });
-
-    await tx.inventory.update({
-      where: { id: inventory.id },
-      data:  { qtyOnHand: qtyAfter, qtyAvailable: newAvailable },
     });
 
     return {
@@ -596,6 +607,9 @@ const createBatchStockAdjustment = async ({ glAccountId, reason, notes, items, c
       const qtyChange    = qtyAfter.sub(qtyBefore);
       const newAvailable = computeAvailable(qtyAfter, inventory.qtyReserved);
 
+      // Guard lost update (G4-12): update bersyarat qtyOnHand masih sama dengan yang dibaca
+      await applyAdjustmentGuarded(tx, inventory, qtyAfter, newAvailable);
+
       const movement = await tx.inventoryMovement.create({
         data: {
           inventoryId:         inventory.id,
@@ -613,11 +627,6 @@ const createBatchStockAdjustment = async ({ glAccountId, reason, notes, items, c
           createdByEmployeeId: createdByEmployeeId ?? null,
         },
         select: { id: true },
-      });
-
-      await tx.inventory.update({
-        where: { id: inventory.id },
-        data:  { qtyOnHand: qtyAfter, qtyAvailable: newAvailable },
       });
 
       ids.push({ movementId: movement.id, qtyBefore: qtyBefore.toFixed(6), qtyChange: qtyChange.toFixed(6), qtyAfter: qtyAfter.toFixed(6) });
@@ -704,7 +713,7 @@ const releaseReservation = async (inventoryId, qty, tx) => {
 // ── GAP 2: Opening Balance ─────────────────────────────────────────────────────
 //
 // Membuat OPENING_BALANCE movement untuk setiap item yang belum pernah ada
-// movement di warehouse tersebut. Idempotent: skip item yang sudah ada movement.
+// movement di warehouse tersebut. Item yang sudah punya movement → 422 (seluruh batch ditolak).
 // Permission: SUPER_ADMIN + OWNER only (enforced at route level).
 
 const createOpeningBalance = async ({ warehouseId, notes, items, createdByEmployeeId }) => {
@@ -726,13 +735,16 @@ const createOpeningBalance = async ({ warehouseId, notes, items, createdByEmploy
         select: { id: true, qtyOnHand: true, qtyReserved: true },
       });
 
-      // Idempotency: skip jika sudah ada movement OPENING_BALANCE untuk inventory ini
+      // Saldo awal hanya untuk item yang belum punya pergerakan stok apa pun di gudang ini
+      // (keputusan owner G4-24) — termasuk OPENING_BALANCE sebelumnya.
       const existing = await tx.inventoryMovement.count({
-        where: { inventoryId: inventory.id, movementType: "OPENING_BALANCE" },
+        where: { inventoryId: inventory.id },
       });
       if (existing > 0) {
-        skipped.push(itemId);
-        continue;
+        throw new AppError(
+          "Saldo awal hanya untuk item yang belum punya pergerakan stok; gunakan penyesuaian atau stock opname",
+          StatusCodes.UNPROCESSABLE_ENTITY,
+        );
       }
 
       const qtyBefore    = D(inventory.qtyOnHand);

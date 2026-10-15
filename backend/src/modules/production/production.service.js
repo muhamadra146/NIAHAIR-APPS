@@ -7,6 +7,7 @@ const { paginate, paginationMeta } = require("../../utils/pagination");
 const { toDateOnly }               = require("../../utils/date");
 const repo                         = require("./production.repository");
 const { syncProductionToAccurate, deleteFromAccurate } = require("./production.sync.service");
+const { toBaseQty }                = require("../inventory/inventory.conversion");
 
 // ── Decimal helper ────────────────────────────────────────────────────────────
 const D = (v) => new Prisma.Decimal(String(v));
@@ -34,6 +35,15 @@ const ALLOWED_TRANSITIONS = {
   QC:          ["COMPLETED", "CANCELLED"],
   COMPLETED:   [],
   CANCELLED:   [],
+};
+
+// ── Helper: transisi status bersyarat (guard race condition) ─────────────────
+const guardTransition = async (tx, id, fromStatus, toStatus) => {
+  const { count } = await tx.productionOrder.updateMany({
+    where: { id, status: fromStatus },
+    data:  { status: toStatus },
+  });
+  if (count === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
 };
 
 // ── getAll ────────────────────────────────────────────────────────────────────
@@ -162,6 +172,10 @@ const updateStatus = async (id, newStatus, employeeId) => {
   }
 
   const result = await prisma.$transaction(async (tx) => {
+    // Guard race condition: transisi bersyarat dari status yang dibaca tadi.
+    // Request paralel kedua mendapat count = 0 → 409, material tidak dikonsumsi dua kali.
+    await guardTransition(tx, id, order.status, newStatus);
+
     const updateData = { status: newStatus };
 
     // ── IN_PROGRESS: set actualStartAt + consume materials ─────────────────
@@ -240,6 +254,8 @@ const consumeMaterials = async (order, employeeId, tx) => {
     if (mat.inventoryMovementId) continue;
 
     const qtyToConsume = D(mat.plannedQuantity);
+    // Movement dalam satuan dasar (conversionFactor satuan material)
+    const baseQty      = await toBaseQty(tx, mat.itemId, mat.unitId, qtyToConsume);
 
     // Find or create inventory record
     const inventory = await tx.inventory.upsert({
@@ -250,9 +266,17 @@ const consumeMaterials = async (order, employeeId, tx) => {
     });
 
     const qtyBefore    = D(inventory.qtyOnHand);
-    const qtyChange    = qtyToConsume.negated();
+    const qtyChange    = baseQty.negated();
     const qtyAfter     = qtyBefore.plus(qtyChange);
     const newAvailable = D(qtyAfter).minus(D(inventory.qtyReserved));
+
+    // Stok material harus cukup, sama seperti transfer (G4-13)
+    if (qtyAfter.lessThan(0)) {
+      throw new AppError(
+        `Stok "${mat.item.name}" tidak mencukupi. Tersedia: ${qtyBefore}, dibutuhkan: ${baseQty}`,
+        StatusCodes.BAD_REQUEST,
+      );
+    }
 
     const movement = await tx.inventoryMovement.create({
       data: {
@@ -314,7 +338,8 @@ const addFinishedGoods = async (order, employeeId, tx) => {
     });
 
     const qtyBefore    = D(inventory.qtyOnHand);
-    const qtyChange    = qtyToAdd;
+    // Movement dalam satuan dasar (conversionFactor satuan barang jadi)
+    const qtyChange    = await toBaseQty(tx, pItem.itemId, pItem.unitId, qtyToAdd);
     const qtyAfter     = qtyBefore.plus(qtyChange);
     const newAvailable = D(qtyAfter).minus(D(inventory.qtyReserved));
 
@@ -369,6 +394,9 @@ const submitQC = async (id, { status, notes, inspectionDate }, qcEmployeeId) => 
 
   // Semua write dalam satu transaction agar konsisten
   const { qcRecord } = await prisma.$transaction(async (tx) => {
+    // 0. Guard race condition: QC hanya diproses sekali (PASS → COMPLETED, lainnya → IN_PROGRESS)
+    await guardTransition(tx, id, "QC", status === "PASS" ? "COMPLETED" : "IN_PROGRESS");
+
     // 1. Buat record QC
     const rec = await tx.productionQC.create({
       data: {
@@ -463,34 +491,57 @@ const remove = async (id) => {
 
   // 2. Reverse inventory + hapus order dalam satu transaksi
   await prisma.$transaction(async (tx) => {
+    // Guard race condition: order harus masih ada dengan status yang sama saat dibaca
+    // (status tidak diubah — hanya mengunci baris; count = 0 → sudah diproses paralel)
+    await guardTransition(tx, id, order.status, order.status);
+
+    // Balik movement + tulis baris movement pembalik agar kartu stok tetap konsisten (G4-10)
+    const reverseMovement = async (movementId, label) => {
+      if (!movementId) return;
+      const mv = await tx.inventoryMovement.findUnique({
+        where:  { id: movementId },
+        select: { inventoryId: true, qtyChange: true, warehouseId: true, referenceId: true },
+      });
+      if (!mv) return;
+      const inventory = await tx.inventory.findUnique({
+        where:  { id: mv.inventoryId },
+        select: { id: true, qtyOnHand: true, qtyReserved: true },
+      });
+      const reversal  = D(mv.qtyChange).negated();
+      const qtyBefore = D(inventory.qtyOnHand);
+      const qtyAfter  = qtyBefore.plus(reversal);
+
+      await tx.inventoryMovement.create({
+        data: {
+          inventoryId:   mv.inventoryId,
+          movementType:  "PRODUCTION",
+          sourceModule:  "PRODUCTION",
+          createdSource: "SYSTEM",
+          warehouseId:   mv.warehouseId,
+          qtyBefore,
+          qtyChange:     reversal,
+          qtyAfter,
+          referenceType: "PRODUCTION",
+          referenceId:   mv.referenceId,
+          referenceNo:   order.productionNo,
+          notes:         `Pembatalan produksi (hapus): ${label}`,
+        },
+      });
+
+      await tx.inventory.update({
+        where: { id: inventory.id },
+        data:  { qtyOnHand: qtyAfter, qtyAvailable: qtyAfter.minus(D(inventory.qtyReserved)) },
+      });
+    };
+
     // Balik konsumsi material (qtyChange negatif → kembalikan ke stok)
     for (const mat of order.materials) {
-      if (!mat.inventoryMovementId) continue;
-      const mv = await tx.inventoryMovement.findUnique({
-        where:  { id: mat.inventoryMovementId },
-        select: { inventoryId: true, qtyChange: true },
-      });
-      if (!mv) continue;
-      const reversal = D(mv.qtyChange).negated(); // OUT → balik jadi positif
-      await tx.inventory.update({
-        where: { id: mv.inventoryId },
-        data:  { qtyOnHand: { increment: reversal }, qtyAvailable: { increment: reversal } },
-      });
+      await reverseMovement(mat.inventoryMovementId, mat.item?.name ?? mat.itemId);
     }
 
     // Balik penambahan barang jadi (qtyChange positif → kurangi dari stok)
     for (const item of order.items) {
-      if (!item.inventoryMovementId) continue;
-      const mv = await tx.inventoryMovement.findUnique({
-        where:  { id: item.inventoryMovementId },
-        select: { inventoryId: true, qtyChange: true },
-      });
-      if (!mv) continue;
-      const reversal = D(mv.qtyChange).negated(); // IN → balik jadi negatif
-      await tx.inventory.update({
-        where: { id: mv.inventoryId },
-        data:  { qtyOnHand: { increment: reversal }, qtyAvailable: { increment: reversal } },
-      });
+      await reverseMovement(item.inventoryMovementId, item.item?.name ?? item.itemId);
     }
 
     // Hard delete — cascade: items, materials, employees, qcRecords, timelines

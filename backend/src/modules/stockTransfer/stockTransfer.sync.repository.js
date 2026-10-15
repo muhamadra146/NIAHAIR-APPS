@@ -66,7 +66,7 @@ const markTransferSynced = ({ id, accurateTransferId, accurateTransferNumber }) 
 const markTransferReceiveSynced = ({ id, accurateReceiveId, accurateReceiveNumber }) =>
   prisma.$executeRawUnsafe(
     `UPDATE "stock_transfers"
-     SET "accurateReceiveId" = $1, "accurateReceiveNumber" = $2, "lastReceiveSyncAt" = NOW()
+     SET "accurateReceiveId" = $1, "accurateReceiveNumber" = $2, "lastReceiveSyncAt" = (NOW() AT TIME ZONE 'UTC')
      WHERE id = $3`,
     accurateReceiveId,
     accurateReceiveNumber ?? null,
