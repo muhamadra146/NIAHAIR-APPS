@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useViewOnly } from "@/hooks/useViewOnly";
 import { Link } from "react-router-dom";
 import { ChevronRight, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -29,7 +30,8 @@ export function InvoicePaymentListPage() {
   const [deleteTarget, setDeleteTarget] = useState<InvoicePayment | null>(null);
 
   const deleteMutation = useDeletePayment("");
-  const canDelete = user ? CAN_DELETE.includes(user.roleCode) : false;
+  const isViewOnly = useViewOnly();
+  const canDelete = !isViewOnly && (user ? CAN_DELETE.includes(user.roleCode) : false);
 
   const { data: methodsData = [] } = useQuery({
     queryKey: ["payment-methods"],

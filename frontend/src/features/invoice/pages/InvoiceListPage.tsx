@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useViewOnly } from "@/hooks/useViewOnly";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Plus, Eye, Search, CreditCard, Receipt,
@@ -340,7 +341,9 @@ function ManagementView() {
   const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null);
 
   const deleteMutation = useDeleteInvoice(deleteTarget?.id ?? "");
-  const canDelete = user ? CAN_DELETE.includes(user.roleCode) : false;
+  // Finance: lihat saja — tanpa tombol buat/hapus
+  const isViewOnly = useViewOnly();
+  const canDelete = !isViewOnly && (user ? CAN_DELETE.includes(user.roleCode) : false);
 
   const { data, isLoading } = useInvoices({
     page, limit: 20,
@@ -358,12 +361,12 @@ function ManagementView() {
     <PageContainer
       title="Invoice / POS"
       subtitle={meta ? `${meta.total} invoice` : "Kelola transaksi penjualan"}
-      action={
+      action={isViewOnly ? undefined : (
         <Button onClick={() => setFormOpen(true)} size="sm" disabled={!branchId}>
           <Plus className="mr-2 h-4 w-4" />
           Buat Invoice
         </Button>
-      }
+      )}
     >
       <div className="space-y-5 sm:space-y-6">
 

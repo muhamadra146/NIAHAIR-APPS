@@ -120,9 +120,9 @@ export const router = createBrowserRouter([
             ],
           },
 
-          // ── Operasional: POS only — CASHIER + MANAGER + ADMIN (bukan OFFICE/FINANCE)
+          // ── Operasional: POS — CASHIER + MANAGER + ADMIN; FINANCE lihat saja (keputusan user 2026-10-15)
           {
-            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","CASHIER"]} />,
+            element: <ProtectedRoute allowedRoles={["SUPER_ADMIN","OWNER","MANAGER","CASHIER","FINANCE"]} />,
             children: [
               { path: "/invoices",         element: <InvoiceListPage /> },
               { path: "/invoices/:id",     element: <InvoiceDetailPage /> },

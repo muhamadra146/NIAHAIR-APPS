@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useViewOnly } from "@/hooks/useViewOnly";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, CreditCard, Wallet, Trash2, Printer, MessageCircle, CheckCircle2, Pencil } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
@@ -63,7 +64,9 @@ export function InvoiceDetailPage() {
   const [receiptOpen, setReceiptOpen]             = useState(false);
   const qc = useQueryClient();
 
-  const canDeletePayment = user ? CAN_DELETE_PAYMENT.includes(user.roleCode) : false;
+  // Finance: lihat saja — tanpa tombol edit/bayar/deposit/hapus
+  const isViewOnly       = useViewOnly();
+  const canDeletePayment = !isViewOnly && (user ? CAN_DELETE_PAYMENT.includes(user.roleCode) : false);
 
   if (isLoading) {
     return (
@@ -113,13 +116,13 @@ export function InvoiceDetailPage() {
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
-              {isOpenInvoice(invoice.status) && (
+              {!isViewOnly && isOpenInvoice(invoice.status) && (
                 <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
                   <Pencil className="mr-1.5 h-3.5 w-3.5" />
                   Edit
                 </Button>
               )}
-              {canPay && (
+              {!isViewOnly && canPay && (
                 <>
                   <Button size="sm" variant="outline" onClick={() => setDepOpen(true)}>
                     <Wallet className="mr-1.5 h-3.5 w-3.5" />
@@ -141,7 +144,7 @@ export function InvoiceDetailPage() {
                   Struk
                 </Button>
               )}
-              {invoice.status !== "PAID" && (
+              {!isViewOnly && invoice.status !== "PAID" && (
                 <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteConfirm(true)}>
                   <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                   Hapus

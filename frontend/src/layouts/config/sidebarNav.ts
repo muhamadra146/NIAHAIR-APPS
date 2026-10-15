@@ -124,11 +124,13 @@ export const sidebarNav: NavItem[] = [
     label: "POS",
     href:  "/invoices",
     icon:  Receipt,
-    roles: POS_ROLES,
+    roles: [...POS_ROLES, "FINANCE"],
+    // Finance hanya melihat invoice & pembayaran (data di balik Dashboard Keuangan)
+    viewOnlyRoles: ["FINANCE"],
     group: "Operasional",
     children: [
-      { label: "Daftar Invoice",           href: "/invoices",          roles: POS_ROLES },
-      { label: "Pembayaran Invoice", href: "/invoice-payments",  roles: POS_ROLES },
+      { label: "Daftar Invoice",           href: "/invoices",          roles: [...POS_ROLES, "FINANCE"], viewOnlyRoles: ["FINANCE"] },
+      { label: "Pembayaran Invoice", href: "/invoice-payments",  roles: [...POS_ROLES, "FINANCE"], viewOnlyRoles: ["FINANCE"] },
     ],
   },
 
