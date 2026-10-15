@@ -798,12 +798,12 @@ function InvoiceGroupRow({
   return (
     <div>
       {/* Invoice header — area tombol buka/tutup dan tombol Setujui bersebelahan (bukan bersarang) */}
-      <div className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-muted/30 transition-colors">
+      <div className="w-full flex flex-wrap items-center gap-3 px-5 py-3.5 hover:bg-muted/30 transition-colors">
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={expanded}
-          className="flex flex-1 min-w-0 flex-wrap items-center gap-3 text-left"
+          className="flex flex-1 min-w-[14rem] items-center gap-3 text-left"
         >
           <ChevronDown
             className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 ${expanded ? "" : "-rotate-90"}`}
@@ -829,7 +829,7 @@ function InvoiceGroupRow({
           <Button
             size="sm"
             variant="outline"
-            className="h-7 shrink-0 text-xs gap-1"
+            className="ml-auto h-7 shrink-0 text-xs gap-1"
             disabled={isGroupApproving || approving}
             onClick={() => onGroupApprove(pendingItems.map((c) => c.id))}
           >
