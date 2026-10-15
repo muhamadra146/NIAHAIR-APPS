@@ -41,13 +41,22 @@ const findUserByEmail = (email) =>
 const findRoleById = (id) =>
   prisma.employeeRole.findUnique({ where: { id }, select: { id: true } });
 
+// Prisma menolak kolom FK (divisionId) yang dicampur dengan relasi (role/homeBranch connect) —
+// divisi selalu ditulis sebagai relasi
+const divisionWrite = (divisionId, isUpdate) => {
+  if (divisionId)                         return { division: { connect: { id: divisionId } } };
+  if (divisionId === null && isUpdate)    return { division: { disconnect: true } };
+  return {};
+};
+
 const create = (data) => {
-  const { roleId, homeBranchId, ...rest } = data;
+  const { roleId, homeBranchId, divisionId, ...rest } = data;
   return prisma.employee.create({
     data: {
       ...rest,
       role: { connect: { id: roleId } },
       ...(homeBranchId && { homeBranch: { connect: { id: homeBranchId } } }),
+      ...divisionWrite(divisionId, false),
     },
     include: INCLUDE,
   });
@@ -55,7 +64,7 @@ const create = (data) => {
 
 /** syncUserId: bila email berubah, email login akun karyawan ikut diperbarui */
 const update = (id, data, syncUserId = null) => {
-  const { roleId, homeBranchId, ...rest } = data;
+  const { roleId, homeBranchId, divisionId, ...rest } = data;
 
   let homeBranchWrite;
   if (homeBranchId)          homeBranchWrite = { connect: { id: homeBranchId } };
@@ -67,6 +76,7 @@ const update = (id, data, syncUserId = null) => {
       ...rest,
       ...(roleId        && { role:       { connect: { id: roleId } } }),
       ...(homeBranchWrite && { homeBranch: homeBranchWrite }),
+      ...divisionWrite(divisionId, true),
     },
     include: INCLUDE,
   });
