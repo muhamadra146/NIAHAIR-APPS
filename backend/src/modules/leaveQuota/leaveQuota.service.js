@@ -17,6 +17,18 @@ const getQuotas = async ({ employeeId, year, page, limit } = {}) => {
 };
 
 // Self-service: kuota milik sendiri — bounded per karyawan (max N jenis cuti)
+/** Tambahkan hari menunggu persetujuan & sisa jatah (jatah − terpakai − menunggu) ke tiap kuota */
+const withRemaining = async (employeeId, quotas) => {
+  const years = [...new Set(quotas.map((q) => q.year))];
+  const pendingByYear = Object.fromEntries(await Promise.all(
+    years.map(async (y) => [y, await repo.sumPendingDays(employeeId, y)]),
+  ));
+  return quotas.map((q) => {
+    const pendingDays = pendingByYear[q.year]?.[q.leaveTypeId] ?? 0;
+    return { ...q, pendingDays, remainingDays: q.totalDays - q.usedDays - pendingDays };
+  });
+};
+
 const getMyQuotas = async (employeeId, { year, page, limit } = {}) => {
   const where = { employeeId };
   if (year) where.year = Number(year);
@@ -25,7 +37,7 @@ const getMyQuotas = async (employeeId, { year, page, limit } = {}) => {
     repo.findAll({ skip, take, where }),
     repo.count(where),
   ]);
-  return { data, meta: paginationMeta(total, pageNum, limitNum) };
+  return { data: await withRemaining(employeeId, data), meta: paginationMeta(total, pageNum, limitNum) };
 };
 
 const assign = async ({ employeeId, leaveTypeId, year, totalDays }) => {
@@ -38,10 +50,12 @@ const assign = async ({ employeeId, leaveTypeId, year, totalDays }) => {
   return repo.upsert(employeeId, leaveTypeId, Number(year), Number(totalDays));
 };
 
+/** Sisa jatah = jatah − terpakai − pengajuan yang masih menunggu persetujuan */
 const getBalance = async (employeeId, leaveTypeId, year) => {
   const q = await repo.findOne(employeeId, leaveTypeId, year);
   if (!q) return null;
-  return { ...q, remainingDays: q.totalDays - q.usedDays };
+  const pendingDays = (await repo.sumPendingDays(employeeId, year, leaveTypeId))[leaveTypeId] ?? 0;
+  return { ...q, pendingDays, remainingDays: q.totalDays - q.usedDays - pendingDays };
 };
 
 const incrementUsed = (employeeId, leaveTypeId, year, days) =>

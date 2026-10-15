@@ -340,6 +340,10 @@ export interface LeaveQuota {
   year:        number;
   totalDays:   number;
   usedDays:    number;
+  /** Hari cuti yang masih menunggu persetujuan (hanya di /leave-quotas/my) */
+  pendingDays?:   number;
+  /** Sisa jatah = jatah − terpakai − menunggu persetujuan */
+  remainingDays?: number;
   employee:    { id: string; name: string; employeeCode: string | null };
   leaveType:   { id: string; code: string; name: string; quotaType: QuotaType; maxDaysPerYear: number; isPaid: boolean };
 }

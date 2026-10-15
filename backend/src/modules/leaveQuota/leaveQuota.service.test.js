@@ -80,8 +80,16 @@ describe('getBalance', () => {
 
   test('computes remainingDays from totalDays - usedDays', async () => {
     repo.findOne.mockResolvedValue(QUOTA);
+    repo.sumPendingDays.mockResolvedValue({});
     const result = await svc.getBalance('e1', 'lt1', 2024);
     expect(result.remainingDays).toBe(9); // 12 - 3
+  });
+
+  test('remainingDays also subtracts requests still waiting for approval', async () => {
+    repo.findOne.mockResolvedValue(QUOTA);
+    repo.sumPendingDays.mockResolvedValue({ lt1: 4 });
+    const result = await svc.getBalance('e1', 'lt1', 2024);
+    expect(result).toMatchObject({ pendingDays: 4, remainingDays: 5 }); // 12 - 3 - 4
   });
 });
 

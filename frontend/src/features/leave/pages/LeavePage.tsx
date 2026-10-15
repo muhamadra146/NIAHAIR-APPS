@@ -136,16 +136,21 @@ function RequestDialog({ open, onClose }: { open: boolean; onClose: () => void }
   const selectedQuota = form.leaveTypeId
     ? myQuotas.find((q) => q.leaveTypeId === form.leaveTypeId) ?? null
     : null;
+  // Sisa jatah = jatah − terpakai − pengajuan lain yang masih menunggu (keputusan user 2026-10-15)
+  const remaining   = selectedQuota ? (selectedQuota.remainingDays ?? selectedQuota.totalDays - selectedQuota.usedDays) : null;
+  const noQuota     = !!form.leaveTypeId && !selectedQuota;
+  const overQuota   = remaining !== null && days > remaining;
+  const canSubmit   = !!form.leaveTypeId && !noQuota && !overQuota
+    && !!form.startDate && !!form.endDate && form.endDate >= form.startDate;
 
   async function handleSubmit() {
-    if (!form.startDate || !form.endDate) return;
-    if (form.endDate < form.startDate) return;
+    if (!canSubmit) return;
     setError(null);
     try {
       await createMut.mutateAsync({
         ...form,
         reason:      form.reason || undefined,
-        leaveTypeId: form.leaveTypeId || undefined,
+        leaveTypeId: form.leaveTypeId,
       });
       onClose();
       setForm({ startDate: today, endDate: today, reason: "", leaveTypeId: "" });
@@ -164,28 +169,34 @@ function RequestDialog({ open, onClose }: { open: boolean; onClose: () => void }
         <div className="space-y-3 py-1">
           {leaveTypes.length > 0 && (
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Tipe Cuti</Label>
+              <Label className="text-xs font-medium">Jenis Cuti <span className="text-destructive">*</span></Label>
               <select
                 value={form.leaveTypeId ?? ""}
                 onChange={(e) => setForm((f) => ({ ...f, leaveTypeId: e.target.value }))}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none"
               >
-                <option value="">Tidak dipilih</option>
+                <option value="" disabled>— Pilih jenis cuti —</option>
                 {leaveTypes.map((lt) => (
                   <option key={lt.id} value={lt.id}>{lt.name}</option>
                 ))}
               </select>
-              {selectedQuota && (
-                <p className="text-xs text-slate-500">
-                  Sisa kuota:{" "}
-                  <span className={`font-semibold ${
-                    selectedQuota.totalDays - selectedQuota.usedDays <= 0
-                      ? "text-red-600"
-                      : "text-emerald-700"
-                  }`}>
-                    {selectedQuota.totalDays - selectedQuota.usedDays} hari
+              {selectedQuota && remaining !== null && (
+                <div className="rounded-md bg-slate-50 px-2.5 py-2 text-xs text-slate-600">
+                  Sisa jatah cuti {form.startDate.slice(0, 4)}:{" "}
+                  <span className={`font-semibold ${remaining <= 0 ? "text-red-600" : "text-emerald-700"}`}>
+                    {remaining} hari
                   </span>{" "}dari {selectedQuota.totalDays} hari
-                </p>
+                  <span className="block text-[11px] text-slate-500">
+                    Terpakai {selectedQuota.usedDays} hari
+                    {(selectedQuota.pendingDays ?? 0) > 0 && ` · ${selectedQuota.pendingDays} hari menunggu persetujuan`}
+                  </span>
+                </div>
+              )}
+              {noQuota && (
+                <p className="text-xs text-red-600">Jatah cuti jenis ini belum ditetapkan untuk tahun {form.startDate.slice(0, 4)}. Hubungi HRD.</p>
+              )}
+              {!form.leaveTypeId && (
+                <p className="text-xs text-muted-foreground">Pilih jenis cuti untuk melihat sisa jatah.</p>
               )}
             </div>
           )}
@@ -209,6 +220,9 @@ function RequestDialog({ open, onClose }: { open: boolean; onClose: () => void }
           {form.endDate < form.startDate && (
             <p className="text-xs text-red-500">Tanggal selesai harus setelah tanggal mulai</p>
           )}
+          {overQuota && (
+            <p className="text-xs text-red-600">Durasi {days} hari melebihi sisa jatah ({remaining} hari).</p>
+          )}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Alasan</Label>
             <Input placeholder="Opsional" value={form.reason ?? ""}
@@ -219,7 +233,7 @@ function RequestDialog({ open, onClose }: { open: boolean; onClose: () => void }
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose} disabled={createMut.isPending}>Batal</Button>
           <Button size="sm" onClick={handleSubmit}
-            disabled={createMut.isPending || !form.startDate || !form.endDate || form.endDate < form.startDate}>
+            disabled={createMut.isPending || !canSubmit}>
             {createMut.isPending ? "Mengirim…" : "Ajukan"}
           </Button>
         </DialogFooter>
@@ -342,7 +356,8 @@ export function LeavePanel({ createOpen, onCreateClose, asApprover }: { createOp
         {!isAdmin && myQuotas.length > 0 && (
           <div className="flex flex-wrap gap-3">
             {myQuotas.map((q) => {
-              const rem = q.totalDays - q.usedDays;
+              // Sisa = jatah − terpakai − menunggu persetujuan
+              const rem = q.remainingDays ?? q.totalDays - q.usedDays;
               return (
                 <div key={q.id} className="flex-1 min-w-[140px] rounded-xl border bg-card px-4 py-3 shadow-sm">
                   <p className="text-xs text-muted-foreground">{q.leaveType.name}</p>
@@ -350,6 +365,9 @@ export function LeavePanel({ createOpen, onCreateClose, asApprover }: { createOp
                     rem <= 0 ? "text-red-600" : rem <= 3 ? "text-amber-600" : "text-emerald-700"
                   }`}>{rem}</p>
                   <p className="text-xs text-muted-foreground">sisa dari {q.totalDays} hari</p>
+                  {(q.pendingDays ?? 0) > 0 && (
+                    <p className="text-[11px] text-amber-600">{q.pendingDays} hari menunggu persetujuan</p>
+                  )}
                 </div>
               );
             })}

@@ -103,7 +103,10 @@ const createLeave = async (employeeId, { startDate, endDate, reason, leaveTypeId
 
   const totalDays = calcTotalDays(start, end);
 
-  if (leaveTypeId) {
+  // Jenis cuti wajib (keputusan user 2026-10-15) — jatah cuti selalu terpotong dari jenis yang dipilih
+  if (!leaveTypeId) throw new AppError("Jenis cuti wajib dipilih", StatusCodes.BAD_REQUEST);
+
+  {
     const leaveType = await prisma.leaveType.findUnique({
       where: { id: leaveTypeId },
       select: { quotaType: true },
@@ -119,10 +122,11 @@ const createLeave = async (employeeId, { startDate, endDate, reason, leaveTypeId
           StatusCodes.UNPROCESSABLE_ENTITY
         );
       }
-      const remaining = balance.totalDays - balance.usedDays;
+      // Sisa sudah dikurangi pengajuan lain yang masih menunggu persetujuan
+      const remaining = balance.remainingDays ?? (balance.totalDays - balance.usedDays);
       if (totalDays > remaining)
         throw new AppError(
-          `Sisa kuota cuti tidak cukup. Sisa: ${remaining} hari, dibutuhkan: ${totalDays} hari`,
+          `Sisa kuota cuti tidak cukup. Sisa: ${remaining} hari${balance.pendingDays ? ` (${balance.pendingDays} hari masih menunggu persetujuan)` : ""}, dibutuhkan: ${totalDays} hari`,
           StatusCodes.BAD_REQUEST
         );
     }
@@ -135,7 +139,7 @@ const createLeave = async (employeeId, { startDate, endDate, reason, leaveTypeId
     reason:    reason ?? null,
     totalDays,
     status: "PENDING",
-    ...(leaveTypeId ? { leaveTypeId } : {}),
+    leaveTypeId,
   });
 };
 

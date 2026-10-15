@@ -21,6 +21,21 @@ const findOne = (employeeId, leaveTypeId, year) =>
     include: INCLUDE,
   });
 
+/** Total hari cuti yang masih MENUNGGU persetujuan, per jenis cuti, untuk tahun tsb */
+const sumPendingDays = async (employeeId, year, leaveTypeId = undefined) => {
+  const rows = await prisma.leave.groupBy({
+    by:    ["leaveTypeId"],
+    where: {
+      employeeId,
+      status: "PENDING",
+      leaveTypeId: leaveTypeId ?? { not: null },
+      startDate: { gte: new Date(Date.UTC(year, 0, 1)), lt: new Date(Date.UTC(year + 1, 0, 1)) },
+    },
+    _sum: { totalDays: true },
+  });
+  return Object.fromEntries(rows.map((r) => [r.leaveTypeId, Number(r._sum.totalDays ?? 0)]));
+};
+
 const findById = (id) =>
   prisma.leaveQuota.findUnique({ where: { id }, include: INCLUDE });
 
@@ -46,4 +61,4 @@ const decrementUsed = (employeeId, leaveTypeId, year, days) =>
     include: INCLUDE,
   });
 
-module.exports = { findAll, count, findMany, findOne, findById, upsert, incrementUsed, decrementUsed };
+module.exports = { findAll, count, findMany, findOne, sumPendingDays, findById, upsert, incrementUsed, decrementUsed };

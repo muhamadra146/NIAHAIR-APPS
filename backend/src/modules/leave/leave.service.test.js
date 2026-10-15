@@ -89,13 +89,29 @@ describe('createLeave', () => {
     })).rejects.toMatchObject({ statusCode: 400 });
   });
 
+  // Jenis cuti wajib (keputusan user 2026-10-15)
+  test('rejects leave without leave type', async () => {
+    await expect(svc.createLeave('e1', { startDate: '2024-06-01', endDate: '2024-06-03' }))
+      .rejects.toMatchObject({ statusCode: 400 });
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  test('pending requests reduce the remaining quota', async () => {
+    prisma.leaveType.findUnique.mockResolvedValue({ quotaType: 'ANNUAL' });
+    quotaSvc.getBalance.mockResolvedValue({ totalDays: 12, usedDays: 2, pendingDays: 8, remainingDays: 2 });
+    await expect(svc.createLeave('e1', { startDate: '2024-06-01', endDate: '2024-06-03', leaveTypeId: 'lt1' }))
+      .rejects.toMatchObject({ statusCode: 400, message: expect.stringContaining('8 hari masih menunggu persetujuan') });
+  });
+
   test('creates leave with PENDING status', async () => {
-    await svc.createLeave('e1', { startDate: '2024-06-01', endDate: '2024-06-03' });
+    prisma.leaveType.findUnique.mockResolvedValue({ quotaType: 'EVENT_BASED' });
+    await svc.createLeave('e1', { startDate: '2024-06-01', endDate: '2024-06-03', leaveTypeId: 'lt1' });
     expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ status: 'PENDING' }));
   });
 
   test('calculates totalDays correctly', async () => {
-    await svc.createLeave('e1', { startDate: '2024-06-01', endDate: '2024-06-03' });
+    prisma.leaveType.findUnique.mockResolvedValue({ quotaType: 'EVENT_BASED' });
+    await svc.createLeave('e1', { startDate: '2024-06-01', endDate: '2024-06-03', leaveTypeId: 'lt1' });
     expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ totalDays: 3 }));
   });
 

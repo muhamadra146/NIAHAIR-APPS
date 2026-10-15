@@ -37,5 +37,6 @@ export interface CreateLeaveInput {
   startDate:   string;
   endDate:     string;
   reason?:     string;
-  leaveTypeId?: string;
+  /** Wajib — jatah cuti terpotong dari jenis ini */
+  leaveTypeId: string;
 }

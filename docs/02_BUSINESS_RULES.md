@@ -4469,6 +4469,13 @@ Special Leave.
 
 Leave membuat Employee tidak Available.
 
+### Pengajuan Cuti & Sisa Jatah (keputusan user 2026-10-15)
+
+- **Jenis cuti wajib dipilih** saat mengajukan cuti; jatah cuti selalu terpotong dari jenis tersebut.
+- **Sisa jatah = jatah − terpakai (disetujui) − pengajuan yang masih menunggu persetujuan**, per jenis cuti per tahun. Pengajuan yang melebihi sisa ditolak.
+- Form pengajuan menampilkan sisa jatah, hari terpakai, dan hari yang masih menunggu; tombol Ajukan nonaktif bila jenis belum dipilih, jatah belum ditetapkan, atau durasi melebihi sisa.
+- Jenis cuti yang jatahnya belum ditetapkan untuk karyawan tidak bisa diajukan ("Hubungi HRD").
+
 ---
 
 # EMP-013
