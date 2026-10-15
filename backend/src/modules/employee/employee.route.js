@@ -23,13 +23,16 @@ const {
 
 const router = Router();
 
+// Tambah/ubah karyawan — peran yang bisa menulis di halaman Karyawan (Finance hanya lihat)
+const EMPLOYEE_WRITE_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE];
+
 router.get("/next-code", authenticate, getNextCodeController);
 router.get("/",          authenticate, getAllController);
-router.post("/",   authenticate, uploadEmployee.fields([{ name: "ktpFile", maxCount: 1 }, { name: "contractFile", maxCount: 1 }]), validate(createEmployeeSchema), createController);
+router.post("/",   authenticate, authorize(...EMPLOYEE_WRITE_ROLES), uploadEmployee.fields([{ name: "ktpFile", maxCount: 1 }, { name: "contractFile", maxCount: 1 }]), validate(createEmployeeSchema), createController);
 router.get("/:id", authenticate, getByIdController);
-router.put("/:id", authenticate, uploadEmployee.fields([{ name: "ktpFile", maxCount: 1 }, { name: "contractFile", maxCount: 1 }]), validate(updateEmployeeSchema), updateController);
+router.put("/:id", authenticate, authorize(...EMPLOYEE_WRITE_ROLES), uploadEmployee.fields([{ name: "ktpFile", maxCount: 1 }, { name: "contractFile", maxCount: 1 }]), validate(updateEmployeeSchema), updateController);
 
-router.patch("/:id/files",      authenticate, uploadEmployee.fields([{ name: "ktpFile", maxCount: 1 }, { name: "contractFile", maxCount: 1 }]), uploadFilesController);
+router.patch("/:id/files",      authenticate, authorize(...EMPLOYEE_WRITE_ROLES), uploadEmployee.fields([{ name: "ktpFile", maxCount: 1 }, { name: "contractFile", maxCount: 1 }]), uploadFilesController);
 router.patch("/:id/deactivate", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), deactivateController);
 router.delete("/:id",           authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), deleteController);
 

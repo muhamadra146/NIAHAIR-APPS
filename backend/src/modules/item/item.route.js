@@ -28,7 +28,8 @@ router.get( "/:id/service-materials",   authenticate, getServiceMaterialsControl
 // 3. CRUD routes last
 router.get("/", authenticate, getAllController);
 router.get("/:id", authenticate, getByIdController);
-router.post("/", authenticate, validate(createItemSchema), createController);
+// Item baru biasanya dari sinkron Accurate; buat manual hanya SA/Owner
+router.post("/", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), validate(createItemSchema), createController);
 // Ubah item (kategori komisi, tanda diskon member) — sama dengan akses halaman Komisi → Master Item
 const ITEM_EDIT_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.FINANCE];
 router.put("/:id", authenticate, authorize(...ITEM_EDIT_ROLES), validate(updateItemSchema), updateController);
