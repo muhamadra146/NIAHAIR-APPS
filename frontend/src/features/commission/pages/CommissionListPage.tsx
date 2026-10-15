@@ -540,21 +540,23 @@ export function CommissionListPage() {
             {/* Filters row */}
             <div className="flex flex-wrap items-center gap-3">
               {/* Date range — grouped */}
-              <div className="flex items-center gap-0 rounded-lg border border-input bg-background shadow-sm overflow-hidden">
-                <div className="flex items-center gap-2 px-3 py-2">
-                  <span className="text-xs text-muted-foreground shrink-0" title="Komisi PENDING memakai tanggal dibuat">Disetujui dari</span>
-                  <input type="date" value={startDate} onChange={(e) => { setStart(e.target.value); setPage(1); }} className="text-sm bg-transparent focus:outline-none" />
+              {/* Di layar HP kotak ini selebar layar, label di atasnya, dan input boleh menyusut (tidak terpotong) */}
+              <span className="w-full text-xs text-muted-foreground sm:hidden">Disetujui dari – sampai</span>
+              <div className="flex w-full sm:w-auto items-center gap-0 rounded-lg border border-input bg-background shadow-sm overflow-hidden">
+                <div className="flex min-w-0 flex-1 sm:flex-none items-center gap-2 px-3 py-2">
+                  <span className="hidden text-xs text-muted-foreground shrink-0 sm:inline" title="Komisi PENDING memakai tanggal dibuat">Disetujui dari</span>
+                  <input type="date" value={startDate} onChange={(e) => { setStart(e.target.value); setPage(1); }} className="min-w-0 w-full sm:w-auto text-sm bg-transparent focus:outline-none" aria-label="Disetujui dari" />
                 </div>
                 <span className="text-muted-foreground text-xs px-1 select-none border-x border-input bg-muted/30 py-2">s/d</span>
-                <div className="flex items-center gap-2 px-3 py-2">
-                  <input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className="text-sm bg-transparent focus:outline-none" />
+                <div className="flex min-w-0 flex-1 sm:flex-none items-center gap-2 px-3 py-2">
+                  <input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className="min-w-0 w-full sm:w-auto text-sm bg-transparent focus:outline-none" aria-label="Disetujui sampai" />
                 </div>
               </div>
               <Input
                 value={invoiceId}
                 onChange={(e) => { setInvoiceId(e.target.value.trim()); setPage(1); }}
                 placeholder="Filter invoice…"
-                className={`${filterInputCls} w-44 h-[38px]`}
+                className={`${filterInputCls} w-full sm:w-44 h-[38px]`}
               />
               {isSuperAdmin && invoiceId && (
                 <Button
