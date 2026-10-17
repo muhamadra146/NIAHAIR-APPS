@@ -160,7 +160,7 @@ const cancel = async (id, employeeId) => {
   if (!sick) throw new AppError("Data sakit tidak ditemukan", StatusCodes.NOT_FOUND);
   if (sick.employeeId !== employeeId) throw new AppError("Akses ditolak", StatusCodes.FORBIDDEN);
   if (sick.status !== "PENDING") throw new AppError("Hanya sakit PENDING yang bisa dibatalkan", StatusCodes.BAD_REQUEST);
-  return repo.update(id, { status: "REJECTED" });
+  return repo.update(id, { status: "CANCELLED" });
 };
 
 const uploadDocument = async (id, employeeId, file) => {

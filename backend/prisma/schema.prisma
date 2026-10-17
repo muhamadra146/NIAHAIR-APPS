@@ -2688,12 +2688,14 @@ enum SickLeaveStatus {
   PENDING
   APPROVED
   REJECTED
+  CANCELLED
 }
 
 enum PermissionStatus {
   PENDING
   APPROVED
   REJECTED
+  CANCELLED
 }
 
 enum PermissionType {

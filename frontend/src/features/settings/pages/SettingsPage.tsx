@@ -12,7 +12,7 @@ import {
   useEmployeeRoles, useCreateEmployeeRole, useUpdateEmployeeRole, useDeleteEmployeeRole,
   useUsers, useCreateUser, useUpdateUser, useResetUserPassword, useDeleteUser,
   useBranches, useCreateBranch, useUpdateBranch, useDeleteBranch, useSyncBranchesFromAccurate, useMapBranchToAccurate,
-  usePaymentMethods, useCreatePaymentMethod, useUpdatePaymentMethod, useDeletePaymentMethod,
+  usePaymentMethods, useCreatePaymentMethod, useUpdatePaymentMethod, useDeletePaymentMethod, useActivatePaymentMethod,
   useCashAccounts, useCreateCashAccount, useUpdateCashAccount, useDeleteCashAccount,
   useWarehouses, useSyncWarehouses, useUpdateWarehouseBranch, useUpdateWarehouseAccurate, useDeleteWarehouse,
   useShiftMasters, useCreateShift, useUpdateShift, useDeleteShift,
@@ -500,8 +500,14 @@ function PaymentMethodSubTab() {
   const [editMethod, setEdit]     = useState<PaymentMethod | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const { data, isLoading } = usePaymentMethods({ limit: 100 });
+  // Default hanya yang aktif; nonaktif bisa dilihat & diaktifkan lagi lewat filter (keputusan user 2026-10-17)
+  const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
+  const { data, isLoading } = usePaymentMethods({
+    limit: 100,
+    ...(statusFilter === "all" ? {} : { isActive: statusFilter === "active" }),
+  });
   const methods = data?.data ?? [];
+  const activateMut = useActivatePaymentMethod();
 
   const createMut = useCreatePaymentMethod();
   const updateMut = useUpdatePaymentMethod(editMethod?.id ?? "");
@@ -510,8 +516,16 @@ function PaymentMethodSubTab() {
   function openCreate() { setEdit(null); setFormError(null); setFormOpen(true); }
   function openEdit(m: PaymentMethod) { setEdit(m); setFormError(null); setFormOpen(true); }
   async function handleDelete(m: PaymentMethod) {
-    if (!confirm(`Delete "${m.name}"?`)) return;
+    if (!confirm(`Nonaktifkan "${m.name}"? Metode ini tidak akan muncul lagi saat pembayaran.`)) return;
     try { await deleteMut.mutateAsync(m.id); } catch { /* handled */ }
+  }
+  async function handleActivate(m: PaymentMethod) {
+    try {
+      await activateMut.mutateAsync(m.id);
+      toast.success(`"${m.name}" diaktifkan kembali`);
+    } catch (err: unknown) {
+      toast.error(apiErr(err, "Gagal mengaktifkan metode bayar"));
+    }
   }
 
   async function handleSubmit(values: PaymentMethodFormValues) {
@@ -534,8 +548,21 @@ function PaymentMethodSubTab() {
         </div>
         <Button size="sm" onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Tambah</Button>
       </div>
+      <div className="flex gap-2">
+        {([["active", "Aktif"], ["inactive", "Nonaktif"], ["all", "Semua"]] as const).map(([value, label]) => (
+          <Button
+            key={value}
+            size="sm"
+            variant={statusFilter === value ? "default" : "outline"}
+            className="h-8 rounded-full"
+            onClick={() => setStatusFilter(value)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
       <Card><CardContent className="p-0">
-        <PaymentMethodTable methods={methods} isLoading={isLoading} onEdit={openEdit} onDelete={handleDelete} />
+        <PaymentMethodTable methods={methods} isLoading={isLoading} onEdit={openEdit} onDelete={handleDelete} onActivate={handleActivate} />
       </CardContent></Card>
       <PaymentMethodForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleSubmit}
         isPending={createMut.isPending || updateMut.isPending} defaultValues={editMethod} error={formError} />

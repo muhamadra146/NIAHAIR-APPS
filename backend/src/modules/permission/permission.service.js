@@ -123,7 +123,7 @@ const cancel = async (id, employeeId) => {
   if (!perm) throw new AppError("Izin tidak ditemukan", StatusCodes.NOT_FOUND);
   if (perm.employeeId !== employeeId) throw new AppError("Akses ditolak", StatusCodes.FORBIDDEN);
   if (perm.status !== "PENDING") throw new AppError("Hanya izin PENDING yang bisa dibatalkan", StatusCodes.BAD_REQUEST);
-  return repo.update(id, { status: "REJECTED" });
+  return repo.update(id, { status: "CANCELLED" });
 };
 
 // ── Notifikasi (lihat notification.service) ─────────────────────────

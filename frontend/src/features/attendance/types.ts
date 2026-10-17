@@ -1,5 +1,5 @@
 // ── Permission Request ────────────────────────────────────────────────
-export type PermissionStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type PermissionStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
 export type PermissionType   = "ABSENCE" | "LATE";
 
 export interface PermissionRequest {
@@ -43,7 +43,7 @@ export interface PermissionListParams {
 }
 
 // ── Sick Leave ────────────────────────────────────────────────────────
-export type SickLeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type SickLeaveStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
 
 export interface SickLeave {
   id:                  string;

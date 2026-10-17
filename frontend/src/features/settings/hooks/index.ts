@@ -248,6 +248,14 @@ export const useUpdatePaymentMethod = (id: string) => {
   });
 };
 
+export const useActivatePaymentMethod = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => updatePaymentMethod(id, { isActive: true }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["paymentMethods"] }); },
+  });
+};
+
 export const useDeletePaymentMethod = () => {
   const qc = useQueryClient();
   return useMutation({

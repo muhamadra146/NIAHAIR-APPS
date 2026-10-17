@@ -172,9 +172,9 @@ describe('cancel', () => {
 
   test('cancels own PENDING permission', async () => {
     repo.findById.mockResolvedValue(PERM_ABSENCE);
-    repo.update.mockResolvedValue({ ...PERM_ABSENCE, status: 'REJECTED' });
+    repo.update.mockResolvedValue({ ...PERM_ABSENCE, status: 'CANCELLED' });
 
     await svc.cancel('p1', 'e1');
-    expect(repo.update).toHaveBeenCalledWith('p1', { status: 'REJECTED' });
+    expect(repo.update).toHaveBeenCalledWith('p1', { status: 'CANCELLED' });
   });
 });

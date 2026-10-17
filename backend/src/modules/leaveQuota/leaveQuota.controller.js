@@ -17,7 +17,7 @@ const getMyQuotasController = async (req, res, next) => {
 
 const assignController = async (req, res, next) => {
   try {
-    const result = await svc.assign(req.body);
+    const result = await svc.assign(req.body, req.user);
     return created(res, result, "Quota assigned");
   } catch (err) { next(err); }
 };

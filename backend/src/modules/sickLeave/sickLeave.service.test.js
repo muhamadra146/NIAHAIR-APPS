@@ -204,11 +204,11 @@ describe('cancel', () => {
     await expect(svc.cancel('sk1', 'e1')).rejects.toMatchObject({ statusCode: 400 });
   });
 
-  test('cancels (sets REJECTED) when owner + PENDING', async () => {
+  test('cancels (sets CANCELLED) when owner + PENDING', async () => {
     repo.findById.mockResolvedValue(SICK);
-    repo.update.mockResolvedValue({ ...SICK, status: 'REJECTED' });
+    repo.update.mockResolvedValue({ ...SICK, status: 'CANCELLED' });
 
     await svc.cancel('sk1', 'e1');
-    expect(repo.update).toHaveBeenCalledWith('sk1', { status: 'REJECTED' });
+    expect(repo.update).toHaveBeenCalledWith('sk1', { status: 'CANCELLED' });
   });
 });

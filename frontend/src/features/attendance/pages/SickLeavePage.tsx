@@ -8,7 +8,7 @@ import { Skeleton }      from "@/components/ui/skeleton";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { useAuthStore }  from "@/stores/authStore";
+import { useAuthStore }  from "@/stores/authStore";
 import { canApprove } from "@/lib/access";
 import {
   useMySickLeaves, useSickLeaves,
@@ -43,6 +43,8 @@ function StatusBadge({ status }: { status: SickLeave["status"] }) {
     return <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Disetujui</span>;
   if (status === "REJECTED")
     return <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-50 text-red-700 border border-red-200">Ditolak</span>;
+  if (status === "CANCELLED")
+    return <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-slate-100 text-slate-500 border border-slate-200">Dibatalkan</span>;
   return <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">Menunggu</span>;
 }
 
@@ -53,6 +55,7 @@ const FILTER_OPTIONS = [
   { value: "PENDING",  label: "Menunggu" },
   { value: "APPROVED", label: "Disetujui" },
   { value: "REJECTED", label: "Ditolak" },
+  { value: "CANCELLED", label: "Dibatalkan" },
 ] as const;
 
 // ── Photo lightbox ────────────────────────────────────────────────────────────

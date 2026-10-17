@@ -1,24 +1,34 @@
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PaymentMethod } from "../../types";
 
 interface Props {
-  methods:   PaymentMethod[];
-  isLoading: boolean;
-  onEdit:    (m: PaymentMethod) => void;
-  onDelete:  (m: PaymentMethod) => void;
+  methods:    PaymentMethod[];
+  isLoading:  boolean;
+  onEdit:     (m: PaymentMethod) => void;
+  onDelete:   (m: PaymentMethod) => void;
+  onActivate: (m: PaymentMethod) => void;
 }
+
+type RowActions = Pick<Props, "onEdit" | "onDelete" | "onActivate">;
 
 function LoadingState() {
   return <div className="space-y-3 p-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
 }
 function EmptyState() {
-  return <div className="py-12 text-center text-sm text-muted-foreground">No payment methods found.</div>;
+  return <div className="py-12 text-center text-sm text-muted-foreground">Tidak ada metode pembayaran.</div>;
 }
 
-function MobileCardList({ methods, onEdit, onDelete }: { methods: PaymentMethod[]; onEdit: (m: PaymentMethod) => void; onDelete: (m: PaymentMethod) => void }) {
+/** Aktif → tombol nonaktifkan; nonaktif → tombol aktifkan kembali */
+function ToggleButton({ m, onDelete, onActivate }: { m: PaymentMethod } & Pick<Props, "onDelete" | "onActivate">) {
+  return m.isActive
+    ? <Button variant="ghost" size="icon" title="Nonaktifkan" onClick={() => onDelete(m)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+    : <Button variant="ghost" size="icon" title="Aktifkan kembali" onClick={() => onActivate(m)}><RotateCcw className="h-4 w-4 text-emerald-600" /></Button>;
+}
+
+function MobileCardList({ methods, onEdit, onDelete, onActivate }: { methods: PaymentMethod[] } & RowActions) {
   return (
     <div className="divide-y divide-border md:hidden">
       {methods.map((m) => (
@@ -32,7 +42,7 @@ function MobileCardList({ methods, onEdit, onDelete }: { methods: PaymentMethod[
             </Badge>
           </div>
           <div className="flex gap-1">
-            <Button variant="ghost" size="icon" onClick={() => onDelete(m)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+            <ToggleButton m={m} onDelete={onDelete} onActivate={onActivate} />
             <Button variant="ghost" size="icon" onClick={() => onEdit(m)}><Pencil className="h-4 w-4" /></Button>
           </div>
         </div>
@@ -41,7 +51,7 @@ function MobileCardList({ methods, onEdit, onDelete }: { methods: PaymentMethod[
   );
 }
 
-function DesktopTable({ methods, onEdit, onDelete }: { methods: PaymentMethod[]; onEdit: (m: PaymentMethod) => void; onDelete: (m: PaymentMethod) => void }) {
+function DesktopTable({ methods, onEdit, onDelete, onActivate }: { methods: PaymentMethod[] } & RowActions) {
   return (
     <div className="hidden overflow-x-auto md:block">
       <table className="w-full text-sm">
@@ -63,7 +73,7 @@ function DesktopTable({ methods, onEdit, onDelete }: { methods: PaymentMethod[];
               <td className="px-4 py-3"><Badge variant={m.isActive ? "success" : "secondary"}>{m.isActive ? "Aktif" : "Nonaktif"}</Badge></td>
               <td className="px-4 py-3">
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => onDelete(m)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  <ToggleButton m={m} onDelete={onDelete} onActivate={onActivate} />
                   <Button variant="ghost" size="icon" onClick={() => onEdit(m)}><Pencil className="h-4 w-4" /></Button>
                 </div>
               </td>
@@ -75,13 +85,13 @@ function DesktopTable({ methods, onEdit, onDelete }: { methods: PaymentMethod[];
   );
 }
 
-export function PaymentMethodTable({ methods, isLoading, onEdit, onDelete }: Props) {
+export function PaymentMethodTable({ methods, isLoading, onEdit, onDelete, onActivate }: Props) {
   if (isLoading) return <LoadingState />;
   if (methods.length === 0) return <EmptyState />;
   return (
     <>
-      <MobileCardList methods={methods} onEdit={onEdit} onDelete={onDelete} />
-      <DesktopTable   methods={methods} onEdit={onEdit} onDelete={onDelete} />
+      <MobileCardList methods={methods} onEdit={onEdit} onDelete={onDelete} onActivate={onActivate} />
+      <DesktopTable   methods={methods} onEdit={onEdit} onDelete={onDelete} onActivate={onActivate} />
     </>
   );
 }

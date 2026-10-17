@@ -46,7 +46,7 @@ const getMyQuotas = async (employeeId, { year, page, limit } = {}) => {
   return { data: await withRemaining(employeeId, data), meta: paginationMeta(total, pageNum, limitNum) };
 };
 
-const assign = async ({ employeeId, leaveTypeId, year, totalDays }) => {
+const assign = async ({ employeeId, leaveTypeId, year, totalDays }, actor = null) => {
   if (!employeeId || !leaveTypeId || !year || totalDays === undefined)
     throw new AppError("employeeId, leaveTypeId, year, totalDays are required", StatusCodes.BAD_REQUEST);
 
@@ -57,6 +57,8 @@ const assign = async ({ employeeId, leaveTypeId, year, totalDays }) => {
 
   const employee = await repo.findEmployeeById(employeeId);
   if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
+  // Manager divisi hanya boleh memberi jatah ke karyawan divisinya (Owner/SA: semua) — keputusan user 2026-10-17
+  await divisionAccess.assertCanManage(actor, employeeId);
 
   const lt = await leaveTypeRepo.findById(leaveTypeId);
   if (!lt) throw new AppError("Jenis cuti tidak ditemukan", StatusCodes.NOT_FOUND);
