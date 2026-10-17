@@ -2121,6 +2121,8 @@ Employee tidak otomatis OFF.
 
 Manager tetap menentukan Schedule.
 
+Daftar Hari Libur dikelola oleh Super Admin, Owner, dan Manager (keputusan user 2026-10-15).
+
 ---
 
 # SCH-021
@@ -3163,6 +3165,8 @@ TRANSFER_IN
 
 ```
 
+Qty diterima tidak boleh melebihi qty dikirim. Bila diterima sebagian, sisanya otomatis kembali ke gudang asal (TRANSFER_IN ke gudang asal) (keputusan user 2026-10-15).
+
 Harus berada pada Transaction yang sama.
 
 ---
@@ -3179,6 +3183,8 @@ Atau.
 Stock Opname.
 
 Dengan Permission khusus.
+
+Opening Balance ditolak bila item di gudang tersebut sudah punya pergerakan stok; koreksi berikutnya lewat Stock Adjustment / Stock Opname (keputusan user 2026-10-15).
 
 ---
 
@@ -3736,6 +3742,8 @@ Payment merupakan penerimaan uang.
 Payment selalu mengacu pada Invoice.
 
 Tidak boleh ada Payment tanpa Invoice.
+
+Yang boleh mencatat pembayaran, pembayaran DP, refund, dan pembatalan: Super Admin, Owner, Manager, Kasir (keputusan user 2026-10-15).
 
 ---
 
@@ -4586,11 +4594,13 @@ History tidak boleh hilang.
 # EMP-020
 ## Employee Soft Delete
 
-Employee tidak boleh Hard Delete.
+Employee yang sudah punya riwayat (absensi, jadwal, cuti/izin/sakit/koreksi, payroll, komisi, kasbon, setting gaji, dll.) tidak boleh Hard Delete — ditolak dengan pesan "Karyawan sudah punya riwayat; nonaktifkan saja".
 
 Gunakan.
 
 isActive = false
+
+Hard Delete hanya boleh untuk Employee tanpa riwayat sama sekali (mis. salah input), dan menghapus akses cabang serta akun login-nya (keputusan user 2026-10-15).
 
 ---
 
