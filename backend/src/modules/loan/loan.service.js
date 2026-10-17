@@ -23,8 +23,31 @@ const getById = async (id) => {
   return loan;
 };
 
+// ── Validasi nilai kasbon ────────────────────────────────────────────
+const toDate = (value, label) => {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) throw new AppError(`${label} tidak valid`, StatusCodes.BAD_REQUEST);
+  return d;
+};
+
+const assertDeductionWithinTotal = (monthlyDeduction, totalAmount) => {
+  if (Number(monthlyDeduction) > Number(totalAmount)) {
+    throw new AppError("Potongan per bulan tidak boleh melebihi total kasbon", StatusCodes.BAD_REQUEST);
+  }
+};
+
+const assertDateOrder = (startDate, endDate) => {
+  if (!endDate) return;
+  if (toDate(endDate, "Tanggal selesai") < toDate(startDate, "Tanggal mulai")) {
+    throw new AppError("Tanggal selesai tidak boleh sebelum tanggal mulai", StatusCodes.BAD_REQUEST);
+  }
+};
+
 const createLoan = async (body) => {
   const prisma = require("../../config/prisma");
+
+  assertDeductionWithinTotal(body.monthlyDeduction, body.totalAmount);
+  assertDateOrder(body.startDate, body.endDate);
 
   // Run number generation + creation in a single transaction so MAX-based numbering
   // is consistent. loanNo @unique in schema is the final guard against duplicates.
@@ -53,6 +76,9 @@ const updateLoan = async (id, body) => {
   if (!existing) throw new AppError("Kasbon tidak ditemukan", StatusCodes.NOT_FOUND);
   if (existing.status !== "ACTIVE")
     throw new AppError("Hanya kasbon aktif yang bisa diubah", StatusCodes.BAD_REQUEST);
+
+  if (body.monthlyDeduction !== undefined) assertDeductionWithinTotal(body.monthlyDeduction, existing.totalAmount);
+  if (body.endDate) assertDateOrder(existing.startDate, body.endDate);
 
   const data = {};
   if (body.monthlyDeduction !== undefined) data.monthlyDeduction = body.monthlyDeduction;

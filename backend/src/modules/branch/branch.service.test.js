@@ -7,7 +7,6 @@ jest.mock('../../config/prisma', () => {
     invoice: countModel(),
     appointment: countModel(),
     attendance: countModel(),
-    branchCommissionRule: countModel(),
     staffSchedule: countModel(),
     deposit: countModel(),
     payment: countModel(),
@@ -118,7 +117,7 @@ describe('deleteBranch', () => {
   });
 
   const mockRelatedCounts = (overrides = {}) => {
-    for (const model of ['invoice', 'appointment', 'attendance', 'branchCommissionRule',
+    for (const model of ['invoice', 'appointment', 'attendance',
       'staffSchedule', 'deposit', 'payment', 'payroll', 'itemPrice']) {
       prisma[model].count.mockResolvedValue(overrides[model] ?? 0);
     }

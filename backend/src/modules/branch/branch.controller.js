@@ -41,7 +41,7 @@ const updateController = async (req, res, next) => {
 const deleteController = async (req, res, next) => {
   try {
     await deleteBranch(req.params.id);
-    return success(res, null, "Branch deactivated");
+    return success(res, null, "Cabang dihapus");
   } catch (err) {
     next(err);
   }

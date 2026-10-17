@@ -21,6 +21,8 @@ const RATE_TYPES = ["PERCENTAGE", "FIXED"];
 //   defaultCommissionType  : "PERCENTAGE" | "FIXED" | null
 //   defaultCommissionValue : number ≥ 0 | null   (persen ≤ 100)
 //   rateTiers              : [{ maxStaff: int ≥ 1 | null, value: number ≥ 0 }]  — null maxStaff = "lebih dari itu"
+// Validasi memakai nilai efektif (kiriman + tersimpan): mis. ganti jenis FIXED → PERCENTAGE tanpa
+// mengirim nilai baru tetap dicek terhadap nilai & tingkatan yang tersimpan (current.rateTiers).
 const normalizeRate = (body, current = {}) => {
   const out = {};
   if (body.defaultCommissionType !== undefined) {
@@ -30,7 +32,7 @@ const normalizeRate = (body, current = {}) => {
   const type = out.defaultCommissionType !== undefined ? out.defaultCommissionType : current.defaultCommissionType ?? null;
 
   const checkValue = (v, label) => {
-    const n = Number(v);
+    const n = v === null || v === "" || typeof v === "boolean" ? NaN : Number(v);
     if (!Number.isFinite(n) || n < 0) throw new AppError(`${label} harus angka ≥ 0`, StatusCodes.BAD_REQUEST);
     if (type === "PERCENTAGE" && n > 100) throw new AppError(`${label} (persen) maksimal 100`, StatusCodes.BAD_REQUEST);
     return n;
@@ -39,15 +41,23 @@ const normalizeRate = (body, current = {}) => {
   if (body.defaultCommissionValue !== undefined) {
     out.defaultCommissionValue = body.defaultCommissionValue === null || body.defaultCommissionValue === ""
       ? null : checkValue(body.defaultCommissionValue, "Tarif bawaan");
+  } else if (current.defaultCommissionValue != null) {
+    checkValue(current.defaultCommissionValue, "Tarif bawaan tersimpan");
   }
 
   if (body.rateTiers !== undefined) {
-    const tiers = Array.isArray(body.rateTiers) ? body.rateTiers : [];
+    if (body.rateTiers !== null && !Array.isArray(body.rateTiers)) {
+      throw new AppError("rateTiers harus berupa daftar (array)", StatusCodes.BAD_REQUEST);
+    }
+    const tiers = body.rateTiers ?? [];
     if (tiers.length > 0 && !type) {
       throw new AppError("Pilih jenis tarif (persen / nominal) sebelum mengisi tingkatan", StatusCodes.BAD_REQUEST);
     }
     const seen = new Set();
     out.rateTiers = tiers.map((t, i) => {
+      if (!t || typeof t !== "object" || Array.isArray(t)) {
+        throw new AppError(`Tingkatan #${i + 1} tidak valid`, StatusCodes.BAD_REQUEST);
+      }
       const maxStaff = t.maxStaff === null || t.maxStaff === "" || t.maxStaff === undefined ? null : Number(t.maxStaff);
       if (maxStaff !== null && (!Number.isInteger(maxStaff) || maxStaff < 1)) {
         throw new AppError(`Tingkatan #${i + 1}: jumlah staf harus bilangan bulat ≥ 1`, StatusCodes.BAD_REQUEST);
@@ -57,8 +67,43 @@ const normalizeRate = (body, current = {}) => {
       seen.add(key);
       return { maxStaff, value: checkValue(t.value, `Tarif tingkatan #${i + 1}`) };
     });
+  } else if (Array.isArray(current.rateTiers) && current.rateTiers.length > 0) {
+    if (!type) {
+      throw new AppError("Hapus tingkatan tarif terlebih dahulu sebelum mengosongkan jenis tarif", StatusCodes.BAD_REQUEST);
+    }
+    current.rateTiers.forEach((t, i) => checkValue(t.value, `Tarif tingkatan tersimpan #${i + 1}`));
   }
   return out;
+};
+
+// name wajib teks tidak kosong (dicek sebelum sanitizeKey agar tidak 500)
+const assertName = (name) => {
+  if (typeof name !== "string" || !name.trim()) {
+    throw new AppError("Nama job wajib diisi", StatusCodes.BAD_REQUEST);
+  }
+};
+
+// pricePerUnit: null/"" = kosong (helper flat), selain itu angka ≥ 0
+const normalizePricePerUnit = (v) => {
+  if (v === null || v === "") return null;
+  const n = typeof v === "boolean" ? NaN : Number(v);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new AppError("Harga per unit harus angka ≥ 0", StatusCodes.BAD_REQUEST);
+  }
+  return n;
+};
+
+// Potong-dari tidak boleh membentuk lingkaran (A → B → A)
+const MAX_CHAIN = 100;
+const assertNoDeductCycle = async (jobId, targetId) => {
+  let cursor = targetId;
+  for (let i = 0; cursor && i < MAX_CHAIN; i++) {
+    if (cursor === jobId) {
+      throw new AppError("Potong dari job ini membentuk lingkaran (job saling memotong)", StatusCodes.BAD_REQUEST);
+    }
+    const next = await repo.findById(cursor);
+    cursor = next?.deductsFromJobId ?? null;
+  }
 };
 
 const sanitizeKey = (s) =>
@@ -85,10 +130,16 @@ const createJob = async (categoryId, body) => {
   const cat = await prisma.commissionCategory.findUnique({ where: { id: categoryId }, select: { id: true } });
   if (!cat) throw new AppError("Kategori komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  const { name, jobKey: rawKey, sortOrder = 0, deductsFromJobId, pricePerUnit, unit, splitMode, defaultQty } = body;
+  const { name: rawName, jobKey: rawKey, sortOrder = 0, deductsFromJobId, pricePerUnit, unit, splitMode, defaultQty } = body ?? {};
+  assertName(rawName);
+  if (rawKey !== undefined && rawKey !== null && rawKey !== "" && typeof rawKey !== "string") {
+    throw new AppError("jobKey harus berupa teks", StatusCodes.BAD_REQUEST);
+  }
+  const name   = rawName.trim();
   const jobKey = rawKey ? sanitizeKey(rawKey) : sanitizeKey(name);
 
-  if (!name || !jobKey) throw new AppError("name wajib diisi", StatusCodes.BAD_REQUEST);
+  if (!jobKey) throw new AppError("Nama job harus mengandung huruf atau angka", StatusCodes.BAD_REQUEST);
+  const price = pricePerUnit !== undefined ? normalizePricePerUnit(pricePerUnit) : null;
   assertEnum(splitMode,  SPLIT_MODES,  "splitMode");
   assertEnum(defaultQty, DEFAULT_QTYS, "defaultQty");
 
@@ -111,7 +162,7 @@ const createJob = async (categoryId, body) => {
     jobKey,
     sortOrder,
     deductsFromJobId: deductsFromJobId ?? null,
-    pricePerUnit:     pricePerUnit != null ? pricePerUnit : null,
+    pricePerUnit:     price,
     unit:             unit ? String(unit).trim() : "helai",
     ...(splitMode  && { splitMode }),
     ...(defaultQty && { defaultQty }),
@@ -128,11 +179,15 @@ const updateJob = async (categoryId, id, body) => {
     throw new AppError("Job komisi tidak ditemukan", StatusCodes.NOT_FOUND);
   }
 
+  body = body ?? {};
   const data = {};
-  if (body.name             !== undefined) data.name             = body.name;
+  if (body.name !== undefined) {
+    assertName(body.name);
+    data.name = body.name.trim();
+  }
   if (body.sortOrder        !== undefined) data.sortOrder        = Number(body.sortOrder);
   if (body.isActive         !== undefined) data.isActive         = body.isActive;
-  if (body.pricePerUnit  !== undefined) data.pricePerUnit = body.pricePerUnit != null ? body.pricePerUnit : null;
+  if (body.pricePerUnit  !== undefined) data.pricePerUnit = normalizePricePerUnit(body.pricePerUnit);
   if (body.unit          !== undefined) data.unit         = body.unit ? String(body.unit).trim() : "helai";
   assertEnum(body.splitMode,  SPLIT_MODES,  "splitMode");
   assertEnum(body.defaultQty, DEFAULT_QTYS, "defaultQty");
@@ -152,6 +207,7 @@ const updateJob = async (categoryId, id, body) => {
       if (!target || target.commissionCategoryId !== categoryId) {
         throw new AppError("deductsFromJobId harus merujuk job dalam kategori yang sama", StatusCodes.BAD_REQUEST);
       }
+      await assertNoDeductCycle(id, target.deductsFromJobId);
     }
     data.deductsFromJobId = body.deductsFromJobId ?? null;
   }

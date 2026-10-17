@@ -111,13 +111,10 @@ describe('markCommissionPaid', () => {
     await expect(svc.markCommissionPaid('cm1', 'u1')).rejects.toMatchObject({ statusCode: 422 });
   });
 
-  test('calls markPaidOne when status is APPROVED', async () => {
+  test('APPROVED juga ditolak 422 — komisi dibayar lewat payroll (COM-017)', async () => {
     repo.findById.mockResolvedValue({ ...COMMISSION, status: 'APPROVED' });
-    repo.markPaidOne.mockResolvedValue({ ...COMMISSION, status: 'PAID' });
-
-    const result = await svc.markCommissionPaid('cm1', 'u1');
-    expect(repo.markPaidOne).toHaveBeenCalledWith('cm1', 'u1');
-    expect(result.status).toBe('PAID');
+    await expect(svc.markCommissionPaid('cm1', 'u1')).rejects.toMatchObject({ statusCode: 422 });
+    expect(repo.markPaidOne).not.toHaveBeenCalled();
   });
 });
 

@@ -15,8 +15,9 @@ const count = (where) => prisma.branch.count({ where });
 const findById = (id) =>
   prisma.branch.findUnique({ where: { id } });
 
+// Kode cabang unik tanpa membedakan huruf besar/kecil
 const findByCode = (code) =>
-  prisma.branch.findUnique({ where: { code } });
+  prisma.branch.findFirst({ where: { code: { equals: code, mode: "insensitive" } } });
 
 const create = (data) => prisma.branch.create({ data });
 

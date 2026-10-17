@@ -47,7 +47,7 @@ const updateController = async (req, res, next) => {
 const deleteController = async (req, res, next) => {
   try {
     const result = await deleteCashAccount(req.params.id);
-    return success(res, result, "Cash account deactivated");
+    return success(res, result, "Akun kas dihapus");
   } catch (err) {
     next(err);
   }

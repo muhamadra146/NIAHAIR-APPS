@@ -4167,7 +4167,7 @@ Finance dianggap valid apabila.
 
 **Invoice Belum Lunas** = sisa tagihan invoice (UNPAID / PARTIAL / PAID) menurut tanggal invoice.
 
-**Arus Kas Bersih** = Pendapatan Kotor (FIN-039) − pembelian gudang − komisi disetujui/dibayar − gaji dibayar.
+**Arus Kas Bersih** = Pendapatan Kotor (FIN-039) − pembelian gudang − gaji dibayar. Komisi tidak dikurangkan terpisah karena komisi dibayar di dalam gaji (COM-017) (keputusan owner 2026-10-15).
 
 Semua angka dashboard **per cabang** (cabang aktif di header, bisa diganti ke cabang lain atau "Semua cabang"). Setiap kartu bisa diklik ke data di baliknya.
 

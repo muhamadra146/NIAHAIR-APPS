@@ -3,7 +3,7 @@ const authenticate = require("../../middlewares/auth.middleware");
 const authorize = require("../../middlewares/role.middleware");
 const validate = require("../../middlewares/validate.middleware");
 const { ROLES } = require("../../common/constants/role.constant");
-const { createBranchSchema, updateBranchSchema } = require("./branch.validation");
+const { createBranchSchema, updateBranchSchema, mapAccurateSchema } = require("./branch.validation");
 const {
   getAllController,
   getByIdController,
@@ -17,7 +17,7 @@ const router = Router();
 
 // Accurate sync — must be BEFORE /:id routes
 router.post("/sync-accurate", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), syncFromAccurateController);
-router.put("/:id/accurate-mapping", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), mapToAccurateController);
+router.put("/:id/accurate-mapping", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), validate(mapAccurateSchema), mapToAccurateController);
 
 // CRUD routes
 router.get("/", authenticate, getAllController);

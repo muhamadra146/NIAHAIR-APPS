@@ -18,7 +18,20 @@ const getById = async (id) => {
   return setting;
 };
 
+// Tanggal berakhir tidak boleh sebelum tanggal berlaku
+const assertDateOrder = (effectiveDate, endDate) => {
+  if (!endDate) return;
+  const start = new Date(effectiveDate);
+  const end   = new Date(endDate);
+  if (Number.isNaN(start.getTime())) throw new AppError("Tanggal berlaku tidak valid", StatusCodes.BAD_REQUEST);
+  if (Number.isNaN(end.getTime()))   throw new AppError("Tanggal berakhir tidak valid", StatusCodes.BAD_REQUEST);
+  if (end < start) {
+    throw new AppError("Tanggal berakhir tidak boleh sebelum tanggal berlaku", StatusCodes.BAD_REQUEST);
+  }
+};
+
 const createSetting = async (body) => {
+  assertDateOrder(body.effectiveDate, body.endDate);
   const data = {
     employeeId:                  body.employeeId,
     baseSalary:                  body.baseSalary,
@@ -58,6 +71,12 @@ const createSetting = async (body) => {
 const updateSetting = async (id, body) => {
   const existing = await repo.findById(id);
   if (!existing) throw new AppError("Setting gaji tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  // Nilai efektif = kiriman digabung dengan data tersimpan
+  assertDateOrder(
+    body.effectiveDate ?? existing.effectiveDate,
+    body.endDate !== undefined ? body.endDate : existing.endDate,
+  );
 
   const data = {};
   const fields = [

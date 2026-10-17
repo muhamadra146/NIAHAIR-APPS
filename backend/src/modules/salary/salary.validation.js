@@ -1,4 +1,7 @@
-const { object, string, number, pipe, minLength, optional, boolean, minValue } = require("valibot");
+const { object, string, number, pipe, minLength, optional, boolean, minValue, maxValue } = require("valibot");
+
+// Persen BPJS 0..100
+const percent = pipe(number("Persen BPJS harus angka"), minValue(0, "Persen BPJS tidak boleh negatif"), maxValue(100, "Persen BPJS maksimal 100"));
 
 const createSalarySchema = object({
   employeeId:                    pipe(string(), minLength(1, "Karyawan wajib dipilih")),
@@ -14,12 +17,12 @@ const createSalarySchema = object({
   lateDeductionBracket3:         optional(pipe(number(), minValue(0))),
   absentDeductionPerDay:         optional(pipe(number(), minValue(0))),
   earlyLeaveDeductionPerMinute:  optional(pipe(number(), minValue(0))),
-  bpjsJhtPercent:                optional(pipe(number(), minValue(0))),
-  bpjsJhtEmployerPercent:        optional(pipe(number(), minValue(0))),
-  bpjsJpPercent:                 optional(pipe(number(), minValue(0))),
-  bpjsJpEmployerPercent:         optional(pipe(number(), minValue(0))),
-  bpjsKesehatanEmployeePercent:  optional(pipe(number(), minValue(0))),
-  bpjsKesehatanEmployerPercent:  optional(pipe(number(), minValue(0))),
+  bpjsJhtPercent:                optional(percent),
+  bpjsJhtEmployerPercent:        optional(percent),
+  bpjsJpPercent:                 optional(percent),
+  bpjsJpEmployerPercent:         optional(percent),
+  bpjsKesehatanEmployeePercent:  optional(percent),
+  bpjsKesehatanEmployerPercent:  optional(percent),
   effectiveDate:                 pipe(string(), minLength(1, "Tanggal berlaku wajib diisi")),
   endDate:                       optional(string()),
   isActive:                      optional(boolean()),
@@ -39,12 +42,12 @@ const updateSalarySchema = object({
   lateDeductionBracket3:         optional(pipe(number(), minValue(0))),
   absentDeductionPerDay:         optional(pipe(number(), minValue(0))),
   earlyLeaveDeductionPerMinute:  optional(pipe(number(), minValue(0))),
-  bpjsJhtPercent:                optional(pipe(number(), minValue(0))),
-  bpjsJhtEmployerPercent:        optional(pipe(number(), minValue(0))),
-  bpjsJpPercent:                 optional(pipe(number(), minValue(0))),
-  bpjsJpEmployerPercent:         optional(pipe(number(), minValue(0))),
-  bpjsKesehatanEmployeePercent:  optional(pipe(number(), minValue(0))),
-  bpjsKesehatanEmployerPercent:  optional(pipe(number(), minValue(0))),
+  bpjsJhtPercent:                optional(percent),
+  bpjsJhtEmployerPercent:        optional(percent),
+  bpjsJpPercent:                 optional(percent),
+  bpjsJpEmployerPercent:         optional(percent),
+  bpjsKesehatanEmployeePercent:  optional(percent),
+  bpjsKesehatanEmployerPercent:  optional(percent),
   effectiveDate:                 optional(string()),
   endDate:                       optional(string()),
   isActive:                      optional(boolean()),

@@ -453,7 +453,7 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
               </Button>
             </>
           )}
-          {canDelete && (
+          {canDelete && (payroll.status === "DRAFT" || payroll.status === "PENDING_APPROVAL") && (
             <Button size="sm" variant="destructive" className="rounded-lg" onClick={() => setDeleteOpen(true)} disabled={isActing}>
               <Trash2 className="h-3 w-3 mr-1" /> Hapus
             </Button>
@@ -598,9 +598,6 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
           <DialogHeader><DialogTitle>Hapus Payroll</DialogTitle></DialogHeader>
           <div className="py-2 space-y-2 text-sm text-muted-foreground">
             <p>Yakin ingin menghapus payroll <span className="font-medium text-foreground">{payroll.employee.name}</span> periode <span className="font-medium text-foreground">{fmtPeriod(payroll.periodStart)}</span>?</p>
-            {payroll.status === "PAID" && (
-              <p className="text-xs text-rose-600 font-medium">⚠ Payroll ini sudah DIBAYAR. Menghapus akan mengembalikan semua komisi periode ini ke status Disetujui dan membatalkan potongan kasbon.</p>
-            )}
             <p className="text-xs text-muted-foreground">Tindakan ini tidak dapat dibatalkan.</p>
           </div>
           <DialogFooter className="gap-2">
@@ -768,7 +765,7 @@ export function PayrollPage() {
                     </div>
                   </div>
 
-                  {canDelete && (
+                  {canDelete && (p.status === "DRAFT" || p.status === "PENDING_APPROVAL") && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }}

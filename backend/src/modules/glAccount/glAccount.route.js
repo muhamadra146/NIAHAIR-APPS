@@ -1,7 +1,9 @@
 const { Router }   = require("express");
 const authenticate = require("../../middlewares/auth.middleware");
 const authorize    = require("../../middlewares/role.middleware");
+const validate     = require("../../middlewares/validate.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
+const { updateUsageSchema } = require("./glAccount.validation");
 const { syncGlAccountsController, getGlAccountsController, updateUsageController } = require("./glAccount.controller");
 
 const router = Router();
@@ -13,6 +15,6 @@ router.post("/sync/accurate", authenticate, authorize(ROLES.SUPER_ADMIN), syncGl
 router.get("/", authenticate, getGlAccountsController);
 
 // Update usage tag per account — SUPER_ADMIN only
-router.patch("/:id/usage", authenticate, authorize(ROLES.SUPER_ADMIN), updateUsageController);
+router.patch("/:id/usage", authenticate, authorize(ROLES.SUPER_ADMIN), validate(updateUsageSchema), updateUsageController);
 
 module.exports = router;

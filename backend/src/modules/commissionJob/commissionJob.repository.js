@@ -30,8 +30,9 @@ const countByCategory = (categoryId, includeInactive = false) =>
     },
   });
 
+// rateTiers ikut dimuat agar validasi update memakai tingkatan tersimpan
 const findById = (id) =>
-  prisma.commissionJob.findUnique({ where: { id } });
+  prisma.commissionJob.findUnique({ where: { id }, include: { rateTiers: RATE_TIERS_INCLUDE } });
 
 const findByKey = (categoryId, jobKey) =>
   prisma.commissionJob.findUnique({

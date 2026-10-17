@@ -29,4 +29,7 @@ const create = (data) =>
 const update = (id, data) =>
   prisma.paymentMethod.update({ where: { id }, data, include: CASH_ACCOUNT_SELECT });
 
-module.exports = { findAll, count, findById, findByCode, create, update };
+const findCashAccountById = (id) =>
+  prisma.cashAccount.findUnique({ where: { id }, select: { id: true, name: true, isActive: true } });
+
+module.exports = { findAll, count, findById, findByCode, create, update, findCashAccountById };

@@ -274,7 +274,7 @@ export function FinanceDashboardPage() {
               <KpiCard
                 label="Arus Kas Bersih"
                 value={data.netCashFlow}
-                sub="Kotor − Pembelian − Komisi − Gaji"
+                sub="Kotor − Pembelian − Gaji"
                 color={data.netCashFlow >= 0 ? "green" : "red"}
                 icon={data.netCashFlow >= 0 ? TrendingUp : TrendingDown}
                 to={incomeLink}

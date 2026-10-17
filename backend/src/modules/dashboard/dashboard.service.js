@@ -59,8 +59,9 @@ const getFinanceDashboard = async ({ branchId, startDate, endDate }) => {
     repo.getPayrollSummary(params),
   ]);
 
-  // Arus kas bersih = pendapatan kotor − pembelian − komisi (disetujui/dibayar) − gaji dibayar
-  const netCashFlow = revenue.summary.gross - purchases.total - commissions.total - payroll.total;
+  // Arus kas bersih = pendapatan kotor − pembelian − gaji dibayar (FIN-038).
+  // Komisi tidak dikurangkan terpisah: komisi dibayar di dalam gaji (COM-017).
+  const netCashFlow = revenue.summary.gross - purchases.total - payroll.total;
 
   return {
     period: { startDate, endDate },

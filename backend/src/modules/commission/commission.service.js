@@ -8,8 +8,8 @@ const { resolvePayPeriod } = require("../../utils/payPeriod");
 const ORDER_MAP = {
   createdAt:    { createdAt: "asc" },
   "-createdAt": { createdAt: "desc" },
-  amount:       { amount: "asc" },
-  "-amount":    { amount: "desc" },
+  amount:       { commissionAmount: "asc" },
+  "-amount":    { commissionAmount: "desc" },
   status:       { status: "asc" },
   "-status":    { status: "desc" },
 };
@@ -19,7 +19,6 @@ const {
   count,
   findById,
   approveOne,
-  markPaidOne,
   deleteOne,
   overrideOne,
   // generator / regenerator
@@ -208,18 +207,17 @@ const approveCommission = async (id, userId) => {
   return approveOne(id, userId);
 };
 
-const markCommissionPaid = async (id, userId) => {
+// Komisi dibayar hanya lewat payroll (COM-017): saat payroll dibayar, komisi yang tercatat
+// di slip menjadi PAID. Bayar manual per komisi ditolak agar komisi tidak hilang dari slip DRAFT.
+// eslint-disable-next-line no-unused-vars
+const markCommissionPaid = async (id, _userId) => {
   const commission = await findById(id);
   if (!commission) throw new AppError("Komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  if (commission.status !== "APPROVED") {
-    throw new AppError(
-      `Cannot mark paid: status is ${commission.status}, expected APPROVED`,
-      StatusCodes.UNPROCESSABLE_ENTITY
-    );
-  }
-
-  return markPaidOne(id, userId);
+  throw new AppError(
+    "Komisi dibayar lewat penggajian. Tandai payroll sebagai dibayar untuk membayar komisi ini.",
+    StatusCodes.UNPROCESSABLE_ENTITY,
+  );
 };
 
 // ── Commission base resolver ──────────────────────────────────────────
@@ -652,6 +650,12 @@ const assertNotInPayroll = (commissions) => {
 };
 
 const overrideCommission = async (id, { commissionAmount, userId, notes }) => {
+  // Nominal wajib diisi — tanpa nominal, jejak override tercatat tanpa perubahan apa pun
+  if (commissionAmount === undefined || commissionAmount === null || commissionAmount === ""
+      || typeof commissionAmount === "boolean" || !Number.isFinite(Number(commissionAmount))) {
+    throw new AppError("Nominal komisi (commissionAmount) wajib diisi dengan angka", StatusCodes.BAD_REQUEST);
+  }
+
   const commission = await findById(id);
   if (!commission) throw new AppError("Komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 

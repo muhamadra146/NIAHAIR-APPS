@@ -17,6 +17,7 @@ const {
   findDuplicate,
   findEmployeeById,
   findCommissionCategoryById,
+  findCommissionJobById,
   create,
   update,
   deleteById,
@@ -56,6 +57,37 @@ const getById = async (id) => {
   return rule;
 };
 
+// ── Validasi nilai efektif (kiriman digabung dengan data tersimpan) ──
+
+const assertPercentRange = (type, value) => {
+  if (type === "PERCENTAGE" && Number(value) > 100) {
+    throw new AppError("Komisi persen tidak boleh lebih dari 100", StatusCodes.BAD_REQUEST);
+  }
+};
+
+const toDate = (value, label) => {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) throw new AppError(`${label} tidak valid`, StatusCodes.BAD_REQUEST);
+  return d;
+};
+
+const assertDateOrder = (effectiveDate, endDate) => {
+  if (!endDate) return;
+  if (toDate(endDate, "Tanggal berakhir") < toDate(effectiveDate, "Tanggal berlaku")) {
+    throw new AppError("Tanggal berakhir tidak boleh sebelum tanggal berlaku", StatusCodes.BAD_REQUEST);
+  }
+};
+
+// Job harus milik kategori rule
+const assertJobInCategory = async (commissionJobId, commissionCategoryId) => {
+  if (!commissionJobId) return;
+  const job = await findCommissionJobById(commissionJobId);
+  if (!job) throw new AppError("Job komisi tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (job.commissionCategoryId !== commissionCategoryId) {
+    throw new AppError("Job komisi bukan bagian dari kategori yang dipilih", StatusCodes.BAD_REQUEST);
+  }
+};
+
 const createCommissionRule = async (body) => {
   const employee = await findEmployeeById(body.employeeId);
   if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
@@ -63,9 +95,9 @@ const createCommissionRule = async (body) => {
   const category = await findCommissionCategoryById(body.commissionCategoryId);
   if (!category) throw new AppError("Kategori komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  if (body.commissionType === "PERCENTAGE" && body.commissionValue > 100) {
-    throw new AppError("Komisi persen tidak boleh lebih dari 100", StatusCodes.BAD_REQUEST);
-  }
+  assertPercentRange(body.commissionType, body.commissionValue);
+  assertDateOrder(body.effectiveDate, body.endDate);
+  await assertJobInCategory(body.commissionJobId, body.commissionCategoryId);
 
   const slotKey        = body.slotKey        ?? null;
   const commissionJobId = body.commissionJobId ?? null;
@@ -106,12 +138,19 @@ const updateCommissionRule = async (id, body) => {
     if (!category) throw new AppError("Kategori komisi tidak ditemukan", StatusCodes.NOT_FOUND);
   }
 
-  if (body.commissionValue !== undefined) {
-    const type = body.commissionType || rule.commissionType;
-    if (type === "PERCENTAGE" && body.commissionValue > 100) {
-      throw new AppError("Komisi persen tidak boleh lebih dari 100", StatusCodes.BAD_REQUEST);
-    }
-  }
+  // Nilai efektif setelah digabung — mis. ganti FIXED → PERCENTAGE tanpa nilai baru tetap dicek
+  assertPercentRange(
+    body.commissionType ?? rule.commissionType,
+    body.commissionValue ?? rule.commissionValue,
+  );
+  assertDateOrder(
+    body.effectiveDate ?? rule.effectiveDate,
+    body.endDate !== undefined ? body.endDate : rule.endDate,
+  );
+  await assertJobInCategory(
+    body.commissionJobId !== undefined ? body.commissionJobId : rule.commissionJobId,
+    body.commissionCategoryId ?? rule.commissionCategoryId,
+  );
 
   const updateData = { ...body };
   if (updateData.effectiveDate) updateData.effectiveDate = new Date(updateData.effectiveDate);

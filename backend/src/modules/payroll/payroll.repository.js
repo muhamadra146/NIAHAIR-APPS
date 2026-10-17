@@ -198,9 +198,12 @@ const findBpjsData = ({ branchId, periodStart, periodEnd }) =>
         select: {
           id: true, name: true, employeeCode: true,
           role: { select: { name: true } },
+          // Setting aktif terbaru (sama dengan generate) — gaji pokok penuh untuk dasar BPJS (PAY-001)
           salarySettings: {
-            where:  { isActive: true },
+            where:   { isActive: true },
+            orderBy: { effectiveDate: "desc" },
             select: {
+              baseSalary:                   true,
               bpjsJhtEmployerPercent:       true,
               bpjsJpEmployerPercent:        true,
               bpjsKesehatanEmployerPercent: true,

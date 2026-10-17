@@ -66,6 +66,9 @@ const findEmployeeById = (id) =>
 const findCommissionCategoryById = (id) =>
   prisma.commissionCategory.findUnique({ where: { id }, select: { id: true, code: true, name: true } });
 
+const findCommissionJobById = (id) =>
+  prisma.commissionJob.findUnique({ where: { id }, select: { id: true, commissionCategoryId: true } });
+
 const create = (data) => prisma.commissionRule.create({ data, include: INCLUDE });
 
 const update = (id, data) => prisma.commissionRule.update({ where: { id }, data, include: INCLUDE });
@@ -81,6 +84,7 @@ module.exports = {
   findDuplicate,
   findEmployeeById,
   findCommissionCategoryById,
+  findCommissionJobById,
   create,
   update,
   deleteById,

@@ -30,6 +30,16 @@ const toDateOnly = (d) => {
   return date;
 };
 
+// Tanggal YYYY-MM-DD harus ada di kalender (2026-02-30 ditolak, tidak digeser ke 2 Maret)
+const parseCalendarDate = (value, label) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value));
+  const date = m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))) : null;
+  if (!date || date.toISOString().slice(0, 10) !== String(value)) {
+    throw new AppError(`${label} tidak valid (format TTTT-BB-HH dan harus tanggal yang ada)`, StatusCodes.BAD_REQUEST);
+  }
+  return date;
+};
+
 // Build [periodStart, periodEnd] from YYYY-MM string → full calendar month
 const buildPeriod = (yearMonth) => {
   const [y, m] = yearMonth.split("-").map(Number);
@@ -265,8 +275,8 @@ const resolveGeneratePeriod = async ({ employeeId, yearMonth, payDay, periodStar
     return { ...buildWorkPeriod(pd, yearMonth), payDay: pd, yearMonth };
   }
   if (ps && pe) {
-    const periodStart = toDateOnly(new Date(ps));
-    const periodEnd   = toDateOnly(new Date(pe));
+    const periodStart = parseCalendarDate(ps, "Tanggal mulai");
+    const periodEnd   = parseCalendarDate(pe, "Tanggal akhir");
     if (periodEnd < periodStart)
       throw new AppError("Tanggal akhir harus setelah tanggal mulai", StatusCodes.BAD_REQUEST);
     return { periodStart, periodEnd, payDate: null, payDay: null, yearMonth: null };
@@ -469,21 +479,38 @@ const markAsPaid = async (id, paidBy) => {
       data: { status: "PAID", paidAt: now, paidBy: paidBy ?? null },
     });
 
-    const kasbonItems = existing.items.filter((i) => i.category === "kasbon" && i.type === "DEDUCTION");
-    if (kasbonItems.length > 0) {
-      const activeLoans = await tx.loan.findMany({ where: { employeeId: existing.employeeId, status: "ACTIVE" } });
-      for (const loan of activeLoans) {
-        // Bug fix #1: gunakan Math.min agar cicilan terakhir tidak overstated
-        const repayAmt = Math.min(Number(loan.monthlyDeduction), Number(loan.remainingAmount));
-        if (repayAmt <= 0) continue;
+    // Kasbon: cicil hanya kasbon yang ikut dipotong di slip ini.
+    //  · hanya kasbon yang sudah ada saat slip dihitung (generate / hitung ulang terakhir) —
+    //    kasbon yang dibuat sesudahnya ikut payroll berikutnya
+    //  · total cicilan tidak melebihi nominal "Potongan Kasbon" di slip
+    const kasbonTotal = existing.items
+      .filter((i) => i.category === "kasbon" && i.type === "DEDUCTION")
+      .reduce((a, i) => a.plus(D(i.amount)), D(0));
+    if (kasbonTotal.gt(0)) {
+      const slipComputedAt = existing.lastRecalculatedAt ?? existing.createdAt;
+      const loans = await tx.loan.findMany({
+        where: {
+          employeeId: existing.employeeId,
+          status:     "ACTIVE",
+          ...(slipComputedAt && { createdAt: { lte: new Date(slipComputedAt) } }),
+        },
+        orderBy: { createdAt: "asc" },
+      });
+      let left = kasbonTotal;
+      for (const loan of loans) {
+        if (left.lte(0)) break;
+        // Cicilan terakhir tidak melebihi sisa kasbon (Bug fix #1), dan tidak melebihi sisa potongan slip
+        const repayAmt = Prisma.Decimal.min(D(loan.monthlyDeduction), D(loan.remainingAmount), left);
+        if (repayAmt.lte(0)) continue;
         const alreadyRepaid = await tx.loanRepayment.findFirst({ where: { loanId: loan.id, payrollId: id } });
         if (alreadyRepaid) continue;
-        const newRemaining = Number(loan.remainingAmount) - repayAmt;
-        const newStatus    = newRemaining <= 0 ? "PAID_OFF" : "ACTIVE";
+        const newRemaining = D(loan.remainingAmount).minus(repayAmt);
+        const newStatus    = newRemaining.lte(0) ? "PAID_OFF" : "ACTIVE";
         await tx.loanRepayment.create({
           data: { loanId: loan.id, payrollId: id, amount: repayAmt, paidAt: now },
         });
         await tx.loan.update({ where: { id: loan.id }, data: { remainingAmount: newRemaining, status: newStatus } });
+        left = left.minus(repayAmt);
       }
     }
   });
@@ -498,9 +525,21 @@ const markAsPaid = async (id, paidBy) => {
   return repo.findById(id);
 };
 
+// PAY-005: payroll APPROVED / PAID terkunci — tidak boleh diubah atau dihapus
+const LOCKED_STATUSES = ["APPROVED", "PAID"];
+const assertNotLocked = (payroll, action) => {
+  if (LOCKED_STATUSES.includes(payroll.status)) {
+    throw new AppError(
+      `Payroll berstatus ${payroll.status} terkunci dan tidak dapat ${action}. Gunakan Payroll Adjustment untuk koreksi.`,
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
+};
+
 const updateNotes = async (id, notes) => {
   const existing = await repo.findById(id);
   if (!existing) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
+  assertNotLocked(existing, "diubah");
   return repo.update(id, { notes });
 };
 
@@ -560,7 +599,14 @@ const getBpjsReport = async ({ branchId, yearMonth }) => {
 
   const rows = payrolls.map((p) => {
     const setting    = p.employee.salarySettings?.[0];
-    const baseSalary = getAmt(p.items, "gaji");
+    // BPJS dihitung dari gaji pokok PENUH (PAY-001), bukan gaji pokok proporsional.
+    // Slip tidak proporsional: item gaji = gaji pokok penuh saat itu (historis).
+    // Slip proporsional (masuk/keluar tengah periode): pakai gaji pokok dari Setting Gaji.
+    const gajiItem   = p.items.find((i) => i.category === "gaji");
+    const isProrated = gajiItem?.quantity != null;
+    const baseSalary = isProrated && setting?.baseSalary != null
+      ? Number(setting.baseSalary)
+      : Number(gajiItem?.amount ?? setting?.baseSalary ?? 0);
 
     const bpjsJht       = getAmt(p.items, "bpjs_jht");
     const bpjsJp        = getAmt(p.items, "bpjs_jp");
@@ -640,25 +686,11 @@ const bulkGenerate = async ({ branchId, payDay, yearMonth, notes }, createdBy) =
 const deletePayroll = async (id) => {
   const payroll = await repo.findById(id);
   if (!payroll) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
+  // Hanya DRAFT / PENDING_APPROVAL yang boleh dihapus (PAY-005). PAID sudah dijurnal ke Accurate
+  // dan kasbon sudah dicicil — penghapusan tidak membalik jurnal, jadi ditolak.
+  assertNotLocked(payroll, "dihapus");
 
   await prisma.$transaction(async (tx) => {
-    // Jika PAID: revert komisi → APPROVED dan balik kasbon
-    if (payroll.status === "PAID") {
-      await tx.commission.updateMany({
-        where: { payrollId: id, status: "PAID" },
-        data:  { status: "APPROVED", paidAt: null, paidBy: null },
-      });
-
-      const repayments = await tx.loanRepayment.findMany({ where: { payrollId: id } });
-      for (const rep of repayments) {
-        await tx.loan.update({
-          where: { id: rep.loanId },
-          data:  { remainingAmount: { increment: Number(rep.amount) }, status: "ACTIVE" },
-        });
-      }
-      await tx.loanRepayment.deleteMany({ where: { payrollId: id } });
-    }
-
     // Lepas semua komisi dari payroll ini → bisa diambil payroll berikutnya
     await tx.commission.updateMany({ where: { payrollId: id }, data: { payrollId: null } });
     await tx.payrollItem.deleteMany({ where: { payrollId: id } });

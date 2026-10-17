@@ -37,23 +37,51 @@ const getById = async (id) => {
   return branch;
 };
 
+// Nama & kode di-trim, kode disimpan huruf besar (G5-17)
+const normalizeBranchInput = (body) => {
+  const data = { ...body };
+  if (typeof data.name === "string") data.name = data.name.trim();
+  if (typeof data.code === "string") data.code = data.code.trim().toUpperCase();
+  if (data.name === "") throw new AppError("Nama cabang wajib diisi", StatusCodes.BAD_REQUEST);
+  if (data.code === "") throw new AppError("Kode cabang wajib diisi", StatusCodes.BAD_REQUEST);
+  return data;
+};
+
+// Titik lokasi absen: latitude & longitude diisi berdua atau tidak sama sekali (G5-06)
+const assertCoordinatePair = (latitude, longitude) => {
+  const hasLat = latitude !== undefined && latitude !== null;
+  const hasLng = longitude !== undefined && longitude !== null;
+  if (hasLat !== hasLng) {
+    throw new AppError("Latitude dan longitude harus diisi bersamaan", StatusCodes.BAD_REQUEST);
+  }
+};
+
 const createBranch = async (body) => {
-  const existing = await findByCode(body.code);
+  const data = normalizeBranchInput(body);
+  assertCoordinatePair(data.latitude, data.longitude);
+
+  const existing = await findByCode(data.code);
   if (existing) throw new AppError("Kode cabang sudah digunakan", StatusCodes.CONFLICT);
 
-  return create(body);
+  return create(data);
 };
 
 const updateBranch = async (id, body) => {
   const branch = await findById(id);
   if (!branch) throw new AppError("Cabang tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  if (body.code && body.code !== branch.code) {
-    const existing = await findByCode(body.code);
-    if (existing) throw new AppError("Kode cabang sudah digunakan", StatusCodes.CONFLICT);
+  const data = normalizeBranchInput(body);
+  assertCoordinatePair(
+    data.latitude  !== undefined ? data.latitude  : branch.latitude,
+    data.longitude !== undefined ? data.longitude : branch.longitude,
+  );
+
+  if (data.code && data.code !== branch.code) {
+    const existing = await findByCode(data.code);
+    if (existing && existing.id !== id) throw new AppError("Kode cabang sudah digunakan", StatusCodes.CONFLICT);
   }
 
-  return update(id, body);
+  return update(id, data);
 };
 
 const deleteBranch = async (id) => {
@@ -81,7 +109,6 @@ const deleteBranch = async (id) => {
     invoiceCount,
     appointmentCount,
     attendanceCount,
-    commissionRuleCount,
     staffScheduleCount,
     depositCount,
     paymentCount,
@@ -91,7 +118,6 @@ const deleteBranch = async (id) => {
     prisma.invoice.count({ where: { branchId: id } }),
     prisma.appointment.count({ where: { branchId: id } }),
     prisma.attendance.count({ where: { branchId: id } }),
-    prisma.branchCommissionRule.count({ where: { branchId: id } }),
     prisma.staffSchedule.count({ where: { branchId: id } }),
     prisma.deposit.count({ where: { branchId: id } }),
     prisma.payment.count({ where: { branchId: id } }),
@@ -105,8 +131,6 @@ const deleteBranch = async (id) => {
     throw new AppError(`Tidak bisa dihapus: ${appointmentCount} appointment masih terhubung ke cabang ini`, StatusCodes.CONFLICT);
   if (attendanceCount > 0)
     throw new AppError(`Tidak bisa dihapus: ${attendanceCount} data absensi masih terhubung ke cabang ini`, StatusCodes.CONFLICT);
-  if (commissionRuleCount > 0)
-    throw new AppError(`Tidak bisa dihapus: ${commissionRuleCount} aturan komisi masih terhubung ke cabang ini`, StatusCodes.CONFLICT);
   if (staffScheduleCount > 0)
     throw new AppError(`Tidak bisa dihapus: ${staffScheduleCount} jadwal shift masih terhubung ke cabang ini`, StatusCodes.CONFLICT);
   if (depositCount > 0)
