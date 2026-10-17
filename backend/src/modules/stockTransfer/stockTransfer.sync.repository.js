@@ -79,6 +79,19 @@ const markTransferItemSynced = (itemId, accurateDetailId) =>
     data:  { accurateDetailId },
   });
 
+// TRANSFER_OUT dihapus di Accurate (semua item diterima 0) — lepas referensinya
+const clearTransferOutSynced = (id) =>
+  prisma.$transaction([
+    prisma.stockTransfer.update({
+      where: { id },
+      data:  { accurateTransferId: null, accurateTransferNumber: null },
+    }),
+    prisma.stockTransferItem.updateMany({
+      where: { transferId: id },
+      data:  { accurateDetailId: null },
+    }),
+  ]);
+
 const findReceiveAccurateId = (id) =>
   prisma.$queryRawUnsafe(
     `SELECT "accurateReceiveId" FROM "stock_transfers" WHERE id = $1`,
@@ -90,5 +103,6 @@ module.exports = {
   markTransferSynced,
   markTransferReceiveSynced,
   markTransferItemSynced,
+  clearTransferOutSynced,
   findReceiveAccurateId,
 };

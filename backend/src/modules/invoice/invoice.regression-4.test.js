@@ -8,6 +8,7 @@ jest.mock('./invoice.repository', () => ({
   findById:                   jest.fn(),
   cancelWithTransaction:      jest.fn().mockResolvedValue({ id: 'inv1', status: 'CANCELLED' }),
   markInvoiceAccurateRemoved: jest.fn(),
+  countPaymentsByInvoice:     jest.fn().mockResolvedValue(0),
 }));
 jest.mock('./invoice.sync.repository', () => ({
   findInvoiceForSync: jest.fn(), markInvoiceSynced: jest.fn(), markInvoiceItemSynced: jest.fn(),

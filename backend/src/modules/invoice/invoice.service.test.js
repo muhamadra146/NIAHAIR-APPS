@@ -28,6 +28,7 @@ jest.mock('./invoice.repository', () => ({
   updateWithTransaction:         jest.fn(),
   cancelWithTransaction:         jest.fn(),
   deleteWithTransaction:         jest.fn(),
+  countPaymentsByInvoice:        jest.fn(),
   findMaxInvoiceSeqToday:        jest.fn(),
   findDailyAssignment:           jest.fn(),
 }));
@@ -123,9 +124,37 @@ describe('cancelInvoice', () => {
     expect(repo.cancelWithTransaction).not.toHaveBeenCalled();
   });
 
+  // Keputusan user 2026-10-17 (ikuti Accurate): ada pembayaran → tidak bisa batal
+  test('should_throw_422_when_invoice_has_payments', async () => {
+    repo.findById.mockResolvedValue({ id: 'inv1', invoiceNo: 'INV-001', status: 'PARTIAL', paidAmount: '50000' });
+    repo.countPaymentsByInvoice.mockResolvedValue(1);
+
+    await expect(cancelInvoice('inv1', 'u1')).rejects.toMatchObject({
+      statusCode: 422,
+      message: 'Invoice ini sudah ada pembayaran. Hapus pembayarannya dulu, baru batalkan invoice.',
+    });
+    expect(repo.countPaymentsByInvoice).toHaveBeenCalledWith('inv1');
+    expect(inventory.reverseInvoiceSaleMovements).not.toHaveBeenCalled();
+    expect(repo.cancelWithTransaction).not.toHaveBeenCalled();
+  });
+
+  test('should_cancel_invoice_with_only_deposit_applied', async () => {
+    const mockInvoice = { id: 'inv1', invoiceNo: 'INV-001', status: 'PARTIAL', grandTotal: '300000', totalDeposit: '100000', paidAmount: '0' };
+    repo.findById.mockResolvedValue(mockInvoice);
+    repo.countPaymentsByInvoice.mockResolvedValue(0);
+    repo.cancelWithTransaction.mockResolvedValue({ ...mockInvoice, status: 'CANCELLED' });
+
+    await cancelInvoice('inv1', 'u1');
+
+    expect(repo.cancelWithTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ invoice: mockInvoice, resolveDepositStatus: expect.any(Function) })
+    );
+  });
+
   test('should_cancel_unpaid_invoice', async () => {
     const mockInvoice = { id: 'inv1', invoiceNo: 'INV-001', status: 'UNPAID' };
     repo.findById.mockResolvedValue(mockInvoice);
+    repo.countPaymentsByInvoice.mockResolvedValue(0);
     repo.cancelWithTransaction.mockResolvedValue({ ...mockInvoice, status: 'CANCELLED' });
 
     await cancelInvoice('inv1', 'u1');
@@ -155,7 +184,7 @@ describe('deleteInvoice', () => {
 
   test('should_throw_422_when_invoice_has_payments', async () => {
     repo.findById.mockResolvedValue({ id: 'inv1', status: 'UNPAID', accurateInvoiceId: null });
-    prisma.payment.count.mockResolvedValue(2);
+    repo.countPaymentsByInvoice.mockResolvedValue(2);
 
     await expect(deleteInvoice('inv1')).rejects.toMatchObject({ statusCode: 422 });
     expect(repo.deleteWithTransaction).not.toHaveBeenCalled();
@@ -163,7 +192,7 @@ describe('deleteInvoice', () => {
 
   test('should_delete_invoice_when_no_payments_and_unpaid', async () => {
     repo.findById.mockResolvedValue({ id: 'inv1', invoiceNo: 'INV-001', status: 'UNPAID', accurateInvoiceId: null });
-    prisma.payment.count.mockResolvedValue(0);
+    repo.countPaymentsByInvoice.mockResolvedValue(0);
     repo.deleteWithTransaction.mockResolvedValue({});
 
     await deleteInvoice('inv1');

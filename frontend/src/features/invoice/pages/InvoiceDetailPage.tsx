@@ -93,6 +93,7 @@ export function InvoiceDetailPage() {
 
   const canPay    = isOpenInvoice(invoice.status);
   const outstanding = Number(invoice.outstandingAmount);
+  const hasPayments = (invoice.payments ?? []).length > 0;
 
   return (
     <PageContainer>
@@ -145,10 +146,22 @@ export function InvoiceDetailPage() {
                 </Button>
               )}
               {!isViewOnly && invoice.status !== "PAID" && (
-                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteConfirm(true)}>
-                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                  Hapus
-                </Button>
+                // Ikuti Accurate: invoice yang masih punya pembayaran tidak bisa dihapus/dibatalkan
+                <div className="flex flex-col items-end">
+                  <Button
+                    size="sm" variant="ghost"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    disabled={hasPayments}
+                    title={hasPayments ? "Hapus pembayaran dulu" : undefined}
+                    onClick={() => setDeleteConfirm(true)}
+                  >
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                    Hapus
+                  </Button>
+                  {hasPayments && (
+                    <span className="text-[11px] text-muted-foreground">Hapus pembayaran dulu</span>
+                  )}
+                </div>
               )}
             </div>
           </div>

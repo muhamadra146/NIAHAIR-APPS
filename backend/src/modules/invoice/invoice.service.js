@@ -42,6 +42,7 @@ const {
   updateWithTransaction,
   cancelWithTransaction,
   markInvoiceAccurateRemoved,
+  countPaymentsByInvoice,
   deleteWithTransaction,
   findMaxInvoiceSeqToday,
   findDailyAssignment,
@@ -931,6 +932,16 @@ const cancelInvoice = async (id, userId) => {
     throw new AppError("Invoice sudah dibatalkan", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
+  // Ikuti Accurate: invoice yang masih punya pembayaran tidak bisa dibatalkan (keputusan user 2026-10-17).
+  // Deposit (DP) bukan pembayaran — batal dengan DP saja tetap boleh (DP dilepas).
+  const paymentCount = await countPaymentsByInvoice(id);
+  if (paymentCount > 0) {
+    throw new AppError(
+      "Invoice ini sudah ada pembayaran. Hapus pembayarannya dulu, baru batalkan invoice.",
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
   await reverseInvoiceSaleMovements(invoice.invoiceNo);
 
   // Deposit yang terpakai dilepas & statusnya dihitung ulang dalam transaksi yang sama (G1-03).
@@ -996,7 +1007,7 @@ const deleteInvoice = async (id) => {
     throw new AppError("Invoice yang sudah lunas tidak dapat dihapus", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
-  const paymentCount = await prisma.payment.count({ where: { invoiceId: id } });
+  const paymentCount = await countPaymentsByInvoice(id);
   if (paymentCount > 0) {
     throw new AppError(
       "Hapus semua pembayaran invoice terlebih dahulu sebelum menghapus invoice ini",

@@ -525,6 +525,10 @@ const cancelWithTransaction = ({ invoice, userId, invoiceData = {}, resolveDepos
     return tx.invoice.findUnique({ where: { id: invoice.id }, include: INCLUDE });
   });
 
+// Jumlah pembayaran (Payment) yang tercatat untuk invoice — deposit (DP) tidak dihitung
+const countPaymentsByInvoice = (invoiceId) =>
+  prisma.payment.count({ where: { invoiceId } });
+
 // Faktur sudah dihapus di Accurate (invoice batal) — lepas referensinya
 const markInvoiceAccurateRemoved = (id) =>
   prisma.invoice.update({
@@ -610,6 +614,7 @@ module.exports = {
   updateWithTransaction,
   cancelWithTransaction,
   markInvoiceAccurateRemoved,
+  countPaymentsByInvoice,
   findDailyAssignment,
   findCommissionGenerateList,
   findAllPaidForJobAssignment,

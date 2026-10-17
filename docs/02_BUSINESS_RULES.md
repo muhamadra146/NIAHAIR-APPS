@@ -3167,6 +3167,8 @@ TRANSFER_IN
 
 Qty diterima tidak boleh melebihi qty dikirim. Bila diterima sebagian, sisanya otomatis kembali ke gudang asal (TRANSFER_IN ke gudang asal) (keputusan user 2026-10-15).
 
+Di Accurate, qty dokumen pengiriman (TRANSFER_OUT) disamakan dengan qty yang diterima sebelum penerimaan dikirim, sehingga sisa tidak tertahan di gudang transit dan stok Accurate sama dengan ERP. Batal terima mengembalikan qty pengiriman ke qty kirim (keputusan user 2026-10-17).
+
 Harus berada pada Transaction yang sama.
 
 ---
@@ -3661,6 +3663,8 @@ VOID
 ```
 
 Status tidak boleh melompati tahapan.
+
+**Batal invoice yang sudah ada pembayaran (ikuti Accurate):** invoice yang masih punya pembayaran tidak bisa dibatalkan (`422` "Invoice ini sudah ada pembayaran. Hapus pembayarannya dulu, baru batalkan invoice."). Hapus pembayarannya dulu (pembayaran di Accurate ikut terhapus), baru invoice bisa dibatalkan atau dihapus. Deposit (DP) yang terpasang bukan pembayaran — invoice yang hanya memakai DP tetap bisa dibatalkan dan DP-nya dilepas (keputusan user 2026-10-17).
 
 ---
 

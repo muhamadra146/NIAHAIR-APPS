@@ -8,8 +8,11 @@ jest.mock('../syncQueue/syncQueue.service');
 jest.mock('../inventory/inventory.period.service');
 jest.mock('./stockTransfer.sync.repository', () => ({ findReceiveAccurateId: jest.fn().mockResolvedValue(null) }));
 jest.mock('../../config/prisma', () => ({ $transaction: jest.fn() }));
+jest.mock('./stockTransfer.sync.service', () => ({ restoreTransferOutInAccurate: jest.fn() }));
 
 const repo   = require('./stockTransfer.repository');
+const syncSvc = require('./stockTransfer.sync.service');
+const { createSyncJob } = require('../syncQueue/syncQueue.service');
 const prisma = require('../../config/prisma');
 const svc    = require('./stockTransfer.service');
 
@@ -73,4 +76,29 @@ test('undo receive menarik kembali sisa yang dikembalikan ke gudang asal', async
   expect(srcOut).toMatchObject({ movementType: 'TRANSFER_OUT' });
   expect(srcOut.qtyChange.toString()).toBe('-3');
   expect(moves.find((m) => m.warehouseId === 'wh2').qtyChange.toString()).toBe('-7');
+  // Belum tersinkron ke Accurate → tidak ada pemulihan TRANSFER_OUT
+  expect(syncSvc.restoreTransferOutInAccurate).not.toHaveBeenCalled();
+});
+
+// Accurate: receive parsial menyesuaikan qty TRANSFER_OUT → undo mengembalikannya ke qty dikirim
+test('undo receive transfer tersinkron → qty TRANSFER_OUT Accurate dipulihkan', async () => {
+  repo.findById.mockResolvedValue({ ...transfer('RECEIVED'), accurateTransferId: 501 });
+  tx.$queryRawUnsafe.mockResolvedValue([{ id: 'ti1', receivedQty: '7', qty: '10' }]);
+  tx.inventoryMovement.aggregate.mockResolvedValue({ _sum: { qtyChange: '-7' } });
+  tx.inventory.upsert.mockImplementation(() => Promise.resolve({ id: 'inv', qtyOnHand: '20', qtyReserved: '0' }));
+
+  await svc.undoReceive('tr1', 'SUPER_ADMIN', null);
+
+  expect(syncSvc.restoreTransferOutInAccurate).toHaveBeenCalledWith('tr1');
+});
+
+test('undo receive yang semuanya diterima 0 (TRANSFER_OUT Accurate dihapus) → antre sync TRANSFER_OUT lagi', async () => {
+  repo.findById.mockResolvedValue(transfer('RECEIVED'));
+  tx.$queryRawUnsafe.mockResolvedValue([{ id: 'ti1', receivedQty: '0', qty: '10' }]);
+  tx.inventoryMovement.aggregate.mockResolvedValue({ _sum: { qtyChange: '0' } });
+  tx.inventory.upsert.mockImplementation(() => Promise.resolve({ id: 'inv', qtyOnHand: '20', qtyReserved: '0' }));
+
+  await svc.undoReceive('tr1', 'SUPER_ADMIN', null);
+
+  expect(createSyncJob).toHaveBeenCalledWith({ entityType: 'STOCK_TRANSFER', entityId: 'tr1', direction: 'APP_TO_ACCURATE' });
 });

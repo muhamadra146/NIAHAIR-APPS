@@ -79,6 +79,19 @@ test('delete melepas deposit & menghitung ulang status', async () => {
   expect(mockTx.invoice.delete).toHaveBeenCalled();
 });
 
+// Keputusan user 2026-10-17 (ikuti Accurate): invoice yang masih punya pembayaran tidak bisa dibatalkan
+test('cancel ditolak 422 bila invoice masih punya pembayaran — deposit tidak disentuh', async () => {
+  prisma.payment.count.mockResolvedValueOnce(1);
+
+  await expect(cancelInvoice('inv1', 'u1')).rejects.toMatchObject({
+    statusCode: 422,
+    message: 'Invoice ini sudah ada pembayaran. Hapus pembayarannya dulu, baru batalkan invoice.',
+  });
+  expect(prisma.payment.count).toHaveBeenCalledWith({ where: { invoiceId: 'inv1' } });
+  expect(mockTx.invoiceDeposit.deleteMany).not.toHaveBeenCalled();
+  expect(mockTx.invoice.update).not.toHaveBeenCalled();
+});
+
 test('deposit habis dipakai invoice lain tetap USED', async () => {
   mockTx.deposit.findMany.mockResolvedValue([
     { id: 'd1', amount: '100000', status: 'PARTIAL_USED', invoiceDeposits: [{ amountApplied: '100000' }] },

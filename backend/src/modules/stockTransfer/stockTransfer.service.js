@@ -503,6 +503,7 @@ const undoReceive = async (id, userRole, actingBranchId) => {
     }
   }
 
+  let nothingReceived = false;
   await prisma.$transaction(async (tx) => {
     // Revert status and clear Accurate receive fields — bersyarat status RECEIVED (guard paralel)
     const reverted = await tx.$executeRawUnsafe(
@@ -521,6 +522,9 @@ const undoReceive = async (id, userRole, actingBranchId) => {
     const receivedQtyMap = new Map(
       receivedQtyRows.map((r) => [r.id, r.receivedQty != null ? D(r.receivedQty) : null]),
     );
+    const invLines = transfer.items.filter((i) => i.item.itemType === "INVENTORY");
+    nothingReceived = invLines.length > 0 &&
+      invLines.every((i) => receivedQtyMap.get(i.id) != null && receivedQtyMap.get(i.id).lessThanOrEqualTo(0));
 
     // Reset receivedQty on items
     await tx.$executeRawUnsafe(
@@ -613,6 +617,19 @@ const undoReceive = async (id, userRole, actingBranchId) => {
       });
     }
   });
+
+  // Accurate: receive parsial dulu menyamakan qty TRANSFER_OUT dengan qty diterima → kembalikan ke
+  // qty dikirim (barang kembali "dalam perjalanan"). Best effort seperti hapus TRANSFER_IN di atas.
+  if (transfer.accurateTransferId) {
+    try {
+      await require("./stockTransfer.sync.service").restoreTransferOutInAccurate(id);
+    } catch (err) {
+      logger.warn(`[undo receive] Accurate restore TRANSFER_OUT failed (ignored): ${err.message}`);
+    }
+  } else if (nothingReceived) {
+    // Semua diterima 0 → TRANSFER_OUT Accurate dulu dihapus; kirim ulang lewat antrean sync
+    await createSyncJob({ entityType: "STOCK_TRANSFER", entityId: id, direction: "APP_TO_ACCURATE" });
+  }
 
   return repo.findById(id);
 };
