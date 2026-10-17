@@ -22,6 +22,11 @@ const findInvoiceForSync = async (id) => {
       },
       membershipDiscountTotal: true,
       membershipId:            true,
+      // Total tersimpan — untuk mengenali diskon membership nominal dari data invoice sendiri
+      // (bukan dari tipe paket saat ini yang bisa sudah diubah admin)
+      subtotal:                true,
+      totalTax:                true,
+      grandTotal:              true,
       membership: {
         select: { discountType: true, discountCategories: DISCOUNT_CATEGORIES_SELECT },
       },

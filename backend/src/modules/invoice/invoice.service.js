@@ -77,102 +77,28 @@ const assertGrandTotal = (grandTotal) => {
   }
 };
 
-// ── List ──────────────────────────────────────────────────────────────
-
-const listInvoices = async ({ page, limit, customerId, branchId, status, appointmentId, startDate, endDate, sortBy }) => {
-  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
-  const orderBy = resolveOrderBy(sortBy, ORDER_MAP, "-invoiceDate");
-
-  const where = {};
-  if (customerId)   where.customerId   = customerId;
-  if (branchId)     where.branchId     = branchId;
-  if (status)       where.status       = status;
-  if (appointmentId) where.appointmentId = appointmentId;
-
-  if (startDate || endDate) {
-    where.invoiceDate = {};
-    if (startDate) where.invoiceDate.gte = wibDayStart(startDate);
-    if (endDate)   where.invoiceDate.lte = wibDayEnd(endDate);
-  }
-
-  const [data, total] = await Promise.all([
-    findAll({ skip, take, where, orderBy }),
-    count(where),
-  ]);
-
-  return { data, meta: paginationMeta(total, pageNum, limitNum) };
+// Label status deposit untuk pesan error (Bahasa Indonesia)
+const DEPOSIT_STATUS_LABEL = {
+  PENDING:      "menunggu",
+  UNPAID:       "belum dibayar",
+  PARTIAL:      "dibayar sebagian",
+  PAID:        "sudah dibayar",
+  PARTIAL_USED: "terpakai sebagian",
+  USED:         "sudah terpakai habis",
+  REFUNDED:     "sudah dikembalikan",
+  CANCELLED:    "dibatalkan",
 };
 
-// ── Single ────────────────────────────────────────────────────────────
+const rupiah = (v) => `Rp ${Number(v).toLocaleString("id-ID", { maximumFractionDigits: 2 })}`;
 
-const getInvoiceById = async (id) => {
-  const invoice = await findById(id);
-  if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
-  return invoice;
-};
-
-// ── Invoice number generator: INV-YYYYMMDD-XXXX ───────────────────────
-
-const buildInvoiceNo = async () => {
-  const now  = new Date(Date.now() + 7 * 3600 * 1000); // WIB (UTC+7)
-  const yyyy = now.getUTCFullYear();
-  const mm   = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const dd   = String(now.getUTCDate()).padStart(2, "0");
-  const prefix = `INV-${yyyy}${mm}${dd}-`;
-
-  const maxSeq = await findMaxInvoiceSeqToday(prefix);
-  return `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
-};
-
-// ── Create ────────────────────────────────────────────────────────────
-
-const createInvoice = async (body, userId, branchId, createdByEmployeeId = null) => {
-  // Key-existence check distinguishes "absent = auto-apply" from "present as 0 = staff override"
-  const membershipDiscountOverride = 'membershipDiscountTotal' in body;
-  const { customerId, appointmentId, treatmentSessionIds, deposits = [], items, notes,
-          taxable = false, inclusiveTax = false } = body;
-  const bodyMembershipDiscount = membershipDiscountOverride ? D(body.membershipDiscountTotal ?? 0) : null;
-
-  const customer = await findCustomerById(customerId);
-  if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
-
-  // Booking harus ada & milik pelanggan yang sama (G1-14)
-  if (appointmentId) {
-    const appointment = await findAppointmentById(appointmentId);
-    if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
-    if (appointment.customerId !== customerId) {
-      throw new AppError("Booking bukan milik pelanggan ini", StatusCodes.UNPROCESSABLE_ENTITY);
-    }
-  }
-
-  const branch = await findBranchById(branchId);
-  if (!branch) throw new AppError("Cabang tidak ditemukan", StatusCodes.NOT_FOUND);
-
-  // Always fetch active membership — needed to determine discountType for grandTotal adjustment
-  // even when override is present. The loop guard (!membershipDiscountOverride) prevents
-  // auto-apply when the frontend has already handled the discount.
-  let activeMembership = null;
-  try {
-    activeMembership = await getActiveMembership(customerId);
-  } catch (err) {
-    logger.warn(`[invoice create] membership fetch failed for customer ${customerId}: ${err.message}`);
-  }
-
-  if (treatmentSessionIds && treatmentSessionIds.length > 0) {
-    const sessions = await findTreatmentSessionsByIds(treatmentSessionIds);
-    if (sessions.length !== treatmentSessionIds.length) {
-      throw new AppError("One or more treatment sessions not found", StatusCodes.NOT_FOUND);
-    }
-    const alreadyAttached = sessions.filter((s) => s.invoiceId !== null);
-    if (alreadyAttached.length > 0) {
-      throw new AppError(
-        "One or more treatment sessions are already attached to an invoice",
-        StatusCodes.CONFLICT
-      );
-    }
-  }
-
-  // Resolve price and build line items
+// ── Hitung baris & total invoice (dipakai create DAN update) ─────────
+//
+// Satu sumber perhitungan supaya edit invoice selalu menghasilkan angka yang sama dengan
+// create untuk input yang sama (P2: diskon membership tidak boleh terpotong dua kali).
+// Diskon membership persen dihitung dari harga asli (price × qty), bukan dari nilai yang
+// sudah didiskon. Bila body membawa membershipDiscountTotal (override dari POS), diskon
+// per baris dipakai apa adanya dan membership tidak ditambahkan lagi.
+const computeInvoiceLines = async ({ items, branchId, taxable, inclusiveTax, activeMembership, membershipDiscountOverride, bodyMembershipDiscount }) => {
   const itemsData    = [];
   let membershipDiscountRunning = D("0");
   // Total (setelah diskon item + PPN) item yang dapat diskon membership — batas diskon nominal
@@ -192,7 +118,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
     const itemUnit = await findItemUnit({ itemId: line.itemId, unitId: line.unitId });
     if (!itemUnit) {
       throw new AppError(
-        `Unit is not valid for item ${item.itemCode}`,
+        `Satuan tidak valid untuk item ${item.itemCode}`,
         StatusCodes.UNPROCESSABLE_ENTITY
       );
     }
@@ -208,7 +134,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
       }
       if (!priceRecord) {
         throw new AppError(
-          `No active price found for item ${item.itemCode}`,
+          `Harga aktif untuk item ${item.itemCode} belum diatur`,
           StatusCodes.UNPROCESSABLE_ENTITY
         );
       }
@@ -317,6 +243,108 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
     : preDiscountGrandTotal;
   assertGrandTotal(grandTotal);
 
+  return { itemsData, totalSubtotal, totalDiscount, totalTax, grandTotal, membershipDiscountTotal, membershipId };
+};
+
+// ── List ──────────────────────────────────────────────────────────────
+
+const listInvoices = async ({ page, limit, customerId, branchId, status, appointmentId, startDate, endDate, sortBy }) => {
+  const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
+  const orderBy = resolveOrderBy(sortBy, ORDER_MAP, "-invoiceDate");
+
+  const where = {};
+  if (customerId)   where.customerId   = customerId;
+  if (branchId)     where.branchId     = branchId;
+  if (status)       where.status       = status;
+  if (appointmentId) where.appointmentId = appointmentId;
+
+  if (startDate || endDate) {
+    where.invoiceDate = {};
+    if (startDate) where.invoiceDate.gte = wibDayStart(startDate);
+    if (endDate)   where.invoiceDate.lte = wibDayEnd(endDate);
+  }
+
+  const [data, total] = await Promise.all([
+    findAll({ skip, take, where, orderBy }),
+    count(where),
+  ]);
+
+  return { data, meta: paginationMeta(total, pageNum, limitNum) };
+};
+
+// ── Single ────────────────────────────────────────────────────────────
+
+const getInvoiceById = async (id) => {
+  const invoice = await findById(id);
+  if (!invoice) throw new AppError("Invoice tidak ditemukan", StatusCodes.NOT_FOUND);
+  return invoice;
+};
+
+// ── Invoice number generator: INV-YYYYMMDD-XXXX ───────────────────────
+
+const buildInvoiceNo = async () => {
+  const now  = new Date(Date.now() + 7 * 3600 * 1000); // WIB (UTC+7)
+  const yyyy = now.getUTCFullYear();
+  const mm   = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const dd   = String(now.getUTCDate()).padStart(2, "0");
+  const prefix = `INV-${yyyy}${mm}${dd}-`;
+
+  const maxSeq = await findMaxInvoiceSeqToday(prefix);
+  return `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
+};
+
+// ── Create ────────────────────────────────────────────────────────────
+
+const createInvoice = async (body, userId, branchId, createdByEmployeeId = null) => {
+  // Key-existence check distinguishes "absent = auto-apply" from "present as 0 = staff override"
+  const membershipDiscountOverride = 'membershipDiscountTotal' in body;
+  const { customerId, appointmentId, treatmentSessionIds, deposits = [], items, notes,
+          taxable = false, inclusiveTax = false } = body;
+  const bodyMembershipDiscount = membershipDiscountOverride ? D(body.membershipDiscountTotal ?? 0) : null;
+
+  const customer = await findCustomerById(customerId);
+  if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  // Booking harus ada & milik pelanggan yang sama (G1-14)
+  if (appointmentId) {
+    const appointment = await findAppointmentById(appointmentId);
+    if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
+    if (appointment.customerId !== customerId) {
+      throw new AppError("Booking bukan milik pelanggan ini", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+  }
+
+  const branch = await findBranchById(branchId);
+  if (!branch) throw new AppError("Cabang tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  // Always fetch active membership — needed to determine discountType for grandTotal adjustment
+  // even when override is present. The loop guard (!membershipDiscountOverride) prevents
+  // auto-apply when the frontend has already handled the discount.
+  let activeMembership = null;
+  try {
+    activeMembership = await getActiveMembership(customerId);
+  } catch (err) {
+    logger.warn(`[invoice create] membership fetch failed for customer ${customerId}: ${err.message}`);
+  }
+
+  if (treatmentSessionIds && treatmentSessionIds.length > 0) {
+    const sessions = await findTreatmentSessionsByIds(treatmentSessionIds);
+    if (sessions.length !== treatmentSessionIds.length) {
+      throw new AppError("Satu atau lebih sesi treatment tidak ditemukan", StatusCodes.NOT_FOUND);
+    }
+    const alreadyAttached = sessions.filter((s) => s.invoiceId !== null);
+    if (alreadyAttached.length > 0) {
+      throw new AppError(
+        "Satu atau lebih sesi treatment sudah terhubung ke invoice lain",
+        StatusCodes.CONFLICT
+      );
+    }
+  }
+
+  // Resolve price and build line items (logika sama dengan update)
+  const { itemsData, totalSubtotal, totalDiscount, totalTax, grandTotal, membershipDiscountTotal, membershipId } =
+    await computeInvoiceLines({ items, branchId, taxable, inclusiveTax, activeMembership, membershipDiscountOverride, bodyMembershipDiscount });
+
   // ── Validate and apply deposits ───────────────────────────────────────
   let totalDeposit = D("0");
   const depositsData = [];
@@ -333,14 +361,14 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
       const usable = ["PAID", "PARTIAL_USED"];
       if (!usable.includes(deposit.status)) {
         throw new AppError(
-          `Deposit ${depositId} cannot be applied (status: ${deposit.status}). Must be PAID or PARTIAL_USED.`,
+          `Deposit tidak bisa dipakai (status: ${DEPOSIT_STATUS_LABEL[deposit.status] ?? deposit.status}). Hanya deposit yang sudah dibayar dan masih bersisa yang bisa dipakai.`,
           StatusCodes.UNPROCESSABLE_ENTITY
         );
       }
 
       if (deposit.customerId !== customerId) {
         throw new AppError(
-          `Deposit ${depositId} belongs to a different customer`,
+          "Deposit milik pelanggan lain",
           StatusCodes.UNPROCESSABLE_ENTITY
         );
       }
@@ -353,7 +381,7 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
 
       if (depositRemaining.lte(D("0"))) {
         throw new AppError(
-          `Deposit ${depositId} has no remaining balance`,
+          "Saldo deposit sudah habis",
           StatusCodes.UNPROCESSABLE_ENTITY
         );
       }
@@ -363,13 +391,13 @@ const createInvoice = async (body, userId, branchId, createdByEmployeeId = null)
 
       if (amountToApply.gt(depositRemaining)) {
         throw new AppError(
-          `Deposit ${depositId}: amount (${amountToApply}) exceeds remaining balance (${depositRemaining})`,
+          `Jumlah deposit (${rupiah(amountToApply)}) melebihi sisa saldo deposit (${rupiah(depositRemaining)})`,
           StatusCodes.UNPROCESSABLE_ENTITY
         );
       }
       if (amountToApply.gt(stillNeeded)) {
         throw new AppError(
-          `Deposit ${depositId}: amount (${amountToApply}) exceeds invoice outstanding (${stillNeeded})`,
+          `Jumlah deposit (${rupiah(amountToApply)}) melebihi sisa tagihan invoice (${rupiah(stillNeeded)})`,
           StatusCodes.UNPROCESSABLE_ENTITY
         );
       }
@@ -521,136 +549,22 @@ const updateInvoice = async (id, body, userId) => {
     logger.warn(`[invoice update] membership fetch failed for customer ${existing.customerId}: ${err.message}`);
   }
 
-  // Re-resolve prices and build new line items (same logic as createInvoice)
-  const itemsData    = [];
-  let totalSubtotal = D("0");
-  let totalDiscount = D("0");
-  let totalTax      = D("0");
-  let membershipDiscountRunning = D("0");
-  // Total (setelah diskon item + PPN) item yang dapat diskon membership — batas diskon nominal
-  let memberEligibleTotal = D("0");
-  // totalSubtotal / totalTax hanya dari item layanan (isMaterial=false)
-
-  for (const line of items) {
-    const isMaterial = line.isMaterial === true;
-
-    const item = await findItemById(line.itemId);
-    if (!item) throw new AppError(`Item tidak ditemukan: ${line.itemId}`, StatusCodes.NOT_FOUND);
-
-    const itemUnit = await findItemUnit({ itemId: line.itemId, unitId: line.unitId });
-    if (!itemUnit) {
-      throw new AppError(`Unit is not valid for item ${item.itemCode}`, StatusCodes.UNPROCESSABLE_ENTITY);
-    }
-
-    let price;
-    if (line.price !== undefined && line.price !== null) {
-      price = D(line.price);
-    } else {
-      let priceRecord = await findActivePrice({ itemId: line.itemId, unitId: line.unitId, branchId });
-      if (!priceRecord) priceRecord = await findActivePriceGlobal({ itemId: line.itemId, unitId: line.unitId });
-      if (!priceRecord) {
-        throw new AppError(`No active price found for item ${item.itemCode}`, StatusCodes.UNPROCESSABLE_ENTITY);
-      }
-      price = D(priceRecord.sellingPrice);
-    }
-
-    // Diskon membership hanya untuk item yang kategorinya dicentang di paket & tidak dikecualikan
-    const memberEligible  = isMemberDiscountEligible(item, activeMembership?.membership, isMaterial);
-    const qty             = D(line.qty);
-    const discountType    = line.discountType ?? "AMOUNT";
-    const discountPercent = discountType === "PERCENT" ? D(line.discountPercent ?? 0) : null;
-    let discount          = discountType === "PERCENT"
-      ? price.mul(qty).mul(discountPercent).div(D("100")).toDecimalPlaces(2)
-      : D(line.discountAmount ?? 0);
-    assertLineAmounts({ price, qty, discount });
-
-    // Membership discount hanya untuk item yang dapat diskon member
-    if (
-      !isMaterial &&
-      !membershipDiscountOverride &&
-      activeMembership?.membership?.discountType === "PERCENTAGE" &&
-      memberEligible
-    ) {
-      const membershipItemDiscount = price.mul(qty)
-        .mul(D(activeMembership.membership.discountValue))
-        .div(D("100"))
-        .toDecimalPlaces(0);
-      discount = discount.add(membershipItemDiscount);
-      membershipDiscountRunning = membershipDiscountRunning.add(membershipItemDiscount);
-    }
-
-    const grossLine       = price.mul(qty).sub(discount);
-    // Bahan baku tidak kena PPN
-    const lineTaxable     = !isMaterial && taxable && (line.taxable ?? false);
-
-    let lineSubtotal, itemTax;
-    if (!lineTaxable) {
-      lineSubtotal = grossLine;
-      itemTax      = D("0");
-    } else if (inclusiveTax) {
-      lineSubtotal = grossLine.div(D("1.11")).toDecimalPlaces(2);
-      itemTax      = grossLine.sub(lineSubtotal);
-    } else {
-      lineSubtotal = grossLine;
-      itemTax      = grossLine.mul(D("0.11")).toDecimalPlaces(2);
-    }
-
-    // Bahan baku tidak masuk total tagihan client
-    if (!isMaterial) {
-      totalSubtotal = totalSubtotal.add(lineSubtotal);
-      totalDiscount = totalDiscount.add(discount);
-      totalTax      = totalTax.add(itemTax);
-      if (memberEligible) memberEligibleTotal = memberEligibleTotal.add(lineSubtotal).add(itemTax);
-    }
-
-    itemsData.push({
-      itemId:          line.itemId,
-      unitId:          line.unitId,
-      qty,
-      price,
-      discount,
-      discountType,
-      discountPercent: discountType === "PERCENT" ? discountPercent : null,
-      subtotal:        lineSubtotal,
-      taxable:         lineTaxable,
-      taxName:         lineTaxable ? "PPN" : null,
-      taxRate:         lineTaxable ? D("11") : D("0"),
-      isMaterial,
-      lineGroup:       line.lineGroup ?? null,
-    });
-  }
-
-  let membershipDiscountTotal = D("0");
-  const membershipId = activeMembership?.membership?.id ?? null;
-
-  if (membershipDiscountOverride) {
-    membershipDiscountTotal = bodyMembershipDiscount;
-    // Nominal: tidak boleh melebihi total item yang dapat diskon
-    if (activeMembership?.membership?.discountType === "FIXED_AMOUNT" && membershipDiscountTotal.gt(memberEligibleTotal)) {
-      membershipDiscountTotal = memberEligibleTotal;
-    }
-  } else if (activeMembership) {
-    if (activeMembership.membership.discountType === "PERCENTAGE") {
-      membershipDiscountTotal = membershipDiscountRunning;
-    } else if (activeMembership.membership.discountType === "FIXED_AMOUNT") {
-      const discountValue    = D(activeMembership.membership.discountValue);
-      membershipDiscountTotal = discountValue.gt(memberEligibleTotal) ? memberEligibleTotal : discountValue;
-    }
-  }
-
-  const preDiscountGrandTotal = totalSubtotal.add(totalTax);
-  const isFixedAmount         = activeMembership?.membership?.discountType === "FIXED_AMOUNT";
-  const fixedAmountApplied    = isFixedAmount && membershipDiscountTotal.gt(D("0"));
-  const grandTotal = fixedAmountApplied
-    ? (preDiscountGrandTotal.sub(membershipDiscountTotal).gt(D("0"))
-        ? preDiscountGrandTotal.sub(membershipDiscountTotal)
-        : D("0"))
-    : preDiscountGrandTotal;
-  assertGrandTotal(grandTotal);
+  // Re-resolve prices and build new line items — fungsi yang SAMA dengan createInvoice (P2)
+  const { itemsData, totalSubtotal, totalDiscount, totalTax, grandTotal, membershipDiscountTotal, membershipId } =
+    await computeInvoiceLines({ items, branchId, taxable, inclusiveTax, activeMembership, membershipDiscountOverride, bodyMembershipDiscount });
 
   // Keep existing deposits and payments; recalculate outstanding
   const existingTotalDeposit = D(existing.totalDeposit);
   const existingPaidAmount   = D(existing.paidAmount);
+  // P3 / FIN-017: total baru tidak boleh lebih kecil dari uang yang sudah diterima (DP + pembayaran).
+  // Kelebihan bayar ditolak (keputusan owner) — jangan diam-diam jadi Lunas & sisa 0.
+  const received = existingTotalDeposit.add(existingPaidAmount);
+  if (grandTotal.lt(received)) {
+    throw new AppError(
+      `Total baru (${rupiah(grandTotal)}) lebih kecil dari uang yang sudah diterima (${rupiah(received)}). Hapus pembayaran / lepas DP dulu.`,
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
   const newOutstanding       = grandTotal.sub(existingTotalDeposit).sub(existingPaidAmount);
   const safeOutstanding      = newOutstanding.lte(D("0")) ? D("0") : newOutstanding;
 
@@ -709,7 +623,7 @@ const applyDepositToInvoice = async (invoiceId, { depositId, amount }, userId) =
 
   if (["PAID", "CANCELLED"].includes(invoice.status)) {
     throw new AppError(
-      `Cannot apply deposit to invoice with status ${invoice.status}`,
+      `Deposit tidak bisa dipasang ke invoice yang ${invoice.status === "PAID" ? "sudah lunas" : "sudah dibatalkan"}`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
@@ -720,13 +634,13 @@ const applyDepositToInvoice = async (invoiceId, { depositId, amount }, userId) =
   const usable = ["PAID", "PARTIAL_USED"];
   if (!usable.includes(deposit.status)) {
     throw new AppError(
-      `Deposit cannot be applied (status: ${deposit.status}). Must be PAID or PARTIAL_USED.`,
+      `Deposit tidak bisa dipakai (status: ${DEPOSIT_STATUS_LABEL[deposit.status] ?? deposit.status}). Hanya deposit yang sudah dibayar dan masih bersisa yang bisa dipakai.`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
 
   if (deposit.customerId !== invoice.customerId) {
-    throw new AppError("Deposit belongs to a different customer", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Deposit milik pelanggan lain", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
   const alreadyApplied = deposit.invoiceDeposits.some((d) => d.invoiceId === invoiceId);
@@ -747,13 +661,13 @@ const applyDepositToInvoice = async (invoiceId, { depositId, amount }, userId) =
   }
   if (amountToApply.gt(depositRemaining)) {
     throw new AppError(
-      `Amount (${amountToApply}) exceeds deposit remaining balance (${depositRemaining})`,
+      `Jumlah (${rupiah(amountToApply)}) melebihi sisa saldo deposit (${rupiah(depositRemaining)})`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
   if (amountToApply.gt(outstandingAmount)) {
     throw new AppError(
-      `Amount (${amountToApply}) exceeds invoice outstanding amount (${outstandingAmount})`,
+      `Jumlah (${rupiah(amountToApply)}) melebihi sisa tagihan invoice (${rupiah(outstandingAmount)})`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
@@ -1033,7 +947,7 @@ const deleteInvoice = async (id) => {
 // ── Daily Assignment ─────────────────────────────────────────────────
 
 const getDailyAssignment = async ({ date, branchId }) => {
-  if (!date) throw new AppError("Query param 'date' (YYYY-MM-DD) is required", StatusCodes.BAD_REQUEST);
+  if (!date) throw new AppError("Tanggal wajib diisi (format YYYY-MM-DD)", StatusCodes.BAD_REQUEST);
 
   // Build WIB (UTC+7) day boundaries
   const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;

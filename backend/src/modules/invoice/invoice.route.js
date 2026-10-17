@@ -37,16 +37,20 @@ const KOMISI_GEN_ROLES     = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.FINANCE];
 // Kalkulator komisi (lihat, hitung, simpan): SUPER_ADMIN, OWNER, FINANCE (sama dengan generate/regenerate).
 // Staf hanya mengisi pengerjaan (job-assignments), tidak boleh menghitung komisi sendiri.
 const COMMISSION_CALC_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.FINANCE];
+// Baca invoice (R2a): POS + FINANCE (lihat saja) + peran yang membaca invoice dari layar lain —
+// OFFICE (tab Invoice di detail Booking, Komplain, Catatan Klien) dan STAFF_OPERASIONAL
+// (tab Invoice di detail Booking read-only, form Catatan Klien). INVENTORY tidak punya akses.
+const INVOICE_READ_ROLES   = [...POS_ROLES, ROLES.FINANCE, ROLES.OFFICE, ROLES.STAFF_OPERASIONAL];
 
 const router = Router();
 
-router.get("/",                 authenticate, getAllController);
+router.get("/",                 authenticate, authorize(...INVOICE_READ_ROLES), getAllController);
 // Literal-path routes MUST come before /:id — Express matches first-registered-wins
 router.get("/daily-assignment",        authenticate, authorize(...DAILY_ASSIGN_ROLES), dailyAssignmentController);
 router.get("/commission-generate",     authenticate, authorize(...KOMISI_GEN_ROLES), commissionGenerateListController);
 // Baca daftar pengerjaan: + FINANCE (melihat invoice "Siap Kalkulasi"); menyimpan tetap DAILY_ASSIGN_ROLES
 router.get("/job-assignments",         authenticate, authorize(...DAILY_ASSIGN_ROLES, ROLES.FINANCE), jobAssignmentsController);
-router.get("/:id",              authenticate, getByIdController);
+router.get("/:id",              authenticate, authorize(...INVOICE_READ_ROLES), getByIdController);
 router.post("/",   authenticate, requireBranch, authorize(...POS_ROLES), validate(createInvoiceSchema), createController);
 // Ubah / batal / pasang DP / setup treatment — hanya peran yang memakai halaman Invoice (POS)
 router.patch("/:id", authenticate, authorize(...POS_ROLES), validate(updateInvoiceSchema), updateController);

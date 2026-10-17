@@ -68,7 +68,14 @@ export interface InvoiceDeposit {
   id:            string;
   depositId:     string;
   amountApplied: string;
-  deposit?:      { id: string; amount: string; notes: string | null };
+  deposit?:      {
+    id:                     string;
+    amount:                 string;
+    notes?:                 string | null;
+    paidAt?:                string | null;
+    createdAt?:             string;
+    accurateDepositNumber?: string | null;
+  };
 }
 
 export interface InvoicePayment {
@@ -171,6 +178,8 @@ export interface UpdateInvoiceInput {
   notes?:        string;
   taxable?:      boolean;
   inclusiveTax?: boolean;
+  /** Sama dengan create: ada = diskon membership sudah ada di baris, backend tidak menambah lagi */
+  membershipDiscountTotal?: number;
 }
 
 export interface AddPaymentInput {

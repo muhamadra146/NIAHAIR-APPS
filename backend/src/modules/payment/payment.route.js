@@ -17,9 +17,13 @@ const {
 // app.use("/invoices/:invoiceId/payments", router)
 const router = Router({ mergeParams: true });
 
-router.get("/summary",    authenticate, summaryController);
-router.get("/",           authenticate, getAllController);
-router.get("/:id",        authenticate, getByIdController);
+// Baca pembayaran invoice (R2a): hanya peran dengan menu POS / Pembayaran Invoice —
+// POS (Super Admin, Owner, Manager, Kasir) + Finance (lihat saja). INVENTORY dll tidak.
+const PAYMENT_READ_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER, ROLES.FINANCE];
+
+router.get("/summary",    authenticate, authorize(...PAYMENT_READ_ROLES), summaryController);
+router.get("/",           authenticate, authorize(...PAYMENT_READ_ROLES), getAllController);
+router.get("/:id",        authenticate, authorize(...PAYMENT_READ_ROLES), getByIdController);
 router.delete(
   "/:id",
   authenticate,

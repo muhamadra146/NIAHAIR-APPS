@@ -124,7 +124,7 @@ const createPayment = async (
   userId
 ) => {
   if (!invoiceId) {
-    throw new AppError("invoiceId is required", StatusCodes.BAD_REQUEST);
+    throw new AppError("Invoice wajib dipilih", StatusCodes.BAD_REQUEST);
   }
 
   const invoice = await findInvoiceForPayment(invoiceId);
@@ -140,7 +140,7 @@ const createPayment = async (
   // Branch must match invoice — prevents cross-branch payment
   if (branchId && invoice.branchId !== branchId) {
     throw new AppError(
-      `Branch mismatch: payment branch does not match invoice branch`,
+      "Cabang pembayaran tidak sama dengan cabang invoice",
       StatusCodes.FORBIDDEN
     );
   }

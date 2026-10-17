@@ -459,7 +459,7 @@ function AddPaymentDialog({
               {loadingDeposits ? (
                 <Skeleton className="h-10 w-full" />
               ) : deposits.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-2">Tidak ada deposit UNPAID untuk customer ini.</p>
+                <p className="text-sm text-muted-foreground py-2">Tidak ada deposit yang belum dibayar untuk customer ini.</p>
               ) : (
                 <div className="space-y-2">
                   {deposits.map((d) => (

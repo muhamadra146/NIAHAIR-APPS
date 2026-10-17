@@ -12,6 +12,34 @@ const { mapInvoiceToAccurate } = require("./invoice.sync.mapper");
 const ACCURATE_INVOICE_SAVE   = "/sales-invoice/save.do";
 const ACCURATE_INVOICE_DETAIL = "/sales-invoice/detail.do";
 
+const ACCURATE_ITEM_DETAIL    = "/item/detail.do";
+
+// Cek (baca saja) master item Accurate untuk setiap baris yang dikirim dengan PPN (useTax1)
+const assertAccurateItemsTaxable = async (invoice, payload) => {
+  const taxedNos = new Set((payload.detailItem ?? []).filter((d) => d.useTax1 === true).map((d) => d.itemNo));
+  if (taxedNos.size === 0) return;
+
+  const byNo = new Map();
+  for (const line of invoice.items) {
+    if (taxedNos.has(line.item.itemCode)) byNo.set(line.item.itemCode, line.item.accurateItemId);
+  }
+
+  const missing = [];
+  for (const [itemNo, accurateItemId] of byNo) {
+    const resp = await accurateRequest(`${ACCURATE_ITEM_DETAIL}?id=${accurateItemId}`, { method: "GET" });
+    if (!resp.s) {
+      throw new Error(`Gagal membaca master item Accurate ${itemNo}: ${JSON.stringify(resp.d ?? resp)}`);
+    }
+    if (!(resp.d?.tax1Id ?? resp.d?.tax1)) missing.push(`${itemNo} ${resp.d?.name ?? ""}`.trim());
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `PPN belum diatur di master item Accurate: ${missing.join(", ")}. ` +
+      "Atur pajak PPN pada item tersebut di Accurate, lalu ulangi sinkron invoice ini."
+    );
+  }
+};
+
 const syncInvoiceToAccurate = async (invoiceId) => {
   logger.info(`[invoice sync] start invoiceId=${invoiceId}`);
 
@@ -96,6 +124,11 @@ const syncInvoiceToAccurate = async (invoiceId) => {
   const accurateBranchId = await getAccurateBranchId(invoice.branchId);
 
   const payload = mapInvoiceToAccurate(invoice, warehouse, isUpdate ? invoice.accurateInvoiceId : null, currentAccurateItemIds, accurateBranchId, currentDownPaymentIds);
+
+  // Baris ber-PPN hanya dikenai pajak oleh Accurate bila master item Accurate punya pajak (PPN).
+  // Tanpa itu Accurate diam-diam tidak memungut PPN → total faktur ≠ grandTotal ERP dan
+  // pembayaran ditolak "melebihi nilai piutang" (P4). Hentikan sync dengan pesan jelas.
+  await assertAccurateItemsTaxable(invoice, payload);
 
   const response = await accurateRequest(ACCURATE_INVOICE_SAVE, {
     method: "POST",

@@ -24,7 +24,8 @@ const INCLUDE = {
   invoiceDeposits: {
     include: {
       deposit: {
-        select: { id: true, amount: true, status: true, paidAt: true },
+        // Nomor DP (nomor faktur DP Accurate) + tanggal untuk tampilan "Deposit Diterapkan" & struk
+        select: { id: true, amount: true, status: true, paidAt: true, createdAt: true, accurateDepositNumber: true },
       },
     },
     orderBy: { createdAt: "asc" },

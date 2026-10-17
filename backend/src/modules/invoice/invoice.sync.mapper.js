@@ -9,6 +9,7 @@
  *   detailDownPayment → array of { invoiceId, paymentAmount } to apply deposits
  */
 
+const logger = require("../../utils/logger");
 const { isMemberDiscountEligible } = require("../membership/membership.discount");
 
 const formatDate = (date) => {
@@ -37,13 +38,19 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
   // in the Accurate sync payload only. Rounding: last SERVICE item absorbs the remainder
   // so the distributed sum always equals membershipDiscountTotal exactly.
   //
-  // Known discrepancy (TE4): for taxable FIXED_AMOUNT SERVICE items, Accurate computes tax
-  // on the post-itemCashDiscount base, while local tax was computed on the pre-membership
-  // grossLine. This is an accepted trade-off — the difference is small (tax on the discount
-  // amount) and fixing it would require storing Accurate-specific tax overrides locally.
+  // PPN exclusive (TE4/P4): ERP memotong diskon nominal membership dari total TERMASUK PPN,
+  // sedangkan Accurate memotong diskon sebelum PPN — porsi membership pada baris taxable
+  // exclusive dikirim ÷ 1,11 (lihat addEntries) agar total Accurate tetap = grandTotal ERP.
   const membershipDiscountTotal = Number(invoice.membershipDiscountTotal ?? 0);
   const membershipDistributionMap = {};
-  if (membershipDiscountTotal > 0 && invoice.membership?.discountType === "FIXED_AMOUNT") {
+  // Diskon membership nominal = dipotong di level invoice: grandTotal = subtotal + PPN − diskon member.
+  // (Membership persen sudah ada di diskon baris: grandTotal = subtotal + PPN.) Dikenali dari angka
+  // invoice sendiri — tipe paket saat ini bisa sudah diubah admin setelah invoice dibuat.
+  const hasStoredTotals = invoice.grandTotal != null && invoice.subtotal != null;
+  const isFixedMemberDiscount = membershipDiscountTotal > 0 && (hasStoredTotals
+    ? Math.abs(Number(invoice.subtotal) + Number(invoice.totalTax ?? 0) - membershipDiscountTotal - Number(invoice.grandTotal)) < 0.01
+    : invoice.membership?.discountType === "FIXED_AMOUNT");
+  if (isFixedMemberDiscount) {
     const billable = invoice.items.filter((line) => !line.isMaterial);
     const eligible = billable.filter((line) => isMemberDiscountEligible(line.item, invoice.membership, false));
     const serviceItems = eligible.length > 0 ? eligible : billable;
@@ -156,23 +163,45 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
     }
   }
 
+  // ── Total Accurate == grandTotal ERP (P4) ─────────────────────────────
+  // Accurate menghitung sendiri: (unitPrice × qty − itemCashDiscount), lalu PPN dari
+  // taxable/inclusiveTax header + tax1Name per baris. Karena itu yang dikirim adalah
+  // HARGA ASLI (bukan line.subtotal yang sudah dipotong diskon / sudah dikeluarkan PPN-nya),
+  // dan diskon dikirim SEKALI sebagai nominal (itemCashDiscount = line.discount, nilai yang
+  // sama persis dengan ERP — bukan itemDiscPercent yang dihitung ulang Accurate tanpa pembulatan).
+  //   • inclusive : Accurate total = Σ(harga×qty − diskon) = grandTotal ERP
+  //   • exclusive : Accurate total = Σ(harga×qty − diskon) × 1,11 = grandTotal ERP
+  //   • DP        : detailDownPayment tidak mengubah total faktur (hanya sisa piutang)
+  // Bahan baku (isMaterial) ikut kena PPN di Accurate bila layanan induknya kena PPN, karena
+  // harganya dipindahkan dari layanan tsb — tanpa itu dasar PPN Accurate turun dan total berbeda.
+  const isTaxableService = (l) => !l.isMaterial && l.taxable === true;
+  const groupTaxable = {};
+  layananItems.forEach((l) => { if (l.lineGroup && isTaxableService(l)) groupTaxable[l.lineGroup] = true; });
+  const allServicesTaxable = layananItems.length > 0 && layananItems.every(isTaxableService);
+  const materialTaxable = (m) => (hasSomeGrouped
+    ? (m.lineGroup ? groupTaxable[m.lineGroup] === true : false)
+    : allServicesTaxable);
+
+  const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
   const addEntries = invoice.items.map((line) => {
     const isMaterial = line.isMaterial === true;
     const qty        = Number(line.qty);
     const origPrice  = Number(line.price);
 
-    // Untuk bahan baku: kirim harga cost asli (tidak ada penyesuaian)
-    // Untuk layanan: kurangi harga dengan alokasi biaya bahan baku
-    let unitPrice;
-    if (isMaterial) {
-      unitPrice = origPrice;
-    } else {
-      const materialShare    = materialAllocationMap[line.id] ?? 0;
-      const adjustedSubtotal = Number(line.subtotal) - materialShare;
-      // unitPrice setelah alokasi — jaga 3 desimal agar tidak ada selisih pembulatan
-      unitPrice = qty > 0
-        ? parseFloat((adjustedSubtotal / qty).toFixed(3))
-        : origPrice;
+    // Bahan baku: harga cost asli. Layanan: harga asli dikurangi alokasi biaya bahan baku.
+    let unitPrice  = origPrice;
+    let extraCash  = 0; // sisa pembulatan alokasi bahan baku → masuk diskon nominal
+    if (!isMaterial) {
+      const materialShare = materialAllocationMap[line.id] ?? 0;
+      if (materialShare !== 0 && qty > 0) {
+        const lineAmount = origPrice * qty - materialShare;
+        const exact      = lineAmount / qty;
+        // Bulatkan ke atas 2 desimal, selisihnya dikirim sebagai diskon nominal agar total tetap tepat
+        unitPrice = Math.ceil(round2(exact * 100)) / 100;
+        if (round2(unitPrice * qty) < round2(lineAmount)) unitPrice = round2(unitPrice + 0.01);
+        extraCash = round2(unitPrice * qty - lineAmount);
+      }
     }
 
     const entry = {
@@ -182,28 +211,18 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
       unitPrice,
     };
 
-    // Bahan baku tidak punya diskon terpisah di Accurate — harganya sudah cost price
     if (!isMaterial) {
-      // Route discount ke Accurate field yang benar:
-      //   AMOUNT → itemCashDiscount | PERCENT → itemDiscPercent
-      // Catatan: jika ada material allocation, diskon sudah ter-reflect di adjustedSubtotal
-      // (subtotal sudah setelah diskon), sehingga tidak perlu kirim discount lagi.
-      // Tapi kita tetap kirim discountPercent agar Accurate bisa display-nya
       const discountAbs     = Number(line.discount ?? 0);
-      const membershipShare = membershipDistributionMap[line.id] ?? 0;
-      if (discountAbs > 0 || membershipShare > 0) {
-        if (line.discountType === "PERCENT") {
-          const lineTotal = origPrice * qty;
-          if (lineTotal > 0) {
-            entry.itemDiscPercent = parseFloat(((discountAbs / lineTotal) * 100).toFixed(4));
-          }
-          if (membershipShare > 0) {
-            entry.itemCashDiscount = membershipShare;
-          }
-        } else {
-          entry.itemCashDiscount = discountAbs + membershipShare;
-        }
+      let   membershipShare = membershipDistributionMap[line.id] ?? 0;
+      // Diskon membership nominal di ERP dipotong SETELAH PPN (dari total termasuk pajak).
+      // Accurate memotong diskon sebelum PPN → untuk PPN exclusive kirim nilai sebelum pajak.
+      // Dibulatkan ke rupiah penuh: Accurate membulatkan PPN ke rupiah, sehingga DPP bulat
+      // menghasilkan total yang sama dengan ERP (selisih pembulatan < Rp 1 diserap saat pelunasan).
+      if (membershipShare > 0 && line.taxable === true && invoice.taxable && !invoice.inclusiveTax) {
+        membershipShare = Math.round(membershipShare / 1.11);
       }
+      const cash = round2(discountAbs + membershipShare + extraCash);
+      if (cash > 0) entry.itemCashDiscount = cash;
     }
 
     // INVENTORY items require a warehouse; SERVICE items do not affect stock
@@ -211,9 +230,12 @@ const mapInvoiceToAccurate = (invoice, warehouse, accurateId = null, currentAccu
       entry.warehouseId = warehouse.accurateWarehouseId;
     }
 
-    // Tax line — hanya untuk layanan yang taxable (bahan baku tidak kena PPN)
-    if (!isMaterial && line.taxable === true) {
+    // Tax line — layanan taxable, dan bahan baku yang harganya diambil dari layanan taxable
+    if (isMaterial ? materialTaxable(line) : line.taxable === true) {
       entry.tax1Name = "PPN";
+      // Penanda baris kena PPN. Accurate hanya memungut PPN bila master item Accurate punya pajak
+      // (mis. OMBRE / BALAYAGE tidak) — dicek sebelum kirim di invoice.sync.service (P4)
+      entry.useTax1  = true;
     }
 
     return entry;

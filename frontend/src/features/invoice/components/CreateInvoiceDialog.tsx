@@ -31,6 +31,8 @@ import type {
   MemberEligibilityItem,
 } from "../types";
 import { isMemberDiscountEligible } from "../discount";
+import { lineAmount } from "../totals";
+import { InvoiceTotalsSummary } from "./InvoiceTotalsSummary";
 import { uniqueStaffEmployees } from "@/features/appointment/staff";
 
 const MEMBERSHIP_EXPIRY_WARNING_DAYS = 7;
@@ -206,8 +208,22 @@ export function CreateInvoiceDialog({
   const [membershipDiscApplied, setMembershipDiscApplied] = useState(false);
   const [fixedMembershipDiscount, setFixedMembershipDiscount] = useState("0");
   const prevMembershipRecordIdRef = useRef<string | null>(null);
+  // true selama form edit dimuat/dipakai — state diskon membership diambil dari invoice tersimpan,
+  // bukan dipasang ulang otomatis (P2: hindari diskon member dobel / menimpa diskon baris)
+  const editingRef = useRef(false);
 
-  const activeCustomerId = mode === "walkin" ? selectedCustomer?.id : selectedAppt?.customerId;
+  // Fetch existing invoice when ID is known
+  const { data: existingInvoice, isLoading: existingLoading } = useQuery({
+    queryKey: ["invoices", existingInvoiceId],
+    queryFn:  () => fetchInvoice(existingInvoiceId!),
+    enabled:  !!existingInvoiceId && open,
+  });
+
+  // Invoice yang sudah ada (lihat/edit): pelanggan diambil dari invoice — booking/pelanggan
+  // tidak dipilih ulang di mode edit (P1)
+  const activeCustomerId = existingInvoiceId && existingInvoice
+    ? existingInvoice.customerId
+    : mode === "walkin" ? selectedCustomer?.id : selectedAppt?.customerId;
 
   const {
     data:    custMembership,
@@ -238,6 +254,8 @@ export function CreateInvoiceDialog({
     const recordId = custMembership?.activeRecord?.id ?? null;
     if (recordId === prevMembershipRecordIdRef.current) return;
     prevMembershipRecordIdRef.current = recordId;
+    // Mode edit: diskon membership mengikuti invoice tersimpan (diatur di enterEditMode)
+    if (editingRef.current) return;
 
     if (activeMembership) {
       setMembershipDiscApplied(true);
@@ -264,13 +282,6 @@ export function CreateInvoiceDialog({
       setExistingInvoiceId(initialExistingInvoiceId ?? null);
     }
   }, [open, initialExistingInvoiceId]);
-
-  // Fetch existing invoice when ID is known
-  const { data: existingInvoice, isLoading: existingLoading } = useQuery({
-    queryKey: ["invoices", existingInvoiceId],
-    queryFn:  () => fetchInvoice(existingInvoiceId!),
-    enabled:  !!existingInvoiceId && open,
-  });
 
   // When existing invoice loads: set correct mode and auto-enter edit mode if requested
   useEffect(() => {
@@ -346,6 +357,8 @@ export function CreateInvoiceDialog({
     prevMembershipRecordIdRef.current = null;
     setTaxable(false); setInclusive(false); setNotes(""); setError(null);
     setEditMode(false); setApptSearch("");
+    editingRef.current = false;
+    setZeroPriceAck(null);
   }
   function handleClose(v: boolean) { if (!v) reset(); onOpenChange(v); }
 
@@ -534,7 +547,7 @@ export function CreateInvoiceDialog({
   // Hanya hitung dari layanan (isMaterial=false) — bahan baku tidak masuk tagihan
   const subtotalEst = lines.filter((l) => !l.isMaterial).reduce((sum, l) => {
     const price = parseFloat(l.price) || 0;
-    const qty   = parseFloat(l.qty) || 1;
+    const qty   = parseFloat(l.qty) || 0;
     const disc  = parseFloat(l.discount) || 0;
     const gross = l.discountType === "PERCENT"
       ? price * qty * (1 - disc / 100)
@@ -544,7 +557,7 @@ export function CreateInvoiceDialog({
   // Total bahan baku (COGS internal — hanya untuk info internal)
   const materialTotalEst = lines.filter((l) => l.isMaterial).reduce((sum, l) => {
     const price = parseFloat(l.price) || 0;
-    const qty   = parseFloat(l.qty) || 1;
+    const qty   = parseFloat(l.qty) || 0;
     return sum + price * qty;
   }, 0);
   const taxEst         = taxable && !inclusiveTax ? subtotalEst * 0.11 : 0;
@@ -552,7 +565,7 @@ export function CreateInvoiceDialog({
   const memberEligibleEst = lines.reduce((sum, l) => {
     if (!isMemberDiscountEligible(l.memberItem, activeMembership, l.isMaterial)) return sum;
     const price = parseFloat(l.price) || 0;
-    const qty   = parseFloat(l.qty) || 1;
+    const qty   = parseFloat(l.qty) || 0;
     const disc  = parseFloat(l.discount) || 0;
     const gross = Math.max(0, l.discountType === "PERCENT" ? price * qty * (1 - disc / 100) : price * qty - disc);
     return sum + gross * (taxable && !inclusiveTax ? 1.11 : 1);
@@ -568,6 +581,7 @@ export function CreateInvoiceDialog({
   // ── Enter edit mode — fetch full item details to populate form ────────
   async function enterEditMode() {
     if (!existingInvoice?.items?.length) return;
+    editingRef.current = true;
     setLoadingEdit(true);
     setError(null);
     try {
@@ -622,8 +636,18 @@ export function CreateInvoiceDialog({
       setNotes(existingInvoice.notes ?? "");
       setTaxable(existingInvoice.taxable);
       setInclusive(existingInvoice.inclusiveTax);
+      // Diskon membership mengikuti invoice tersimpan. Diskon persen sudah ada di baris
+      // (discountPercent) — saat simpan dikirim sebagai membershipDiscountTotal sehingga
+      // backend tidak menambahkannya lagi (P2).
+      const storedMemberDisc = Number(existingInvoice.membershipDiscountTotal ?? 0);
+      setMembershipDiscApplied(storedMemberDisc > 0);
+      setFixedMembershipDiscount(
+        existingInvoice.membership?.discountType === "FIXED_AMOUNT" ? String(storedMemberDisc) : "0",
+      );
+      setZeroPriceAck(null);
       setEditMode(true);
     } catch {
+      editingRef.current = false;
       toast.error("Gagal memuat item untuk diedit");
     } finally {
       setLoadingEdit(false);
@@ -633,15 +657,26 @@ export function CreateInvoiceDialog({
   // ── Submit ────────────────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (mode === "booking" && !selectedAppt) { setError("Pilih booking terlebih dahulu"); return; }
-    if (mode === "walkin" && !selectedCustomer) { setError("Pilih customer terlebih dahulu"); return; }
+    const isEdit = editMode && !!existingInvoiceId;
+    // Booking / pelanggan hanya dipilih saat membuat invoice baru — di mode edit sudah terkunci (P1)
+    if (!isEdit) {
+      if (mode === "booking" && !selectedAppt) { setError("Pilih booking terlebih dahulu"); return; }
+      if (mode === "walkin" && !selectedCustomer) { setError("Pilih customer terlebih dahulu"); return; }
+    }
     const layananLines = lines.filter((l) => !l.isMaterial);
     if (layananLines.length === 0) { setError("Tambahkan minimal 1 layanan"); return; }
 
     for (const l of lines) {
       if (!l.unitId) { setError(`Pilih satuan untuk: ${l.itemName}`); return; }
       const qty = parseFloat(l.qty);
-      if (isNaN(qty) || qty <= 0) { setError(`Qty tidak valid untuk: ${l.itemName}`); return; }
+      if (isNaN(qty) || qty <= 0) { setError(`Qty untuk ${l.itemName} harus lebih dari 0`); return; }
+      if (l.isMaterial) continue;
+      const disc = parseFloat(l.discount) || 0;
+      if (disc < 0) { setError(`Diskon untuk ${l.itemName} tidak boleh negatif`); return; }
+      if (l.discountType === "PERCENT" && disc > 100) { setError(`Diskon persen untuk ${l.itemName} maksimal 100%`); return; }
+      if (l.discountType === "AMOUNT" && disc > (parseFloat(l.price) || 0) * qty) {
+        setError(`Diskon untuk ${l.itemName} tidak boleh melebihi harga`); return;
+      }
     }
 
     // Peringatan item yang ditagih dengan harga Rp 0 (bahan baku dikecualikan)
@@ -671,7 +706,7 @@ export function CreateInvoiceDialog({
       const lineItems: CreateInvoiceItemInput[] = lines.map((l) => ({
         itemId:          l.itemId,
         unitId:          l.unitId,
-        qty:             parseFloat(l.qty) || 1,
+        qty:             parseFloat(l.qty) || 0,
         price:           parseFloat(l.price) || undefined,
         discountType:    l.discountType,
         discountAmount:  l.discountType === "AMOUNT" ? (parseFloat(l.discount) || 0) : 0,
@@ -681,33 +716,8 @@ export function CreateInvoiceDialog({
         lineGroup:       l.lineGroup || undefined,
       }));
 
-      // ── Update existing invoice ──
-      if (editMode && existingInvoiceId) {
-        const input: UpdateInvoiceInput = {
-          items:        lineItems,
-          notes:        notes || undefined,
-          taxable,
-          inclusiveTax: taxable ? inclusiveTax : undefined,
-        };
-        await updateInvoice(existingInvoiceId, input);
-        await qc.invalidateQueries({ queryKey: ["invoices", existingInvoiceId] });
-        await qc.invalidateQueries({ queryKey: ["invoices"] });
-        await qc.invalidateQueries({ queryKey: ["inventories"] });
-        await qc.invalidateQueries({ queryKey: ["stock-movements"] });
-        toast.success("Invoice berhasil diupdate");
-        setEditMode(false);
-        setLines([]);
-        setSubmitting(false);
-        return;
-      }
-
-      // ── Create new invoice ──
-      const deposits = selectedDeps.map((d) => ({
-        depositId: d.depositId,
-        amount:    parseFloat(d.amount),
-      }));
-
-      // Build membershipDiscountTotal override signal
+      // Build membershipDiscountTotal override signal — dikirim saat create DAN edit, sehingga
+      // backend memakai diskon per baris apa adanya dan tidak menambah diskon member lagi (P2)
       let membershipDiscountTotalValue: number | undefined;
       if (activeMembership) {
         if (!membershipDiscApplied) {
@@ -719,12 +729,53 @@ export function CreateInvoiceDialog({
           membershipDiscountTotalValue = lines.reduce((sum, l) => {
             if (!isMemberDiscountEligible(l.memberItem, activeMembership, l.isMaterial) || l.discountType !== "PERCENT") return sum;
             const price = parseFloat(l.price) || 0;
-            const qty   = parseFloat(l.qty)   || 1;
+            const qty   = parseFloat(l.qty)   || 0;
             const pct   = parseFloat(l.discount) || 0;
             return sum + (price * qty * pct) / 100;
           }, 0);
         }
+      } else if (isEdit) {
+        // Membership tidak aktif lagi / gagal dimuat: diskon baris tersimpan dipakai apa adanya
+        membershipDiscountTotalValue = Number(existingInvoice?.membershipDiscountTotal ?? 0) > 0
+          && existingInvoice?.membership?.discountType === "PERCENTAGE"
+          ? Number(existingInvoice.membershipDiscountTotal)
+          : 0;
       }
+
+      // ── Update existing invoice ──
+      if (isEdit && existingInvoiceId) {
+        const input: UpdateInvoiceInput = {
+          items:        lineItems,
+          notes:        notes || undefined,
+          taxable,
+          inclusiveTax: taxable ? inclusiveTax : undefined,
+          ...(membershipDiscountTotalValue !== undefined && { membershipDiscountTotal: membershipDiscountTotalValue }),
+        };
+        await updateInvoice(existingInvoiceId, input);
+        await qc.invalidateQueries({ queryKey: ["invoices", existingInvoiceId] });
+        await qc.invalidateQueries({ queryKey: ["invoices"] });
+        await qc.invalidateQueries({ queryKey: ["inventories"] });
+        await qc.invalidateQueries({ queryKey: ["stock-movements"] });
+        toast.success("Invoice berhasil diupdate");
+        if (startInEditMode) {
+          // Dibuka dari tombol Edit di Detail Invoice → tutup dialog setelah simpan
+          reset();
+          onOpenChange(false);
+          onSuccess?.(existingInvoiceId);
+          return;
+        }
+        editingRef.current = false;
+        setEditMode(false);
+        setLines([]);
+        setSubmitting(false);
+        return;
+      }
+
+      // ── Create new invoice ──
+      const deposits = selectedDeps.map((d) => ({
+        depositId: d.depositId,
+        amount:    parseFloat(d.amount),
+      }));
 
       const input: CreateInvoiceInput = {
         customerId:    mode === "booking" ? selectedAppt!.customerId : selectedCustomer!.id,
@@ -781,7 +832,7 @@ export function CreateInvoiceDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
+        <form noValidate onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 space-y-5">
 
             {error && (
@@ -1072,7 +1123,7 @@ export function CreateInvoiceDialog({
                                 <span className="text-muted-foreground text-[10px]">{line.unit?.name ?? "—"}</span>
                                 <span className="text-[10px]">{line.qty}</span>
                                 <span className="text-[10px]">{formatCurrency(line.price)}</span>
-                                <span className="font-semibold">{formatCurrency(line.subtotal)}</span>
+                                <span className="font-semibold">{formatCurrency(lineAmount(line))}</span>
                               </div>
                             </div>
                             {/* Bahan baku terhubung */}
@@ -1130,21 +1181,6 @@ export function CreateInvoiceDialog({
                   </div>
                 )}
 
-                {/* Applied deposits */}
-                {(existingInvoice.invoiceDeposits ?? []).length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Deposit Diterapkan</p>
-                    <div className="rounded-md border border-green-200 bg-green-50/50 divide-y divide-green-200/50">
-                      {existingInvoice.invoiceDeposits!.map((dep) => (
-                        <div key={dep.id} className="flex items-center justify-between px-3 py-2">
-                          <span className="text-xs text-muted-foreground">Deposit</span>
-                          <span className="text-xs font-medium text-green-700">− {formatCurrency(dep.amountApplied)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Payments made */}
                 {(existingInvoice.payments ?? []).length > 0 && (
                   <div className="space-y-1.5">
@@ -1163,37 +1199,8 @@ export function CreateInvoiceDialog({
                   </div>
                 )}
 
-                {/* Totals summary */}
-                <div className="rounded-md border border-border bg-muted/30 p-3 text-xs space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Subtotal</span>
-                    <span>{formatCurrency(existingInvoice.subtotal)}</span>
-                  </div>
-                  {Number(existingInvoice.totalTax) > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Pajak</span>
-                      <span>{formatCurrency(existingInvoice.totalTax)}</span>
-                    </div>
-                  )}
-                  {Number(existingInvoice.totalDeposit) > 0 && (
-                    <div className="flex justify-between text-green-700">
-                      <span>Total Deposit</span>
-                      <span>− {formatCurrency(existingInvoice.totalDeposit)}</span>
-                    </div>
-                  )}
-                  {Number(existingInvoice.paidAmount) > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Sudah Dibayar</span>
-                      <span>− {formatCurrency(existingInvoice.paidAmount)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1">
-                    <span>Sisa Bayar</span>
-                    <span className={Number(existingInvoice.outstandingAmount) > 0 ? "text-red-600" : "text-green-600"}>
-                      {formatCurrency(existingInvoice.outstandingAmount)}
-                    </span>
-                  </div>
-                </div>
+                {/* Ringkasan: Subtotal − Diskon + PPN = Total; DP (nomor + tanggal), dibayar, sisa (P6) */}
+                <InvoiceTotalsSummary invoice={existingInvoice} />
 
                 {existingInvoice.notes && (
                   <div className="rounded-md border border-border bg-muted/20 px-3 py-2">
@@ -1417,13 +1424,13 @@ export function CreateInvoiceDialog({
                       (l) => l.isMaterial && l.lineGroup === line.lineGroup
                     );
                     const _price = parseFloat(line.price) || 0;
-                    const _qty   = parseFloat(line.qty) || 1;
+                    const _qty   = parseFloat(line.qty) || 0;
                     const _disc  = parseFloat(line.discount) || 0;
                     const sub    = Math.max(0, line.discountType === "PERCENT"
                       ? _price * _qty * (1 - _disc / 100)
                       : _price * _qty - _disc);
                     const groupHPP = materialLines.reduce(
-                      (s, m) => s + (parseFloat(m.price) || 0) * (parseFloat(m.qty) || 1),
+                      (s, m) => s + (parseFloat(m.price) || 0) * (parseFloat(m.qty) || 0),
                       0
                     );
                     const isMatOpen = activeMaterialGroupId === line.lineGroup;
@@ -1491,7 +1498,7 @@ export function CreateInvoiceDialog({
                             {/* Bahan baku rows */}
                             {materialLines.map((mat) => {
                               const mIdx  = mat._idx;
-                              const mCost = (parseFloat(mat.price) || 0) * (parseFloat(mat.qty) || 1);
+                              const mCost = (parseFloat(mat.price) || 0) * (parseFloat(mat.qty) || 0);
                               return (
                                 <div key={mIdx} className="grid grid-cols-[16px_1fr_90px_60px_90px_28px] gap-1.5 items-center px-2.5 py-1.5 border-t border-border/30">
                                   <span className="text-[10px] text-muted-foreground/50 text-center">└</span>
@@ -1689,6 +1696,7 @@ export function CreateInvoiceDialog({
                   type="button" variant="outline"
                   onClick={() => {
                     if (startInEditMode) { handleClose(false); return; }
+                    editingRef.current = false;
                     setEditMode(false); setLines([]); setError(null);
                   }}
                   disabled={submitting}

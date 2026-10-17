@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useViewOnly } from "@/hooks/useViewOnly";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, CreditCard, Wallet, Trash2, Printer, MessageCircle, CheckCircle2, Pencil } from "lucide-react";
@@ -27,7 +27,9 @@ import { createDeposit, createDepositPayment, applyDeposit } from "../api";
 import type { InvoiceStatus } from "../types";
 import { isOpenInvoice } from "../types";
 import { CreateInvoiceDialog } from "../components/CreateInvoiceDialog";
-import { itemDiscountParts, invoiceDiscountSummary, invoiceDiscountTotal, discountText } from "../discount";
+import { itemDiscountParts, invoiceDiscountSummary, discountText } from "../discount";
+import { invoiceBreakdown, lineAmount } from "../totals";
+import { toast } from "@/lib/toast";
 
 const STATUS_LABEL: Record<InvoiceStatus, string> = {
   UNPAID:    "Belum Bayar",
@@ -49,7 +51,7 @@ export function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { data: invoice, isLoading, isError } = useInvoice(id!);
+  const { data: invoice, isLoading, isError, refetch } = useInvoice(id!);
   const paymentMutation       = useAddPayment(id!);
   const depositMutation       = useApplyDeposit(id!);
   const deleteMutation        = useDeleteInvoice(id!);
@@ -94,6 +96,17 @@ export function InvoiceDetailPage() {
   const canPay    = isOpenInvoice(invoice.status);
   const outstanding = Number(invoice.outstandingAmount);
   const hasPayments = (invoice.payments ?? []).length > 0;
+  const totals      = invoiceBreakdown(invoice);
+
+  // P5: popup "lunas" hanya bila invoice benar-benar Lunas setelah data terbaru dimuat
+  async function afterMoneyReceived() {
+    const { data: fresh } = await refetch();
+    if (fresh?.status === "PAID") {
+      setReceiptOpen(true);
+    } else if (fresh) {
+      toast.success(`Sisa tagihan ${formatCurrency(fresh.outstandingAmount)}`);
+    }
+  }
 
   return (
     <PageContainer>
@@ -169,13 +182,17 @@ export function InvoiceDetailPage() {
 
         {/* Summary cards */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <SummaryCard label="Subtotal"    value={formatCurrency(invoice.subtotal)} />
+          <SummaryCard label="Subtotal"    value={formatCurrency(totals.subtotal)} sub="Harga × qty, sebelum diskon" />
           <SummaryCard
             label="Diskon"
-            value={formatCurrency(invoiceDiscountTotal(invoice))}
+            value={formatCurrency(totals.discount)}
             sub={invoiceDiscountSummary(invoice).map(discountText).join(" · ") || undefined}
           />
-          <SummaryCard label="Pajak"       value={formatCurrency(invoice.totalTax)} />
+          <SummaryCard
+            label="PPN"
+            value={formatCurrency(invoice.totalTax)}
+            sub={invoice.inclusiveTax && Number(invoice.totalTax) > 0 ? "Sudah termasuk di harga" : undefined}
+          />
           <SummaryCard label="Grand Total" value={formatCurrency(invoice.grandTotal)} highlight />
         </div>
 
@@ -200,7 +217,7 @@ export function InvoiceDetailPage() {
                     <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Qty</th>
                     <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Harga</th>
                     <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Diskon</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Subtotal</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Jumlah</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -223,12 +240,39 @@ export function InvoiceDetailPage() {
                             ))
                           : "—"}
                       </td>
-                      <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.subtotal)}</td>
+                      <td className={`px-4 py-2 text-right font-medium ${item.isMaterial ? "text-muted-foreground" : ""}`}>
+                        {item.isMaterial ? "—" : formatCurrency(lineAmount(item))}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Ringkasan — angka bisa dicocokkan: Subtotal − Diskon + PPN = Grand Total (FIN-023) */}
+        <Card>
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="text-sm font-semibold">Ringkasan</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 pb-3 space-y-1 text-sm">
+            <TotalRow label="Subtotal" value={formatCurrency(totals.subtotal)} />
+            {totals.discount > 0 && <TotalRow label="Diskon" value={`− ${formatCurrency(totals.discount)}`} className="text-red-600" />}
+            {totals.taxAdded > 0 && <TotalRow label="PPN 11%" value={`+ ${formatCurrency(totals.taxAdded)}`} />}
+            <TotalRow label="Grand Total" value={formatCurrency(totals.grandTotal)} className="border-t border-border pt-1 font-semibold" />
+            {totals.taxIncluded > 0 && (
+              <p className="px-1 text-right text-[11px] text-muted-foreground">termasuk PPN {formatCurrency(totals.taxIncluded)}</p>
+            )}
+            {totals.deposits.map((d) => (
+              <TotalRow key={d.id} label={`${d.label}${d.date ? ` (${formatDate(d.date)})` : ""}`} value={`− ${formatCurrency(d.amount)}`} className="text-green-700" />
+            ))}
+            {totals.paid > 0 && <TotalRow label="Sudah Dibayar" value={`− ${formatCurrency(totals.paid)}`} className="text-green-700" />}
+            <TotalRow
+              label="Sisa Tagihan"
+              value={formatCurrency(totals.outstanding)}
+              className={`border-t border-border pt-1 font-semibold ${totals.outstanding > 0 ? "text-red-600" : "text-green-600"}`}
+            />
           </CardContent>
         </Card>
 
@@ -239,10 +283,13 @@ export function InvoiceDetailPage() {
               <CardTitle className="text-sm font-semibold">Deposit Diterapkan</CardTitle>
             </CardHeader>
             <CardContent className="pt-0 pb-3 space-y-1">
-              {invoice.invoiceDeposits!.map((d) => (
+              {totals.deposits.map((d) => (
                 <div key={d.id} className="flex items-center justify-between text-sm px-1">
-                  <span className="text-muted-foreground font-mono text-xs">{d.depositId}</span>
-                  <span className="font-medium text-green-700">- {formatCurrency(d.amountApplied)}</span>
+                  <span className="text-muted-foreground text-xs">
+                    <span className="font-mono">{d.label}</span>
+                    {d.date && <> · {formatDate(d.date)}</>}
+                  </span>
+                  <span className="font-medium text-green-700">- {formatCurrency(d.amount)}</span>
                 </div>
               ))}
             </CardContent>
@@ -294,7 +341,7 @@ export function InvoiceDetailPage() {
         onSubmit={async (input) => {
           await paymentMutation.mutateAsync(input);
           setPayOpen(false);
-          setReceiptOpen(true);
+          await afterMoneyReceived();
         }}
         isPending={paymentMutation.isPending}
       />
@@ -310,7 +357,7 @@ export function InvoiceDetailPage() {
           qc.invalidateQueries({ queryKey: ["invoices"] });
           qc.invalidateQueries({ queryKey: ["deposits"] });
           setNewDepOpen(false);
-          setReceiptOpen(true);
+          void afterMoneyReceived();
         }}
       />
 
@@ -330,6 +377,7 @@ export function InvoiceDetailPage() {
         onSubmit={async (depositId, amount) => {
           await depositMutation.mutateAsync({ depositId, amount });
           setDepOpen(false);
+          await afterMoneyReceived();
         }}
         isPending={depositMutation.isPending}
       />
@@ -421,6 +469,15 @@ function SummaryCard({ label, value, highlight, sub }: { label: string; value: s
   );
 }
 
+function TotalRow({ label, value, className = "" }: { label: string; value: string; className?: string }) {
+  return (
+    <div className={`flex items-center justify-between gap-3 px-1 ${className}`}>
+      <span className={className ? "" : "text-muted-foreground"}>{label}</span>
+      <span className="tabular-nums whitespace-nowrap">{value}</span>
+    </div>
+  );
+}
+
 // ── Create & Apply New Deposit Dialog ────────────────────────────────────────
 
 function CreateAndApplyDepositDialog({
@@ -447,6 +504,8 @@ function CreateAndApplyDepositDialog({
 
 
   function reset() { setMethodId(""); setAmount(String(maxAmount)); setRefNo(""); setNotes(""); setError(null); }
+  // Nominal awal = sisa tagihan TERKINI setiap kali dialog dibuka (bukan nilai saat halaman pertama dimuat)
+  useEffect(() => { if (open) setAmount(String(maxAmount)); }, [open, maxAmount]);
   function handleClose(v: boolean) { if (!v) reset(); onOpenChange(v); }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -523,6 +582,8 @@ function CreateAndApplyDepositDialog({
   );
 }
 
+const rp = (n: number | string) => Math.round(Number(n)).toLocaleString("id-ID");
+
 // ── Receipt dialog ────────────────────────────────────────────────────────────
 
 function buildWhatsAppMessage(invoice: import("../types").Invoice): string {
@@ -532,28 +593,32 @@ function buildWhatsAppMessage(invoice: import("../types").Invoice): string {
   lines.push(`Tanggal: ${new Date(invoice.invoiceDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "2-digit", month: "long", year: "numeric" })}`);
   lines.push(`Cabang: ${invoice.branch?.name ?? "-"}`);
   lines.push(``);
+  const t = invoiceBreakdown(invoice);
   lines.push(`*Item:*`);
   // Bahan baku = biaya internal, tidak ditampilkan ke customer
   (invoice.items ?? []).filter((item) => !item.isMaterial).forEach((item) => {
-    const subtotal = Number(item.subtotal).toLocaleString("id-ID");
-    lines.push(`• ${item.item?.name ?? "-"} x${item.qty} = Rp ${subtotal}`);
+    lines.push(`• ${item.item?.name ?? "-"} x${item.qty} = Rp ${rp(lineAmount(item))}`);
     itemDiscountParts(item, invoice).forEach((p) => lines.push(`   ${p.label} -Rp ${Math.round(p.amount).toLocaleString("id-ID")}`));
   });
   lines.push(``);
+  lines.push(`Subtotal: Rp ${rp(t.subtotal)}`);
   invoiceDiscountSummary(invoice).forEach((p) => {
-    lines.push(`${p.label}: -Rp ${Math.round(p.amount).toLocaleString("id-ID")}`);
+    lines.push(`${p.label}: -Rp ${rp(p.amount)}`);
   });
-  if (Number(invoice.totalTax) > 0) {
-    lines.push(`Pajak: Rp ${Number(invoice.totalTax).toLocaleString("id-ID")}`);
-  }
-  lines.push(`*Total: Rp ${Number(invoice.grandTotal).toLocaleString("id-ID")}*`);
-  if ((invoice.payments ?? []).length > 0) {
+  if (t.taxAdded > 0) lines.push(`PPN 11%: Rp ${rp(t.taxAdded)}`);
+  lines.push(`*Total: Rp ${rp(t.grandTotal)}*`);
+  if (t.taxIncluded > 0) lines.push(`(termasuk PPN Rp ${rp(t.taxIncluded)})`);
+  if (t.deposits.length > 0 || (invoice.payments ?? []).length > 0) {
     lines.push(``);
     lines.push(`*Pembayaran:*`);
-    invoice.payments!.forEach((p) => {
-      lines.push(`• ${p.paymentMethod?.name ?? "-"}: Rp ${Number(p.amount).toLocaleString("id-ID")}`);
+    t.deposits.forEach((d) => {
+      lines.push(`• ${d.label}${d.date ? ` (${formatDate(d.date)})` : ""}: Rp ${rp(d.amount)}`);
+    });
+    (invoice.payments ?? []).forEach((p) => {
+      lines.push(`• ${p.paymentMethod?.name ?? "-"}: Rp ${rp(p.amount)}`);
     });
   }
+  lines.push(`Sisa Tagihan: Rp ${rp(t.outstanding)}`);
   lines.push(``);
   lines.push(`Terima kasih telah mengunjungi NIAHAIR! 🌟`);
   return lines.join("\n");
@@ -568,14 +633,21 @@ function printReceipt(invoice: import("../types").Invoice) {
         <td style="padding:4px 0;border-bottom:1px dashed #e5e7eb">${item.item?.name ?? "-"}${item.item?.itemCode ? `<br><small style="color:#6b7280">${item.item.itemCode}</small>` : ""}${itemDiscountParts(item, invoice).map((p) => `<br><small>${p.label} -Rp ${Math.round(p.amount).toLocaleString("id-ID")}</small>`).join("")}</td>
         <td style="padding:4px 0;text-align:center;border-bottom:1px dashed #e5e7eb">${item.qty}</td>
         <td style="padding:4px 0;text-align:right;border-bottom:1px dashed #e5e7eb">Rp ${Number(item.price).toLocaleString("id-ID")}</td>
-        <td style="padding:4px 0;text-align:right;border-bottom:1px dashed #e5e7eb">Rp ${Number(item.subtotal).toLocaleString("id-ID")}</td>
+        <td style="padding:4px 0;text-align:right;border-bottom:1px dashed #e5e7eb">Rp ${rp(lineAmount(item))}</td>
       </tr>`)
     .join("");
 
-  const payments = (invoice.payments ?? [])
+  const t = invoiceBreakdown(invoice);
+  const dpRows = t.deposits
+    .map((d) => `<tr>
+        <td style="padding:2px 0;color:#374151">${d.label}${d.date ? ` (${formatDate(d.date)})` : ""}</td>
+        <td style="padding:2px 0;text-align:right;font-weight:600">Rp ${rp(d.amount)}</td>
+      </tr>`)
+    .join("");
+  const payments = dpRows + (invoice.payments ?? [])
     .map((p) => `<tr>
         <td style="padding:2px 0;color:#374151">${p.paymentMethod?.name ?? "-"}</td>
-        <td style="padding:2px 0;text-align:right;font-weight:600">Rp ${Number(p.amount).toLocaleString("id-ID")}</td>
+        <td style="padding:2px 0;text-align:right;font-weight:600">Rp ${rp(p.amount)}</td>
       </tr>`)
     .join("");
 
@@ -619,11 +691,14 @@ function printReceipt(invoice: import("../types").Invoice) {
   </table>
   <div class="divider"></div>
   <table>
-    ${invoiceDiscountSummary(invoice).map((p) => `<tr><td>${p.label}</td><td style="text-align:right">-Rp ${Math.round(p.amount).toLocaleString("id-ID")}</td></tr>`).join("")}
-    ${Number(invoice.totalTax) > 0 ? `<tr><td>Pajak</td><td style="text-align:right">Rp ${Number(invoice.totalTax).toLocaleString("id-ID")}</td></tr>` : ""}
-    <tr class="total-row"><td>TOTAL</td><td style="text-align:right">Rp ${Number(invoice.grandTotal).toLocaleString("id-ID")}</td></tr>
+    <tr><td>Subtotal</td><td style="text-align:right">Rp ${rp(t.subtotal)}</td></tr>
+    ${invoiceDiscountSummary(invoice).map((p) => `<tr><td>${p.label}</td><td style="text-align:right">-Rp ${rp(p.amount)}</td></tr>`).join("")}
+    ${t.taxAdded > 0 ? `<tr><td>PPN 11%</td><td style="text-align:right">Rp ${rp(t.taxAdded)}</td></tr>` : ""}
+    <tr class="total-row"><td>TOTAL</td><td style="text-align:right">Rp ${rp(t.grandTotal)}</td></tr>
+    ${t.taxIncluded > 0 ? `<tr><td colspan="2" style="text-align:right;font-size:10px;color:#6b7280">termasuk PPN Rp ${rp(t.taxIncluded)}</td></tr>` : ""}
   </table>
   ${payments ? `<div class="divider"></div><table>${payments}</table>` : ""}
+  <table><tr class="total-row"><td>Sisa Tagihan</td><td style="text-align:right">Rp ${rp(t.outstanding)}</td></tr></table>
   <div class="divider"></div>
   <div class="center" style="font-size:10px;margin-top:4px">Terima kasih atas kunjungan Anda!</div>
   <div class="center" style="font-size:10px">niahair.id</div>
@@ -659,12 +734,15 @@ function ReceiptDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-green-600" />
-            Pembayaran Berhasil
+            {invoice.status === "PAID" ? "Pembayaran Berhasil" : "Struk Pembayaran"}
           </DialogTitle>
         </DialogHeader>
         <div className="py-2 space-y-2">
           <p className="text-sm text-muted-foreground">
-            Invoice <span className="font-mono font-medium text-foreground">{invoice.invoiceNo}</span> telah lunas.
+            Invoice <span className="font-mono font-medium text-foreground">{invoice.invoiceNo}</span>{" "}
+            {invoice.status === "PAID"
+              ? "telah lunas."
+              : <>belum lunas — sisa tagihan <span className="font-medium text-red-600">{formatCurrency(invoice.outstandingAmount)}</span>.</>}
           </p>
           <p className="text-sm font-semibold">
             Total: {formatCurrency(invoice.grandTotal)}
@@ -718,6 +796,8 @@ function AddPaymentDialog({
 
 
   function reset() { setMethodId(""); setAmount(String(maxAmount)); setRefNo(""); setNotes(""); setError(null); }
+  // Nominal awal = sisa tagihan TERKINI setiap kali dialog dibuka (bukan nilai saat halaman pertama dimuat)
+  useEffect(() => { if (open) setAmount(String(maxAmount)); }, [open, maxAmount]);
   function handleClose(v: boolean) { if (!v) reset(); onOpenChange(v); }
 
   async function handleSubmit(e: React.FormEvent) {

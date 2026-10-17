@@ -13,6 +13,11 @@ import { formatCurrency, formatDate, toWibDateStr } from "@/lib/utils";
 import { fetchPaymentMethods } from "@/features/settings/api/paymentMethod.api";
 import { useDeposit, useCreateDepositPayment, useDepositPayments } from "../hooks";
 
+const DEPOSIT_STATUS_LABEL: Record<string, string> = {
+  UNPAID: "Belum Dibayar", PENDING: "Menunggu", PARTIAL: "Dibayar Sebagian", PAID: "Lunas",
+  PARTIAL_USED: "Terpakai Sebagian", USED: "Terpakai", REFUNDED: "Dikembalikan", CANCELLED: "Dibatalkan",
+};
+
 export function DepositPaymentPage() {
   const { id }             = useParams<{ id: string }>();
   const navigate           = useNavigate();
@@ -158,7 +163,7 @@ export function DepositPaymentPage() {
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Status</span>
               <Badge variant="outline" className="text-xs text-yellow-600 border-yellow-300">
-                {deposit.status}
+                {DEPOSIT_STATUS_LABEL[deposit.status] ?? deposit.status}
               </Badge>
             </div>
             {deposit.notes && (

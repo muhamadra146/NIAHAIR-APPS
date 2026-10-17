@@ -8,6 +8,26 @@ const { mapPaymentToAccurate }                  = require("./payment.sync.mapper
 const ACCURATE_RECEIPT_SAVE   = "/sales-receipt/save.do";
 const ACCURATE_RECEIPT_DELETE = "/sales-receipt/delete.do";
 
+const ACCURATE_INVOICE_DETAIL = "/sales-invoice/detail.do";
+const ROUNDING_TOLERANCE      = 1; // rupiah
+
+// Nominal penerimaan untuk Accurate: sama dengan ERP, kecuali selisih pembulatan PPN < Rp 1
+const resolveReceiptAmount = async (payment) => {
+  const amount = Number(payment.amount);
+  try {
+    const resp  = await accurateRequest(`${ACCURATE_INVOICE_DETAIL}?id=${payment.invoice.accurateInvoiceId}`, { method: "GET" });
+    const owing = Number(resp.d?.primeOwing);
+    if (resp.s && Number.isFinite(owing) && owing > 0 && amount > owing && amount - owing < ROUNDING_TOLERANCE) {
+      const adjusted = Math.floor(owing * 100) / 100;
+      logger.warn(`[payment sync] selisih pembulatan PPN: ERP ${amount} → Accurate ${adjusted} (paymentId=${payment.id})`);
+      return adjusted;
+    }
+  } catch (err) {
+    logger.warn(`[payment sync] gagal membaca sisa piutang Accurate (lanjut nominal ERP): ${err.message}`);
+  }
+  return amount;
+};
+
 const syncPaymentToAccurate = async (paymentId) => {
   logger.info(`[payment sync] start paymentId=${paymentId}`);
 
@@ -45,7 +65,15 @@ const syncPaymentToAccurate = async (paymentId) => {
   });
   const accurateBranchId = await getAccurateBranchId(paymentBranch?.invoice?.branchId);
 
-  const payload = mapPaymentToAccurate(payment, accurateBranchId);
+  // Accurate membulatkan PPN ke rupiah penuh, ERP menyimpan sen. Pada faktur PPN exclusive
+  // dengan pajak pecahan, piutang Accurate bisa lebih kecil < Rp 1 dari sisa ERP sehingga
+  // pelunasan penuh ditolak "melebihi nilai piutang" (P4). Selisih pembulatan (< Rp 1) itu
+  // diserap: penerimaan dikirim sebesar sisa piutang Accurate.
+  const syncAmount = await resolveReceiptAmount(payment);
+  const payload = mapPaymentToAccurate(
+    syncAmount === Number(payment.amount) ? payment : { ...payment, amount: syncAmount },
+    accurateBranchId,
+  );
 
   logger.info("[payment sync payload]", JSON.stringify(payload));
 

@@ -27,7 +27,7 @@ const createInvoiceSchema = object({
   notes:                  optional(string()),
   taxable:                optional(boolean()),
   inclusiveTax:           optional(boolean()),
-  membershipDiscountTotal: optional(pipe(number(), minValue(0))),
+  membershipDiscountTotal: optional(pipe(number(), minValue(0, "Diskon membership tidak boleh negatif"))),
   items:                  pipe(array(itemSchema), minLength(1, "Minimal satu item wajib diisi")),
 });
 
@@ -41,6 +41,8 @@ const updateInvoiceSchema = object({
   notes:        optional(string()),
   taxable:      optional(boolean()),
   inclusiveTax: optional(boolean()),
+  // Sama dengan create: ada = diskon membership sudah ditangani POS (tidak ditambah lagi) — P2
+  membershipDiscountTotal: optional(pipe(number(), minValue(0, "Diskon membership tidak boleh negatif"))),
 });
 
 // ── Kalkulator komisi ─────────────────────────────────────────────────
