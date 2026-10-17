@@ -3,9 +3,15 @@ const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo     = require("./leaveQuota.repository");
 const leaveTypeRepo = require("../leaveType/leaveType.repository");
+const divisionAccess = require("../division/division.access");
 
-const getQuotas = async ({ employeeId, year, page, limit } = {}) => {
+const getQuotas = async ({ employeeId, year, page, limit } = {}, actor = null) => {
   const where = {};
+  // Batas wewenang divisi seperti daftar persetujuan lain (Owner/SA: semua; manager divisi: stafnya)
+  if (actor) {
+    const scope = await divisionAccess.getScope(actor);
+    if (!scope.all) where.employee = divisionAccess.managedEmployeeWhere(scope);
+  }
   if (employeeId) where.employeeId = employeeId;
   if (year)       where.year = Number(year);
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -44,10 +50,24 @@ const assign = async ({ employeeId, leaveTypeId, year, totalDays }) => {
   if (!employeeId || !leaveTypeId || !year || totalDays === undefined)
     throw new AppError("employeeId, leaveTypeId, year, totalDays are required", StatusCodes.BAD_REQUEST);
 
+  const days = Number(totalDays);
+  if (!Number.isInteger(days) || days < 0) {
+    throw new AppError("Jatah cuti harus bilangan bulat dan tidak negatif", StatusCodes.BAD_REQUEST);
+  }
+
+  const employee = await repo.findEmployeeById(employeeId);
+  if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
+
   const lt = await leaveTypeRepo.findById(leaveTypeId);
   if (!lt) throw new AppError("Jenis cuti tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (lt.maxDaysPerYear != null && days > Number(lt.maxDaysPerYear)) {
+    throw new AppError(
+      `Jatah cuti melebihi batas jenis cuti ini (maksimal ${lt.maxDaysPerYear} hari per tahun)`,
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
 
-  return repo.upsert(employeeId, leaveTypeId, Number(year), Number(totalDays));
+  return repo.upsert(employeeId, leaveTypeId, Number(year), days);
 };
 
 /** Sisa jatah = jatah − terpakai − pengajuan yang masih menunggu persetujuan */

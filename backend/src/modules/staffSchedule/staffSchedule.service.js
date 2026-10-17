@@ -72,6 +72,38 @@ const getRoster = async ({ startDate, days = 7, branchId }, user = null) => {
 
 // ── Bulk upsert ───────────────────────────────────────────────────────────────
 
+/**
+ * Tolak (422) bila ada item jadwal yang jatuh pada hari cuti / izin tidak masuk / sakit
+ * karyawan yang SUDAH DISETUJUI — ketidakhadiran resmi tidak boleh ditimpa diam-diam.
+ */
+const assertNoApprovedAbsence = async (items) => {
+  if (!items.length) return;
+  const employeeIds = [...new Set(items.map((i) => i.employeeId))];
+  const times = items.map((i) => i.workDate.getTime());
+  const from  = new Date(Math.min(...times));
+  const to    = new Date(Math.max(...times));
+  const { leaves = [], permissions = [], sickLeaves = [] } =
+    (await repo.findApprovedAbsences(employeeIds, from, to)) ?? {};
+
+  const blocked = new Set(); // "employeeId|YYYY-MM-DD"
+  const addRange = (employeeId, start, end) => {
+    for (let d = new Date(start); d <= new Date(end); d = addDays(d, 1)) blocked.add(`${employeeId}|${toDateStr(d)}`);
+  };
+  leaves.forEach((l) => addRange(l.employeeId, l.startDate, l.endDate));
+  sickLeaves.forEach((s) => addRange(s.employeeId, s.startDate, s.endDate));
+  permissions.forEach((p) => blocked.add(`${p.employeeId}|${toDateStr(new Date(p.date))}`));
+
+  const hits = [...new Set(items
+    .filter((i) => blocked.has(`${i.employeeId}|${toDateStr(i.workDate)}`))
+    .map((i) => toDateStr(i.workDate)))].sort();
+  if (hits.length) {
+    throw new AppError(
+      `Jadwal tidak bisa diubah pada hari cuti/izin/sakit yang sudah disetujui: ${hits.join(", ")}`,
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
+};
+
 const bulkUpsert = async ({ branchId, schedules }, user = null) => {
   if (!branchId)  throw new AppError("branchId is required",   StatusCodes.BAD_REQUEST);
   if (!schedules?.length) return { updated: 0 };
@@ -92,21 +124,47 @@ const bulkUpsert = async ({ branchId, schedules }, user = null) => {
       throw new AppError("Ada shift yang tidak valid", StatusCodes.BAD_REQUEST);
   }
 
+  const items = schedules.map((item) => ({
+    ...item,
+    workDate: toDateOnly(item.date),
+    isClear:  item.status === null && item.shiftId === null,
+  }));
+
+  // EMP-006: karyawan hanya boleh dijadwalkan di cabang yang boleh ia tempati
+  // (cabang utama atau akses cabang aktif). Menghapus jadwal tetap boleh.
+  const assignIds = [...new Set(items.filter((i) => !i.isClear).map((i) => i.employeeId))];
+  if (assignIds.length) {
+    const employees = (await repo.findEmployeesBranchAccess(assignIds)) ?? [];
+    const byId = new Map(employees.map((e) => [e.id, e]));
+    const missing = assignIds.filter((id) => !byId.has(id));
+    if (missing.length) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
+    const noAccess = employees.filter((e) =>
+      e.homeBranchId !== branchId && !(e.employeeBranches ?? []).some((eb) => eb.branchId === branchId));
+    if (noAccess.length) {
+      throw new AppError(
+        `Karyawan tidak punya akses ke cabang ini: ${noAccess.map((e) => e.name).join(", ")}`,
+        StatusCodes.UNPROCESSABLE_ENTITY,
+      );
+    }
+  }
+
+  // Hari cuti / izin / sakit yang sudah disetujui tidak boleh ditimpa jadwal lain
+  await assertNoApprovedAbsence(items);
+
   let updated = 0;
 
-  await prisma.$transaction(async () => {
-    for (const item of schedules) {
-      const workDate = toDateOnly(item.date);
-
-      if (item.status === null && item.shiftId === null) {
+  // Semua perubahan memakai klien transaksi — gagal satu, batal semua
+  await prisma.$transaction(async (tx) => {
+    for (const item of items) {
+      if (item.isClear) {
         // Explicit clear: delete the schedule
-        await repo.deleteSchedule(item.employeeId, branchId, workDate);
+        await repo.deleteSchedule(item.employeeId, branchId, item.workDate, tx);
       } else {
         const status  = item.status  ?? (item.shiftId ? "WORKING" : "OFF");
         const shiftId = item.shiftId ?? null;
         const notes   = item.notes   ?? null;
 
-        await repo.upsertSchedule(item.employeeId, branchId, workDate, { shiftId, status, notes });
+        await repo.upsertSchedule(item.employeeId, branchId, item.workDate, { shiftId, status, notes }, tx);
         updated++;
       }
     }

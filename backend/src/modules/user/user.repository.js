@@ -43,7 +43,7 @@ const findById = (id) =>
   prisma.user.findUnique({ where: { id }, select: USER_SELECT });
 
 const findByEmail = (email) =>
-  prisma.user.findUnique({ where: { email }, select: { id: true } });
+  prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true } });
 
 const findByUsername = (username) =>
   prisma.user.findUnique({ where: { username }, select: { id: true } });
@@ -57,14 +57,14 @@ const findByEmployeeId = (employeeId) =>
 // ── Lookup helpers ────────────────────────────────────────────────────
 
 const findUserRoleById = (id) =>
-  prisma.userRole.findUnique({ where: { id }, select: { id: true, code: true } });
+  prisma.userRole.findUnique({ where: { id }, select: { id: true, code: true, isActive: true } });
 
 const findEmployeeById = (id) =>
   prisma.employee.findUnique({ where: { id }, select: { id: true, name: true } });
 
 /** Karyawan yang memakai email ini (email karyawan juga unik) */
 const findEmployeeByEmail = (email) =>
-  prisma.employee.findUnique({ where: { email }, select: { id: true } });
+  prisma.employee.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true } });
 
 // ── Write ─────────────────────────────────────────────────────────────
 

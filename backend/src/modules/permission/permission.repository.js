@@ -34,4 +34,11 @@ const update = async (id, data) => {
   return normalize(row);
 };
 
-module.exports = { findAll, count, findById, create, update };
+/** Izin PENDING/APPROVED milik karyawan pada rentang tanggal [start, end] */
+const findOverlapping = (employeeId, start, end) =>
+  prisma.permissionRequest.findFirst({
+    where:  { employeeId, status: { in: ["PENDING", "APPROVED"] }, date: { gte: start, lte: end } },
+    select: { id: true, date: true, status: true, type: true },
+  });
+
+module.exports = { findAll, count, findById, create, update, findOverlapping };

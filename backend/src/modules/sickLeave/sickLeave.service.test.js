@@ -1,6 +1,7 @@
 'use strict';
 
 jest.mock('./sickLeave.repository');
+jest.mock('../leave/leave.overlap', () => ({ assertNoOverlappingRequest: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../config/prisma', () => {
   const p = {
     employee:      { findUnique: jest.fn() },

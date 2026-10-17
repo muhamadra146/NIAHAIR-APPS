@@ -14,6 +14,10 @@ const countUnread = (userId) => prisma.notification.count({ where: { userId, isR
 const markRead = (userId, id) =>
   prisma.notification.updateMany({ where: { id, userId, isRead: false }, data: { isRead: true, readAt: new Date() } });
 
+/** Notifikasi milik user ini (null bila bukan miliknya / tidak ada) */
+const findOwned = (userId, id) =>
+  prisma.notification.findFirst({ where: { id, userId }, select: { id: true } });
+
 const markAllRead = (userId) =>
   prisma.notification.updateMany({ where: { userId, isRead: false }, data: { isRead: true, readAt: new Date() } });
 
@@ -54,6 +58,6 @@ const countPendingRequests = async (employeeWhere) => {
 };
 
 module.exports = {
-  createMany, findForUser, countUnread, markRead, markAllRead,
+  createMany, findForUser, countUnread, markRead, markAllRead, findOwned,
   findUsersByRoles, findUsersByEmployeeIds, findEmployeeName, findInvoiceNo, countPendingRequests,
 };

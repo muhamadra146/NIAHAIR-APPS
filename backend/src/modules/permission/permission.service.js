@@ -4,6 +4,7 @@ const { paginate, paginationMeta } = require("../../utils/pagination");
 const prisma  = require("../../config/prisma");
 const repo    = require("./permission.repository");
 const divisionAccess = require("../division/division.access");
+const { assertNoOverlappingRequest } = require("../leave/leave.overlap");
 
 const toDateOnly = (d) => {
   const date = new Date(d);
@@ -32,9 +33,10 @@ const getMy = async ({ employeeId, page = 1, limit = 20, status }) => {
   return { data: rows, meta: paginationMeta(total, page, limit) };
 };
 
-const getById = async (id) => {
+const getById = async (id, actor = null) => {
   const p = await repo.findById(id);
   if (!p) throw new AppError("Izin tidak ditemukan", StatusCodes.NOT_FOUND);
+  await divisionAccess.assertCanView(actor, p.employeeId);
   return p;
 };
 
@@ -43,6 +45,7 @@ const create = async (employeeId, branchId, { type, date, reason, notes, estimat
 
   const permType = type ?? "ABSENCE";
   const permDate = toDateOnly(date);
+  if (Number.isNaN(permDate.getTime())) throw new AppError("Tanggal tidak valid", StatusCodes.BAD_REQUEST);
 
   // estimatedArrival required for LATE
   if (permType === "LATE" && !estimatedArrival) {
@@ -59,6 +62,9 @@ const create = async (employeeId, branchId, { type, date, reason, notes, estimat
     resolvedBranchId = emp?.homeBranchId;
     if (!resolvedBranchId) throw new AppError("Branch tidak ditemukan", StatusCodes.BAD_REQUEST);
   }
+
+  // Tidak boleh bertabrakan dengan cuti / izin / sakit lain yang menunggu atau disetujui
+  await assertNoOverlappingRequest(employeeId, permDate, permDate);
 
   return repo.create({
     employeeId,

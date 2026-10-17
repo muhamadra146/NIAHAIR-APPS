@@ -18,7 +18,7 @@ const getMyController = async (req, res, next) => {
 
 const getByIdController = async (req, res, next) => {
   try {
-    const result = await svc.getById(req.params.id);
+    const result = await svc.getById(req.params.id, req.user);
     return success(res, result, "Correction request fetched");
   } catch (err) { next(err); }
 };

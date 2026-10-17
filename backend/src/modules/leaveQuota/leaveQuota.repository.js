@@ -61,4 +61,7 @@ const decrementUsed = (employeeId, leaveTypeId, year, days) =>
     include: INCLUDE,
   });
 
-module.exports = { findAll, count, findMany, findOne, sumPendingDays, findById, upsert, incrementUsed, decrementUsed };
+const findEmployeeById = (id) =>
+  prisma.employee.findUnique({ where: { id }, select: { id: true } });
+
+module.exports = { findEmployeeById, findAll, count, findMany, findOne, sumPendingDays, findById, upsert, incrementUsed, decrementUsed };

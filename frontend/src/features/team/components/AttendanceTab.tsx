@@ -101,7 +101,7 @@ function ManualDialog({ open, row, date, isPending, onSave, onClose }: ManualDia
       status,
       checkInAt:  checkInAt  ? `${workDate}T${checkInAt}:00+07:00`  : undefined,
       checkOutAt: checkOutAt ? `${workDate}T${checkOutAt}:00+07:00` : undefined,
-      notes:      notes || undefined,
+      notes:      notes.trim(),
     });
   };
 
@@ -137,14 +137,21 @@ function ManualDialog({ open, row, date, isPending, onSave, onClose }: ManualDia
             </div>
           </div>
           <div>
-            <Label className="text-xs">Catatan</Label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opsional" className="mt-1" />
+            <Label className="text-xs">Alasan <span className="text-destructive">*</span></Label>
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Wajib, minimal 3 karakter" className="mt-1" />
+            {checkInAt && checkOutAt && checkOutAt <= checkInAt && (
+              <p className="mt-1 text-xs text-destructive">Jam keluar harus setelah jam masuk.</p>
+            )}
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose} disabled={isPending}>Batal</Button>
-          <Button size="sm" onClick={handleSave} disabled={isPending}>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={isPending || notes.trim().length < 3 || (!!checkInAt && !!checkOutAt && checkOutAt <= checkInAt)}
+          >
             {isPending ? "Menyimpan…" : "Simpan"}
           </Button>
         </DialogFooter>

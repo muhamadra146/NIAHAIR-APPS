@@ -53,18 +53,51 @@ const findRoster = async (branchId, startDate, endDate, employeeWhere = {}) => {
   return { employeeBranches, schedules };
 };
 
-const upsertSchedule = (employeeId, branchId, workDate, data) =>
-  prisma.staffSchedule.upsert({
+// client: klien transaksi (tx) agar simpan massal bersifat atomik; default prisma
+const upsertSchedule = (employeeId, branchId, workDate, data, client = prisma) =>
+  client.staffSchedule.upsert({
     where: { employeeId_branchId_workDate: { employeeId, branchId, workDate } },
     update: data,
     create: { employeeId, branchId, workDate, ...data },
     include: { shift: { select: SHIFT_SELECT } },
   });
 
-const deleteSchedule = (employeeId, branchId, workDate) =>
-  prisma.staffSchedule.deleteMany({
+const deleteSchedule = (employeeId, branchId, workDate, client = prisma) =>
+  client.staffSchedule.deleteMany({
     where: { employeeId, branchId, workDate },
   });
+
+/** Karyawan + akses cabangnya (cabang utama & akses cabang aktif) */
+const findEmployeesBranchAccess = (employeeIds) =>
+  prisma.employee.findMany({
+    where:  { id: { in: employeeIds } },
+    select: {
+      id: true, name: true, homeBranchId: true,
+      employeeBranches: { where: { isActive: true }, select: { branchId: true } },
+    },
+  });
+
+/**
+ * Cuti / izin tidak masuk / sakit yang SUDAH DISETUJUI dan beririsan dengan rentang [from, to]
+ * untuk karyawan-karyawan tsb (tanggal disimpan 00:00 UTC).
+ */
+const findApprovedAbsences = async (employeeIds, from, to) => {
+  const [leaves, permissions, sickLeaves] = await Promise.all([
+    prisma.leave.findMany({
+      where:  { employeeId: { in: employeeIds }, status: "APPROVED", startDate: { lte: to }, endDate: { gte: from } },
+      select: { employeeId: true, startDate: true, endDate: true },
+    }),
+    prisma.permissionRequest.findMany({
+      where:  { employeeId: { in: employeeIds }, status: "APPROVED", type: "ABSENCE", date: { gte: from, lte: to } },
+      select: { employeeId: true, date: true },
+    }),
+    prisma.sickLeave.findMany({
+      where:  { employeeId: { in: employeeIds }, status: "APPROVED", startDate: { lte: to }, endDate: { gte: from } },
+      select: { employeeId: true, startDate: true, endDate: true },
+    }),
+  ]);
+  return { leaves, permissions, sickLeaves };
+};
 
 const findAvailableByDateAndBranch = (branchId, workDate) =>
   prisma.staffSchedule.findMany({
@@ -80,4 +113,7 @@ const findAvailableByDateAndBranch = (branchId, workDate) =>
     },
   });
 
-module.exports = { findRoster, upsertSchedule, deleteSchedule, findAvailableByDateAndBranch };
+module.exports = {
+  findRoster, upsertSchedule, deleteSchedule, findAvailableByDateAndBranch,
+  findEmployeesBranchAccess, findApprovedAbsences,
+};

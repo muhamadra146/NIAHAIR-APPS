@@ -12,7 +12,7 @@ const getNextCodeController = async (req, res, next) => {
 
 const getAllController = async (req, res, next) => {
   try {
-    const result = await getAll(req.query);
+    const result = await getAll(req.query, req.user);
     return success(res, result, "Employees fetched");
   } catch (err) {
     next(err);
@@ -21,7 +21,7 @@ const getAllController = async (req, res, next) => {
 
 const getByIdController = async (req, res, next) => {
   try {
-    const result = await getById(req.params.id);
+    const result = await getById(req.params.id, req.user);
     return success(res, result, "Employee fetched");
   } catch (err) {
     next(err);

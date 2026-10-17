@@ -6,7 +6,7 @@ const assignLeaveQuotaSchema = object({
   employeeId:  pipe(string(), minLength(1, 'Karyawan wajib dipilih')),
   leaveTypeId: pipe(string(), minLength(1, 'leaveTypeId is required')),
   year:        pipe(number(), integer(), minValue(2000)),
-  totalDays:   pipe(number(), minValue(0)),
+  totalDays:   pipe(number(), integer('Jatah cuti harus bilangan bulat'), minValue(0, 'Jatah cuti tidak boleh negatif')),
 });
 
 module.exports = { assignLeaveQuotaSchema };

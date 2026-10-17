@@ -5,6 +5,7 @@ const { toDateOnly, wibDateStr }         = require("../../utils/date");
 const prisma                             = require("../../config/prisma");
 const repo                               = require("./attendance.repository");
 const settingRepo                        = require("../setting/setting.repository");
+const logger                             = require("../../utils/logger");
 
 const GEOFENCE_EXEMPT_KEY = "attendance_geofence_exempt_employees";
 
@@ -17,6 +18,18 @@ const haversineMeters = (lat1, lon1, lat2, lon2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
+// Pengaturan pengecualian geofence rusak (bukan JSON array) tidak boleh menggagalkan absen —
+// dianggap kosong (semua karyawan tetap dicek lokasinya) dan dicatat di log.
+const parseExemptList = (raw) => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter((e) => e && typeof e === "object");
+  } catch { /* lanjut ke log di bawah */ }
+  logger.warn("Setting attendance_geofence_exempt_employees tidak valid — dianggap kosong");
+  return [];
+};
+
 const checkGeofence = async (branchId, employeeId, latitude, longitude) => {
   const [branch, exemptSetting] = await Promise.all([
     prisma.branch.findUnique({ where: { id: branchId }, select: { latitude: true, longitude: true, radiusMeters: true } }),
@@ -24,7 +37,7 @@ const checkGeofence = async (branchId, employeeId, latitude, longitude) => {
   ]);
   if (!branch?.latitude || !branch?.longitude) return; // branch has no coordinates, allow
   // Format: [{employeeId, branchId}] — branchId null means exempt at all branches
-  const exemptList = exemptSetting?.value ? JSON.parse(exemptSetting.value) : [];
+  const exemptList = parseExemptList(exemptSetting?.value);
   const isExempt = exemptList.some(
     (e) => e.employeeId === employeeId && (e.branchId === null || e.branchId === branchId)
   );
@@ -256,8 +269,17 @@ const manualSet = async ({ staffScheduleId, status, checkInAt, checkOutAt, notes
   });
   if (!schedule) throw new AppError("Jadwal tidak ditemukan", StatusCodes.NOT_FOUND);
 
+  // EMP-011: absensi manual tidak boleh tanpa alasan
+  if (!notes || !String(notes).trim()) throw new AppError("Alasan absensi manual wajib diisi", StatusCodes.BAD_REQUEST);
+
   const checkIn  = checkInAt  ? new Date(checkInAt)  : null;
   const checkOut = checkOutAt ? new Date(checkOutAt) : null;
+  if ((checkIn && Number.isNaN(checkIn.getTime())) || (checkOut && Number.isNaN(checkOut.getTime()))) {
+    throw new AppError("Format jam masuk/keluar tidak valid", StatusCodes.BAD_REQUEST);
+  }
+  if (checkIn && checkOut && checkOut <= checkIn) {
+    throw new AppError("Jam keluar harus setelah jam masuk", StatusCodes.BAD_REQUEST);
+  }
 
   const computed = computeStatus(checkIn, checkOut, schedule.shift);
   const resolvedStatus  = status ?? (typeof computed === "object" ? computed.status : computed);

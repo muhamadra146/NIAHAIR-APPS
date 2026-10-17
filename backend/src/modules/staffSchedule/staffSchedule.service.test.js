@@ -83,6 +83,8 @@ describe('bulkUpsert', () => {
   test('upserts schedules when shiftIds are valid', async () => {
     prisma.shift.findMany.mockResolvedValue([{ id: 'sh1' }]);
     repo.upsertSchedule.mockResolvedValue(undefined);
+    repo.findEmployeesBranchAccess.mockResolvedValue([{ id: 'e1', name: 'Nia', homeBranchId: 'b1', employeeBranches: [] }]);
+    repo.findApprovedAbsences.mockResolvedValue({ leaves: [], permissions: [], sickLeaves: [] });
     prisma.$transaction.mockImplementation(async (fn) => fn());
 
     const result = await svc.bulkUpsert({

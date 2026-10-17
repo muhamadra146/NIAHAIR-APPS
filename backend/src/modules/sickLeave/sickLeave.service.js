@@ -4,6 +4,7 @@ const { paginate, paginationMeta } = require("../../utils/pagination");
 const prisma  = require("../../config/prisma");
 const repo    = require("./sickLeave.repository");
 const divisionAccess = require("../division/division.access");
+const { assertNoOverlappingRequest } = require("../leave/leave.overlap");
 
 const MAX_NO_LETTER_PER_YEAR = 2;
 
@@ -50,9 +51,10 @@ const getMy = async ({ employeeId, page = 1, limit = 20, status }) => {
   return { data: rows, meta: paginationMeta(total, page, limit) };
 };
 
-const getById = async (id) => {
+const getById = async (id, actor = null) => {
   const s = await repo.findById(id);
   if (!s) throw new AppError("Data sakit tidak ditemukan", StatusCodes.NOT_FOUND);
+  await divisionAccess.assertCanView(actor, s.employeeId);
   return s;
 };
 
@@ -63,6 +65,7 @@ const create = async (employeeId, branchId, body) => {
 
   const start = toDateOnly(startDate);
   const end   = toDateOnly(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) throw new AppError("Tanggal tidak valid", StatusCodes.BAD_REQUEST);
   if (end < start) throw new AppError("Tanggal selesai harus setelah tanggal mulai", StatusCodes.BAD_REQUEST);
 
   const totalDays = calcTotalDays(start, end);
@@ -89,6 +92,9 @@ const create = async (employeeId, branchId, body) => {
       );
     }
   }
+
+  // Tidak boleh bertabrakan dengan cuti / izin / sakit lain yang menunggu atau disetujui
+  await assertNoOverlappingRequest(employeeId, start, end);
 
   const data = {
     employeeId,

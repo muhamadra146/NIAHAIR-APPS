@@ -26,9 +26,10 @@ const getMy = async ({ employeeId, page, limit, status }) => {
   return { data: rows, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
-const getById = async (id) => {
+const getById = async (id, actor = null) => {
   const cr = await repo.findById(id);
   if (!cr) throw new AppError("Pengajuan koreksi tidak ditemukan", StatusCodes.NOT_FOUND);
+  await divisionAccess.assertCanView(actor, cr.employeeId);
   return cr;
 };
 

@@ -1,6 +1,7 @@
 'use strict';
 
 jest.mock('./permission.repository');
+jest.mock('../leave/leave.overlap', () => ({ assertNoOverlappingRequest: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../config/prisma', () => ({
   employee:          { findUnique: jest.fn() },
   $transaction:      jest.fn((fn) => fn({

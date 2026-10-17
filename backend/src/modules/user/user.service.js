@@ -11,6 +11,9 @@ const {
 
 const SALT_ROUNDS = 12;
 
+/** Email login disimpan & dibandingkan tanpa beda huruf besar/kecil */
+const normalizeEmail = (email) => (typeof email === "string" ? email.trim().toLowerCase() : email);
+
 // ── List ──────────────────────────────────────────────────────────────
 
 const getAll = async ({ page, limit, search, isActive, branchId }) => {
@@ -50,7 +53,8 @@ const getById = async (id, requestingUserId, requestingRoleCode) => {
 
 // ── Create ────────────────────────────────────────────────────────────
 
-const createUser = async ({ username, email, password, userRoleId, employeeId }) => {
+const createUser = async ({ username, email: rawEmail, password, userRoleId, employeeId }) => {
+  const email = normalizeEmail(rawEmail);
   const existingUsername = await findByUsername(username);
   if (existingUsername) throw new AppError("Username sudah digunakan", StatusCodes.CONFLICT);
 
@@ -59,6 +63,7 @@ const createUser = async ({ username, email, password, userRoleId, employeeId })
 
   const role = await findUserRoleById(userRoleId);
   if (!role) throw new AppError("Role user tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (role.isActive === false) throw new AppError("Role user sudah nonaktif", StatusCodes.UNPROCESSABLE_ENTITY);
 
   const employee = await findEmployeeById(employeeId);
   if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
@@ -88,7 +93,12 @@ const updateUser = async (id, body) => {
   if (body.roleId) {
     const role = await findUserRoleById(body.roleId);
     if (!role) throw new AppError("Role user tidak ditemukan", StatusCodes.NOT_FOUND);
+    if (role.isActive === false && body.roleId !== user.role?.id) {
+      throw new AppError("Role user sudah nonaktif", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
   }
+
+  if (body.email !== undefined) body.email = normalizeEmail(body.email);
 
   if (body.employeeId !== undefined && body.employeeId !== user.employeeId) {
     if (body.employeeId !== null) {

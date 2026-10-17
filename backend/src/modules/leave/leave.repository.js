@@ -25,4 +25,11 @@ const create = (data) =>
 const update = (id, data) =>
   prisma.leave.update({ where: { id }, data, include: INCLUDE });
 
-module.exports = { findAll, count, findById, create, update };
+/** Pengajuan cuti PENDING/APPROVED milik karyawan yang beririsan dengan rentang [start, end] */
+const findOverlapping = (employeeId, start, end) =>
+  prisma.leave.findFirst({
+    where:  { employeeId, status: { in: ["PENDING", "APPROVED"] }, startDate: { lte: end }, endDate: { gte: start } },
+    select: { id: true, startDate: true, endDate: true, status: true },
+  });
+
+module.exports = { findAll, count, findById, create, update, findOverlapping };

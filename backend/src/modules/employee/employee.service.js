@@ -1,5 +1,6 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
+const { ROLES } = require("../../common/constants/role.constant");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { resolveOrderBy } = require("../../utils/sort");
 const cloudinary = require("../../config/cloudinary");
@@ -40,7 +41,26 @@ const {
   updateBranches,
   softDelete,
   hardDelete,
+  countHistory,
 } = require("./employee.repository");
+
+// ── Visibilitas data karyawan (EMP-029) ──────────────────────────────
+// Peran pengelola melihat seluruh kolom; peran lain hanya data umum
+// (tanpa NIK/KTP, alamat, tanggal lahir, file, tanggal gajian, kontak) — kecuali data dirinya sendiri.
+const FULL_VIEW_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE, ROLES.FINANCE];
+const PUBLIC_FIELDS = [
+  "id", "employeeCode", "name", "isActive", "roleId", "role",
+  "homeBranchId", "homeBranch", "divisionId", "division", "isDivisionManager",
+  "employeeBranches", "commissionEnabled",
+];
+const canViewFull = (actor) => !actor || FULL_VIEW_ROLES.includes(actor.roleCode);
+const toPublicEmployee = (employee) =>
+  Object.fromEntries(PUBLIC_FIELDS.filter((f) => f in employee).map((f) => [f, employee[f]]));
+const visibleFor = (actor) => (employee) =>
+  (canViewFull(actor) || (actor?.employeeId && actor.employeeId === employee.id)) ? employee : toPublicEmployee(employee);
+
+/** Email dibandingkan & disimpan tanpa beda huruf besar/kecil */
+const normalizeEmail = (email) => (typeof email === "string" ? email.trim().toLowerCase() : email);
 
 const generateNextCode = async () => {
   const last = await findLastEmployeeCode();
@@ -53,7 +73,7 @@ const generateNextCode = async () => {
   return code;
 };
 
-const getAll = async ({ page, limit, search, isActive, branchId, sortBy }) => {
+const getAll = async ({ page, limit, search, isActive, branchId, sortBy }, actor = null) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
   const orderBy = resolveOrderBy(sortBy, ORDER_MAP);
 
@@ -92,15 +112,15 @@ const getAll = async ({ page, limit, search, isActive, branchId, sortBy }) => {
   ]);
 
   return {
-    data: employees,
+    data: employees.map(visibleFor(actor)),
     meta: paginationMeta(total, pageNum, limitNum),
   };
 };
 
-const getById = async (id) => {
+const getById = async (id, actor = null) => {
   const employee = await findById(id);
   if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
-  return employee;
+  return visibleFor(actor)(employee);
 };
 
 const getNextCode = async () => generateNextCode();
@@ -140,6 +160,7 @@ const createEmployee = async (body, actor) => {
     if (existing) throw new AppError("Kode karyawan sudah digunakan", StatusCodes.CONFLICT);
   }
 
+  if (body.email !== undefined) body.email = normalizeEmail(body.email);
   if (body.email) {
     const existing = await findByEmail(body.email);
     if (existing) throw new AppError("Email sudah digunakan", StatusCodes.CONFLICT);
@@ -167,19 +188,31 @@ const updateEmployee = async (id, body, actor) => {
   if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
   await applyDivisionFields(body, employee, actor);
 
+  // Status aktif hanya diubah Owner / Super Admin (penonaktifan lewat /deactivate)
+  if (body.isActive !== undefined && actor && !divisionAccess.hasFullAccess(actor)) {
+    if (body.isActive !== employee.isActive) {
+      throw new AppError("Hanya Owner atau Super Admin yang dapat mengubah status aktif karyawan", StatusCodes.FORBIDDEN);
+    }
+    delete body.isActive;
+  }
+
   if (body.roleId && body.roleId !== employee.roleId) {
     const role = await findRoleById(body.roleId);
     if (!role) throw new AppError("Role karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
   }
 
-  if (body.employeeCode && body.employeeCode !== employee.employeeCode) {
-    const existing = await findByEmployeeCode(body.employeeCode);
-    if (existing) throw new AppError("Kode karyawan sudah digunakan", StatusCodes.CONFLICT);
+  // EMP-001: kode karyawan tidak boleh berubah setelah dibuat
+  if (body.employeeCode !== undefined) {
+    if (body.employeeCode !== employee.employeeCode) {
+      throw new AppError("Kode karyawan tidak dapat diubah", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+    delete body.employeeCode;
   }
 
   // Satu email per orang: email karyawan = email login akunnya (keputusan user 2026-10-15)
+  if (body.email !== undefined) body.email = normalizeEmail(body.email);
   const linkedUser = employee.user ?? null;
-  const emailChanged = body.email !== undefined && (body.email || null) !== (employee.email ?? null);
+  const emailChanged = body.email !== undefined && (body.email || null) !== (normalizeEmail(employee.email) ?? null);
   if (emailChanged) {
     if (!body.email && linkedUser) {
       throw new AppError("Email wajib diisi karena dipakai untuk login karyawan ini", StatusCodes.BAD_REQUEST);
@@ -232,6 +265,10 @@ const deactivateEmployee = async (id) => {
 const deleteEmployee = async (id) => {
   const employee = await findById(id);
   if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
+  // EMP-015 / EMP-020: riwayat tidak boleh hilang — hapus permanen hanya untuk data tanpa riwayat
+  if ((await countHistory(id)) > 0) {
+    throw new AppError("Karyawan sudah punya riwayat; nonaktifkan saja", StatusCodes.CONFLICT);
+  }
   await Promise.all([
     deleteCloudinaryFile(employee.ktpFilePublicId, employee.ktpFileUrl),
     deleteCloudinaryFile(employee.contractFilePublicId, employee.contractFileUrl),

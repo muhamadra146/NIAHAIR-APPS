@@ -1,8 +1,11 @@
-const { object, string, pipe, email, optional, boolean, minLength } = require("valibot");
+const { object, string, pipe, email, optional, boolean, minLength, trim, toLowerCase } = require("valibot");
+
+// Email login disimpan huruf kecil tanpa spasi (login & reset password tidak peka huruf besar/kecil)
+const EMAIL = pipe(string(), trim(), toLowerCase(), email("Format email tidak valid"));
 
 const createUserSchema = object({
   username:   pipe(string(), minLength(3, "Username minimal 3 karakter")),
-  email:      pipe(string(), email("Format email tidak valid")),
+  email:      EMAIL,
   password:   pipe(string(), minLength(6, "Password minimal 6 karakter")),
   userRoleId: pipe(string(), minLength(1, "Role wajib dipilih")),
   employeeId: pipe(string(), minLength(1, "Karyawan wajib dipilih")),
@@ -11,7 +14,7 @@ const createUserSchema = object({
 const updateUserSchema = object({
   username:   optional(pipe(string(), minLength(3, "Username minimal 3 karakter"))),
   // Email login = email karyawan — ikut diperbarui di data karyawan
-  email:      optional(pipe(string(), email("Format email tidak valid"))),
+  email:      optional(EMAIL),
   roleId:     optional(pipe(string(), minLength(1, "Role tidak boleh kosong"))),
   employeeId: optional(pipe(string(), minLength(1, "Karyawan tidak boleh kosong"))),
   isActive:   optional(boolean()),

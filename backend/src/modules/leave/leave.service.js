@@ -6,6 +6,7 @@ const prisma          = require("../../config/prisma");
 const repo            = require("./leave.repository");
 const quotaSvc        = require("../leaveQuota/leaveQuota.service");
 const divisionAccess = require("../division/division.access");
+const { assertNoOverlappingRequest } = require("./leave.overlap");
 
 const ORDER_MAP = {
   createdAt:    { createdAt: "asc" },
@@ -83,9 +84,10 @@ const getMy = async ({ employeeId, page, limit, status, sortBy }) => {
   return { data: rows, meta: paginationMeta(total, pageNum, limitNum) };
 };
 
-const getById = async (id) => {
+const getById = async (id, actor = null) => {
   const leave = await repo.findById(id);
   if (!leave) throw new AppError("Cuti tidak ditemukan", StatusCodes.NOT_FOUND);
+  await divisionAccess.assertCanView(actor, leave.employeeId);
   return leave;
 };
 
@@ -99,6 +101,7 @@ const createLeave = async (employeeId, { startDate, endDate, reason, leaveTypeId
 
   const start     = toDate(startDate);
   const end       = toDate(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) throw new AppError("Tanggal tidak valid", StatusCodes.BAD_REQUEST);
   if (end < start) throw new AppError("Tanggal selesai harus setelah tanggal mulai", StatusCodes.BAD_REQUEST);
 
   const totalDays = calcTotalDays(start, end);
@@ -131,6 +134,9 @@ const createLeave = async (employeeId, { startDate, endDate, reason, leaveTypeId
         );
     }
   }
+
+  // Tidak boleh bertabrakan dengan cuti / izin / sakit lain yang menunggu atau disetujui
+  await assertNoOverlappingRequest(employeeId, start, end);
 
   return repo.create({
     employeeId,

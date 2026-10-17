@@ -12,11 +12,13 @@ const {
 const router = Router();
 
 const ALL_ADMIN = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE];
+// Hari libur dikelola Super Admin, Owner, dan Manager (keputusan owner, QA G3-26)
+const HOLIDAY_WRITE = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER];
 
 router.get("/",    authenticate, authorize(...ALL_ADMIN), getAllController);
 router.get("/:id", authenticate, authorize(...ALL_ADMIN), getByIdController);
-router.post("/",   authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER), validate(createHolidaySchema), createController);
-router.put("/:id", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER), validate(updateHolidaySchema), updateController);
-router.delete("/:id", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.MANAGER), deleteController);
+router.post("/",   authenticate, authorize(...HOLIDAY_WRITE), validate(createHolidaySchema), createController);
+router.put("/:id", authenticate, authorize(...HOLIDAY_WRITE), validate(updateHolidaySchema), updateController);
+router.delete("/:id", authenticate, authorize(...HOLIDAY_WRITE), deleteController);
 
 module.exports = router;

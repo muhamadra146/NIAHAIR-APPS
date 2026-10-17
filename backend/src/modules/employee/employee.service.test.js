@@ -125,10 +125,10 @@ describe('updateEmployee', () => {
     expect(repo.findRoleById).not.toHaveBeenCalled();
   });
 
-  test('throws 409 when new employeeCode already taken', async () => {
-    repo.findByEmployeeCode.mockResolvedValue({ id: 'e99' });
+  // EMP-001: kode karyawan tidak boleh berubah (QA G3-11)
+  test('throws 422 when employeeCode is changed', async () => {
     await expect(svc.updateEmployee('e1', { employeeCode: 'EMP999' }))
-      .rejects.toMatchObject({ statusCode: 409 });
+      .rejects.toMatchObject({ statusCode: 422 });
   });
 
   test('skips code check when employeeCode unchanged', async () => {

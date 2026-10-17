@@ -3,7 +3,7 @@ const svc = require("./leaveQuota.service");
 
 const getQuotasController = async (req, res, next) => {
   try {
-    const result = await svc.getQuotas(req.query);
+    const result = await svc.getQuotas(req.query, req.user);
     return success(res, result, "Quotas fetched");
   } catch (err) { next(err); }
 };

@@ -49,9 +49,11 @@ const issueRefreshToken = async (userId) => {
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 
-const login = async ({ identifier, password }) => {
+const login = async ({ identifier: rawIdentifier, password }) => {
+  // Email login tidak peka huruf besar/kecil & spasi di tepi diabaikan
+  const identifier = String(rawIdentifier).trim();
   const user = identifier.includes("@")
-    ? await findUserByEmail(identifier)
+    ? await findUserByEmail(identifier.toLowerCase())
     : await findUserByUsername(identifier);
 
   if (!user || !user.isActive) {

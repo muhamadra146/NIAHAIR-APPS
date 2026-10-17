@@ -18,7 +18,7 @@ const USER_AUTH_INCLUDE = {
 };
 
 const findUserByEmail = (email) =>
-  prisma.user.findUnique({ where: { email }, include: USER_AUTH_INCLUDE });
+  prisma.user.findFirst({ where: { email: { equals: String(email).trim(), mode: "insensitive" } }, include: USER_AUTH_INCLUDE });
 
 const findUserByUsername = (username) =>
   prisma.user.findUnique({ where: { username }, include: USER_AUTH_INCLUDE });
@@ -53,8 +53,8 @@ const findAllBranches = () =>
  * Only use this in the forgot-password flow.
  */
 const findUserByEmailRaw = (email) =>
-  prisma.user.findUnique({
-    where:  { email },
+  prisma.user.findFirst({
+    where:  { email: { equals: String(email).trim(), mode: "insensitive" } },
     select: {
       id:           true,
       email:        true,

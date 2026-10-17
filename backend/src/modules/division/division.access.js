@@ -84,7 +84,23 @@ const assertCanManage = async (user, targetEmployeeId, scope = null) => {
   }
 };
 
+/**
+ * Pastikan user boleh MELIHAT detail pengajuan milik karyawan target
+ * (cuti / izin / sakit / koreksi): pemiliknya sendiri, penyetuju yang berwenang atas
+ * karyawan itu, atau Owner / Super Admin. `user` kosong = panggilan internal.
+ */
+const assertCanView = async (user, ownerEmployeeId) => {
+  if (!user) return;
+  if (hasFullAccess(user)) return;
+  if (user.employeeId && user.employeeId === ownerEmployeeId) return;
+  const scope  = await getScope(user);
+  const target = scope.manager ? await repo.findEmployeeScope(ownerEmployeeId) : null;
+  if (!canManageTarget(scope, target)) {
+    throw new AppError("Anda tidak berhak melihat pengajuan ini", StatusCodes.FORBIDDEN);
+  }
+};
+
 module.exports = {
   FULL_ACCESS_ROLES, hasFullAccess, getScope, isApprover,
-  managedEmployeeWhere, visibleEmployeeWhere, canManageTarget, assertCanManage,
+  managedEmployeeWhere, visibleEmployeeWhere, canManageTarget, assertCanManage, assertCanView,
 };

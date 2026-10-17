@@ -3,6 +3,14 @@ const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { findAll, count, findById, findByCode, create, update, remove, countEmployees } = require("./employeeRole.repository");
 
+// Kode role dinormalisasi seperti kode divisi: tanpa spasi tepi, huruf besar, spasi → _
+const normalizeCode = (code) => String(code).trim().toUpperCase().replace(/\s+/g, "_");
+const normalizeBody = (body) => ({
+  ...body,
+  ...(body.code !== undefined && { code: normalizeCode(body.code) }),
+  ...(body.name !== undefined && { name: String(body.name).trim() }),
+});
+
 const getAll = async ({ page, limit, search, isActive }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
 
@@ -36,14 +44,16 @@ const getById = async (id) => {
   return role;
 };
 
-const createEmployeeRole = async (body) => {
+const createEmployeeRole = async (rawBody) => {
+  const body = normalizeBody(rawBody);
   const existing = await findByCode(body.code);
   if (existing) throw new AppError("Kode role karyawan sudah digunakan", StatusCodes.CONFLICT);
 
   return create(body);
 };
 
-const updateEmployeeRole = async (id, body) => {
+const updateEmployeeRole = async (id, rawBody) => {
+  const body = normalizeBody(rawBody);
   const role = await findById(id);
   if (!role) throw new AppError("Role karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
 

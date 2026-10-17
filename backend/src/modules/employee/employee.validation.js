@@ -1,11 +1,14 @@
-const { object, string, pipe, email, optional, nullable, boolean, minLength, array, number, integer, minValue, maxValue } = require("valibot");
+const { object, string, pipe, email, optional, nullable, boolean, minLength, array, number, integer, minValue, maxValue, trim, toLowerCase } = require("valibot");
+
+// Email disimpan huruf kecil tanpa spasi — tidak ada akun ganda karena beda huruf besar/kecil
+const EMAIL = pipe(string(), trim(), toLowerCase(), email("Format email tidak valid"));
 
 const createEmployeeSchema = object({
   name:              pipe(string(), minLength(1, "Nama wajib diisi")),
   roleId:            pipe(string(), minLength(1, "Role wajib dipilih")),
   employeeCode:      optional(string()),
   phone:             optional(string()),
-  email:             optional(pipe(string(), email("Format email tidak valid"))),
+  email:             optional(EMAIL),
   hireDate:          optional(string()),
   birthDate:         optional(string()),
   address:           optional(string()),
@@ -24,7 +27,7 @@ const updateEmployeeSchema = object({
   roleId:            optional(string()),
   employeeCode:      optional(string()),
   phone:             optional(string()),
-  email:             optional(pipe(string(), email("Format email tidak valid"))),
+  email:             optional(EMAIL),
   hireDate:          optional(string()),
   birthDate:         optional(string()),
   address:           optional(string()),

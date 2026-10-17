@@ -31,12 +31,13 @@ const findLastEmployeeCode = () =>
     select:  { employeeCode: true },
   });
 
+// Email dicari tanpa beda huruf besar/kecil (data lama bisa tersimpan campuran)
 const findByEmail = (email) =>
-  prisma.employee.findUnique({ where: { email } });
+  prisma.employee.findFirst({ where: { email: { equals: email, mode: "insensitive" } } });
 
 /** Akun user yang memakai email ini */
 const findUserByEmail = (email) =>
-  prisma.user.findUnique({ where: { email }, select: { id: true, employeeId: true } });
+  prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true, employeeId: true } });
 
 const findRoleById = (id) =>
   prisma.employeeRole.findUnique({ where: { id }, select: { id: true } });
@@ -109,68 +110,38 @@ const updateFiles = (id, data) =>
 const softDelete = (id) =>
   prisma.employee.update({ where: { id }, data: { isActive: false } });
 
+// Relasi yang dihitung sebagai riwayat karyawan (EMP-015: riwayat tidak boleh hilang).
+// Tidak termasuk: akses cabang (employeeBranches) & akun login (user) — ikut terhapus.
+const HISTORY_RELATIONS = [
+  "branchHistories", "createdAppointments", "createdDeposits", "createdInvoices", "createdPayments",
+  "filledConsultations", "appointmentStaffs", "treatmentAssignments", "commissionRules", "commissions",
+  "attendances", "schedules", "leaves", "overtimeChargeEmployees", "staffSchedules", "salarySettings",
+  "omsetBonusTiers", "loans", "payrolls", "leaveQuotas", "correctionRequests", "permissionRequests",
+  "sickLeaves", "inventoryMovements", "inventoryPeriods", "purchaseInvoices", "complaintsAbout",
+  "treatmentJobAssignments", "productionOrders", "productionEmployees", "productionQCs",
+  "productionTimelines", "purchaseReturns", "stockOpnamesCreated", "stockOpnamesPosted",
+];
+const USER_HISTORY_RELATIONS = ["reviewedCorrections", "reviewedPermissions", "reviewedSickLeaves"];
+
+/** Jumlah seluruh catatan riwayat milik karyawan (termasuk persetujuan yang dibuat akunnya) */
+const countHistory = async (id) => {
+  const row = await prisma.employee.findUnique({
+    where:  { id },
+    select: {
+      _count: { select: Object.fromEntries(HISTORY_RELATIONS.map((r) => [r, true])) },
+      user:   { select: { _count: { select: Object.fromEntries(USER_HISTORY_RELATIONS.map((r) => [r, true])) } } },
+    },
+  });
+  if (!row) return 0;
+  const sum = (counts) => Object.values(counts ?? {}).reduce((a, b) => a + Number(b || 0), 0);
+  return sum(row._count) + sum(row.user?._count);
+};
+
+/** Hapus permanen — hanya dipanggil untuk karyawan TANPA riwayat (lihat countHistory) */
 const hardDelete = (id) =>
   prisma.$transaction(async (tx) => {
-    // Null-out optional foreign keys that reference this employee
-    await tx.appointment.updateMany({
-      where: { createdByEmployeeId: id },
-      data:  { createdByEmployeeId: null },
-    });
-    await tx.deposit.updateMany({
-      where: { createdByEmployeeId: id },
-      data:  { createdByEmployeeId: null },
-    });
-    await tx.invoice.updateMany({
-      where: { createdByEmployeeId: id },
-      data:  { createdByEmployeeId: null },
-    });
-    await tx.payment.updateMany({
-      where: { createdByEmployeeId: id },
-      data:  { createdByEmployeeId: null },
-    });
-    await tx.clientConsultationNote.updateMany({
-      where: { filledByEmployeeId: id },
-      data:  { filledByEmployeeId: null },
-    });
-    await tx.inventoryMovement.updateMany({
-      where: { createdByEmployeeId: id },
-      data:  { createdByEmployeeId: null },
-    });
-    await tx.inventoryPeriod.updateMany({
-      where: { closedByEmployeeId: id },
-      data:  { closedByEmployeeId: null },
-    });
-
-    // Null-out nullable FK: complaint.employeeId (no onDelete:SetNull in schema)
-    await tx.complaint.updateMany({
-      where: { employeeId: id },
-      data:  { employeeId: null },
-    });
-
-    // Delete required-FK child records in correct order
-    await tx.productionEmployee.deleteMany({ where: { employeeId: id } });
-    await tx.commission.deleteMany({ where: { employeeId: id } });
-    await tx.attendanceCorrectionRequest.deleteMany({ where: { employeeId: id } });
-    await tx.attendance.deleteMany({ where: { employeeId: id } });
-    await tx.staffSchedule.deleteMany({ where: { employeeId: id } });
-    await tx.permissionRequest.deleteMany({ where: { employeeId: id } });
-    await tx.sickLeave.deleteMany({ where: { employeeId: id } });
-    await tx.treatmentAssignment.deleteMany({ where: { employeeId: id } });
-    await tx.appointmentStaff.deleteMany({ where: { employeeId: id } });
-    await tx.overtimeChargeEmployee.deleteMany({ where: { employeeId: id } });
-    await tx.commissionRule.deleteMany({ where: { employeeId: id } });
-    await tx.loanRepayment.deleteMany({ where: { loan: { employeeId: id } } });
-    await tx.loan.deleteMany({ where: { employeeId: id } });
-    await tx.payrollItem.deleteMany({ where: { payroll: { employeeId: id } } });
-    await tx.payroll.deleteMany({ where: { employeeId: id } });
-    await tx.leaveQuota.deleteMany({ where: { employeeId: id } });
-    await tx.leave.deleteMany({ where: { employeeId: id } });
-    await tx.employeeSchedule.deleteMany({ where: { employeeId: id } });
-    await tx.employeeSalarySettings.deleteMany({ where: { employeeId: id } });
-    await tx.employeeBranchHistory.deleteMany({ where: { employeeId: id } });
     await tx.employeeBranch.deleteMany({ where: { employeeId: id } });
     await tx.user.deleteMany({ where: { employeeId: id } });
-
     await tx.employee.delete({ where: { id } });
   });
 
@@ -178,5 +149,5 @@ module.exports = {
   findAll, count, findById,
   findByEmployeeCode, findLastEmployeeCode, findByEmail, findUserByEmail,
   findRoleById,
-  create, update, updateFiles, updateBranches, softDelete, hardDelete,
+  create, update, updateFiles, updateBranches, softDelete, hardDelete, countHistory,
 };

@@ -54,13 +54,15 @@ describe('assign', () => {
   });
 
   test('throws 404 when leave type not found', async () => {
+    repo.findEmployeeById.mockResolvedValue({ id: 'e1' });
     leaveTypeRepo.findById.mockResolvedValue(null);
     await expect(svc.assign({ employeeId: 'e1', leaveTypeId: 'bad', year: 2024, totalDays: 12 }))
       .rejects.toMatchObject({ statusCode: 404 });
   });
 
   test('upserts quota when all fields valid', async () => {
-    leaveTypeRepo.findById.mockResolvedValue({ id: 'lt1', code: 'SAKIT' });
+    leaveTypeRepo.findById.mockResolvedValue({ id: 'lt1', code: 'SAKIT', maxDaysPerYear: 12 });
+    repo.findEmployeeById.mockResolvedValue({ id: 'e1' });
     repo.upsert.mockResolvedValue(QUOTA);
 
     const result = await svc.assign({ employeeId: 'e1', leaveTypeId: 'lt1', year: 2024, totalDays: 12 });

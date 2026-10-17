@@ -1,6 +1,8 @@
 'use strict';
 
 jest.mock('./leave.repository');
+// Cek tabrakan tanggal diuji tersendiri (leave.regression-1)
+jest.mock('./leave.overlap', () => ({ assertNoOverlappingRequest: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../leaveQuota/leaveQuota.service');
 jest.mock('../../config/prisma', () => ({
   leaveType: { findUnique: jest.fn() },

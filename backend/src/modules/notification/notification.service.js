@@ -11,6 +11,8 @@
 // Notifikasi bersifat "terbaik-usaha": kegagalan membuat notifikasi / mengirim email
 // TIDAK membatalkan proses utama (dicatat di log saja).
 
+const { StatusCodes } = require("http-status-codes");
+const AppError = require("../../common/errors/AppError");
 const logger = require("../../utils/logger");
 const { sendMail } = require("../../common/utils/mailer");
 const { ROLES } = require("../../common/constants/role.constant");
@@ -210,7 +212,14 @@ const summary = async (user) => {
   return { unread, pendingApprovals: pending, pendingApprovalTotal: pendingTotal };
 };
 
-const markRead    = (userId, id) => repo.markRead(userId, id);
+// Notifikasi orang lain / id asal → 404 (sudah dibaca sebelumnya tetap sukses)
+const markRead = async (userId, id) => {
+  const result = await repo.markRead(userId, id);
+  if ((result?.count ?? 0) === 0 && !(await repo.findOwned(userId, id))) {
+    throw new AppError("Notifikasi tidak ditemukan", StatusCodes.NOT_FOUND);
+  }
+  return result;
+};
 const markAllRead = (userId)     => repo.markAllRead(userId);
 
 module.exports = {
