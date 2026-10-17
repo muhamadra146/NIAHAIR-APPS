@@ -420,6 +420,7 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
   const canDelete  = user ? CAN_DELETE.includes(user.roleCode) : false;
   const canApprove = user ? CAN_APPROVE.includes(user.roleCode) : false;
   const isActing = recalcMut.isPending || submitMut.isPending || approveMut.isPending || paidMut.isPending || deleteMut.isPending;
+  const isNegativeNet = Number(payroll.netSalary) < 0;
 
   const handle = async (action: () => Promise<unknown>, msg: string) => {
     try { await action(); toast.success(msg); }
@@ -459,7 +460,13 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
             </Button>
           )}
           {payroll.status === "PENDING_APPROVAL" && canApprove && (
-            <Button size="sm" className="rounded-lg" onClick={() => handle(approveMut.mutateAsync, "Payroll disetujui")} disabled={isActing}>
+            <Button
+              size="sm"
+              className="rounded-lg"
+              onClick={() => handle(approveMut.mutateAsync, "Payroll disetujui")}
+              disabled={isActing || isNegativeNet}
+              title={isNegativeNet ? "Gaji bersih minus — periksa absen & potongan, lalu hitung ulang" : undefined}
+            >
               <CheckCircle2 className="h-3 w-3 mr-1" /> Setujui
             </Button>
           )}
@@ -511,6 +518,13 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
           </CardContent>
         </Card>
       </div>
+
+      {isNegativeNet && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span className="font-semibold">Gaji bersih minus.</span> Potongan lebih besar dari pendapatan.
+          Periksa absen dan potongan karyawan ini, lalu klik Hitung Ulang. Payroll ini belum bisa disetujui.
+        </div>
+      )}
 
       {/* Net */}
       <Card className="rounded-2xl border-primary/20 bg-primary/5">
@@ -761,7 +775,10 @@ export function PayrollPage() {
                     </div>
                     <div>
                       <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Bersih</p>
-                      <p className="font-bold tabular-nums text-primary">{fmtRp(p.netSalary)}</p>
+                      <p className={`font-bold tabular-nums ${Number(p.netSalary) < 0 ? "text-red-600" : "text-primary"}`}>{fmtRp(p.netSalary)}</p>
+                      {Number(p.netSalary) < 0 && (
+                        <p className="text-[10px] font-semibold uppercase text-red-600">Gaji minus</p>
+                      )}
                     </div>
                   </div>
 

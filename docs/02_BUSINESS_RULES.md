@@ -5030,6 +5030,8 @@ DRAFT
 VOID
 ```
 
+Gaji bersih minus (potongan > pendapatan) boleh dibuat dan diajukan, tetapi ditandai peringatan merah di daftar & detail payroll dan **tidak bisa disetujui** sampai absen / potongan diperiksa dan payroll dihitung ulang. Angka tidak dipotong otomatis ke Rp 0 (keputusan user 2026-10-17).
+
 ---
 
 # PAY-005

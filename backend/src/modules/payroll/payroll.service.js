@@ -454,6 +454,14 @@ const approve = async (id, approvedBy) => {
   if (!existing) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
   if (existing.status !== "PENDING_APPROVAL")
     throw new AppError("Payroll tidak sedang menunggu persetujuan", StatusCodes.BAD_REQUEST);
+  // Gaji bersih minus boleh dibuat (diberi peringatan), tapi tidak boleh disetujui sampai
+  // absen / potongan dicek dan payroll dihitung ulang — keputusan user 2026-10-17
+  if (new Prisma.Decimal(existing.netSalary ?? 0).lt(0)) {
+    throw new AppError(
+      "Gaji bersih minus. Periksa absen dan potongan, lalu hitung ulang payroll sebelum disetujui.",
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
   return repo.update(id, { status: "APPROVED", approvedBy, approvedAt: new Date() });
 };
 
