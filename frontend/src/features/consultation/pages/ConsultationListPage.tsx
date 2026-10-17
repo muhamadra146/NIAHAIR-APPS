@@ -29,6 +29,7 @@ import {
   getLabel,
 } from "../constants";
 import type { ConsultationNote, UnfilledInvoice } from "../types";
+import { canModifyNote } from "../permissions";
 
 const MANAGEMENT_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "FINANCE"];
 
@@ -103,6 +104,9 @@ function StatCard({ title, data, options, total, accent }: {
 
 function NoteRow({ note, isViewOnly = false }: { note: ConsultationNote; isViewOnly?: boolean }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const user = useAuthStore((st) => st.user);
+  // Hapus: penulis catatan atau SA/Owner/Manager (CRM-008)
+  const canDelete = !isViewOnly && canModifyNote(user, note);
   const deleteMutation = useDeleteConsultationNote();
 
   const services = (note.invoice?.items ?? []).map((i) => i.item.name).join(", ");
@@ -142,7 +146,7 @@ function NoteRow({ note, isViewOnly = false }: { note: ConsultationNote; isViewO
                 <Eye className="w-3.5 h-3.5" /> Lihat
               </Button>
             </Link>
-            {!isViewOnly && (
+            {canDelete && (
               <Button
                 variant="ghost" size="sm"
                 className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
@@ -214,14 +218,16 @@ export function ConsultationListPage() {
   const unfilledPages    = unfilledMeta ? Math.ceil(unfilledMeta.total / 20) : 1;
 
   // ── Tab "Semua Catatan" ────────────────────────────────────────────────────
+  // Periode terbalik (akhir sebelum awal) — beri peringatan, filter tanggal tidak dipakai
+  const invalidRange = !!(listStartDate && listEndDate && listEndDate < listStartDate);
   const { data: listData, isLoading: loadingList } = useConsultationNotes(
     {
       page:      listPage,
       limit:     20,
       branchId:  isManager ? undefined : (branchId || undefined),
       search:    listSearch    || undefined,
-      startDate: listStartDate || undefined,
-      endDate:   listEndDate   || undefined,
+      startDate: invalidRange ? undefined : listStartDate || undefined,
+      endDate:   invalidRange ? undefined : listEndDate   || undefined,
     },
     { enabled: tab === "list" },
   );
@@ -424,6 +430,10 @@ export function ConsultationListPage() {
                   />
                 </div>
               </div>
+
+              {invalidRange && (
+                <p className="w-full text-xs text-destructive order-last">Tanggal akhir tidak boleh sebelum tanggal awal</p>
+              )}
 
               {/* Reset */}
               {(listSearch || listStartDate || listEndDate) && (

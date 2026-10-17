@@ -45,7 +45,7 @@ function LoadingState() {
 function EmptyState() {
   return (
     <div className="py-14 text-center text-sm text-slate-400">
-      No appointments found.
+      Tidak ada booking.
     </div>
   );
 }
@@ -70,9 +70,9 @@ function DeleteConfirmDialog({
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Hapus Appointment?</DialogTitle>
+          <DialogTitle>Hapus Booking?</DialogTitle>
           <DialogDescription>
-            Appointment <strong>{appointment.bookingNo}</strong> ({appointment.customer.name}) akan
+            Booking <strong>{appointment.bookingNo}</strong> ({appointment.customer.name}) akan
             dihapus permanen. Tindakan ini tidak dapat dibatalkan.
           </DialogDescription>
         </DialogHeader>

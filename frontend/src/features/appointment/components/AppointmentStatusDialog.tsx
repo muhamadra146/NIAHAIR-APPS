@@ -15,6 +15,8 @@ import { changeStatusSchema, type ChangeStatusFormValues } from "../schemas/appo
 import { AppointmentStatusBadge, STATUS_LABEL } from "./AppointmentStatusBadge";
 import type { AppointmentStatus } from "../types";
 
+// Sama dengan VALID_TRANSITIONS di backend (appointment.service.js).
+// Reschedule bukan status — jadwal ulang lewat tombol Reschedule di Booking Harian.
 const VALID_TRANSITIONS: Record<AppointmentStatus, AppointmentStatus[]> = {
   BOOKED:      ["CONFIRMED", "CANCELLED", "NO_SHOW"],
   CONFIRMED:   ["CHECK_IN",  "CANCELLED", "NO_SHOW"],
@@ -44,15 +46,17 @@ export function AppointmentStatusDialog({
 }: Props) {
   const allowed = VALID_TRANSITIONS[currentStatus] ?? [];
 
-  const { register, handleSubmit, reset, formState: { errors } } =
+  const { register, handleSubmit, reset, watch, formState: { errors } } =
     useForm<ChangeStatusFormValues>({
       resolver: zodResolver(changeStatusSchema),
-      defaultValues: { status: allowed[0], notes: "" },
+      defaultValues: { status: allowed[0], notes: "", cancelReason: "" },
     });
 
   useEffect(() => {
-    if (open) reset({ status: allowed[0], notes: "" });
+    if (open) reset({ status: allowed[0], notes: "", cancelReason: "" });
   }, [open, currentStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selected = watch("status");
 
   if (allowed.length === 0) return null;
 
@@ -60,7 +64,7 @@ export function AppointmentStatusDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Change Status</DialogTitle>
+          <DialogTitle>Ubah Status Booking</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -69,12 +73,12 @@ export function AppointmentStatusDialog({
           )}
 
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">Current:</span>
+            <span className="text-muted-foreground">Status saat ini:</span>
             <AppointmentStatusBadge status={currentStatus} />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="new-status">New Status <span className="text-destructive">*</span></Label>
+            <Label htmlFor="new-status">Status Baru <span className="text-destructive">*</span></Label>
             <select
               id="new-status"
               {...register("status")}
@@ -89,7 +93,29 @@ export function AppointmentStatusDialog({
               ))}
             </select>
             {errors.status && <p className="text-xs text-destructive">{errors.status.message}</p>}
+            {selected === "NO_SHOW" && (
+              <p className="text-xs text-muted-foreground">
+                Pelanggan tidak datang. Booking akan ditutup — untuk memindah jadwal gunakan Reschedule di Booking Harian.
+              </p>
+            )}
           </div>
+
+          {selected === "CANCELLED" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="cancel-reason">Alasan pembatalan <span className="text-destructive">*</span></Label>
+              <textarea
+                id="cancel-reason"
+                {...register("cancelReason")}
+                rows={2}
+                placeholder="Mis. pelanggan berhalangan"
+                className={cn(
+                  "flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none",
+                  errors.cancelReason && "border-destructive"
+                )}
+              />
+              {errors.cancelReason && <p className="text-xs text-destructive">{errors.cancelReason.message}</p>}
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="status-notes">Catatan</Label>
@@ -97,7 +123,7 @@ export function AppointmentStatusDialog({
               id="status-notes"
               {...register("notes")}
               rows={2}
-              placeholder="Optional reason or note..."
+              placeholder="Catatan tambahan (opsional)"
               className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
             />
           </div>
@@ -107,7 +133,7 @@ export function AppointmentStatusDialog({
               Batal
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Memperbarui…" : "Update Status"}
+              {isPending ? "Memperbarui…" : "Simpan Status"}
             </Button>
           </DialogFooter>
         </form>

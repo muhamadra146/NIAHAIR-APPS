@@ -19,6 +19,8 @@ import { toast } from "@/lib/toast";
 import { formatDate } from "@/lib/utils";
 import { fetchAppointments } from "@/features/appointment/api/appointment.api";
 import { fetchInvoices } from "@/features/invoice/api";
+import { fetchCommissions } from "@/features/commission/api";
+import { formatCurrency } from "@/lib/utils";
 import type { Appointment } from "@/features/appointment/types";
 import { useComplaintStats, useComplaints, useCreateComplaint, useUpdateComplaint, useDeleteComplaint } from "../hooks";
 import type { ComplaintStats } from "../types";
@@ -68,13 +70,16 @@ export function ComplaintPage() {
 
   const { data: statsData } = useComplaintStats(branchId ?? undefined);
 
+  // Periode terbalik (akhir sebelum awal) — beri peringatan, filter tanggal tidak dipakai
+  const invalidRange = !!(startDate && endDate && endDate < startDate);
+
   const { data, isLoading } = useComplaints({
     page, limit: 20,
     branchId:  branchId ?? undefined,
     status:    filterStatus || undefined,
     search:    search       || undefined,
-    startDate: startDate    || undefined,
-    endDate:   endDate      || undefined,
+    startDate: invalidRange ? undefined : startDate || undefined,
+    endDate:   invalidRange ? undefined : endDate   || undefined,
   });
 
   const complaints = data?.data ?? [];
@@ -149,6 +154,10 @@ export function ComplaintPage() {
             >
               Reset
             </button>
+          )}
+
+          {invalidRange && (
+            <p className="w-full text-xs text-destructive order-last">Tanggal akhir tidak boleh sebelum tanggal awal</p>
           )}
 
           {/* Spacer + Buat Komplain */}
@@ -574,8 +583,11 @@ function CreateComplaintDialog({ branchId, onClose }: { branchId?: string | null
   }
 
   function handleSubmit() {
-    if (!selectedApt)        { toast.error("Pilih appointment terlebih dahulu"); return; }
+    if (!selectedApt)        { toast.error("Pilih booking terlebih dahulu"); return; }
     if (!description.trim()) { toast.error("Deskripsi wajib diisi"); return; }
+    if (repairDate && repairDate < selectedApt.visitDate.slice(0, 10)) {
+      toast.error("Tanggal perbaikan tidak boleh sebelum tanggal booking"); return;
+    }
 
     const input: CreateComplaintInput = {
       appointmentId: selectedApt.id,
@@ -619,9 +631,9 @@ function CreateComplaintDialog({ branchId, onClose }: { branchId?: string | null
 
         <div className="flex-1 overflow-y-auto space-y-3 pr-1">
 
-          {/* ── Appointment picker ───────────────────── */}
+          {/* ── Booking picker ───────────────────────── */}
           <div className="space-y-1" ref={searchRef}>
-            <Label>Appointment <span className="text-red-500">*</span></Label>
+            <Label>Booking <span className="text-red-500">*</span></Label>
             <div className="relative flex items-center">
               <Search className="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
@@ -717,7 +729,7 @@ function CreateComplaintDialog({ branchId, onClose }: { branchId?: string | null
               />
             ) : (
               <Input
-                placeholder={selectedApt ? "Tidak ada invoice terkait" : "Pilih appointment dulu"}
+                placeholder={selectedApt ? "Tidak ada invoice terkait" : "Pilih booking dulu"}
                 value={invoiceId}
                 disabled={!!selectedApt && invoiceOptions.length === 0}
                 onChange={(e) => setInvoiceId(e.target.value)}
@@ -739,7 +751,7 @@ function CreateComplaintDialog({ branchId, onClose }: { branchId?: string | null
               />
             ) : (
               <Input
-                placeholder={selectedApt ? "Tidak ada staff di appointment" : "Pilih appointment dulu"}
+                placeholder={selectedApt ? "Tidak ada staf di booking ini" : "Pilih booking dulu"}
                 value={employeeId}
                 disabled={!!selectedApt && staffOptions.length === 0}
                 onChange={(e) => setEmployeeId(e.target.value)}
@@ -813,7 +825,8 @@ function CreateComplaintDialog({ branchId, onClose }: { branchId?: string | null
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Perbaikan / Redo <span className="font-normal normal-case">(opsional, isi jika sudah ada tindakan)</span></p>
             <div className="space-y-1">
               <Label className="text-xs">Tanggal Perbaikan</Label>
-              <Input type="date" value={repairDate} onChange={(e) => setRepairDate(e.target.value)} />
+              <Input type="date" value={repairDate} min={selectedApt?.visitDate.slice(0, 10)}
+                onChange={(e) => setRepairDate(e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -880,8 +893,35 @@ function UpdateComplaintDialog({ complaint, onClose }: { complaint: Complaint; o
 
   const updateMut      = useUpdateComplaint();
   const showCommission = status === "RESOLVED" && complaint.category === "HASIL_LAYANAN";
+  const visitDateStr   = complaint.appointment.visitDate?.slice(0, 10) ?? "";
+
+  // Pilih komisi karyawan yang dikomplain (daftar komisi hanya bisa dibaca SA/Owner/Manager/Finance —
+  // role lain tetap memakai isian ID manual)
+  const roleCode        = useAuthStore((st) => st.user?.roleCode) ?? "";
+  const canPickCommission = ["SUPER_ADMIN", "OWNER", "MANAGER", "FINANCE"].includes(roleCode) && !!complaint.employeeId;
+  const { data: commissionData, isLoading: loadingCommissions } = useQuery({
+    queryKey: ["complaint-commissions", complaint.employeeId, complaint.invoiceId],
+    queryFn:  () => fetchCommissions({
+      employeeId: complaint.employeeId ?? undefined,
+      invoiceId:  complaint.invoiceId  ?? undefined,
+      limit:      50,
+    }),
+    enabled:  showCommission && canPickCommission,
+  });
+  const commissionOptions = (commissionData?.data ?? []).map((c) => ({
+    value: c.id,
+    label: [
+      c.invoice?.invoiceNo,
+      c.treatmentJobAssignment?.commissionJob?.name ?? c.serviceItem?.name,
+      formatCurrency(Number(c.commissionAmount)),
+    ].filter(Boolean).join(" · "),
+  }));
 
   function handleSubmit() {
+    if (repairDate && visitDateStr && repairDate < visitDateStr) {
+      toast.error("Tanggal perbaikan tidak boleh sebelum tanggal booking");
+      return;
+    }
     const input: UpdateComplaintInput & { id: string } = {
       id:     complaint.id,
       status,
@@ -983,7 +1023,8 @@ function UpdateComplaintDialog({ complaint, onClose }: { complaint: Complaint; o
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Perbaikan / Redo</p>
             <div className="space-y-1">
               <Label className="text-xs">Tanggal Perbaikan</Label>
-              <Input type="date" value={repairDate} onChange={(e) => setRepairDate(e.target.value)} />
+              <Input type="date" value={repairDate} min={visitDateStr || undefined}
+                onChange={(e) => setRepairDate(e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -1025,9 +1066,33 @@ function UpdateComplaintDialog({ complaint, onClose }: { complaint: Complaint; o
                 </div>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">ID Komisi yang Dipotong</Label>
-                <Input placeholder="ID commission record"
-                  value={commissionId} onChange={(e) => setCommissionId(e.target.value)} />
+                <Label className="text-xs">Komisi yang Dipotong</Label>
+                {canPickCommission ? (
+                  loadingCommissions ? (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Memuat komisi…
+                    </p>
+                  ) : commissionOptions.length > 0 ? (
+                    <SimpleSelect
+                      value={commissionId}
+                      onChange={setCommissionId}
+                      options={[{ value: "", label: "— Pilih komisi —" }, ...commissionOptions]}
+                    />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Belum ada komisi untuk {complaint.employee?.name ?? "karyawan ini"}
+                      {complaint.invoice ? ` di invoice ${complaint.invoice.invoiceNo}` : ""}.
+                    </p>
+                  )
+                ) : (
+                  <>
+                    <Input placeholder="ID komisi"
+                      value={commissionId} onChange={(e) => setCommissionId(e.target.value)} />
+                    {!complaint.employeeId && (
+                      <p className="text-[11px] text-muted-foreground">Pilih karyawan dikomplain agar daftar komisinya bisa dipilih.</p>
+                    )}
+                  </>
+                )}
               </div>
               {correctedStrands && totalStrands && Number(totalStrands) > 0 && (
                 <p className="text-xs text-yellow-700">

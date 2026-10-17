@@ -76,7 +76,7 @@ const createWithTransaction = ({ appointmentData, services = [], staffsBySlot = 
         appointmentId: appointment.id,
         oldStatus:     null,
         newStatus:     "BOOKED",
-        notes:         "Appointment created",
+        notes:         "Booking dibuat",
         createdBy:     userId ?? null,
       },
     });

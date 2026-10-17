@@ -8,9 +8,12 @@ const { listController, uploadController, deleteController } = require("./appoin
 const router = Router({ mergeParams: true });
 
 // Unggah/hapus foto — peran yang boleh membuat booking (foto ikut diunggah saat buat booking) (G1-11)
-const WRITE_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER, ROLES.STAFF_OPERASIONAL, ROLES.OFFICE];
+// OFFICE & STAFF_OPERASIONAL view-only di menu Booking / Booking Harian
+const WRITE_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER];
+// Baca — sama dengan GET /appointments (INVENTORY tidak punya menu booking)
+const READ_ROLES  = [...WRITE_ROLES, ROLES.STAFF_OPERASIONAL, ROLES.OFFICE, ROLES.FINANCE];
 
-router.get("/",              authenticate, listController);
+router.get("/",              authenticate, authorize(...READ_ROLES), listController);
 router.post("/",             authenticate, authorize(...WRITE_ROLES), upload.single("photo"), uploadController);
 router.delete("/:photoId",   authenticate, authorize(...WRITE_ROLES), deleteController);
 

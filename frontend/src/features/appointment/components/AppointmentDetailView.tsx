@@ -10,6 +10,8 @@ import { Home, Store, Plus, Loader2, Trash2, Upload, X, ImageIcon, FileText, Ext
 import { formatDate, formatCurrency, toWibTimeStr, WIB_TZ } from "@/lib/utils";
 import { fetchDeposits, linkDepositToAppointment, fetchInvoices } from "@/features/invoice/api";
 import { CreateInvoiceDialog } from "@/features/invoice/components/CreateInvoiceDialog";
+import { InvoiceTotalsSummary } from "@/features/invoice/components/InvoiceTotalsSummary";
+import { lineAmount } from "@/features/invoice/totals";
 import { useAuthStore } from "@/stores/authStore";
 import {
   fetchAppointmentPhotos,
@@ -19,7 +21,8 @@ import {
   type AppointmentPhotoType,
 } from "../api/appointment.api";
 import { toast } from "@/lib/toast";
-import type { Appointment, AppointmentStatusHistory, AppointmentRescheduleHistory } from "../types";
+import type { Appointment, AppointmentStatus, AppointmentStatusHistory, AppointmentRescheduleHistory } from "../types";
+import { STATUS_LABEL as APPT_STATUS_LABEL } from "./AppointmentStatusBadge";
 import { uniqueStaffEmployees } from "../staff";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -176,10 +179,13 @@ function HistoryTab({ a }: { a: Appointment }) {
               <div>
                 <p className="text-sm font-semibold text-slate-800">
                   {h.oldStatus
-                    ? `${h.oldStatus} → ${h.newStatus}`
-                    : `Booking dibuat · ${h.newStatus}`}
+                    ? `${APPT_STATUS_LABEL[h.oldStatus as AppointmentStatus] ?? h.oldStatus} → ${APPT_STATUS_LABEL[h.newStatus as AppointmentStatus] ?? h.newStatus}`
+                    : `Booking dibuat · ${APPT_STATUS_LABEL[h.newStatus as AppointmentStatus] ?? h.newStatus}`}
                 </p>
-                {h.notes && <p className="text-xs text-slate-500 mt-0.5 italic">"{h.notes}"</p>}
+                {/* Catatan otomatis saat booking dibuat sudah tersirat di judul — data lama berbahasa Inggris */}
+                {h.notes && !["Appointment created", "Booking dibuat"].includes(h.notes) && (
+                  <p className="text-xs text-slate-500 mt-0.5 italic">"{h.notes}"</p>
+                )}
                 {h.newStatus === "CANCELLED" && a.cancelReason && (
                   <p className="text-xs text-red-600 mt-0.5">Alasan: {a.cancelReason}</p>
                 )}
@@ -275,8 +281,8 @@ function InvoiceTab({ a, readOnly }: { a: Appointment; readOnly: boolean }) {
     );
   }
 
-  const items    = invoice.items ?? [];
-  const deposits = invoice.invoiceDeposits ?? [];
+  // Bahan baku = biaya internal, tidak ditagih → tidak ditampilkan agar angka bisa dicocokkan (P6)
+  const items    = (invoice.items ?? []).filter((i) => !i.isMaterial);
 
   return (
     <div className="py-4 space-y-4">
@@ -314,7 +320,7 @@ function InvoiceTab({ a, readOnly }: { a: Appointment; readOnly: boolean }) {
                 <th className="px-3 py-2 text-left font-medium text-muted-foreground">Item</th>
                 <th className="px-3 py-2 text-right font-medium text-muted-foreground">Qty</th>
                 <th className="px-3 py-2 text-right font-medium text-muted-foreground">Harga</th>
-                <th className="px-3 py-2 text-right font-medium text-muted-foreground">Subtotal</th>
+                <th className="px-3 py-2 text-right font-medium text-muted-foreground">Jumlah</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -328,7 +334,7 @@ function InvoiceTab({ a, readOnly }: { a: Appointment; readOnly: boolean }) {
                   </td>
                   <td className="px-3 py-2 text-right text-muted-foreground">{item.qty}</td>
                   <td className="px-3 py-2 text-right text-muted-foreground">{formatCurrency(item.price)}</td>
-                  <td className="px-3 py-2 text-right font-medium">{formatCurrency(item.subtotal)}</td>
+                  <td className="px-3 py-2 text-right font-medium">{formatCurrency(lineAmount(item))}</td>
                 </tr>
               ))}
             </tbody>
@@ -336,47 +342,8 @@ function InvoiceTab({ a, readOnly }: { a: Appointment; readOnly: boolean }) {
         </div>
       )}
 
-      {/* Totals */}
-      <div className="rounded-md border border-border divide-y divide-border text-sm">
-        <div className="flex justify-between px-3 py-2">
-          <span className="text-muted-foreground">Subtotal</span>
-          <span>{formatCurrency(invoice.subtotal)}</span>
-        </div>
-        {Number(invoice.totalDiscount) > 0 && (
-          <div className="flex justify-between px-3 py-2">
-            <span className="text-muted-foreground">Diskon</span>
-            <span className="text-red-600">- {formatCurrency(invoice.totalDiscount)}</span>
-          </div>
-        )}
-        {Number(invoice.totalTax) > 0 && (
-          <div className="flex justify-between px-3 py-2">
-            <span className="text-muted-foreground">Pajak</span>
-            <span>{formatCurrency(invoice.totalTax)}</span>
-          </div>
-        )}
-        <div className="flex justify-between px-3 py-2 font-semibold">
-          <span>Total</span>
-          <span>{formatCurrency(invoice.grandTotal)}</span>
-        </div>
-        {deposits.length > 0 && (
-          <div className="flex justify-between px-3 py-2">
-            <span className="text-muted-foreground">DP Dipakai</span>
-            <span className="text-green-700">- {formatCurrency(invoice.totalDeposit)}</span>
-          </div>
-        )}
-        {Number(invoice.outstandingAmount) > 0 && (
-          <div className="flex justify-between px-3 py-2 font-semibold text-red-600">
-            <span>Sisa Tagihan</span>
-            <span>{formatCurrency(invoice.outstandingAmount)}</span>
-          </div>
-        )}
-        {invoice.status === "PAID" && (
-          <div className="flex justify-between px-3 py-2 font-semibold text-green-600">
-            <span>Lunas</span>
-            <span>{formatCurrency(invoice.paidAmount)}</span>
-          </div>
-        )}
-      </div>
+      {/* Totals — Subtotal − Diskon + PPN = Total; DP (nomor + tanggal), dibayar, sisa (P6) */}
+      <InvoiceTotalsSummary invoice={invoice} />
     </div>
   );
 }
@@ -738,11 +705,15 @@ function DepositTab({ a, readOnly }: { a: Appointment; readOnly: boolean }) {
   const deposits = data?.data ?? [];
   const totalDP  = deposits.reduce((sum, d) => sum + Number(d.amount), 0);
 
+  // Sama dengan label di halaman Deposit (DepositListPage)
   const STATUS_LABEL: Record<string, string> = {
-    PAID:         "Lunas",
-    PARTIAL_USED: "Sebagian Dipakai",
+    PENDING:      "Menunggu",
+    UNPAID:       "Belum Dibayar",
+    PARTIAL:      "Sebagian Dibayar",
+    PAID:         "Aktif",
+    PARTIAL_USED: "Sebagian Terpakai",
     USED:         "Habis",
-    REFUNDED:     "Refund",
+    REFUNDED:     "Dikembalikan",
     CANCELLED:    "Dibatalkan",
   };
   const STATUS_COLOR: Record<string, string> = {

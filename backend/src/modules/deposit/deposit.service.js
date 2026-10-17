@@ -3,7 +3,7 @@ const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { resolveOrderBy } = require("../../utils/sort");
-const { wibDayStart, wibDayEnd } = require("../../utils/date");
+const { wibDayStart, wibDayEnd, wibDateStr } = require("../../utils/date");
 
 const ORDER_MAP = {
   createdAt:    { createdAt: "asc" },
@@ -85,6 +85,11 @@ const getDepositById = async (id) => {
 // ── Create ────────────────────────────────────────────────────────────
 
 const createDeposit = async ({ customerId, appointmentId, amount, notes, paidAt, branchId, createdByEmployeeId }) => {
+  // Tanggal deposit tidak boleh setelah hari ini (kalender WIB)
+  if (paidAt && String(paidAt).slice(0, 10) > wibDateStr()) {
+    throw new AppError("Tanggal deposit tidak boleh setelah hari ini", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
   const customer = await findCustomerById(customerId);
   if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
 
@@ -93,7 +98,7 @@ const createDeposit = async ({ customerId, appointmentId, amount, notes, paidAt,
     if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
     if (appointment.customerId !== customerId) {
       throw new AppError(
-        "Appointment does not belong to the specified customer",
+        "Booking bukan milik pelanggan ini",
         StatusCodes.UNPROCESSABLE_ENTITY
       );
     }
@@ -128,7 +133,7 @@ const refundDeposit = async (id) => {
   const refundable = ["PAID", "PARTIAL_USED"];
   if (!refundable.includes(deposit.status)) {
     throw new AppError(
-      `Cannot refund deposit with status ${deposit.status}. Only PAID and PARTIAL_USED can be refunded.`,
+      "Hanya deposit berstatus Aktif atau Sebagian Terpakai yang bisa di-refund",
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
@@ -151,14 +156,14 @@ const cancelDeposit = async (id) => {
   const cancellable = ["PENDING", "UNPAID", "PAID"];
   if (!cancellable.includes(deposit.status)) {
     throw new AppError(
-      `Cannot cancel deposit with status ${deposit.status}. Only PENDING, UNPAID and PAID can be cancelled.`,
+      "Hanya deposit yang belum dipakai (Belum Dibayar atau Aktif) yang bisa dibatalkan",
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
 
   if (deposit.invoiceDeposits?.length > 0) {
     throw new AppError(
-      "Cannot cancel deposit that has already been applied to an invoice",
+      "Deposit yang sudah dipakai di invoice tidak bisa dibatalkan",
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
@@ -208,7 +213,7 @@ const deleteDeposit = async (id) => {
 
   if (deposit.invoiceDeposits?.length > 0) {
     throw new AppError(
-      "Cannot delete deposit that has been applied to an invoice",
+      "Deposit yang sudah dipakai di invoice tidak bisa dihapus",
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
@@ -216,7 +221,7 @@ const deleteDeposit = async (id) => {
   const blocked = ["PAID", "PARTIAL_USED", "USED"];
   if (blocked.includes(deposit.status)) {
     throw new AppError(
-      `Cannot delete deposit with status ${deposit.status}`,
+      "Deposit yang sudah dibayar tidak bisa dihapus — gunakan Batalkan atau Refund",
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
@@ -253,7 +258,7 @@ const linkAppointmentToDeposit = async (id, appointmentId) => {
 
   if (appointment.customerId !== deposit.customerId) {
     throw new AppError(
-      "Appointment does not belong to the same customer as this deposit",
+      "Booking bukan milik pelanggan deposit ini",
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }

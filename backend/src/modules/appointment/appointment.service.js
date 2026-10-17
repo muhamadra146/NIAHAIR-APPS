@@ -37,6 +37,18 @@ const {
 // Cancel:  BOOKED / CONFIRMED / CHECK_IN → CANCELLED
 // No-show: BOOKED / CONFIRMED → NO_SHOW
 
+// Label status untuk pesan error (sama dengan label di frontend)
+const STATUS_LABEL_ID = {
+  BOOKED:      "Booked",
+  CONFIRMED:   "Confirmed",
+  CHECK_IN:    "Check In",
+  IN_PROGRESS: "In Progress",
+  COMPLETED:   "Selesai",
+  CANCELLED:   "Dibatalkan",
+  NO_SHOW:     "Tidak Datang",
+};
+const statusLabel = (s) => STATUS_LABEL_ID[s] ?? s;
+
 const VALID_TRANSITIONS = {
   BOOKED:      ["CONFIRMED", "CANCELLED", "NO_SHOW"],
   CONFIRMED:   ["CHECK_IN",  "CANCELLED", "NO_SHOW"],
@@ -213,7 +225,7 @@ const updateAppointmentById = async (id, body, userId) => {
                     type !== undefined || homeServiceAddress !== undefined;
 
   if (!hasUpdate) {
-    throw new AppError("No fields to update", StatusCodes.UNPROCESSABLE_ENTITY);
+    throw new AppError("Tidak ada data yang diubah", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
   // Bandingkan dengan jam tersimpan bila hanya salah satu yang diubah
@@ -252,7 +264,7 @@ const changeAppointmentStatus = async (id, body, userId) => {
 
   if (newStatus === currentStatus) {
     throw new AppError(
-      `Appointment is already ${currentStatus}`,
+      `Status booking sudah ${statusLabel(currentStatus)}`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
@@ -260,13 +272,13 @@ const changeAppointmentStatus = async (id, body, userId) => {
   const allowed = VALID_TRANSITIONS[currentStatus] ?? [];
   if (!allowed.includes(newStatus)) {
     throw new AppError(
-      `Cannot transition from ${currentStatus} to ${newStatus}`,
+      `Status booking tidak bisa diubah dari ${statusLabel(currentStatus)} ke ${statusLabel(newStatus)}`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
 
-  if (newStatus === "CANCELLED" && !cancelReason) {
-    throw new AppError("cancelReason is required when cancelling", StatusCodes.UNPROCESSABLE_ENTITY);
+  if (newStatus === "CANCELLED" && !cancelReason?.trim()) {
+    throw new AppError("Alasan pembatalan wajib diisi", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
   if (newStatus === "COMPLETED") {
@@ -311,7 +323,7 @@ const rescheduleAppointment = async (id, body, userId) => {
 
   if (["COMPLETED", "CANCELLED"].includes(appointment.status)) {
     throw new AppError(
-      `Cannot reschedule a ${appointment.status.toLowerCase()} appointment`,
+      `Booking berstatus ${statusLabel(appointment.status)} tidak bisa di-reschedule`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
@@ -334,7 +346,7 @@ const updateRescheduleById = async (appointmentId, historyId, body) => {
 
   if (["COMPLETED", "CANCELLED"].includes(appointment.status)) {
     throw new AppError(
-      `Cannot modify reschedule of a ${appointment.status.toLowerCase()} appointment`,
+      `Reschedule booking berstatus ${statusLabel(appointment.status)} tidak bisa diubah`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }

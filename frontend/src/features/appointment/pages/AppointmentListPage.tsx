@@ -30,12 +30,15 @@ export function AppointmentListPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Periode terbalik (akhir sebelum awal) — beri peringatan, filter tanggal tidak dipakai
+  const invalidRange = !!(startDate && endDate && endDate < startDate);
+
   const { data, isLoading } = useAppointments({
     page, limit: 20,
     branchId:  branchId ?? undefined,
     status:    status   || undefined,
-    startDate: startDate || undefined,
-    endDate:   endDate   || undefined,
+    startDate: invalidRange ? undefined : startDate || undefined,
+    endDate:   invalidRange ? undefined : endDate   || undefined,
   });
   const createMutation = useCreateAppointment();
 
@@ -128,6 +131,9 @@ export function AppointmentListPage() {
                 className="h-9 bg-transparent px-3 text-sm focus:outline-none"
               />
             </div>
+            {invalidRange && (
+              <p className="mt-1 text-xs text-destructive">Tanggal akhir tidak boleh sebelum tanggal awal</p>
+            )}
           </div>
 
           {(status || startDate || endDate) && (

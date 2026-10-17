@@ -775,6 +775,14 @@ Setiap Note memiliki.
 
 Note tidak boleh diubah tanpa audit.
 
+### Catatan Klien (Consultation Note) — hak akses (keputusan owner 2026-10-17)
+
+- Buat: SUPER_ADMIN, OWNER, MANAGER, CASHIER; staf lain hanya untuk invoice yang ia tangani (pembuat invoice / staf booking / Input Job).
+- Ubah & hapus (termasuk foto before/after): penulis catatan, atau SUPER_ADMIN / OWNER / MANAGER.
+- FINANCE dan OFFICE: hanya lihat. INVENTORY: tidak punya akses.
+- Saat diedit, penulis asli (Diisi oleh) dan tanggal isi tidak boleh berubah. Tidak ada kolom editor terpisah; waktu perubahan terakhir tercatat di Updated At.
+- Pilihan "Lainnya" wajib disertai keterangan.
+
 ---
 
 # CRM-009
@@ -1293,6 +1301,8 @@ Exception.
 
 SUPER_ADMIN.
 
+**Status: sengaja TIDAK diterapkan (fleksibel)** — keputusan owner 2026-10-17: booking boleh dibuat/di-reschedule ke tanggal lampau (mis. input susulan). Backend tidak menolak tanggal lampau.
+
 ---
 
 # APT-006
@@ -1310,6 +1320,8 @@ Appointment tidak boleh berpindah Branch setelah CHECK_IN.
 Appointment minimal memiliki satu Service.
 
 Appointment tanpa Service tidak boleh disimpan.
+
+**Status: sengaja TIDAK diterapkan (fleksibel)** — keputusan owner 2026-10-17: booking boleh disimpan tanpa layanan; layanan dapat dilengkapi kemudian / saat invoice dibuat.
 
 ---
 
@@ -1357,6 +1369,8 @@ Seorang Staff tidak boleh memiliki dua Appointment yang waktunya bertabrakan.
 Overlap sekecil apa pun dianggap konflik.
 
 Backend wajib melakukan pengecekan.
+
+**Status: sengaja TIDAK diterapkan (fleksibel)** — keputusan owner 2026-10-17: staf boleh dijadwalkan di dua booking yang waktunya bertabrakan; backend tidak menolak (pengaturan diserahkan ke manager/kasir).
 
 ---
 
@@ -3839,6 +3853,8 @@ Total Payment.
 Tidak boleh melebihi.
 
 Invoice Total.
+
+**Edit invoice (keputusan owner 2026-10-17):** total baru tidak boleh lebih kecil dari uang yang sudah diterima (DP terpasang + pembayaran). Ditolak `422` "Total baru (Rp X) lebih kecil dari uang yang sudah diterima (Rp Y). Hapus pembayaran / lepas DP dulu." — invoice tidak boleh diam-diam menjadi Lunas dengan kelebihan bayar.
 
 ---
 

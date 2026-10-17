@@ -22,9 +22,17 @@ const {
 // app.use("/appointments/:appointmentId/deposits", router)
 const router = Router({ mergeParams: true });
 
-router.get("/",        authenticate, getAllController);
-router.get("/summary", authenticate, summaryController);
-router.get("/:id",     authenticate, getByIdController);
+// Hak akses mengikuti menu (sidebarNav): Deposit = POS + OFFICE/FINANCE (lihat saja).
+// STAFF_OPERASIONAL ikut baca karena tab DP di Detail Booking (dibuka dari Booking Harian).
+// INVENTORY tidak punya menu/layar yang memakai deposit.
+const READ_ROLES    = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER, ROLES.OFFICE, ROLES.FINANCE, ROLES.STAFF_OPERASIONAL];
+const SUMMARY_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER, ROLES.OFFICE, ROLES.FINANCE];
+// Tulis: POS saja — OFFICE & FINANCE view-only (FIN-012)
+const WRITE_ROLES   = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER];
+
+router.get("/",        authenticate, authorize(...READ_ROLES),    getAllController);
+router.get("/summary", authenticate, authorize(...SUMMARY_ROLES), summaryController);
+router.get("/:id",     authenticate, authorize(...READ_ROLES),    getByIdController);
 
 router.post("/:id/resync", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER), resyncController);
 
@@ -32,7 +40,7 @@ router.post(
   "/",
   authenticate,
   requireBranch,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER, ROLES.STAFF_OPERASIONAL, ROLES.OFFICE),
+  authorize(...WRITE_ROLES),
   validate(createDepositSchema),
   createController
 );

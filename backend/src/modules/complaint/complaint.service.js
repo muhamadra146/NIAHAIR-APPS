@@ -2,7 +2,7 @@ const { Prisma }      = require("@prisma/client");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
-const { wibDayStart, wibDayEnd }   = require("../../utils/date");
+const { wibDayStart, wibDayEnd, toDateStr } = require("../../utils/date");
 const prisma          = require("../../config/prisma");
 const repo            = require("./complaint.repository");
 const { ROLES }       = require("../../common/constants/role.constant");
@@ -18,6 +18,14 @@ const buildComplaintNo = async () => {
   const prefix = `KMP-${yyyy}${mm}${dd}-`;
   const maxSeq = await repo.findMaxSeqToday(prefix);
   return `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
+};
+
+// Tanggal perbaikan tidak boleh sebelum tanggal booking (kalender WIB)
+const assertRepairNotBeforeVisit = (repairDate, visitDate) => {
+  if (!repairDate || !visitDate) return;
+  if (toDateStr(repairDate.slice(0, 10)) < toDateStr(visitDate)) {
+    throw new AppError("Tanggal perbaikan tidak boleh sebelum tanggal booking", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
 };
 
 // ── Stats ─────────────────────────────────────────────────────────────
@@ -130,9 +138,11 @@ const create = async (body, userId, user = null) => {
   // Pastikan appointment ada
   const appointment = await prisma.appointment.findUnique({
     where:  { id: appointmentId },
-    select: { id: true, branchId: true, customerId: true },
+    select: { id: true, branchId: true, customerId: true, visitDate: true },
   });
-  if (!appointment) throw new AppError("Appointment tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (!appointment) throw new AppError("Booking tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  assertRepairNotBeforeVisit(repairDate, appointment.visitDate);
 
   // branchId dari body — cek akses cabang, aturan sama dengan branch middleware (G1-20)
   if (branchId && user && user.roleCode !== ROLES.SUPER_ADMIN) {
@@ -189,6 +199,8 @@ const updateComplaint = async (id, body, userId) => {
     repairDate, repairNotes, repairStaff, repairAssistant,
     correctedStrands, totalStrands, commissionId,
   } = body;
+
+  if (repairDate) assertRepairNotBeforeVisit(repairDate, complaint.appointment?.visitDate);
 
   // Helaian diperbaiki tidak boleh melebihi total helaian (G1-20)
   if (correctedStrands != null && totalStrands != null && Number(correctedStrands) > Number(totalStrands)) {

@@ -22,6 +22,8 @@ import {
   PREV_EXP_OPTIONS,
 } from "../constants";
 import type { CreateConsultationNoteInput, UnfilledInvoice } from "../types";
+import { canCreateNote, canModifyNote, missingOtherText } from "../permissions";
+import { toast } from "@/lib/toast";
 
 // ── Question ───────────────────────────────────────────────────────────────────
 
@@ -286,6 +288,7 @@ export function ConsultationFormPage() {
   const [form, setForm]                = useState<FormState>(EMPTY);
   const [editNote, setEditNote]        = useState<any>(null);
   const [noteError, setNoteError]      = useState(false);
+  const user                           = useAuthStore((st) => st.user);
 
   const { data: existingNote } = useConsultationNoteByInvoice(isEdit ? "" : invoiceId);
 
@@ -377,10 +380,20 @@ export function ConsultationFormPage() {
   const createMutation = useCreateConsultationNote();
   const updateMutation = useUpdateConsultationNote(isEdit ? id! : (existingNote?.id ?? ""));
 
+  // Hanya-lihat: FINANCE/OFFICE, atau catatan milik orang lain (ubah = penulis / SA / Owner / Manager — CRM-008)
+  const currentNote = isEdit ? editNote : existingNote;
+  const readOnly    = currentNote ? !canModifyNote(user, currentNote) : !canCreateNote(user);
+
   const set = (key: keyof FormState, val: unknown) =>
     setForm((f) => ({ ...f, [key]: val }));
 
   const handleSubmit = async () => {
+    if (readOnly) return;
+    const otherError = missingOtherText(form as Record<string, unknown>);
+    if (otherError) {
+      toast.error(otherError);
+      return;
+    }
     if (!form.interestingNote?.trim()) {
       setNoteError(true);
       document.getElementById("interesting-note")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -447,7 +460,7 @@ export function ConsultationFormPage() {
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="font-bold text-sm leading-tight">
-            {isEdit || existingNote ? "Edit Catatan Klien" : "Isi Catatan Klien"}
+            {readOnly ? "Lihat Catatan Klien" : isEdit || existingNote ? "Edit Catatan Klien" : "Isi Catatan Klien"}
           </h1>
           <p className="text-xs text-muted-foreground truncate">{customerName} · {invoiceNo}</p>
         </div>
@@ -457,16 +470,18 @@ export function ConsultationFormPage() {
             onClick={() => navigate(backTo)}
             disabled={isPending}
           >
-            Batal
+            {readOnly ? "Kembali" : "Batal"}
           </Button>
-          <Button size="sm" onClick={handleSubmit} disabled={isPending} className="gap-1.5">
-            <Save className="w-4 h-4" />
-            {isPending ? "Menyimpan..." : isEdit || existingNote ? "Perbarui" : "Simpan"}
-          </Button>
+          {!readOnly && (
+            <Button size="sm" onClick={handleSubmit} disabled={isPending} className="gap-1.5">
+              <Save className="w-4 h-4" />
+              {isPending ? "Menyimpan..." : isEdit || existingNote ? "Perbarui" : "Simpan"}
+            </Button>
+          )}
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
+      <fieldset disabled={readOnly} className="max-w-2xl mx-auto px-4 pt-4 pb-0 space-y-4 min-w-0 border-0">
 
         {/* ── Client header card ── */}
         <div className="rounded-2xl overflow-hidden shadow-sm border">
@@ -751,7 +766,7 @@ export function ConsultationFormPage() {
           </Q>
         </Section>
 
-      </div>
+      </fieldset>
     </div>
   );
 }

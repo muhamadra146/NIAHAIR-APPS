@@ -849,7 +849,7 @@ const STATUS_CONFIG: Record<AppointmentStatus, { label: string; bg: string; text
   IN_PROGRESS: { label: "In Progress", bg: "bg-amber-50",   text: "text-amber-700",   dot: "bg-amber-400",   border: "border-amber-200"   },
   COMPLETED:   { label: "Selesai",     bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-400", border: "border-emerald-200" },
   CANCELLED:   { label: "Dibatalkan",  bg: "bg-red-50",     text: "text-red-700",     dot: "bg-red-400",     border: "border-red-200"     },
-  NO_SHOW:     { label: "No Show",     bg: "bg-slate-50",   text: "text-slate-500",   dot: "bg-slate-400",   border: "border-slate-200"   },
+  NO_SHOW:     { label: "Tidak Datang",   bg: "bg-slate-50",   text: "text-slate-500",   dot: "bg-slate-400",   border: "border-slate-200"   },
 };
 
 // ── Appointment list row (to-do list style) ───────────────────────────

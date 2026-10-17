@@ -19,9 +19,12 @@ const {
 // app.use("/deposits/:depositId/payments", router)
 const router = Router({ mergeParams: true });
 
-router.get("/",        authenticate, getAllController);
-router.get("/summary", authenticate, summaryController);
-router.get("/:id",     authenticate, getByIdController);
+// Baca: role yang punya menu Pembayaran Deposit (POS + OFFICE/FINANCE lihat saja). INVENTORY tidak.
+const READ_ROLES  = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER, ROLES.OFFICE, ROLES.FINANCE];
+
+router.get("/",        authenticate, authorize(...READ_ROLES), getAllController);
+router.get("/summary", authenticate, authorize(...READ_ROLES), summaryController);
+router.get("/:id",     authenticate, authorize(...READ_ROLES), getByIdController);
 
 router.post("/:id/resync", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER), resyncController);
 

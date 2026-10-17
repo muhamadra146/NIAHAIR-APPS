@@ -17,9 +17,57 @@ const {
   getStats,
 } = require("./consultation.repository");
 
-const MANAGEMENT_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "FINANCE"];
+// Hak akses Catatan Klien (keputusan owner 2026-10-17, lihat CRM-008):
+//   Buat  : SUPER_ADMIN, OWNER, MANAGER, CASHIER — staf lain hanya bila terkait invoice-nya
+//   Ubah/hapus (termasuk foto): penulis catatan, atau SUPER_ADMIN / OWNER / MANAGER
+//   FINANCE, OFFICE (view-only) dan INVENTORY: hanya lihat
+const SUPERVISOR_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER"];
+const CREATE_ROLES     = [...SUPERVISOR_ROLES, "CASHIER"];
+const VIEW_ONLY_ROLES  = ["FINANCE", "OFFICE", "INVENTORY"];
 
-const isManager = (roleCode) => MANAGEMENT_ROLES.includes(roleCode);
+const assertCanCreate = async (invoiceId, user) => {
+  if (VIEW_ONLY_ROLES.includes(user.roleCode)) {
+    throw new AppError("Anda hanya dapat melihat catatan klien", StatusCodes.FORBIDDEN);
+  }
+  if (CREATE_ROLES.includes(user.roleCode)) return;
+  const assigned = await isEmployeeAssignedToInvoice(invoiceId, user.employeeId);
+  if (!assigned) {
+    throw new AppError("Anda tidak memiliki akses ke invoice ini", StatusCodes.FORBIDDEN);
+  }
+};
+
+const assertCanModify = (note, user) => {
+  if (VIEW_ONLY_ROLES.includes(user.roleCode)) {
+    throw new AppError("Anda hanya dapat melihat catatan klien", StatusCodes.FORBIDDEN);
+  }
+  if (SUPERVISOR_ROLES.includes(user.roleCode)) return;
+  const isAuthor = !!user.employeeId && note.filledByEmployeeId === user.employeeId;
+  if (!isAuthor) {
+    throw new AppError(
+      "Catatan hanya bisa diubah atau dihapus oleh penulisnya, Manager, Owner, atau Super Admin",
+      StatusCodes.FORBIDDEN
+    );
+  }
+};
+
+// Pilihan "Lainnya" (OTHER) wajib disertai keterangan
+const OTHER_TEXT_RULES = [
+  { field: "profession",       textField: "professionOther",        label: "Profesi",                multi: false },
+  { field: "dailyStyling",     textField: "dailyStylingOther",      label: "Styling sehari-hari",    multi: true  },
+  { field: "discoveryChannel", textField: "discoveryChannelDetail", label: "Tau Nia Hair dari mana", multi: false },
+  { field: "reasonForService", textField: "reasonForServiceOther",  label: "Alasan service",         multi: true  },
+  { field: "hesitation",       textField: "hesitationOther",        label: "Yang bikin ragu",        multi: true  },
+];
+
+const assertOtherFilled = (data) => {
+  for (const { field, textField, label, multi } of OTHER_TEXT_RULES) {
+    const value   = data[field];
+    const isOther = multi ? Array.isArray(value) && value.includes("OTHER") : value === "OTHER";
+    if (isOther && !String(data[textField] ?? "").trim()) {
+      throw new AppError(`Pilihan "Lainnya" pada ${label} wajib diisi keterangannya`, StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+  }
+};
 
 // ── List (Semua Catatan) ───────────────────────────────────────────────────────
 
@@ -90,12 +138,8 @@ const createNote = async (body, user) => {
   const existing = await findByInvoiceId(invoiceId);
   if (existing) throw new AppError("Catatan untuk invoice ini sudah ada", StatusCodes.CONFLICT);
 
-  if (!isManager(user.roleCode)) {
-    const assigned = await isEmployeeAssignedToInvoice(invoiceId, user.employeeId);
-    if (!assigned) {
-      throw new AppError("Anda tidak memiliki akses ke invoice ini", StatusCodes.FORBIDDEN);
-    }
-  }
+  await assertCanCreate(invoiceId, user);
+  assertOtherFilled(rest);
 
   return create({
     invoiceId,
@@ -113,19 +157,13 @@ const updateNote = async (id, body, user) => {
   const note = await findById(id);
   if (!note) throw new AppError("Catatan tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  if (!isManager(user.roleCode)) {
-    const assigned = await isEmployeeAssignedToInvoice(note.invoiceId, user.employeeId);
-    if (!assigned) {
-      throw new AppError("Anda tidak memiliki akses ke catatan ini", StatusCodes.FORBIDDEN);
-    }
-  }
+  assertCanModify(note, user);
 
   const { invoiceId, ...rest } = body;
-  return update(id, {
-    ...rest,
-    filledByEmployeeId: user.employeeId ?? note.filledByEmployeeId,
-    filledAt:           new Date(),
-  });
+  assertOtherFilled({ ...note, ...rest });
+
+  // Penulis & tanggal isi asli tidak boleh tertimpa saat diedit (CRM-008) — updatedAt terisi otomatis
+  return update(id, rest);
 };
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
@@ -157,12 +195,7 @@ const uploadNotePhoto = async (id, { url, publicId, type }, user) => {
   const note = await findById(id);
   if (!note) throw new AppError("Catatan tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  if (!isManager(user.roleCode)) {
-    const assigned = await isEmployeeAssignedToInvoice(note.invoiceId, user.employeeId);
-    if (!assigned) {
-      throw new AppError("Anda tidak memiliki akses ke catatan ini", StatusCodes.FORBIDDEN);
-    }
-  }
+  assertCanModify(note, user);
 
   if (type !== "BEFORE" && type !== "AFTER") {
     throw new AppError("type harus BEFORE atau AFTER", StatusCodes.UNPROCESSABLE_ENTITY);
@@ -185,12 +218,7 @@ const deleteNote = async (id, user) => {
   const note = await findById(id);
   if (!note) throw new AppError("Catatan tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  if (!isManager(user.roleCode)) {
-    const assigned = await isEmployeeAssignedToInvoice(note.invoiceId, user.employeeId);
-    if (!assigned) {
-      throw new AppError("Anda tidak memiliki akses ke catatan ini", StatusCodes.FORBIDDEN);
-    }
-  }
+  assertCanModify(note, user);
 
   await remove(id);
 };

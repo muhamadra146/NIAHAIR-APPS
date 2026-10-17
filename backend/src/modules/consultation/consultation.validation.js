@@ -1,5 +1,8 @@
 const { object, string, array, optional, pipe, minLength } = require("valibot");
 
+// Field wajib: kunci yang tidak dikirim diperlakukan sama dengan kosong agar pesan tetap Bahasa Indonesia
+const requiredString = (message) => pipe(optional(string(message), ""), minLength(1, message));
+
 const noteFields = {
   profession:             optional(string()),
   professionOther:        optional(string()),
@@ -17,12 +20,12 @@ const noteFields = {
   reasonSwitchToNia:      optional(string()),
   issuesDuringUse:        optional(string()),
   changesAfterUse:        optional(string()),
-  interestingNote:        pipe(string(), minLength(1, "Catatan wajib diisi")),
+  interestingNote:        requiredString("Catatan wajib diisi"),
   additionalNotes:        optional(string()),
 };
 
 const createNoteSchema = object({
-  invoiceId: pipe(string(), minLength(1, "Invoice wajib dipilih")),
+  invoiceId: requiredString("Invoice wajib dipilih"),
   ...noteFields,
 });
 

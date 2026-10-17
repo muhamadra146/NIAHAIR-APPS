@@ -388,12 +388,12 @@ export function AppointmentCreateForm({ open, onOpenChange, onSubmit, isPending,
             {/* Start / End Time — HH:MM only */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="startTime">Start Time <span className="text-destructive">*</span></Label>
+                <Label htmlFor="startTime">Jam Mulai <span className="text-destructive">*</span></Label>
                 <Input id="startTime" type="time" {...register("startTime")} />
                 {errors.startTime && <p className="text-xs text-destructive">{errors.startTime.message}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="endTime">End Time <span className="text-destructive">*</span></Label>
+                <Label htmlFor="endTime">Jam Selesai <span className="text-destructive">*</span></Label>
                 <Input id="endTime" type="time" {...register("endTime")} />
                 {errors.endTime && <p className="text-xs text-destructive">{errors.endTime.message}</p>}
               </div>
@@ -771,12 +771,12 @@ export function AppointmentUpdateForm({ open, onOpenChange, onSubmit, isPending,
             {/* Start / End Time */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="u-startTime">Start Time <span className="text-destructive">*</span></Label>
+                <Label htmlFor="u-startTime">Jam Mulai <span className="text-destructive">*</span></Label>
                 <Input id="u-startTime" type="time" {...register("startTime")} />
                 {errors.startTime && <p className="text-xs text-destructive">{errors.startTime.message}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="u-endTime">End Time <span className="text-destructive">*</span></Label>
+                <Label htmlFor="u-endTime">Jam Selesai <span className="text-destructive">*</span></Label>
                 <Input id="u-endTime" type="time" {...register("endTime")} />
                 {errors.endTime && <p className="text-xs text-destructive">{errors.endTime.message}</p>}
               </div>

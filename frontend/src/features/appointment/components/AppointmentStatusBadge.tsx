@@ -7,8 +7,9 @@ export const STATUS_LABEL: Record<AppointmentStatus, string> = {
   CHECK_IN:    "Check In",
   IN_PROGRESS: "In Progress",
   COMPLETED:   "Selesai",
-  CANCELLED:   "Cancelled",
-  NO_SHOW:     "Reschedule",
+  CANCELLED:   "Dibatalkan",
+  // Sama dengan Booking Harian. Bukan "Reschedule" — jadwal ulang lewat alur Reschedule.
+  NO_SHOW:     "Tidak Datang",
 };
 
 const STATUS_CLASS: Record<AppointmentStatus, string> = {

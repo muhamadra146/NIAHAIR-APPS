@@ -13,8 +13,8 @@ const serviceLineSchema = z.object({
 export const createAppointmentSchema = z.object({
   customerId:          z.string().min(1, "Pelanggan wajib dipilih"),
   visitDate:           z.string().min(1, "Tanggal kunjungan wajib diisi"),
-  startTime:           z.string().regex(timeRegex, "Isi jam dengan format JJ:MM (mis. 09:00)"),
-  endTime:             z.string().regex(timeRegex, "Isi jam dengan format JJ:MM (mis. 12:00)"),
+  startTime:           z.string().min(1, "Jam mulai wajib diisi").regex(timeRegex, "Isi jam dengan format JJ:MM (mis. 09:00)"),
+  endTime:             z.string().min(1, "Jam selesai wajib diisi").regex(timeRegex, "Isi jam dengan format JJ:MM (mis. 12:00)"),
   type:                z.enum(["SALON", "HOME_SERVICE"]).default("SALON"),
   homeServiceAddress:  z.string().optional().or(z.literal("")),
   notes:               z.string().optional().or(z.literal("")),
@@ -41,10 +41,16 @@ export const changeStatusSchema = z.object({
     "BOOKED", "CONFIRMED", "CHECK_IN", "IN_PROGRESS",
     "COMPLETED", "CANCELLED", "NO_SHOW",
   ]),
-  notes: z.string().optional().or(z.literal("")),
+  notes:        z.string().optional().or(z.literal("")),
+  cancelReason: z.string().optional().or(z.literal("")),
+}).superRefine((v, ctx) => {
+  // Membatalkan booking wajib menyertakan alasan (backend menolak tanpa alasan)
+  if (v.status === "CANCELLED" && !v.cancelReason?.trim()) {
+    ctx.addIssue({ code: "custom",path: ["cancelReason"], message: "Alasan pembatalan wajib diisi" });
+  }
 });
 
-export type ServiceLineFormValues       = z.infer<typeof serviceLineSchema>;
+export type ServiceLineFormValues      = z.infer<typeof serviceLineSchema>;
 export type CreateAppointmentFormValues = z.infer<typeof createAppointmentSchema>;
 export type UpdateAppointmentFormValues = z.infer<typeof updateAppointmentSchema>;
 export type ChangeStatusFormValues      = z.infer<typeof changeStatusSchema>;

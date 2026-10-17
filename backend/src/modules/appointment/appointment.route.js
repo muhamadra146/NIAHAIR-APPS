@@ -23,14 +23,20 @@ const {
 
 const router = Router();
 
-router.get("/",    authenticate, getAllController);
-router.get("/:id", authenticate, getByIdController);
+// Hak akses mengikuti menu (sidebarNav):
+//   Baca : Booking (POS + OFFICE/FINANCE lihat saja) + Booking Harian / Dashboard staf (STAFF_OPERASIONAL)
+//   Tulis: POS saja — OFFICE, FINANCE & STAFF_OPERASIONAL view-only. INVENTORY tidak punya menu booking.
+const READ_ROLES  = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER, ROLES.STAFF_OPERASIONAL, ROLES.OFFICE, ROLES.FINANCE];
+const WRITE_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER];
+
+router.get("/",    authenticate, authorize(...READ_ROLES), getAllController);
+router.get("/:id", authenticate, authorize(...READ_ROLES), getByIdController);
 
 router.post(
   "/",
   authenticate,
   requireBranch,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER, ROLES.STAFF_OPERASIONAL, ROLES.OFFICE),
+  authorize(...WRITE_ROLES),
   validate(createAppointmentSchema),
   createController
 );
@@ -38,7 +44,7 @@ router.post(
 router.patch(
   "/:id",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER),
+  authorize(...WRITE_ROLES),
   validate(updateAppointmentSchema),
   updateController
 );
@@ -54,7 +60,7 @@ router.delete(
 router.patch(
   "/:id/status",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.CASHIER),
+  authorize(...WRITE_ROLES),
   validate(changeStatusSchema),
   changeStatusController
 );
@@ -62,7 +68,7 @@ router.patch(
 router.patch(
   "/:id/reschedule",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.OFFICE, ROLES.MANAGER, ROLES.CASHIER),
+  authorize(...WRITE_ROLES),
   validate(rescheduleSchema),
   rescheduleController
 );
@@ -71,7 +77,7 @@ router.patch(
 router.patch(
   "/:id/reschedule/:historyId",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.OFFICE, ROLES.MANAGER, ROLES.CASHIER),
+  authorize(...WRITE_ROLES),
   validate(rescheduleSchema),
   updateRescheduleController
 );
