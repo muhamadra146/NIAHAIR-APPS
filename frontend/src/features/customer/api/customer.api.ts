@@ -28,6 +28,12 @@ export async function updateCustomer(id: string, input: UpdateCustomerInput): Pr
   return data.data;
 }
 
+/** Kirim ulang pelanggan ke Accurate (tombol "Coba lagi") */
+export async function syncCustomerToAccurate(id: string): Promise<string> {
+  const { data } = await api.post<ApiResponse<unknown>>(`/customers/${id}/sync/accurate`);
+  return data.message;
+}
+
 export async function fetchMembershipOptions(): Promise<MembershipOption[]> {
   const { data } = await api.get<ApiResponse<PaginatedResponse<MembershipOption>>>("/memberships", {
     params: { limit: 100 },

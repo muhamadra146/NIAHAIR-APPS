@@ -6,6 +6,7 @@ const { resolveOrderBy } = require("../../utils/sort");
 const cloudinary = require("../../config/cloudinary");
 const divisionRepo   = require("../division/division.repository");
 const divisionAccess = require("../division/division.access");
+const { escapeLike } = require("../customer/customer.fields");
 
 // Deteksi resource_type dari URL Cloudinary (/raw/upload/ = file, sisanya = image)
 const deleteCloudinaryFile = async (publicId, url) => {
@@ -39,6 +40,7 @@ const {
   update,
   updateFiles,
   updateBranches,
+  syncPrimaryBranch,
   softDelete,
   hardDelete,
   countHistory,
@@ -81,12 +83,14 @@ const getAll = async ({ page, limit, search, isActive, branchId, sortBy }, actor
   const andClauses = [];
 
   if (search) {
+    // "%" / "_" dibaca harfiah, bukan wildcard LIKE
+    const term = escapeLike(search);
     andClauses.push({
       OR: [
-        { name:         { contains: search, mode: "insensitive" } },
-        { email:        { contains: search, mode: "insensitive" } },
-        { phone:        { contains: search, mode: "insensitive" } },
-        { employeeCode: { contains: search, mode: "insensitive" } },
+        { name:         { contains: term, mode: "insensitive" } },
+        { email:        { contains: term, mode: "insensitive" } },
+        { phone:        { contains: term, mode: "insensitive" } },
+        { employeeCode: { contains: term, mode: "insensitive" } },
       ],
     });
   }
@@ -156,6 +160,8 @@ const createEmployee = async (body, actor) => {
   if (!body.employeeCode) {
     body.employeeCode = await generateNextCode();
   } else {
+    // Kode disimpan huruf besar; dibandingkan tanpa beda huruf besar/kecil (B11)
+    body.employeeCode = String(body.employeeCode).trim().toUpperCase();
     const existing = await findByEmployeeCode(body.employeeCode);
     if (existing) throw new AppError("Kode karyawan sudah digunakan", StatusCodes.CONFLICT);
   }
@@ -172,20 +178,29 @@ const createEmployee = async (body, actor) => {
   if (body.birthDate)  body.birthDate  = new Date(body.birthDate);
   if (body.resignDate) body.resignDate = new Date(body.resignDate);
 
+  let employee;
   try {
-    return await create(body);
+    employee = await create(body);
   } catch (err) {
     if (err?.code === "P2002" && err?.meta?.target?.includes("employeeCode")) {
       body.employeeCode = await generateNextCode();
-      return create(body);
+      employee = await create(body);
+    } else {
+      throw err;
     }
-    throw err;
   }
+
+  // Home Branch = cabang Utama karyawan (EMP-005, B15)
+  if (employee?.homeBranchId) {
+    return (await syncPrimaryBranch(employee.id, employee.homeBranchId)) ?? employee;
+  }
+  return employee;
 };
 
 const updateEmployee = async (id, body, actor) => {
   const employee = await findById(id);
   if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (body.homeBranchId === "") body.homeBranchId = null;
   await applyDivisionFields(body, employee, actor);
 
   // Status aktif hanya diubah Owner / Super Admin (penonaktifan lewat /deactivate)
@@ -203,7 +218,7 @@ const updateEmployee = async (id, body, actor) => {
 
   // EMP-001: kode karyawan tidak boleh berubah setelah dibuat
   if (body.employeeCode !== undefined) {
-    if (body.employeeCode !== employee.employeeCode) {
+    if (String(body.employeeCode).trim().toUpperCase() !== String(employee.employeeCode).toUpperCase()) {
       throw new AppError("Kode karyawan tidak dapat diubah", StatusCodes.UNPROCESSABLE_ENTITY);
     }
     delete body.employeeCode;
@@ -215,7 +230,7 @@ const updateEmployee = async (id, body, actor) => {
   const emailChanged = body.email !== undefined && (body.email || null) !== (normalizeEmail(employee.email) ?? null);
   if (emailChanged) {
     if (!body.email && linkedUser) {
-      throw new AppError("Email wajib diisi karena dipakai untuk login karyawan ini", StatusCodes.BAD_REQUEST);
+      throw new AppError("Email wajib diisi karena karyawan punya akun login", StatusCodes.BAD_REQUEST);
     }
     if (body.email) {
       const existing = await findByEmail(body.email);
@@ -229,7 +244,16 @@ const updateEmployee = async (id, body, actor) => {
   if (body.birthDate)  body.birthDate  = new Date(body.birthDate);
   if (body.resignDate) body.resignDate = new Date(body.resignDate);
 
-  return update(id, body, emailChanged && linkedUser ? linkedUser.id : null);
+  // Email tidak berubah — jangan tulis ulang
+  if (body.email !== undefined && !emailChanged) delete body.email;
+
+  const updated = await update(id, body, emailChanged && linkedUser ? linkedUser.id : null);
+
+  // Home Branch dikirim → cabang Utama ikut Home Branch (EMP-005, B15)
+  if (body.homeBranchId !== undefined) {
+    return (await syncPrimaryBranch(id, body.homeBranchId || null)) ?? updated;
+  }
+  return updated;
 };
 
 const updateEmployeeBranches = async (id, branchIds) => {

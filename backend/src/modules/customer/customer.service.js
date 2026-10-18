@@ -23,6 +23,7 @@ const {
   update,
 } = require("./customer.repository");
 const { createSyncJob } = require("../syncQueue/syncQueue.service");
+const { canonicalPhone, escapeLike } = require("./customer.fields");
 
 // ── Auto generate customer number: CUS-000001 ─────────────────────────
 const buildCustomerNo = async () => {
@@ -37,12 +38,19 @@ const getAll = async ({ page, limit, search, isActive, syncStatus, sortBy, membe
   const where = {};
 
   if (search) {
+    // "%" / "_" dibaca harfiah, bukan wildcard LIKE
+    const term = escapeLike(search);
     where.OR = [
-      { name:       { contains: search, mode: "insensitive" } },
-      { email:      { contains: search, mode: "insensitive" } },
-      { mobilePhone: { contains: search, mode: "insensitive" } },
-      { customerNo:  { contains: search, mode: "insensitive" } },
+      { name:       { contains: term, mode: "insensitive" } },
+      { email:      { contains: term, mode: "insensitive" } },
+      { mobilePhone: { contains: term, mode: "insensitive" } },
+      { customerNo:  { contains: term, mode: "insensitive" } },
     ];
+    // Cari nomor "0812…" juga menemukan data tersimpan "62812…"
+    const phone = canonicalPhone(search);
+    if (/^\d{4,}$/.test(phone) && phone !== search) {
+      where.OR.push({ mobilePhone: { contains: phone } });
+    }
   }
 
   if (isActive !== undefined && isActive !== "") {
@@ -83,7 +91,11 @@ const getById = async (id) => {
 };
 
 const createCustomer = async (body) => {
-  // CRM-001 + CRM-005: Duplicate detection by phone
+  // Nomor HP & email disimpan dalam bentuk baku (628xx, huruf kecil)
+  if (body.mobilePhone) body.mobilePhone = canonicalPhone(body.mobilePhone);
+  if (typeof body.email === "string") body.email = body.email.trim().toLowerCase() || null;
+
+  // CRM-001 + CRM-005: Duplicate detection by phone (08xx = 628xx = +62 8xx)
   if (body.mobilePhone) {
     const byPhone = await findByPhone(body.mobilePhone);
     if (byPhone) {
@@ -94,7 +106,7 @@ const createCustomer = async (body) => {
     }
   }
 
-  // CRM-001: Duplicate detection by email
+  // CRM-001: Duplicate detection by email (tanpa beda huruf besar/kecil)
   if (body.email) {
     const byEmail = await findByEmail(body.email);
     if (byEmail) {
@@ -136,20 +148,27 @@ const updateCustomer = async (id, body) => {
   const customer = await findById(id);
   if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  // CRM-005: Phone uniqueness check on update
-  if (body.mobilePhone && body.mobilePhone !== customer.mobilePhone) {
-    const byPhone = await findByPhone(body.mobilePhone);
-    if (byPhone) {
-      throw new AppError(
-        `Nomor telepon ${body.mobilePhone} sudah digunakan oleh customer lain (${byPhone.name})`,
-        StatusCodes.CONFLICT,
-      );
+  // CRM-005: Phone uniqueness check on update (dibandingkan dalam bentuk baku)
+  if (body.mobilePhone) {
+    body.mobilePhone = canonicalPhone(body.mobilePhone);
+    if (body.mobilePhone === canonicalPhone(customer.mobilePhone ?? "")) {
+      // Nomor sama dengan yang tersimpan — jangan tulis ulang format data lama
+      delete body.mobilePhone;
+    } else {
+      const byPhone = await findByPhone(body.mobilePhone, id);
+      if (byPhone) {
+        throw new AppError(
+          `Nomor telepon ${body.mobilePhone} sudah digunakan oleh customer lain (${byPhone.name})`,
+          StatusCodes.CONFLICT,
+        );
+      }
     }
   }
 
-  // CRM-001: Email uniqueness check on update
-  if (body.email && body.email !== customer.email) {
-    const byEmail = await findByEmail(body.email);
+  // CRM-001: Email uniqueness check on update (tanpa beda huruf besar/kecil)
+  if (typeof body.email === "string") body.email = body.email.trim().toLowerCase() || null;
+  if (body.email && body.email !== (customer.email ?? "").trim().toLowerCase()) {
+    const byEmail = await findByEmail(body.email, id);
     if (byEmail) {
       throw new AppError(
         `Email ${body.email} sudah digunakan oleh customer lain (${byEmail.name})`,
@@ -161,9 +180,25 @@ const updateCustomer = async (id, body) => {
   // CRM-002: customerNo tidak boleh diubah
   delete body.customerNo;
 
+  // null = kosongkan tanggal lahir (B4)
   if (body.birthDate) body.birthDate = new Date(body.birthDate);
 
-  return update(id, body);
+  // Perubahan data pelanggan ikut dikirim ke Accurate (B3) — tandai menunggu sinkron
+  const pushToAccurate = ACCURATE_FIELDS.some((f) => body[f] !== undefined && body[f] !== customer[f]);
+  const updated = await update(id, pushToAccurate ? { ...body, syncStatus: "PENDING", syncError: null } : body);
+
+  if (pushToAccurate) {
+    await createSyncJob({
+      entityType: "CUSTOMER",
+      entityId:   id,
+      direction:  "APP_TO_ACCURATE",
+    });
+  }
+
+  return updated;
 };
+
+// Kolom yang dikirim ke Accurate (lihat customer.push.mapper)
+const ACCURATE_FIELDS = ["name", "mobilePhone", "email", "address", "city", "province", "notes"];
 
 module.exports = { getAll, getById, createCustomer, updateCustomer };

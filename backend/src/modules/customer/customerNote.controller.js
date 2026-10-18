@@ -14,8 +14,11 @@ const getNotesController = async (req, res, next) => {
 
 const createNoteController = async (req, res, next) => {
   try {
-    const creatorName = req.user?.name ?? req.user?.email ?? null;
-    const note = await createNote(req.params.id, req.body, creatorName);
+    // Penulis = nama karyawan pemilik akun (bukan email) — B7
+    const note = await createNote(req.params.id, req.body, {
+      userId:   req.user?.id ?? null,
+      fallback: req.user?.name ?? req.user?.email ?? null,
+    });
     return created(res, note, "Note created");
   } catch (err) {
     next(err);

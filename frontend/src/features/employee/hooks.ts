@@ -61,15 +61,13 @@ export function useNextEmployeeCode() {
 
 // ── Employee mutations ────────────────────────────────────────────────────────
 
+// Tambah / ubah / upload: toast ditampilkan halaman pemanggil setelah SEMUA langkah
+// (data, akses cabang, file) selesai — satu toast yang benar (B12/B14)
 export function useCreateEmployee() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateEmployeeInput) => createEmployee(input),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["employees"] });
-      toast.success("Karyawan berhasil ditambahkan");
-    },
-    onError: (err: Error) => toast.error(err.message),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); },
   });
 }
 
@@ -77,11 +75,7 @@ export function useUpdateEmployee(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateEmployeeInput) => updateEmployee(id, input),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["employees"] });
-      toast.success("Data karyawan diperbarui");
-    },
-    onError: (err: Error) => toast.error(err.message),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); },
   });
 }
 
@@ -91,6 +85,18 @@ export function useUploadEmployeeFiles() {
     mutationFn: ({ id, files }: { id: string; files: UploadEmployeeFilesInput }) =>
       uploadEmployeeFiles(id, files),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["employees"] }),
+  });
+}
+
+/** Aktifkan kembali karyawan nonaktif (EMP-019) — Owner / Super Admin */
+export function useReactivateEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => updateEmployee(id, { isActive: true }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      toast.success("Karyawan berhasil diaktifkan kembali");
+    },
     onError: (err: Error) => toast.error(err.message),
   });
 }

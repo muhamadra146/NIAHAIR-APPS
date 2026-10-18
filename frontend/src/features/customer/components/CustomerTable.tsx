@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/utils";
 import type { Customer } from "../types";
+import { customerSyncView, SYNC_LABEL } from "../syncStatus";
 
 interface CustomerTableProps {
   customers: Customer[];
@@ -14,12 +15,19 @@ function getInitials(name: string) {
   return name.trim().charAt(0).toUpperCase();
 }
 
+const SYNC_CLASS = {
+  SYNCED:  "bg-emerald-50 text-emerald-700 border-emerald-200",
+  FAILED:  "bg-red-50 text-red-700 border-red-200",
+  PENDING: "bg-amber-50 text-amber-700 border-amber-200",
+} as const;
+
 function AccurateBadge({ customer }: { customer: Customer }) {
-  if (customer.accurateCustomerId)
-    return <Badge variant="outline" className="text-xs rounded-lg px-2 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-200">Synced</Badge>;
-  if (customer.syncStatus === "FAILED")
-    return <Badge variant="outline" className="text-xs rounded-lg px-2 py-0.5 bg-red-50 text-red-700 border-red-200">Gagal</Badge>;
-  return <Badge variant="outline" className="text-xs rounded-lg px-2 py-0.5 bg-amber-50 text-amber-700 border-amber-200">Pending</Badge>;
+  const view = customerSyncView(customer);
+  return (
+    <Badge variant="outline" className={`text-xs rounded-lg px-2 py-0.5 ${SYNC_CLASS[view]}`} title={customer.syncError ?? undefined}>
+      {SYNC_LABEL[view]}
+    </Badge>
+  );
 }
 
 function LoadingState() {

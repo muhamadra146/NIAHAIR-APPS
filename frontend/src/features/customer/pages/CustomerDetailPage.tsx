@@ -18,6 +18,13 @@ import { CustomerForm } from "../components/CustomerForm";
 import { useInvoices, useDeposits } from "@/features/invoice/hooks";
 import { useAppointments } from "@/features/appointment/hooks";
 import type { CustomerFormValues } from "../schemas/customer.schema";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/authStore";
+import { toast } from "@/lib/toast";
+import { syncCustomerToAccurate } from "../api/customer.api";
+import { toUpdateCustomerInput } from "../customerInput";
+import { customerPermissions } from "../permissions";
+import { customerSyncView, SYNC_LABEL } from "../syncStatus";
 
 function getInitials(name: string): string {
   const words = name.trim().split(/\s+/);
@@ -29,6 +36,9 @@ export function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: customer, isLoading, isError } = useCustomer(id!);
   const updateMutation = useUpdateCustomer(id!);
+  const queryClient = useQueryClient();
+  const roleCode = useAuthStore((s) => s.user?.roleCode);
+  const perm = customerPermissions(roleCode);
   const [formOpen, setFormOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -57,24 +67,34 @@ export function CustomerDetailPage() {
     .reduce((s, i) => s + Number(i.outstandingAmount), 0);
 
   async function handleUpdate(values: CustomerFormValues) {
+    if (!customer) return;
     setFormError(null);
+    const input = toUpdateCustomerInput(values, customer);
+    if (Object.keys(input).length === 0) {
+      toast.info("Tidak ada perubahan");
+      setFormOpen(false);
+      return;
+    }
     try {
-      await updateMutation.mutateAsync({
-        name:        values.name,
-        mobilePhone: values.mobilePhone || undefined,
-        email:       values.email       || undefined,
-        gender:      (values.gender as "MALE" | "FEMALE" | undefined) || undefined,
-        birthDate:   values.birthDate   || undefined,
-        address:     values.address     || undefined,
-        city:        values.city        || undefined,
-        province:    values.province    || undefined,
-        notes:       values.notes       || undefined,
-      });
+      await updateMutation.mutateAsync(input);
+      toast.success("Data pelanggan diperbarui");
       setFormOpen(false);
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Gagal memperbarui pelanggan");
     }
   }
+
+  const retrySync = useMutation({
+    mutationFn: () => syncCustomerToAccurate(id!),
+    onSuccess: (message) => {
+      toast.success(message || "Pelanggan berhasil disinkronkan ke Accurate");
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Sinkron ke Accurate gagal");
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+    },
+  });
 
   if (isLoading) {
     return (
@@ -95,12 +115,14 @@ export function CustomerDetailPage() {
     return (
       <PageContainer>
         <div className="py-12 text-center text-sm text-muted-foreground">
-          Customer tidak ditemukan.{" "}
+          Pelanggan tidak ditemukan.{" "}
           <Link to="/customers" className="text-primary underline">Kembali ke daftar</Link>
         </div>
       </PageContainer>
     );
   }
+
+  const syncView = customerSyncView(customer);
 
   const statCards = [
     {
@@ -142,7 +164,7 @@ export function CustomerDetailPage() {
         >
           <Link to="/customers">
             <ChevronLeft className="mr-1 h-4 w-4" />
-            Semua Customer
+            Semua Pelanggan
           </Link>
         </Button>
 
@@ -178,21 +200,21 @@ export function CustomerDetailPage() {
                         {customer.membership.name}
                       </Badge>
                     )}
-                    {customer.accurateCustomerId ? (
+                    {syncView === "SYNCED" ? (
                       <Badge
                         variant="outline"
                         className="border-emerald-200 bg-emerald-50 text-emerald-700"
                       >
                         <CheckCircle2 className="mr-1 h-3 w-3" />
-                        Synced
+                        {SYNC_LABEL.SYNCED}
                       </Badge>
-                    ) : customer.syncStatus === "FAILED" ? (
+                    ) : syncView === "FAILED" ? (
                       <Badge
                         variant="outline"
                         className="border-red-200 bg-red-50 text-red-700"
                       >
                         <Ban className="mr-1 h-3 w-3" />
-                        Sync Failed
+                        {SYNC_LABEL.FAILED}
                       </Badge>
                     ) : (
                       <Badge
@@ -200,41 +222,67 @@ export function CustomerDetailPage() {
                         className="border-amber-200 bg-amber-50 text-amber-700"
                       >
                         <Clock className="mr-1 h-3 w-3" />
-                        Pending Sync
+                        {SYNC_LABEL.PENDING}
                       </Badge>
                     )}
                     {!customer.isActive && (
                       <Badge variant="secondary">Nonaktif</Badge>
                     )}
                   </div>
+                  {/* Sinkron Accurate gagal: tampilkan pesan Accurate + Coba lagi (B5) */}
+                  {syncView === "FAILED" && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                      <span>Gagal sinkron ke Accurate{customer.syncError ? `: ${customer.syncError}` : ""}</span>
+                      {perm.canRetrySync && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 border-red-300 text-xs text-red-700 hover:bg-red-100"
+                          onClick={() => retrySync.mutate()}
+                          disabled={retrySync.isPending}
+                        >
+                          {retrySync.isPending ? "Mengirim…" : "Coba lagi"}
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Right: quick actions */}
+              {/* Tombol hanya untuk peran yang diizinkan backend (B6) */}
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => { setFormError(null); setFormOpen(true); }}
-                >
-                  <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                  Edit
-                </Button>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to={`/appointments?customerId=${customer.id}`}>
-                    + Booking
-                  </Link>
-                </Button>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to={`/invoices?customerId=${customer.id}`}>
-                    + Invoice
-                  </Link>
-                </Button>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to={`/deposits?customerId=${customer.id}`}>
-                    + Deposit
-                  </Link>
-                </Button>
+                {perm.canEdit && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { setFormError(null); setFormOpen(true); }}
+                  >
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                )}
+                {perm.canCreateBooking && (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={`/appointments?customerId=${customer.id}`}>
+                      + Booking
+                    </Link>
+                  </Button>
+                )}
+                {perm.canCreateInvoice && (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={`/invoices?customerId=${customer.id}`}>
+                      + Invoice
+                    </Link>
+                  </Button>
+                )}
+                {perm.canCreateDeposit && (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={`/deposits?customerId=${customer.id}`}>
+                      + Deposit
+                    </Link>
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>

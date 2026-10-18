@@ -35,6 +35,10 @@ import { SalarySettingForm } from "../components/SalarySettingForm";
 import { OmsetBonusTierTab } from "../../settings/components/omsetBonusTier/OmsetBonusTierTab";
 import type { UpdateEmployeeFormValues, SalarySettingFormValues } from "../schemas/employee.schema";
 import type { SalarySetting } from "../types";
+import { branchesChanged, canEditBranchAccess, toUpdateEmployeeInput, uploadMsg } from "../employeeInput";
+
+// Edit profil karyawan — sama dengan backend employee.route EMPLOYEE_WRITE_ROLES
+const EMPLOYEE_WRITE_ROLES: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER", "OFFICE"];
 
 async function changeMyPassword(currentPassword: string, newPassword: string) {
   const { data } = await api.patch<ApiResponse<{ message: string }>>("/users/me/password", {
@@ -81,6 +85,7 @@ export function EmployeeDetailPage() {
   const { user } = useAuthStore();
   const isOwnProfile = user?.employee?.id === id;
   const canSalary    = user ? SALARY_ROLES.includes(user.roleCode) : false;
+  const canEdit      = user ? EMPLOYEE_WRITE_ROLES.includes(user.roleCode) : false;
 
   const { data: employee, isLoading, isError } = useEmployee(id!);
   const updateMutation       = useUpdateEmployee(id!);
@@ -126,33 +131,30 @@ export function EmployeeDetailPage() {
   const updateSsMutation = useUpdateSalarySetting(id!, editSs?.id ?? "");
 
   async function handleUpdate(values: UpdateEmployeeFormValues, files: { ktpFile?: File | null; contractFile?: File | null }) {
+    if (!employee) return;
     setEditError(null);
+    // Satu toast untuk seluruh simpan (data + akses cabang + file) — B12
+    let step = "data karyawan";
     try {
-      await updateMutation.mutateAsync({
-        name:              values.name,
-        roleId:            values.roleId,
-        employeeCode:      values.employeeCode     || undefined,
-        phone:             values.phone            || undefined,
-        email:             values.email            || undefined,
-        hireDate:          values.hireDate         || undefined,
-        birthDate:         values.birthDate        || undefined,
-        address:           values.address          || undefined,
-        emergencyContact:  values.emergencyContact || undefined,
-        nikKtp:            values.nikKtp           || undefined,
-        resignDate:        values.resignDate       || undefined,
-        commissionEnabled: values.commissionEnabled,
-        payDay:            values.payDay ?? null,
-        isActive:          values.isActive,
-        homeBranchId:      values.homeBranchId     || null,
-        ...(isFullAccess(user) ? { divisionId: values.divisionId || null, isDivisionManager: !!values.divisionId && !!values.isDivisionManager } : {}),
-      });
-      await updateBranchMutation.mutateAsync({ branchIds: values.branchIds ?? [] });
+      await updateMutation.mutateAsync(toUpdateEmployeeInput(values, employee, isFullAccess(user)));
+      // Akses cabang hanya Super Admin & hanya bila berubah (PATCH /branches = SUPER_ADMIN)
+      if (canEditBranchAccess(user?.roleCode) && branchesChanged(values.branchIds, employee)) {
+        step = "akses cabang";
+        await updateBranchMutation.mutateAsync({ branchIds: values.branchIds ?? [] });
+      }
       if (files.ktpFile || files.contractFile) {
+        step = "file";
         await uploadFilesMutation.mutateAsync({ id: id!, files });
       }
+      toast.success("Data karyawan diperbarui");
       setEditOpen(false);
     } catch (err: unknown) {
-      setEditError(apiErr(err, "Gagal memperbarui"));
+      const msg = apiErr(err, "Gagal memperbarui");
+      const full = step === "data karyawan"
+        ? msg
+        : `Data karyawan tersimpan, tetapi ${step} gagal disimpan: ${uploadMsg(msg)}`;
+      toast.error(full);
+      setEditError(full);
     }
   }
 
@@ -221,7 +223,8 @@ export function EmployeeDetailPage() {
   }
 
   const activeSetting = salarySettings.find((s) => s.isActive) ?? null;
-  const primaryBranch = employee.employeeBranches?.find((b) => b.isPrimary)?.branch;
+  // Cabang Utama = Home Branch (EMP-005, B15)
+  const primaryBranch = employee.homeBranch ?? employee.employeeBranches?.find((b) => b.isPrimary)?.branch;
 
   return (
     <PageContainer>
@@ -242,15 +245,17 @@ export function EmployeeDetailPage() {
               <div className={`flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br ${avatarColor(employee.name)} text-white text-2xl font-bold shadow-md ring-4 ring-white`}>
                 {getInitials(employee.name)}
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => { setEditError(null); setEditOpen(true); }}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                Edit Profil
-              </Button>
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => { setEditError(null); setEditOpen(true); }}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit Profil
+                </Button>
+              )}
             </div>
 
             {/* Name & identity */}
@@ -365,22 +370,43 @@ export function EmployeeDetailPage() {
               />
             </InfoSection>
 
+            {/* Penempatan: Cabang Utama, Divisi, Akun login (B15/B16) */}
+            <InfoSection title="Penempatan & Akun" icon={<Building2 className="h-4 w-4" />}>
+              <InfoRow icon={<Building2 className="h-3.5 w-3.5" />} label="Cabang Utama" value={employee.homeBranch?.name ?? null} />
+              <InfoRow
+                icon={<User className="h-3.5 w-3.5" />}
+                label="Divisi"
+                value={employee.division
+                  ? `${employee.division.name}${employee.isDivisionManager ? " (Manager Divisi)" : ""}`
+                  : null}
+              />
+              {employee.user !== undefined && (
+                <InfoRow
+                  icon={<Lock className="h-3.5 w-3.5" />}
+                  label="Akun Login"
+                  value={employee.user
+                    ? `Ada — ${employee.user.email}`
+                    : <span className="font-normal text-muted-foreground">Belum punya akun login</span>}
+                />
+              )}
+            </InfoSection>
+
             {/* Branch assignments */}
             {employee.employeeBranches && employee.employeeBranches.length > 0 && (
-              <InfoSection title="Cabang" icon={<Building2 className="h-4 w-4" />}>
+              <InfoSection title="Bisa Bekerja Di" icon={<Building2 className="h-4 w-4" />}>
                 <div className="flex flex-wrap gap-2">
                   {employee.employeeBranches.map((eb) => (
                     <div
                       key={eb.id}
                       className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium ${
-                        eb.isPrimary
+                        eb.branch.id === employee.homeBranchId
                           ? "border-primary/30 bg-primary/5 text-primary"
                           : "border-border bg-muted/30 text-muted-foreground"
                       }`}
                     >
                       <Building2 className="h-3 w-3" />
                       {eb.branch.name}
-                      {eb.isPrimary && <span className="ml-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px]">Utama</span>}
+                      {(eb.branch.id === employee.homeBranchId) && <span className="ml-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px]">Utama</span>}
                     </div>
                   ))}
                 </div>

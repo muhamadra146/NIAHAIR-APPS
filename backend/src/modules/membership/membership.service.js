@@ -34,9 +34,21 @@ const normalizeCategoryIds = async (categoryIds) => {
   return ids;
 };
 
+/** Nama paket unik tanpa beda huruf besar/kecil (B8) */
+const assertUniqueName = async (name, excludeId = null) => {
+  if (name === undefined) return;
+  const dup = await repo.findByName(name, excludeId);
+  if (dup) {
+    throw new AppError(`Nama paket "${dup.name}" sudah dipakai`, StatusCodes.CONFLICT, [
+      { field: "name", message: "Nama paket sudah dipakai" },
+    ]);
+  }
+};
+
 const create = async (body) => {
   const { name, price, durationDays, discountType, discountValue } = body;
   assertDiscount(discountType, discountValue);
+  await assertUniqueName(name);
   // Tidak dikirim → default kategori JASA (semua treatment)
   let categoryIds = await normalizeCategoryIds(body.categoryIds);
   if (categoryIds === undefined) {
@@ -50,6 +62,7 @@ const update = async (id, body) => {
   const existing = await getById(id);
   const { name, price, durationDays, discountType, discountValue } = body;
   assertDiscount(discountType ?? existing.discountType, discountValue ?? existing.discountValue);
+  await assertUniqueName(name, id);
   const data = {};
   if (name          !== undefined) data.name          = name;
   if (price         !== undefined) data.price         = price;
@@ -92,7 +105,16 @@ const remove = async (id) => {
     );
   }
 
-  // Riwayat (EXPIRED/CANCELLED) bisa dihapus bersama membership dalam satu transaksi
+  // Keputusan owner 2026-10-18: paket yang pernah dipakai (ada riwayat langganan apa pun
+  // statusnya) tidak boleh dihapus — riwayat pelanggan harus tetap ada.
+  if ((await repo.countUsageHistory(id)) > 0) {
+    throw new AppError(
+      "Paket sudah pernah dipakai pelanggan sehingga tidak bisa dihapus (riwayat membership harus tetap tersimpan)",
+      StatusCodes.CONFLICT
+    );
+  }
+
+  // Paket yang belum pernah dipakai: hapus (deleteMany hanya pengaman bila ada data baru di antara cek & hapus)
   return prisma.$transaction(async (tx) => {
     await tx.membershipHistory.deleteMany({ where: { membershipId: id } });
     await tx.customerMembership.deleteMany({ where: { membershipId: id } });

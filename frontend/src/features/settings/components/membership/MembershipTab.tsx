@@ -12,13 +12,10 @@ import { useMemberships, useCreateMembership, useUpdateMembership, useDeleteMemb
 import { useItemCategories } from "@/features/inventory/hooks";
 import type { ItemCategory } from "@/features/inventory/types";
 import type { Membership, CreateMembershipInput, UpdateMembershipInput, DiscountType } from "../../types";
+import { membershipApiErrors, validateMembershipForm, type MembershipFieldErrors } from "./membershipForm";
 
-function apiErr(err: unknown) {
-  if (err && typeof err === "object" && "response" in err) {
-    const r = (err as { response?: { data?: { message?: string } } }).response;
-    if (r?.data?.message) return r.data.message;
-  }
-  return err instanceof Error ? err.message : "Terjadi kesalahan";
+function FieldError({ msg }: { msg?: string }) {
+  return msg ? <p className="text-xs text-red-600">{msg}</p> : null;
 }
 
 const IDR = (v: number | string) =>
@@ -106,6 +103,7 @@ export function MembershipTab() {
   const [editItem, setEditItem]   = useState<Membership | null>(null);
   const [form,     setForm]       = useState<FormState>(EMPTY);
   const [error,    setError]      = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<MembershipFieldErrors>({});
   const [deleteId, setDeleteId]   = useState<string | null>(null);
 
   const { data, isLoading } = useMemberships({ limit: 100 });
@@ -123,6 +121,7 @@ export function MembershipTab() {
     const jasa = categories.find((c) => !c.parentId && c.name.toUpperCase() === "JASA");
     setForm({ ...EMPTY, categoryIds: jasa ? [jasa.id] : [] });
     setError(null);
+    setFieldErrors({});
     setFormOpen(true);
   }
 
@@ -130,15 +129,19 @@ export function MembershipTab() {
     setEditItem(m);
     setForm(toForm(m));
     setError(null);
+    setFieldErrors({});
     setFormOpen(true);
   }
 
   async function handleSubmit() {
     setError(null);
+    const clientErrors = validateMembershipForm(form);
+    setFieldErrors(clientErrors);
+    if (Object.keys(clientErrors).length > 0) return;
     try {
       if (editItem) {
         const input: UpdateMembershipInput = {
-          name:          form.name,
+          name:          form.name.trim(),
           price:         Number(form.price),
           durationDays:  Number(form.durationDays),
           discountType:  form.discountType,
@@ -148,7 +151,7 @@ export function MembershipTab() {
         await updateMut.mutateAsync(input);
       } else {
         const input: CreateMembershipInput = {
-          name:          form.name,
+          name:          form.name.trim(),
           price:         Number(form.price),
           durationDays:  Number(form.durationDays),
           discountType:  form.discountType,
@@ -158,7 +161,11 @@ export function MembershipTab() {
         await createMut.mutateAsync(input);
       }
       setFormOpen(false);
-    } catch (err) { setError(apiErr(err)); }
+    } catch (err) {
+      const { message, fields } = membershipApiErrors(err);
+      setFieldErrors(fields);
+      setError(message);
+    }
   }
 
   async function handleDelete() {
@@ -249,8 +256,10 @@ export function MembershipTab() {
               <Input
                 placeholder="cth: Gold Member"
                 value={form.name}
+                maxLength={100}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               />
+              <FieldError msg={fieldErrors.name} />
             </div>
             <div className="space-y-1.5">
               <Label>Harga (Rp)</Label>
@@ -259,6 +268,7 @@ export function MembershipTab() {
                 value={form.price}
                 onValueChange={(v) => setForm((f) => ({ ...f, price: v }))}
               />
+              <FieldError msg={fieldErrors.price} />
             </div>
             <div className="space-y-1.5">
               <Label>Durasi (hari)</Label>
@@ -267,6 +277,7 @@ export function MembershipTab() {
                 value={form.durationDays}
                 onChange={(e) => setForm((f) => ({ ...f, durationDays: e.target.value }))}
               />
+              <FieldError msg={fieldErrors.durationDays} />
             </div>
             <div className="space-y-1.5">
               <Label>Tipe Diskon</Label>
@@ -295,6 +306,7 @@ export function MembershipTab() {
                   onValueChange={(v) => setForm((f) => ({ ...f, discountValue: v }))}
                 />
               )}
+              <FieldError msg={fieldErrors.discountValue} />
             </div>
             <div className="space-y-1.5">
               <Label>Diskon Berlaku Untuk Kategori</Label>
@@ -314,7 +326,7 @@ export function MembershipTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>Batal</Button>
-            <Button onClick={handleSubmit} disabled={isPending || !form.name || !form.price}>
+            <Button onClick={handleSubmit} disabled={isPending}>
               {isPending ? "Menyimpan..." : "Simpan"}
             </Button>
           </DialogFooter>
@@ -328,7 +340,7 @@ export function MembershipTab() {
             <DialogTitle>Hapus Membership</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground py-2">
-            Yakin ingin menghapus membership ini? Membership yang sedang digunakan pelanggan tidak bisa dihapus.
+            Yakin ingin menghapus paket ini? Paket yang sudah pernah dipakai pelanggan tidak bisa dihapus agar riwayat membership tetap tersimpan.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>Batal</Button>

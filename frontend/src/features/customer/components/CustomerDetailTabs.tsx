@@ -16,6 +16,8 @@ import {
   Camera, Loader2,
 } from "lucide-react";
 import type { Customer } from "../types";
+import { customerSyncView, GENDER_LABEL, SYNC_LABEL } from "../syncStatus";
+import { customerPermissions } from "../permissions";
 import { useAllMemberships, useCustomerMembership, useAssignMembership, useCancelCustomerMembership } from "@/features/settings/hooks";
 import { useAppointments } from "@/features/appointment/hooks";
 import { AppointmentStatusBadge } from "@/features/appointment/components/AppointmentStatusBadge";
@@ -142,10 +144,10 @@ function OverviewTab({ customer }: { customer: Customer }) {
         </CardHeader>
         <CardContent className="px-4 pb-4">
           <div className="divide-y divide-border">
-            <InfoRow label="Customer No"   value={customer.customerNo} />
+            <InfoRow label="No. Pelanggan" value={customer.customerNo} />
             <InfoRow label="No. HP"        value={customer.mobilePhone} />
             <InfoRow label="Email"         value={customer.email} />
-            <InfoRow label="Jenis Kelamin" value={customer.gender} />
+            <InfoRow label="Jenis Kelamin" value={customer.gender ? GENDER_LABEL[customer.gender] : null} />
             <InfoRow label="Tanggal Lahir" value={customer.birthDate ? formatDate(customer.birthDate) : null} />
             <InfoRow label="Alamat"        value={customer.address} />
             <InfoRow label="Kota"          value={customer.city} />
@@ -175,23 +177,23 @@ function OverviewTab({ customer }: { customer: Customer }) {
                 </Badge>
               ) : null
             } />
-            <InfoRow label="Accurate Status"  value={
-              customer.accurateCustomerId ? (
+            <InfoRow label="Status Accurate"  value={
+              customerSyncView(customer) === "SYNCED" ? (
                 <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
-                  <CheckCircle2 className="mr-1 h-3 w-3" />Synced
+                  <CheckCircle2 className="mr-1 h-3 w-3" />{SYNC_LABEL.SYNCED}
                 </Badge>
-              ) : customer.syncStatus === "FAILED" ? (
+              ) : customerSyncView(customer) === "FAILED" ? (
                 <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
-                  <XCircle className="mr-1 h-3 w-3" />Failed
+                  <XCircle className="mr-1 h-3 w-3" />{SYNC_LABEL.FAILED}
                 </Badge>
               ) : (
                 <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
-                  <Clock className="mr-1 h-3 w-3" />Pending
+                  <Clock className="mr-1 h-3 w-3" />{SYNC_LABEL.PENDING}
                 </Badge>
               )
             } />
             {customer.syncError && (
-              <InfoRow label="Sync Error" value={
+              <InfoRow label="Pesan Accurate" value={
                 <span className="text-destructive text-xs">{customer.syncError}</span>
               } />
             )}
@@ -839,6 +841,8 @@ function MembershipTab({ customer }: { customer: Customer }) {
   const { data: allMemberships = [] } = useAllMemberships();
   const assignMut = useAssignMembership(customer.id);
   const cancelMut = useCancelCustomerMembership(customer.id);
+  // Tetapkan / ganti / batalkan membership hanya SA, Owner, Manager (membership.route) — B6
+  const canManage = customerPermissions(useAuthStore((s) => s.user?.roleCode)).canManageMembership;
 
   const active = membershipData?.activeMembership;
   const record = membershipData?.activeRecord;
@@ -885,9 +889,11 @@ function MembershipTab({ customer }: { customer: Customer }) {
               <span className="font-semibold text-purple-900">{active.name}</span>
               <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Aktif</Badge>
             </div>
-            <Button size="sm" variant="outline" className="text-destructive border-destructive hover:bg-destructive/10" onClick={() => setCancelOpen(true)}>
-              Batalkan
-            </Button>
+            {canManage && (
+              <Button size="sm" variant="outline" className="text-destructive border-destructive hover:bg-destructive/10" onClick={() => setCancelOpen(true)}>
+                Batalkan
+              </Button>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
@@ -916,13 +922,15 @@ function MembershipTab({ customer }: { customer: Customer }) {
         <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
           <CreditCard className="h-8 w-8 text-slate-400 mx-auto mb-2" />
           <p className="text-sm text-muted-foreground mb-3">Pelanggan belum memiliki membership aktif</p>
-          <Button size="sm" onClick={() => { setSelectedId(""); setError(null); setAssignOpen(true); }}>
-            Tetapkan Membership
-          </Button>
+          {canManage && (
+            <Button size="sm" onClick={() => { setSelectedId(""); setError(null); setAssignOpen(true); }}>
+              Tetapkan Membership
+            </Button>
+          )}
         </div>
       )}
 
-      {active && (
+      {active && canManage && (
         <Button size="sm" variant="outline" onClick={() => { setSelectedId(""); setError(null); setAssignOpen(true); }}>
           Ganti Membership
         </Button>
@@ -989,6 +997,8 @@ const CAN_MANAGE_NOTE_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER"];
 function CustomerNotesTab({ customerId }: { customerId: string }) {
   const user      = useAuthStore((s) => s.user);
   const canManage = CAN_MANAGE_NOTE_ROLES.includes(user?.roleCode ?? "");
+  // Tambah catatan: peran tulis pelanggan (Finance hanya lihat) — B6
+  const canAdd    = customerPermissions(user?.roleCode).canAddNote;
 
   const { data: notes = [], isLoading } = useCustomerNotes(customerId);
   const createMut = useCreateCustomerNote(customerId);
@@ -1034,6 +1044,7 @@ function CustomerNotesTab({ customerId }: { customerId: string }) {
   return (
     <div className="space-y-4">
       {/* ── Add new note ─────────────────────────────────────── */}
+      {canAdd && (
       <Card>
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -1065,6 +1076,7 @@ function CustomerNotesTab({ customerId }: { customerId: string }) {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* ── Notes list ───────────────────────────────────────── */}
       {notes.length === 0 ? (
@@ -1197,11 +1209,11 @@ export function CustomerDetailTabs({ customer }: CustomerDetailTabsProps) {
       {/* Horizontal scroll wrapper for mobile */}
       <div className="overflow-x-auto pb-1 -mx-1 px-1">
         <TabsList className="inline-flex min-w-max">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="overview">Ringkasan</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="appointments">Appointments</TabsTrigger>
-          <TabsTrigger value="invoices">Invoices</TabsTrigger>
-          <TabsTrigger value="deposits">Deposits</TabsTrigger>
+          <TabsTrigger value="appointments">Booking</TabsTrigger>
+          <TabsTrigger value="invoices">Invoice</TabsTrigger>
+          <TabsTrigger value="deposits">Deposit</TabsTrigger>
           <TabsTrigger value="history">Treatment</TabsTrigger>
           <TabsTrigger value="photos">Foto</TabsTrigger>
           <TabsTrigger value="notes">Catatan</TabsTrigger>

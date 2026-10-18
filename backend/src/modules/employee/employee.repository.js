@@ -21,8 +21,9 @@ const count = (where) => prisma.employee.count({ where });
 const findById = (id) =>
   prisma.employee.findUnique({ where: { id }, include: INCLUDE });
 
+// Kode karyawan dibandingkan tanpa beda huruf besar/kecil (EMP-001, B11)
 const findByEmployeeCode = (employeeCode) =>
-  prisma.employee.findUnique({ where: { employeeCode } });
+  prisma.employee.findFirst({ where: { employeeCode: { equals: employeeCode, mode: "insensitive" } } });
 
 const findLastEmployeeCode = () =>
   prisma.employee.findFirst({
@@ -88,17 +89,40 @@ const update = (id, data, syncUserId = null) => {
   });
 };
 
+// Cabang "Utama" (isPrimary) selalu = Home Branch karyawan (EMP-005, B15)
 const updateBranches = (employeeId, branchIds) =>
   prisma.$transaction(async (tx) => {
+    const emp = await tx.employee.findUnique({ where: { id: employeeId }, select: { homeBranchId: true } });
     await tx.employeeBranch.deleteMany({ where: { employeeId } });
-    if (branchIds.length > 0) {
+    const ids = [...new Set(branchIds)];
+    if (ids.length > 0) {
       await tx.employeeBranch.createMany({
-        data: branchIds.map((branchId, index) => ({
+        data: ids.map((branchId) => ({
           employeeId,
           branchId,
-          isPrimary: index === 0,
+          isPrimary: branchId === emp?.homeBranchId,
           isActive:  true,
         })),
+      });
+    }
+    return tx.employee.findUnique({ where: { id: employeeId }, include: INCLUDE });
+  });
+
+/**
+ * Samakan cabang Utama dengan Home Branch: hanya cabang Home Branch yang isPrimary,
+ * dan Home Branch selalu termasuk cabang tempat karyawan bisa bekerja (EMP-005, B15).
+ */
+const syncPrimaryBranch = (employeeId, homeBranchId) =>
+  prisma.$transaction(async (tx) => {
+    await tx.employeeBranch.updateMany({
+      where: { employeeId, isPrimary: true, ...(homeBranchId && { branchId: { not: homeBranchId } }) },
+      data:  { isPrimary: false },
+    });
+    if (homeBranchId) {
+      await tx.employeeBranch.upsert({
+        where:  { employeeId_branchId: { employeeId, branchId: homeBranchId } },
+        update: { isPrimary: true, isActive: true },
+        create: { employeeId, branchId: homeBranchId, isPrimary: true, isActive: true },
       });
     }
     return tx.employee.findUnique({ where: { id: employeeId }, include: INCLUDE });
@@ -149,5 +173,5 @@ module.exports = {
   findAll, count, findById,
   findByEmployeeCode, findLastEmployeeCode, findByEmail, findUserByEmail,
   findRoleById,
-  create, update, updateFiles, updateBranches, softDelete, hardDelete, countHistory,
+  create, update, updateFiles, updateBranches, syncPrimaryBranch, softDelete, hardDelete, countHistory,
 };

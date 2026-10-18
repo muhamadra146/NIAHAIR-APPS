@@ -11,8 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
-import { customerSchema, type CustomerFormValues } from "../schemas/customer.schema";
+import { cn, toWibDateStr } from "@/lib/utils";
+import { customerSchema, CUSTOMER_MAX, type CustomerFormInput, type CustomerFormValues } from "../schemas/customer.schema";
 import type { Customer } from "../types";
 
 interface CustomerFormProps {
@@ -39,7 +39,7 @@ export function CustomerForm({
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<CustomerFormValues>({
+  } = useForm<CustomerFormInput, unknown, CustomerFormValues>({
     resolver: zodResolver(customerSchema),
     defaultValues: {
       name:        defaultValues?.name ?? "",
@@ -70,18 +70,13 @@ export function CustomerForm({
     }
   }, [open, defaultValues, reset]);
 
+  // Nilai kosong diteruskan apa adanya — halaman yang menentukan
+  // (tambah: tidak dikirim; ubah: dikirim null agar kolom terhapus)
   function handleFormSubmit(values: CustomerFormValues) {
-    onSubmit({
-      ...values,
-      email:     values.email     || undefined,
-      gender:    values.gender    || undefined,
-      birthDate: values.birthDate || undefined,
-      address:   values.address   || undefined,
-      city:      values.city      || undefined,
-      province:  values.province  || undefined,
-      notes:     values.notes     || undefined,
-    } as CustomerFormValues);
+    onSubmit(values);
   }
+
+  const today = toWibDateStr();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -119,7 +114,7 @@ export function CustomerForm({
                 <Label htmlFor="name">
                   Nama <span className="text-destructive">*</span>
                 </Label>
-                <Input id="name" {...register("name")} placeholder="Nama lengkap" />
+                <Input id="name" {...register("name")} placeholder="Nama lengkap" maxLength={CUSTOMER_MAX.name} />
                 {errors.name && (
                   <p className="text-xs text-destructive">{errors.name.message}</p>
                 )}
@@ -129,7 +124,7 @@ export function CustomerForm({
                 <Label htmlFor="mobilePhone">
                   No. HP <span className="text-destructive">*</span>
                 </Label>
-                <Input id="mobilePhone" {...register("mobilePhone")} placeholder="08123456789" inputMode="tel" />
+                <Input id="mobilePhone" {...register("mobilePhone")} placeholder="08123456789 / 628123456789" inputMode="tel" />
                 {errors.mobilePhone && (
                   <p className="text-xs text-destructive">{errors.mobilePhone.message}</p>
                 )}
@@ -137,7 +132,7 @@ export function CustomerForm({
 
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" inputMode="email" {...register("email")} placeholder="email@example.com" />
+                <Input id="email" type="email" inputMode="email" {...register("email")} placeholder="email@example.com" maxLength={CUSTOMER_MAX.email} />
                 {errors.email && (
                   <p className="text-xs text-destructive">{errors.email.message}</p>
                 )}
@@ -158,22 +153,26 @@ export function CustomerForm({
 
               <div className="space-y-1.5">
                 <Label htmlFor="birthDate">Tanggal Lahir</Label>
-                <Input id="birthDate" type="date" {...register("birthDate")} />
+                <Input id="birthDate" type="date" max={today} {...register("birthDate")} />
+                {errors.birthDate && <p className="text-xs text-destructive">{errors.birthDate.message}</p>}
               </div>
 
               <div className="sm:col-span-2 space-y-1.5">
                 <Label htmlFor="address">Alamat</Label>
-                <Input id="address" {...register("address")} placeholder="Alamat lengkap" />
+                <Input id="address" {...register("address")} placeholder="Alamat lengkap" maxLength={CUSTOMER_MAX.address} />
+                {errors.address && <p className="text-xs text-destructive">{errors.address.message}</p>}
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="city">Kota</Label>
-                <Input id="city" {...register("city")} placeholder="Kota" />
+                <Input id="city" {...register("city")} placeholder="Kota" maxLength={CUSTOMER_MAX.city} />
+                {errors.city && <p className="text-xs text-destructive">{errors.city.message}</p>}
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="province">Provinsi</Label>
-                <Input id="province" {...register("province")} placeholder="Provinsi" />
+                <Input id="province" {...register("province")} placeholder="Provinsi" maxLength={CUSTOMER_MAX.province} />
+                {errors.province && <p className="text-xs text-destructive">{errors.province.message}</p>}
               </div>
 
               <div className="sm:col-span-2 space-y-1.5">
@@ -183,8 +182,10 @@ export function CustomerForm({
                   {...register("notes")}
                   rows={3}
                   placeholder="Catatan tambahan..."
+                  maxLength={CUSTOMER_MAX.notes}
                   className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
                 />
+                {errors.notes && <p className="text-xs text-destructive">{errors.notes.message}</p>}
               </div>
             </div>
           </div>

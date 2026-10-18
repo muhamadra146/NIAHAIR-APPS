@@ -22,6 +22,17 @@ const fetchCustomerNoFromAccurate = async (accurateId) => {
   return null;
 };
 
+// Pesan penolakan Accurate: `d` bisa string, array string, atau objek (B5)
+const accurateErrorMessage = (response) => {
+  const d = response?.d;
+  if (typeof d === "string" && d.trim()) return d.trim();
+  if (Array.isArray(d) && d.length > 0) {
+    return d.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join("; ");
+  }
+  if (d && typeof d === "object") return JSON.stringify(d);
+  return response?.message || "Accurate menolak data pelanggan";
+};
+
 // ── Push local customer to Accurate ──────────────────────────────────
 const pushCustomerToAccurate = async (customerId) => {
   logger.info(`[accurate customer sync] start customerId=${customerId}`);
@@ -29,10 +40,8 @@ const pushCustomerToAccurate = async (customerId) => {
   const customer = await findById(customerId);
   if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  if (customer.accurateCustomerId) {
-    return { alreadySynced: true, accurateCustomerId: customer.accurateCustomerId };
-  }
-
+  // Sudah ada di Accurate → kirim perubahan data (save.do dengan id = ubah, B3)
+  const isUpdate = !!customer.accurateCustomerId;
   const payload = mapCustomerToAccurate(customer);
 
   let response;
@@ -48,18 +57,22 @@ const pushCustomerToAccurate = async (customerId) => {
   }
 
   if (!response.s) {
-    const errMsg =
-      typeof response.d === "string"
-        ? response.d
-        : response.message || "Accurate API rejected customer push";
+    const errMsg = accurateErrorMessage(response);
     logger.error(`[accurate customer sync] failed customerId=${customerId}`, errMsg);
     await markSyncFailed(customerId, errMsg);
     throw new AppError(errMsg, StatusCodes.BAD_GATEWAY);
   }
 
+  if (isUpdate) {
+    // Nomor pelanggan tidak berubah setelah sinkron (CRM-002) — hanya status sinkron yang diperbarui
+    await updateAfterPush(customerId, { accurateCustomerId: customer.accurateCustomerId, customerNo: null });
+    logger.info(`[accurate customer sync] updated customerId=${customerId} accurateId=${customer.accurateCustomerId}`);
+    return { alreadySynced: true, updated: true, accurateCustomerId: customer.accurateCustomerId, customerNo: customer.customerNo };
+  }
+
   const accurateId = response.r?.id;
   if (!accurateId) {
-    const errMsg = "Accurate did not return customer ID";
+    const errMsg = "Accurate tidak mengembalikan ID pelanggan";
     logger.error(`[accurate customer sync] failed — ${errMsg}`);
     await markSyncFailed(customerId, errMsg);
     throw new AppError(errMsg, StatusCodes.BAD_GATEWAY);
@@ -160,4 +173,4 @@ const retryFailedCustomerSync = async () => {
   return { retried, succeeded, failed };
 };
 
-module.exports = { pushCustomerToAccurate, repairMissingCustomerNo, retryFailedCustomerSync };
+module.exports = { pushCustomerToAccurate, repairMissingCustomerNo, retryFailedCustomerSync, accurateErrorMessage };

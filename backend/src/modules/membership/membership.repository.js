@@ -43,6 +43,25 @@ const remove = (id) => prisma.membership.delete({ where: { id } });
 const countCustomers = (membershipId) =>
   prisma.customer.count({ where: { membershipId } });
 
+/** Jumlah riwayat pemakaian paket (langganan apa pun statusnya + riwayat membership) */
+const countUsageHistory = async (membershipId) => {
+  const [subscriptions, histories] = await Promise.all([
+    prisma.customerMembership.count({ where: { membershipId } }),
+    prisma.membershipHistory.count({ where: { membershipId } }),
+  ]);
+  return subscriptions + histories;
+};
+
+/** Paket lain dengan nama sama (tanpa beda huruf besar/kecil) */
+const findByName = (name, excludeId = null) =>
+  prisma.membership.findFirst({
+    where: {
+      name: { equals: name, mode: "insensitive" },
+      ...(excludeId && { id: { not: excludeId } }),
+    },
+    select: { id: true, name: true },
+  });
+
 const findCustomerWithMembership = (customerId) =>
   prisma.customer.findUnique({
     where: { id: customerId },
@@ -76,5 +95,6 @@ const findActiveMembership = (customerId) =>
 
 module.exports = {
   findAll, count, findById, create, update, remove, countCustomers, countCategories, findDefaultDiscountCategory,
+  countUsageHistory, findByName,
   findCustomerWithMembership, findActiveCustomerMembership, findActiveMembership,
 };

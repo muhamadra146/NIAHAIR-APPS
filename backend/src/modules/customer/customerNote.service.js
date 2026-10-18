@@ -1,25 +1,42 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { findById: findCustomer } = require("./customer.repository");
-const { findAllByCustomer, create, findById, update, remove } = require("./customerNote.repository");
+const {
+  findAllByCustomer, create, findById, update, remove, findAuthorNameByUserId, findAuthorNamesByEmails,
+} = require("./customerNote.repository");
 
 // Roles yang boleh edit dan hapus catatan (CRM-008)
 const CAN_MANAGE_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER"];
 
+const isEmail = (v) => typeof v === "string" && v.includes("@");
+
 const getNotes = async (customerId, { skip, take } = {}) => {
   const customer = await findCustomer(customerId);
   if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
-  return findAllByCustomer(customerId, { skip, take });
+  const notes = await findAllByCustomer(customerId, { skip, take });
+
+  // Catatan lama menyimpan email penulis — tampilkan nama karyawannya (B7)
+  const emails = [...new Set(notes.map((n) => n.createdBy).filter(isEmail).map((e) => e.toLowerCase()))];
+  if (emails.length === 0 || !findAuthorNamesByEmails) return notes;
+  const names = await findAuthorNamesByEmails(emails);
+  return notes.map((n) => (isEmail(n.createdBy) && names[n.createdBy.toLowerCase()]
+    ? { ...n, createdBy: names[n.createdBy.toLowerCase()] }
+    : n));
 };
 
-const createNote = async (customerId, body, createdByName) => {
+/** author: { userId, fallback } — nama karyawan pemilik akun; fallback bila tidak ada */
+const createNote = async (customerId, body, author) => {
   const customer = await findCustomer(customerId);
   if (!customer) throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
 
+  const createdBy = typeof author === "object" && author !== null
+    ? (findAuthorNameByUserId ? await findAuthorNameByUserId(author.userId) : null) ?? author.fallback ?? null
+    : author ?? null;
+
   return create({
     customerId,
-    note:      body.note,
-    createdBy: createdByName ?? null,
+    note:      body.note.trim(),
+    createdBy,
   });
 };
 

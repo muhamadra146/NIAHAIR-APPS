@@ -39,6 +39,8 @@ export interface Employee {
   divisionId?:        string | null;
   isDivisionManager?: boolean;
   division?:          { id: string; code: string; name: string } | null;
+  /** Akun login karyawan (hanya untuk peran yang melihat data lengkap) */
+  user?:              { id: string; email: string } | null;
   employeeBranches: EmployeeBranch[];
   createdAt:        string;
   updatedAt:        string;
@@ -103,18 +105,19 @@ export interface UpdateEmployeeBranchesInput {
   branchIds: string[];
 }
 
+// null = kosongkan kolom opsional (B4)
 export interface UpdateEmployeeInput {
   name?:              string;
   roleId?:            string;
   employeeCode?:      string;
-  phone?:             string;
-  email?:             string;
-  hireDate?:          string;
-  birthDate?:         string;
-  address?:           string;
-  emergencyContact?:  string;
-  nikKtp?:            string;
-  resignDate?:        string;
+  phone?:             string | null;
+  email?:             string | null;
+  hireDate?:          string | null;
+  birthDate?:         string | null;
+  address?:           string | null;
+  emergencyContact?:  string | null;
+  nikKtp?:            string | null;
+  resignDate?:        string | null;
   commissionEnabled?: boolean;
   isActive?:          boolean;
   payDay?:            number | null;

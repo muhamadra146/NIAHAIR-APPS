@@ -65,4 +65,16 @@ export interface CreateCustomerInput {
   notes?:       string;
 }
 
-export type UpdateCustomerInput = Partial<CreateCustomerInput> & { isActive?: boolean };
+// null = kosongkan kolom opsional (B4)
+export interface UpdateCustomerInput {
+  name?:        string;
+  mobilePhone?: string;
+  email?:       string | null;
+  gender?:      CustomerGender | null;
+  birthDate?:   string | null;
+  address?:     string | null;
+  city?:        string | null;
+  province?:    string | null;
+  notes?:       string | null;
+  isActive?:    boolean;
+}

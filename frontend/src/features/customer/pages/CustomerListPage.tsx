@@ -13,6 +13,8 @@ import { CustomerForm } from "../components/CustomerForm";
 import type { CustomerFormValues } from "../schemas/customer.schema";
 import type { CustomerListParams } from "../types";
 import { useViewOnly } from "@/hooks/useViewOnly";
+import { toast } from "@/lib/toast";
+import { toCreateCustomerInput } from "../customerInput";
 
 /* ── Compact select (reusable locally) ──────────────────────────── */
 function FilterSelect({
@@ -89,17 +91,8 @@ export function CustomerListPage() {
   async function handleCreate(values: CustomerFormValues) {
     setFormError(null);
     try {
-      await createMutation.mutateAsync({
-        name:        values.name,
-        mobilePhone: values.mobilePhone || undefined,
-        email:       values.email || undefined,
-        gender:      (values.gender as "MALE" | "FEMALE" | undefined) || undefined,
-        birthDate:   values.birthDate || undefined,
-        address:     values.address || undefined,
-        city:        values.city || undefined,
-        province:    values.province || undefined,
-        notes:       values.notes || undefined,
-      });
+      const created = await createMutation.mutateAsync(toCreateCustomerInput(values));
+      toast.success(`Pelanggan ${created.name} berhasil ditambahkan`);
       setFormOpen(false);
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Gagal menambah pelanggan");
@@ -107,11 +100,20 @@ export function CustomerListPage() {
   }
 
   const hasActiveFilter = membershipFilter || depositFilter;
+  // Saat mencari / memfilter, jumlah = hasil yang ditemukan, bukan total pelanggan terdaftar
+  const isFiltered = !!debouncedSearch || !!hasActiveFilter;
+  const subtitle = !meta
+    ? "Memuat data..."
+    : isFiltered
+      ? (meta.total === 0
+          ? "Tidak ada pelanggan yang cocok"
+          : `${meta.total.toLocaleString("id-ID")} pelanggan ditemukan`)
+      : `${meta.total.toLocaleString("id-ID")} pelanggan terdaftar`;
 
   return (
     <PageContainer
       title="Pelanggan"
-      subtitle={meta ? `${meta.total.toLocaleString("id-ID")} pelanggan terdaftar` : "Memuat data..."}
+      subtitle={subtitle}
       action={
         !isViewOnly ? (
           <Button onClick={() => { setFormError(null); setFormOpen(true); }} size="sm">

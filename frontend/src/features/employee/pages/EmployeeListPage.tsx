@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Plus, Search, ChevronRight, EyeOff, Building2, Trash2, AlertTriangle } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Plus, Search, ChevronRight, Eye, EyeOff, Building2, Trash2, AlertTriangle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
@@ -14,10 +14,13 @@ import { useAuthStore } from "@/stores/authStore";
 import { isFullAccess } from "@/lib/access";
 import { useViewOnly } from "@/hooks/useViewOnly";
 import { fetchAllBranches } from "@/features/settings/api/branch.api";
-import { useEmployees, useCreateEmployee, useUploadEmployeeFiles, useDeactivateEmployee, useDeleteEmployee } from "../hooks";
+import { useEmployees, useCreateEmployee, useUploadEmployeeFiles, useDeactivateEmployee, useDeleteEmployee, useReactivateEmployee } from "../hooks";
 import { updateEmployeeBranches } from "../api";
 import { EmployeeCreateForm } from "../components/EmployeeForm";
 import type { CreateEmployeeFormValues } from "../schemas/employee.schema";
+import type { Employee } from "../types";
+import { canEditBranchAccess, toCreateEmployeeInput, uploadMsg } from "../employeeInput";
+import { toast } from "@/lib/toast";
 
 function apiErr(err: unknown, fallback = "Terjadi kesalahan"): string {
   if (err && typeof err === "object" && "response" in err) {
@@ -66,6 +69,8 @@ export function EmployeeListPage() {
   const uploadFilesMutation = useUploadEmployeeFiles();
   const deactivateMutation  = useDeactivateEmployee();
   const deleteMutation      = useDeleteEmployee();
+  const reactivateMutation  = useReactivateEmployee();
+  const navigate            = useNavigate();
 
   const canDelete = ["SUPER_ADMIN", "OWNER"].includes(user?.role?.code ?? "");
 
@@ -75,33 +80,37 @@ export function EmployeeListPage() {
 
   async function handleCreate(values: CreateEmployeeFormValues, files: { ktpFile?: File | null; contractFile?: File | null }) {
     setFormError(null);
+    let created: Employee;
     try {
-      const created = await createMutation.mutateAsync({
-        name:              values.name,
-        roleId:            values.roleId,
-        employeeCode:      values.employeeCode     || undefined,
-        phone:             values.phone            || undefined,
-        email:             values.email            || undefined,
-        hireDate:          values.hireDate         || undefined,
-        birthDate:         values.birthDate        || undefined,
-        address:           values.address          || undefined,
-        emergencyContact:  values.emergencyContact || undefined,
-        nikKtp:            values.nikKtp           || undefined,
-        resignDate:        values.resignDate        || undefined,
-        commissionEnabled: values.commissionEnabled,
-        payDay:            values.payDay ?? undefined,
-        homeBranchId:      values.homeBranchId     || undefined,
-        ...(isFullAccess(user) ? { divisionId: values.divisionId || null, isDivisionManager: !!values.divisionId && !!values.isDivisionManager } : {}),
-      });
-      if ((values.branchIds ?? []).length > 0) {
+      created = await createMutation.mutateAsync(toCreateEmployeeInput(values, isFullAccess(user)));
+    } catch (err: unknown) {
+      setFormError(apiErr(err, "Gagal menambahkan karyawan"));
+      return;
+    }
+
+    // Karyawan SUDAH tersimpan. Bila langkah lanjutan (akses cabang / file) gagal, form tambah
+    // ditutup dan pengguna diarahkan ke halaman detail untuk melengkapi — mengulang "Simpan"
+    // di form tambah akan membuat karyawan ganda (B14).
+    let step = "";
+    try {
+      if (canEditBranchAccess(user?.roleCode) && (values.branchIds ?? []).length > 0) {
+        step = "akses cabang";
         await updateEmployeeBranches(created.id, { branchIds: values.branchIds });
       }
       if (files.ktpFile || files.contractFile) {
+        step = "file";
         await uploadFilesMutation.mutateAsync({ id: created.id, files });
       }
+      toast.success(`Karyawan ${created.name} (${created.employeeCode}) berhasil ditambahkan`);
       setFormOpen(false);
     } catch (err: unknown) {
-      setFormError(apiErr(err, "Gagal menambahkan karyawan"));
+      setFormOpen(false);
+      toast.error(
+        `Karyawan ${created.name} (${created.employeeCode}) sudah tersimpan, tetapi ${step} gagal disimpan: ` +
+        `${uploadMsg(apiErr(err, "terjadi kesalahan")).replace(/\.+$/, "")}. Lengkapi lewat Edit Profil.`,
+        { duration: 10000 },
+      );
+      navigate(`/employees/${created.id}`);
     }
   }
 
@@ -223,10 +232,18 @@ export function EmployeeListPage() {
                         </Link>
                         {canDelete && (
                           <>
-                            <button type="button" className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                              onClick={() => { setConfirmDeleteId(null); setConfirmDeactivateId(e.id); }}>
-                              <EyeOff className="h-3.5 w-3.5" />
-                            </button>
+                            {e.isActive ? (
+                              <button type="button" title="Nonaktifkan" className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                onClick={() => { setConfirmDeleteId(null); setConfirmDeactivateId(e.id); }}>
+                                <EyeOff className="h-3.5 w-3.5" />
+                              </button>
+                            ) : (
+                              <button type="button" title="Aktifkan" className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                disabled={reactivateMutation.isPending}
+                                onClick={() => reactivateMutation.mutate(e.id)}>
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                             <button type="button" className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 hover:text-destructive hover:bg-destructive/10 transition-colors"
                               onClick={() => { setConfirmDeactivateId(null); setConfirmDeleteId(e.id); }}>
                               <Trash2 className="h-3.5 w-3.5" />
@@ -353,11 +370,20 @@ export function EmployeeListPage() {
                               </Link>
                               {canDelete && (
                                 <>
-                                  <button type="button" title="Nonaktifkan"
-                                    className="inline-flex items-center justify-center rounded-md p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                                    onClick={() => { setConfirmDeleteId(null); setConfirmDeactivateId(e.id); }}>
-                                    <EyeOff className="h-3.5 w-3.5" />
-                                  </button>
+                                  {e.isActive ? (
+                                    <button type="button" title="Nonaktifkan"
+                                      className="inline-flex items-center justify-center rounded-md p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                      onClick={() => { setConfirmDeleteId(null); setConfirmDeactivateId(e.id); }}>
+                                      <EyeOff className="h-3.5 w-3.5" />
+                                    </button>
+                                  ) : (
+                                    <button type="button" title="Aktifkan"
+                                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
+                                      disabled={reactivateMutation.isPending}
+                                      onClick={() => reactivateMutation.mutate(e.id)}>
+                                      <Eye className="h-3.5 w-3.5" /> Aktifkan
+                                    </button>
+                                  )}
                                   <button type="button" title="Hapus permanen"
                                     className="inline-flex items-center justify-center rounded-md p-1 text-slate-400 hover:text-destructive hover:bg-destructive/10 transition-colors"
                                     onClick={() => { setConfirmDeactivateId(null); setConfirmDeleteId(e.id); }}>

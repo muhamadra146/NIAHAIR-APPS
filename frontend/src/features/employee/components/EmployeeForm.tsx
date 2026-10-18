@@ -13,6 +13,8 @@ import { useDivisions } from "@/features/division/hooks";
 import { useAuthStore } from "@/stores/authStore";
 import { isFullAccess } from "@/lib/access";
 import { useEmployeeRoles, useNextEmployeeCode } from "../hooks";
+import { toWibDateStr } from "@/lib/utils";
+import { canEditBranchAccess, fileTooLarge, MAX_FILE_MB } from "../employeeInput";
 import { createEmployeeSchema, updateEmployeeSchema } from "../schemas/employee.schema";
 import type { CreateEmployeeFormValues, UpdateEmployeeFormValues, UpdateEmployeeFormInput } from "../schemas/employee.schema";
 import type { Employee } from "../types";
@@ -102,6 +104,8 @@ export function EmployeeUpdateForm({ open, onOpenChange, onSubmit, isPending, er
   const [ktpFile,      setKtpFile]      = useState<File | null>(null);
   const [contractFile, setContractFile] = useState<File | null>(null);
 
+  const canSetActive = isFullAccess(useAuthStore((s) => s.user));
+
   const form = useForm<UpdateEmployeeFormInput, unknown, UpdateEmployeeFormValues>({
     resolver: zodResolver(updateEmployeeSchema),
     defaultValues: employeeToForm(employee),
@@ -132,14 +136,17 @@ export function EmployeeUpdateForm({ open, onOpenChange, onSubmit, isPending, er
               existingKtpUrl={employee.ktpFileUrl}
               existingContractUrl={employee.contractFileUrl}
             />
-            <div className="flex items-center gap-3">
-              <Switch
-                id="isActive"
-                checked={form.watch("isActive") ?? true}
-                onCheckedChange={(v) => form.setValue("isActive", v)}
-              />
-              <Label htmlFor="isActive">Aktif</Label>
-            </div>
+            {/* Status aktif hanya diubah Owner / Super Admin (backend menolak peran lain) */}
+            {canSetActive && (
+              <div className="flex items-center gap-3">
+                <Switch
+                  id="isActive"
+                  checked={form.watch("isActive") ?? true}
+                  onCheckedChange={(v) => form.setValue("isActive", v)}
+                />
+                <Label htmlFor="isActive">Aktif</Label>
+              </div>
+            )}
           </div>
           <DialogFooter className="shrink-0 border-t px-5 py-4 flex gap-2">
             <Button type="button" variant="outline" className="flex-1 sm:flex-none" onClick={() => onOpenChange(false)} disabled={isPending}>
@@ -195,11 +202,28 @@ function EmployeeFormFields({
   const divisionId = (watch("divisionId") as string | undefined) ?? "";
   const ktpInputRef      = useRef<HTMLInputElement>(null);
   const contractInputRef = useRef<HTMLInputElement>(null);
+  // Akses cabang hanya diubah Super Admin (PATCH /employees/:id/branches) — B12
+  const canEditBranches = canEditBranchAccess(useAuthStore((s) => s.user?.roleCode));
+  const [fileErrors, setFileErrors] = useState<{ ktp?: string | null; contract?: string | null }>({});
+
+  /** Pilih file: tolak > 10 MB di browser agar pesan jelas (batas backend sama) */
+  function pickFile(key: "ktp" | "contract", input: HTMLInputElement, set: (f: File | null) => void) {
+    const file = input.files?.[0] ?? null;
+    if (fileTooLarge(file)) {
+      setFileErrors((e) => ({ ...e, [key]: `Ukuran file maksimal ${MAX_FILE_MB} MB` }));
+      set(null);
+      input.value = "";
+      return;
+    }
+    setFileErrors((e) => ({ ...e, [key]: null }));
+    set(file);
+  }
 
   const selectedBranchIds = (watch("branchIds") as string[]) ?? [];
   const homeBranchId      = watch("homeBranchId") ?? "";
 
   const homeBranchNotInAccess =
+    canEditBranches &&
     homeBranchId !== "" &&
     selectedBranchIds.length > 0 &&
     !selectedBranchIds.includes(homeBranchId);
@@ -234,10 +258,10 @@ function EmployeeFormFields({
         </select>
       </Field>
 
-      {/* Kode Karyawan */}
+      {/* Kode Karyawan — tidak dapat diubah setelah dibuat (EMP-001) */}
       <Field label="Kode Karyawan" error={errs.employeeCode?.message}>
         {isEdit ? (
-          <Input {...register("employeeCode")} placeholder="Kode karyawan" />
+          <Input value={(watch("employeeCode") as string) ?? ""} readOnly disabled className="text-muted-foreground" />
         ) : (
           <Input value={nextCode ?? "…"} disabled className="text-muted-foreground" />
         )}
@@ -245,12 +269,12 @@ function EmployeeFormFields({
 
       {/* No. HP */}
       <Field label="No. HP" error={errs.phone?.message}>
-        <Input {...register("phone")} placeholder="08xxxxxxxxxx" inputMode="tel" />
+        <Input {...register("phone")} placeholder="08xxxxxxxxxx" inputMode="tel" maxLength={20} />
       </Field>
 
       {/* Email */}
       <Field label="Email" error={errs.email?.message} full>
-        <Input {...register("email")} type="email" placeholder="email@contoh.com" />
+        <Input {...register("email")} type="email" placeholder="email@contoh.com" maxLength={100} />
         <p className="mt-1 text-xs text-muted-foreground">Satu email per orang: bila karyawan punya akun, email login ikut berubah (dipakai untuk login, notifikasi, dan reset password).</p>
       </Field>
 
@@ -261,12 +285,12 @@ function EmployeeFormFields({
 
       {/* Tanggal Lahir */}
       <Field label="Tanggal Lahir" error={errs.birthDate?.message}>
-        <Input {...register("birthDate")} type="date" />
+        <Input {...register("birthDate")} type="date" max={toWibDateStr()} />
       </Field>
 
       {/* Kontak Darurat */}
       <Field label="Kontak Darurat" error={errs.emergencyContact?.message} full>
-        <Input {...register("emergencyContact")} placeholder="Nama - No. HP" />
+        <Input {...register("emergencyContact")} placeholder="Nama - No. HP" maxLength={150} />
       </Field>
 
       {/* Alamat */}
@@ -274,6 +298,7 @@ function EmployeeFormFields({
         <textarea
           {...register("address")}
           rows={2}
+          maxLength={500}
           placeholder="Alamat lengkap"
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
@@ -281,7 +306,7 @@ function EmployeeFormFields({
 
       {/* NIK KTP */}
       <Field label="NIK KTP" error={errs.nikKtp?.message}>
-        <Input {...register("nikKtp")} placeholder="16 digit NIK" inputMode="numeric" />
+        <Input {...register("nikKtp")} placeholder="16 digit NIK" inputMode="numeric" maxLength={16} />
       </Field>
 
       {/* Tanggal Resign */}
@@ -290,13 +315,13 @@ function EmployeeFormFields({
       </Field>
 
       {/* Upload Foto KTP */}
-      <Field label="Foto KTP" full>
+      <Field label="Foto KTP" full error={fileErrors.ktp ?? undefined}>
         <input
           ref={ktpInputRef}
           type="file"
           accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"
           className="hidden"
-          onChange={(e) => setKtpFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => pickFile("ktp", e.target, setKtpFile)}
         />
         <div className="flex items-center gap-2">
           <Button
@@ -320,19 +345,19 @@ function EmployeeFormFields({
               Lihat file saat ini
             </a>
           ) : (
-            <span className="text-xs text-muted-foreground">Belum ada file</span>
+            <span className="text-xs text-muted-foreground">Belum ada file (JPG/PNG/WEBP/HEIC/PDF, maks. 10 MB)</span>
           )}
         </div>
       </Field>
 
       {/* Upload File Kontrak */}
-      <Field label="File Kontrak" full>
+      <Field label="File Kontrak" full error={fileErrors.contract ?? undefined}>
         <input
           ref={contractInputRef}
           type="file"
           accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"
           className="hidden"
-          onChange={(e) => setContractFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => pickFile("contract", e.target, setContractFile)}
         />
         <div className="flex items-center gap-2">
           <Button
@@ -356,7 +381,7 @@ function EmployeeFormFields({
               Lihat file saat ini
             </a>
           ) : (
-            <span className="text-xs text-muted-foreground">Belum ada file</span>
+            <span className="text-xs text-muted-foreground">Belum ada file (JPG/PNG/WEBP/HEIC/PDF, maks. 10 MB)</span>
           )}
         </div>
       </Field>
@@ -395,7 +420,7 @@ function EmployeeFormFields({
 
       {/* Home Branch */}
       {branches.length > 0 && (
-        <Field label="Home Branch" error={errs.homeBranchId?.message} full>
+        <Field label="Cabang Utama" error={errs.homeBranchId?.message} full>
           <select
             {...register("homeBranchId")}
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -405,18 +430,18 @@ function EmployeeFormFields({
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>
-          <p className="text-xs text-muted-foreground">Cabang utama untuk penggajian dan alokasi biaya.</p>
+          <p className="text-xs text-muted-foreground">Cabang utama untuk penggajian, absensi, dan laporan. Otomatis termasuk cabang tempat karyawan bisa bekerja.</p>
           {homeBranchNotInAccess && (
             <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>Home branch belum ada di daftar akses. Tambahkan di bawah.</span>
+              <span>Cabang utama belum ada di daftar "Bisa Bekerja Di". Tambahkan di bawah.</span>
             </div>
           )}
         </Field>
       )}
 
-      {/* Can Work At */}
-      {branches.length > 0 && (
+      {/* Can Work At — hanya Super Admin (B12) */}
+      {branches.length > 0 && canEditBranches && (
         <Field label="Bisa Bekerja Di" full>
           <div className="rounded-md border border-input overflow-hidden">
             <button
@@ -460,7 +485,11 @@ function EmployeeFormFields({
       {/* Tanggal Gajian */}
       <Field label="Tanggal Gajian (1-31)" error={errs.payDay?.message}>
         <Input
-          {...register("payDay", { setValueAs: (v) => (v === "" ? null : Number(v)) })}
+          {...register("payDay", {
+            // Kosong = null (B13). RHF juga memanggil setValueAs dengan nilai awal null —
+            // Number(null) = 0 akan memicu "harus antara 1 dan 31"
+            setValueAs: (v) => (v === "" || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v)),
+          })}
           type="number"
           min={1}
           max={31}
