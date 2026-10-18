@@ -4984,6 +4984,16 @@ Contoh: periode 1–31 Okt, OFF 4 hari (27 hari kerja), masuk 15 Okt (15 hari ke
 
 Periode yang **seluruhnya** sebelum Tanggal Masuk atau sesudah tanggal resign tidak bisa di-generate / dihitung ulang: ditolak dengan pesan "Periode di luar masa kerja karyawan" (keputusan owner 2026-10-18).
 
+### Mode Rentang Tanggal
+
+Payroll mode **Rentang Tanggal** (periode transisi / kasus khusus, COM-017) tidak dibayar sebulan penuh. Gaji pokok, tunjangan tetap bulanan, dan tunjangan transport diproporsikan **hari kalender**: hari dalam rentang selama bekerja (sejak Tanggal Masuk s/d tanggal resign) ÷ jumlah hari bulan kalender tersebut. Rentang yang melewati dua bulan dihitung per bagian bulan dengan panjang bulannya masing-masing (keputusan user 2026-10-18).
+
+- Contoh: rentang 2–5 Nov, gaji pokok 3.000.000 → 3.000.000 × 4/30 = 400.000 (bukan 3.000.000).
+- Contoh: rentang 28 Okt – 3 Nov → gaji pokok × (4/31 + 3/30).
+- Tunjangan transport hasil proporsi dibagi rata ke hari kerja rentang (hari − OFF); hari tidak hadir dipotong sebesar bagian harian itu (PAY-018).
+- Uang makan, potongan alpha, lembur, dan kerja hari libur tetap per hari (PAY-018, PAY-019). BPJS tetap dari gaji pokok penuh.
+- Rentang yang persis sama dengan satu periode gaji penuh (tanggal gajian s/d sehari sebelum tanggal gajian bulan berikutnya) dihitung seperti mode Per Bulan. Mode Per Bulan tidak berubah.
+
 ### Hak Akses Setting Gaji
 
 Setting Gaji karyawan (gaji pokok, tunjangan, potongan, BPJS) hanya dapat dilihat dan diubah oleh SUPER_ADMIN, OWNER, dan FINANCE. MANAGER dan role lain tidak dapat melihat gaji karyawan.
@@ -5732,7 +5742,7 @@ Helper persen (rule PERCENTAGE, harga per unit diisi):
 
 - Base helper = qty × harga per unit.
 - Komisi helper = base helper × rate%.
-- Base helper memotong **base** Job Utama.
+- Base helper memotong **base** Job Utama **hanya bila komisi helper > 0**. Staf helper tanpa tarif (tidak ada Commission Rule maupun tarif bawaan job) atau bertarif 0 tidak mengurangi komisi Job Utama (keputusan user 2026-10-18). Berlaku untuk perhitungan baru; komisi yang sudah APPROVED / PAID tidak dihitung ulang.
 
 Helper bernilai flat (rule FIXED, dengan atau tanpa harga per unit):
 

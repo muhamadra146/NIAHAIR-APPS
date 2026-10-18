@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { breakdownFromCommission, buildBreakdownLines, exactRatio, recoverRemainingBase } from "./commissionBreakdown";
+import { breakdownFromCommission, buildBreakdownLines, exactRatio, recoverRemainingBase, type BreakdownInput } from "./commissionBreakdown";
 import type { Commission, CommissionSplitMode } from "./types";
 
 // Regression — UI QA 2026-10-18: rincian menampilkan "Rp 7.700.004 × 70/120" (base asli 7.700.000)
@@ -50,6 +50,29 @@ describe("breakdownFromCommission — base asli", () => {
 
   it("base bukan rupiah bulat (mis. harga eks-PPN) tetap 2 desimal", () => {
     expect(recoverRemainingBase(round2(6_936_936.94 * 0.5), 0.5)).toBe(6_936_936.94);
+  });
+});
+
+// Keputusan user 2026-10-18 (COM-009): helper tanpa komisi tidak memotong job utama
+describe("buildBreakdownLines — helper", () => {
+  const helper = (amount: number, over: Partial<BreakdownInput> = {}): BreakdownInput => ({
+    role: "HELPER_UNIT", splitMode: "BY_QTY", unit: "helai", pricePerUnit: 5000,
+    commissionType: "PERCENTAGE", commissionValue: amount > 0 ? 10 : 0, workQty: 120, workRatio: null,
+    remainingBase: 0, staffCount: 1, itemQty: null, effectiveBase: 600_000,
+    grossAmount: amount, flatDeduction: 0, amount, ...over,
+  });
+
+  it("helper per unit dengan komisi > 0 → memotong base job utama", () => {
+    expect(buildBreakdownLines(helper(60_000))[0]).toMatch(/\(memotong base job utama\)$/);
+  });
+
+  it("helper per unit komisi Rp 0 → tidak memotong base job utama", () => {
+    expect(buildBreakdownLines(helper(0))[0]).toMatch(/tidak memotong base job utama/);
+  });
+
+  it("helper flat Rp 0 → tidak memotong komisi job utama", () => {
+    const lines = buildBreakdownLines(helper(0, { role: "HELPER_FLAT", commissionType: "FIXED", pricePerUnit: null }));
+    expect(lines[0]).toMatch(/tidak memotong komisi job utama/);
   });
 });
 

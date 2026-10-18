@@ -100,6 +100,7 @@ function detectColoristInSession(items) {
 //   Helper (deductsFromJobId diisi):
 //     · Rule PERCENTAGE + harga/unit (HELPER_UNIT): base helper = qty × harga/unit,
 //         komisi = base × rate%, base helper memotong BASE job primary target
+//         — hanya bila komisi helper > 0 (staf tanpa tarif / tarif 0 tidak memotong)
 //     · Rule FIXED (nilai flat, dengan/tanpa harga/unit): komisi = nominal rule
 //         (sekali per staf, tidak dikali qty), nominal memotong KOMISI akhir job primary
 //   Primary:
@@ -167,7 +168,9 @@ function calcCategoryItem({ subtotal, itemQty, jobs, qtyOverrides = {} }) {
         // Helper persen: base helper = qty × harga/unit → memotong BASE job utama
         effectiveBase = qty.mul(price);
         if (hasRule(w)) amount = roundRp(effectiveBase.mul(rateOf(w)).div(100));
-        ded(job.deductsFromJobId).base = ded(job.deductsFromJobId).base.add(effectiveBase);
+        // Base helper hanya memotong job utama bila helper benar-benar dapat komisi (> 0):
+        // staf helper tanpa tarif / tarif 0 tidak mengurangi komisi job utama (COM-009, keputusan user 2026-10-18)
+        if (amount.gt(0)) ded(job.deductsFromJobId).base = ded(job.deductsFromJobId).base.add(effectiveBase);
       } else {
         // Helper bernilai flat (rule FIXED, dengan/tanpa harga per unit): nominal rule
         // dibayar sekali per staf dan memotong KOMISI job utama (bukan base / invoice)

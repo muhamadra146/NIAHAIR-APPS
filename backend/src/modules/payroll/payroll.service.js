@@ -4,8 +4,8 @@ const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { resolveOrderBy } = require("../../utils/sort");
 const { wibDateStr, wibDayEnd } = require("../../utils/date");
-const { buildWorkPeriod, DEFAULT_PAY_DAY } = require("../../utils/payPeriod");
-const { computeMealAllowance, computeTransportAllowance, computeProration, computeAlphaDays, countUnscheduledDays, isOutsideEmployment, computeEmployerBpjs, PRESENT_STATUSES } = require("./payroll.calc");
+const { buildWorkPeriod, DEFAULT_PAY_DAY, isWorkPeriod } = require("../../utils/payPeriod");
+const { computeMealAllowance, computeTransportAllowance, computeProration, computeRangeProration, rangeProrationLabel, computeAlphaDays, countUnscheduledDays, isOutsideEmployment, computeEmployerBpjs, PRESENT_STATUSES } = require("./payroll.calc");
 const repo            = require("./payroll.repository");
 const notification = require("../notification/notification.service");
 const { createSyncJob, retrySync } = require("../syncQueue/syncQueue.service");
@@ -89,10 +89,15 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
     ? computeAlphaDays({ periodStart, periodEnd, schedules, attendances, holidays, hireDate, resignDate })
     : Math.max(workingDays - presentDays, 0);
 
-  // Gaji pokok proporsional bila masuk/keluar di tengah periode (PAY-001)
-  const proration = hasPeriod
-    ? computeProration({ periodStart, periodEnd, schedules, hireDate, resignDate })
-    : { prorated: false };
+  // Gaji pokok proporsional bila masuk/keluar di tengah periode (PAY-001).
+  // Mode Rentang Tanggal (periode bukan satu periode gaji penuh): hari kalender ÷ hari bulan kalender,
+  // per bagian bulan (keputusan user 2026-10-18). Mode Per Bulan tidak berubah.
+  const isRange   = hasPeriod && !isWorkPeriod(periodStart, periodEnd);
+  const proration = !hasPeriod
+    ? { prorated: false }
+    : isRange
+      ? computeRangeProration({ periodStart, periodEnd, hireDate, resignDate })
+      : computeProration({ periodStart, periodEnd, schedules, hireDate, resignDate });
   const baseSalaryAmount = proration.prorated ? D(s.baseSalary).mul(proration.factor) : D(s.baseSalary);
   const tunjanganAmount  = proration.prorated ? D(s.tunjangan ?? 0).mul(proration.factor) : D(s.tunjangan ?? 0);
 
@@ -115,7 +120,7 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
 
   // Transport (PAY-018): pembagi = hari periode − hari OFF; tiap hari tidak hadir dipotong tarif harian
   const transport = hasPeriod
-    ? computeTransportAllowance({ monthlyAmount: s.transportAllowance, periodStart, periodEnd, schedules, attendances, holidays, hireDate, resignDate })
+    ? computeTransportAllowance({ monthlyAmount: s.transportAllowance, periodStart, periodEnd, schedules, attendances, holidays, hireDate, resignDate, rangeFactor: isRange ? proration.factor : null })
     : { amount: D(s.transportAllowance), absentDays: 0, divisor: 0, dailyRate: D(0) };
   const transportAmount = transport.amount;
 
@@ -157,13 +162,21 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   };
 
   // INCOME
-  if (proration.prorated) {
+  if (proration.range) {
+    // quantity diisi → slip proporsional (BPJS perusahaan tetap dari gaji pokok penuh, computeEmployerBpjs)
+    const label = rangeProrationLabel(proration.parts);
+    const days  = proration.employedDays;
+    addItem("INCOME", "gaji", `Gaji Pokok (${label})`, baseSalaryAmount, days, days > 0 ? baseSalaryAmount.div(D(days)) : null);
+  } else if (proration.prorated) {
     addItem("INCOME", "gaji", `Gaji Pokok (${proration.employedWorkDays}/${proration.divisor} hari kerja)`, baseSalaryAmount, proration.employedWorkDays, D(s.baseSalary).div(D(proration.divisor)));
   } else {
     addItem("INCOME", "gaji",            "Gaji Pokok",                      baseSalaryAmount);
   }
   addItem("INCOME", "makan",           meal.halfDays > 0 ? `Uang Makan (${meal.fullDays} penuh, ${meal.halfDays} setengah hari)` : "Uang Makan", meal.amount, meal.units, s.mealAllowancePerDay);
-  if (proration.prorated) {
+  if (proration.range) {
+    const days = proration.employedDays;
+    addItem("INCOME", "tunjangan", `Tunjangan (${rangeProrationLabel(proration.parts)})`, tunjanganAmount, days, days > 0 ? tunjanganAmount.div(D(days)) : null);
+  } else if (proration.prorated) {
     addItem("INCOME", "tunjangan", `Tunjangan (${proration.employedWorkDays}/${proration.divisor} hari kerja)`, tunjanganAmount, proration.employedWorkDays, D(s.tunjangan ?? 0).div(D(proration.divisor)));
   } else {
     addItem("INCOME", "tunjangan",       "Tunjangan",                       tunjanganAmount);

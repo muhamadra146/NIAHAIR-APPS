@@ -92,7 +92,7 @@ const computeMealAllowance = ({ ratePerDay, attendances, schedules }) => {
  *                      → cuti, sakit, izin tidak masuk, alpha dipotong; libur nasional tidak
  *   hari tanpa jadwal dianggap hari kerja (jadwal harus diisi lengkap)
  */
-const computeTransportAllowance = ({ monthlyAmount, periodStart, periodEnd, schedules, attendances, holidays, hireDate = null, resignDate = null }) => {
+const computeTransportAllowance = ({ monthlyAmount, periodStart, periodEnd, schedules, attendances, holidays, hireDate = null, resignDate = null, rangeFactor = null }) => {
   const dates      = periodDates(periodStart, periodEnd);
   const offDates   = offDateSet(dates, schedules);
   const holidaySet = new Set(holidays.map((h) => dateKey(h.date)));
@@ -102,6 +102,18 @@ const computeTransportAllowance = ({ monthlyAmount, periodStart, periodEnd, sche
   const divisor          = dates.length - offDates.size;
   const employedWorkDays = employed.filter((d) => !offDates.has(d)).length;
   const absentDays = employed.filter((d) => !offDates.has(d) && !holidaySet.has(d) && !present.has(d)).length;
+
+  // Mode Rentang Tanggal (PAY-001, keputusan user 2026-10-18): tunjangan bulanan diproporsikan
+  // hari kalender (rangeFactor), lalu dibagi rata ke hari kerja rentang untuk potongan tidak hadir.
+  if (rangeFactor != null) {
+    const base = D(monthlyAmount).mul(D(rangeFactor));
+    if (employedWorkDays <= 0) {
+      return { amount: base, divisor: 0, dailyRate: D(0), absentDays: 0, offDays: offDates.size, periodDays: dates.length, employedWorkDays: 0 };
+    }
+    const dailyRate = base.div(D(employedWorkDays));
+    const amount    = Prisma.Decimal.max(D(0), base.minus(dailyRate.mul(D(absentDays))));
+    return { amount, divisor: employedWorkDays, dailyRate, absentDays, offDays: offDates.size, periodDays: dates.length, employedWorkDays };
+  }
 
   if (divisor <= 0) {
     return { amount: D(monthlyAmount), divisor: 0, dailyRate: D(0), absentDays: 0, offDays: offDates.size, periodDays: dates.length, employedWorkDays: 0 };
@@ -127,6 +139,29 @@ const computeProration = ({ periodStart, periodEnd, schedules, hireDate = null, 
   const factor   = divisor > 0 ? D(employedWorkDays).div(D(divisor)) : D(1);
   return { factor, prorated, divisor, employedWorkDays };
 };
+
+const daysInMonthOf = (yearMonth) => {
+  const [y, m] = yearMonth.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+};
+
+/**
+ * Proporsi mode Rentang Tanggal (PAY-001, keputusan user 2026-10-18).
+ *   factor = Σ per bulan kalender: hari rentang selama bekerja ÷ jumlah hari bulan itu
+ *   contoh: 1–4 Nov → 4/30; 28 Okt – 3 Nov → 4/31 + 3/30
+ * Hari kalender (OFF ikut dihitung), sejalan dengan gaji bulanan yang dibayar penuh untuk sebulan.
+ */
+const computeRangeProration = ({ periodStart, periodEnd, hireDate = null, resignDate = null }) => {
+  const employed = employedDates(periodDates(periodStart, periodEnd), hireDate, resignDate);
+  const counts = new Map();
+  for (const d of employed) counts.set(d.slice(0, 7), (counts.get(d.slice(0, 7)) ?? 0) + 1);
+  const parts  = [...counts].map(([yearMonth, days]) => ({ yearMonth, days, monthDays: daysInMonthOf(yearMonth) }));
+  const factor = parts.reduce((acc, p) => acc.plus(D(p.days).div(D(p.monthDays))), D(0));
+  return { factor, prorated: true, range: true, parts, employedDays: employed.length };
+};
+
+/** "4/30 hari" atau "4/31 + 3/30 hari" */
+const rangeProrationLabel = (parts) => `${parts.map((p) => `${p.days}/${p.monthDays}`).join(" + ")} hari`;
 
 /**
  * Hari alpha untuk Potongan Absen (PAY-019): hari kerja selama bekerja yang tidak ada absensi hadir.
@@ -184,6 +219,8 @@ module.exports = {
   computeMealAllowance,
   computeTransportAllowance,
   computeProration,
+  computeRangeProration,
+  rangeProrationLabel,
   computeAlphaDays,
   countUnscheduledDays,
   isOutsideEmployment,

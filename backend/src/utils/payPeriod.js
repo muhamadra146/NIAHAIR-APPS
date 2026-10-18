@@ -60,4 +60,21 @@ const resolvePayPeriod = (payDay, workMonth) => {
   return { yearMonth: ym, payDay: p, ...buildWorkPeriod(p, ym) };
 };
 
-module.exports = { DEFAULT_PAY_DAY, buildWorkPeriod, workMonthFor, resolvePayPeriod };
+const isoDay = (d) => new Date(d).toISOString().slice(0, 10);
+
+/**
+ * true bila [periodStart, periodEnd] persis satu periode gaji penuh untuk salah satu tanggal gajian
+ * (mode Per Bulan). Payroll tidak menyimpan modenya, jadi periode lain = mode Rentang Tanggal (PAY-001).
+ */
+const isWorkPeriod = (periodStart, periodEnd) => {
+  const start = isoDay(periodStart);
+  const end   = isoDay(periodEnd);
+  const ym    = start.slice(0, 7);
+  for (let pd = 1; pd <= 31; pd++) {
+    const p = buildWorkPeriod(pd, ym);
+    if (isoDay(p.periodStart) === start && isoDay(p.periodEnd) === end) return true;
+  }
+  return false;
+};
+
+module.exports = { DEFAULT_PAY_DAY, buildWorkPeriod, workMonthFor, resolvePayPeriod, isWorkPeriod };

@@ -178,6 +178,56 @@ describe("calcCategoryItem", () => {
     expect(b.amount).toBe(49_500);   // 990.000 × 1/2 × 10%
   });
 
+  // Keputusan user 2026-10-18 (COM-009): helper tanpa komisi tidak memotong base job utama
+  describe("helper per unit tanpa komisi tidak memotong base job utama", () => {
+    const run = (helperOver) => calcCategoryItem({
+      subtotal: 3_000_000, itemQty: 180,
+      jobs: [
+        job("pasang", { workers: [worker("a", { workQty: 180 })] }),
+        job("remove", { deductsFromJobId: "pasang", pricePerUnit: 5000, sortOrder: 1,
+          workers: [worker("h", { workQty: 120, ...helperOver })] }),
+      ],
+    });
+
+    test("staf helper tanpa tarif (commissionType null) → base utama utuh", () => {
+      const jobs = run({ commissionType: null, commissionValue: null, commissionRuleId: null });
+      const p = jobs.find((j) => j.commissionJobId === "pasang");
+      expect(p.baseDeduction).toBe(0);
+      expect(p.remainingBase).toBe(3_000_000);
+      expect(p.rows[0].amount).toBe(300_000);              // sebelumnya 240.000 (base −600.000)
+      expect(rowsOf(jobs, "remove")[0]).toMatchObject({ amount: 0, hasRule: false, effectiveBase: 600_000 });
+    });
+
+    test("staf helper tarif 0% → base utama utuh", () => {
+      const jobs = run({ commissionType: "PERCENTAGE", commissionValue: "0" });
+      expect(jobs.find((j) => j.commissionJobId === "pasang").rows[0].amount).toBe(300_000);
+    });
+
+    test("staf helper dengan komisi > 0 → base tetap dipotong", () => {
+      const jobs = run({ commissionType: "PERCENTAGE", commissionValue: "10" });
+      const p = jobs.find((j) => j.commissionJobId === "pasang");
+      expect(p.baseDeduction).toBe(600_000);
+      expect(p.rows[0].amount).toBe(240_000);
+      expect(rowsOf(jobs, "remove")[0].amount).toBe(60_000);
+    });
+
+    test("dua helper: hanya yang dapat komisi yang memotong", () => {
+      const jobs = calcCategoryItem({
+        subtotal: 3_000_000, itemQty: 180,
+        jobs: [
+          job("pasang", { workers: [worker("a", { workQty: 180 })] }),
+          job("remove", { deductsFromJobId: "pasang", pricePerUnit: 5000, sortOrder: 1, workers: [
+            worker("h1", { workQty: 60 }),
+            worker("h2", { workQty: 60, commissionType: null, commissionValue: null, commissionRuleId: null }),
+          ] }),
+        ],
+      });
+      const p = jobs.find((j) => j.commissionJobId === "pasang");
+      expect(p.baseDeduction).toBe(300_000);
+      expect(p.rows[0].amount).toBe(270_000);
+    });
+  });
+
   test("hasil diurutkan menurut sortOrder", () => {
     const jobs = calcCategoryItem({
       subtotal: 100, itemQty: 1,

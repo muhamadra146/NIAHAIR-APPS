@@ -250,6 +250,9 @@ function GenerateDialog({ open, onClose, onGenerated }: {
               {periodStart && periodEnd && periodEnd < periodStart && (
                 <p className="col-span-2 text-xs text-red-500 -mt-1">Tanggal selesai harus setelah tanggal mulai</p>
               )}
+              <p className="col-span-2 text-xs text-muted-foreground">
+                Gaji pokok, tunjangan & transport dihitung proporsional: hari dalam rentang ÷ jumlah hari bulan kalender (per bulan bila melewati dua bulan).
+              </p>
             </div>
           )}
 

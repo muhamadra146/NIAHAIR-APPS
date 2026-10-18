@@ -63,17 +63,19 @@ export function buildBreakdownLines(b: BreakdownInput): string[] {
 
   const rate = `${num(b.commissionValue)}%`;
 
-  // Helper persen per unit: base helper memotong base job utama
+  // Helper persen per unit: base helper memotong base job utama — hanya bila komisi helper > 0
+  // (COM-009, keputusan user 2026-10-18)
   if (b.role === "HELPER_UNIT" && b.commissionType === "PERCENTAGE") {
+    const cut = b.amount > 0 ? "memotong base job utama" : "tidak memotong base job utama karena komisi helper Rp 0";
     return [
-      `${num(b.workQty)} ${b.unit} × ${rp(b.pricePerUnit ?? 0)} = ${rp(b.effectiveBase)} (memotong base job utama)`,
+      `${num(b.workQty)} ${b.unit} × ${rp(b.pricePerUnit ?? 0)} = ${rp(b.effectiveBase)} (${cut})`,
       `${rp(b.effectiveBase)} × ${rate} = ${rp(b.amount)}`,
     ];
   }
 
   // Helper bernilai flat (rule FIXED, dengan/tanpa harga per unit): memotong komisi job utama
   if (b.role === "HELPER_UNIT" || b.role === "HELPER_FLAT") {
-    return [`Komisi flat ${rp(b.amount)} (memotong komisi job utama)`];
+    return [`Komisi flat ${rp(b.amount)} (${b.amount > 0 ? "memotong" : "tidak memotong"} komisi job utama)`];
   }
 
   // PRIMARY

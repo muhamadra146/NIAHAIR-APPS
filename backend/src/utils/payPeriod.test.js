@@ -1,6 +1,6 @@
 'use strict';
 
-const { buildWorkPeriod, workMonthFor, resolvePayPeriod } = require("./payPeriod");
+const { buildWorkPeriod, workMonthFor, resolvePayPeriod, isWorkPeriod } = require("./payPeriod");
 
 const ymd = (d) => d.toISOString().slice(0, 10);
 const span = (p) => [ymd(p.periodStart), ymd(p.periodEnd), ymd(p.payDate)];
@@ -81,5 +81,21 @@ describe("resolvePayPeriod", () => {
     expect(r.yearMonth).toBe("2026-10");
     expect(r.payDay).toBe(5);
     expect(span(r)).toEqual(["2026-10-05", "2026-11-04", "2026-11-05"]);
+  });
+});
+
+// PAY-001 (keputusan user 2026-10-18): periode yang bukan satu periode gaji penuh = mode Rentang Tanggal
+describe("isWorkPeriod", () => {
+  const d = (s) => new Date(`${s}T00:00:00Z`);
+  test("periode gaji penuh (payDay 1, 7, 31 terpangkas) → true", () => {
+    expect(isWorkPeriod(d("2026-10-01"), d("2026-10-31"))).toBe(true);
+    expect(isWorkPeriod(d("2026-10-07"), d("2026-11-06"))).toBe(true);
+    expect(isWorkPeriod(d("2026-01-31"), d("2026-02-27"))).toBe(true);
+    expect(isWorkPeriod(d("2026-02-28"), d("2026-03-30"))).toBe(true);
+  });
+  test("rentang pendek / transisi → false", () => {
+    expect(isWorkPeriod(d("2026-11-02"), d("2026-11-05"))).toBe(false);
+    expect(isWorkPeriod(d("2026-10-25"), d("2026-11-30"))).toBe(false);
+    expect(isWorkPeriod(d("2026-10-01"), d("2026-10-30"))).toBe(false);
   });
 });
