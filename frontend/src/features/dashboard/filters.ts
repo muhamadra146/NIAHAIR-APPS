@@ -2,6 +2,7 @@ import { useSearchParams } from "react-router-dom";
 import { toWibDateStr, wibMonthRange } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
 import type { FinanceDashboardParams } from "./api";
+import { dateRangeError } from "./dateRange";
 
 /** Nilai "cabang" di URL untuk semua cabang */
 export const ALL_BRANCHES = "semua";
@@ -36,5 +37,8 @@ export function useFinanceFilters() {
   /** Query string filter, untuk tautan ke halaman rincian */
   const query = new URLSearchParams({ dari: startDate, sampai: endDate, cabang: branch }).toString();
 
-  return { startDate, endDate, branch, apiParams, setFilters, query };
+  /** Peringatan rentang tanggal tidak valid ("Dari" sesudah "Sampai") — API menolak dengan 400 */
+  const rangeError = dateRangeError(startDate, endDate);
+
+  return { startDate, endDate, branch, apiParams, setFilters, query, rangeError };
 }

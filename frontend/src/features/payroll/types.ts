@@ -14,6 +14,13 @@ export interface PayrollItem {
   notes:     string | null;
 }
 
+export interface PayrollAccurateSync {
+  status:       "SYNCED" | "PENDING" | "FAILED";
+  /** Alasan gagal terakhir (FAILED, atau PENDING yang akan dicoba ulang otomatis) */
+  errorMessage: string | null;
+  jobId:        string | null;
+}
+
 export interface CommissionBreakdownItem {
   id:               string;
   commissionAmount: number;
@@ -39,6 +46,8 @@ export interface Payroll {
   accurateJournalId:     string | null;
   accurateJournalNumber: string | null;
   lastSyncAt:            string | null;
+  /** Status jurnal Accurate (hanya payroll PAID) dari antrian sync */
+  accurateSync?:         PayrollAccurateSync | null;
   createdAt:      string;
   updatedAt:      string;
   employee: {

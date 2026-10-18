@@ -102,6 +102,21 @@ export interface PurchaseRow {
   warehouse:         { name: string } | null;
 }
 
+/** Payroll yang dibayar dalam periode (menurut tanggal bayar) */
+export interface PaidPayrollRow {
+  id:                    string;
+  periodStart:           string;
+  periodEnd:             string;
+  paidAt:                string;
+  grossIncome:           number;
+  totalDeductions:       number;
+  netSalary:             number;
+  accurateJournalNumber: string | null;
+  employee:              { id: string; name: string; employeeCode: string | null };
+  branch:                { id: string; name: string };
+}
+
 export type FinanceDetails =
   | { type: "revenue";   rows: IncomeRow[];   summary: IncomeSummary }
-  | { type: "purchases"; rows: PurchaseRow[]; summary: { total: number; count: number } };
+  | { type: "purchases"; rows: PurchaseRow[]; summary: { total: number; count: number } }
+  | { type: "payroll";   rows: PaidPayrollRow[]; summary: { total: number; count: number; employeeCount: number } };

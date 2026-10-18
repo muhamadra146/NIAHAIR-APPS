@@ -17,7 +17,7 @@ const financeDashboardController = async (req, res, next) => {
 const financeDetailsController = async (req, res, next) => {
   try {
     const { type, branchId, startDate, endDate } = req.query;
-    const result = await getFinanceDetails({ type, branchId, startDate, endDate });
+    const result = await getFinanceDetails({ type, branchId, startDate, endDate, roleCode: req.user?.roleCode });
     return success(res, result, "Finance dashboard details fetched");
   } catch (err) {
     next(err);

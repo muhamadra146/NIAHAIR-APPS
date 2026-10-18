@@ -36,6 +36,16 @@ export const submitPayroll = async (id: string): Promise<Payroll> => {
   return data.data;
 };
 
+export const revertPayrollToDraft = async (id: string): Promise<Payroll> => {
+  const { data } = await api.post<ApiResponse<Payroll>>(`/payroll/${id}/revert-draft`);
+  return data.data;
+};
+
+export const retryPayrollSync = async (id: string): Promise<Payroll> => {
+  const { data } = await api.post<ApiResponse<Payroll>>(`/payroll/${id}/sync-retry`);
+  return data.data;
+};
+
 export const approvePayroll = async (id: string): Promise<Payroll> => {
   const { data } = await api.post<ApiResponse<Payroll>>(`/payroll/${id}/approve`);
   return data.data;

@@ -5,6 +5,7 @@ const AppError        = require("../../common/errors/AppError");
 const repo            = require("./dashboard.repository");
 const settingRepo     = require("../setting/setting.repository");
 const { buildRevenue } = require("./dashboard.revenue");
+const { ROLES }       = require("../../common/constants/role.constant");
 
 // Kode item penentu pendapatan bersih — diatur di tabel settings (FIN-039)
 const CODE_SETTINGS = {
@@ -29,6 +30,20 @@ const loadCodes = async () => {
   return Object.fromEntries(entries);
 };
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Filter tanggal: format TTTT-BB-HH dan "Dari" tidak boleh sesudah "Sampai" */
+const assertDateRange = (startDate, endDate) => {
+  for (const d of [startDate, endDate]) {
+    if (d && (!DATE_RE.test(d) || Number.isNaN(new Date(`${d}T00:00:00Z`).getTime()))) {
+      throw new AppError("Format tanggal harus TTTT-BB-HH", StatusCodes.BAD_REQUEST);
+    }
+  }
+  if (startDate && endDate && startDate > endDate) {
+    throw new AppError("Tanggal \"Dari\" tidak boleh setelah tanggal \"Sampai\"", StatusCodes.BAD_REQUEST);
+  }
+};
+
 /** Semua kejadian uang client dalam periode → baris pendapatan kotor/bersih */
 const getRevenue = async (params) => {
   const [invoicePayments, depositPayments, depositApplications, depositRefunds, codes] = await Promise.all([
@@ -49,6 +64,7 @@ const getRevenue = async (params) => {
  * @param {{ branchId?: string, startDate?: string, endDate?: string }} params
  */
 const getFinanceDashboard = async ({ branchId, startDate, endDate }) => {
+  assertDateRange(startDate, endDate);
   const params = { branchId, startDate, endDate };
   const [revenue, invoices, purchases, warehouses, commissions, payroll] = await Promise.all([
     getRevenue(params),
@@ -75,17 +91,41 @@ const getFinanceDashboard = async ({ branchId, startDate, endDate }) => {
   };
 };
 
-const DETAIL_TYPES = ["revenue", "purchases"];
+const DETAIL_TYPES = ["revenue", "purchases", "payroll"];
 
-/** Data di balik kartu dashboard: baris pendapatan atau daftar pembelian */
-const getFinanceDetails = async ({ type, branchId, startDate, endDate }) => {
+// Rincian gaji per karyawan: hanya yang boleh membuka Penggajian (PAY-001 / PAY-032) — bukan MANAGER
+const PAYROLL_DETAIL_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.FINANCE];
+
+/** Data di balik kartu dashboard: baris pendapatan, daftar pembelian, atau gaji dibayar */
+const getFinanceDetails = async ({ type, branchId, startDate, endDate, roleCode }) => {
   if (!DETAIL_TYPES.includes(type)) {
     throw new AppError(`type harus salah satu dari: ${DETAIL_TYPES.join(", ")}`, StatusCodes.BAD_REQUEST);
   }
+  assertDateRange(startDate, endDate);
   const params = { branchId, startDate, endDate };
   if (type === "revenue") {
     const { rows, summary } = await getRevenue(params);
     return { type, rows, summary };
+  }
+  if (type === "payroll") {
+    if (!PAYROLL_DETAIL_ROLES.includes(roleCode)) {
+      throw new AppError("Rincian gaji hanya untuk Owner, Super Admin, dan Finance", StatusCodes.FORBIDDEN);
+    }
+    const rows = (await repo.findPaidPayrolls(params)).map((r) => ({
+      ...r,
+      grossIncome:     Number(r.grossIncome),
+      totalDeductions: Number(r.totalDeductions),
+      netSalary:       Number(r.netSalary),
+    }));
+    return {
+      type,
+      rows,
+      summary: {
+        total:         rows.reduce((s, r) => s + r.netSalary, 0),
+        count:         rows.length,
+        employeeCount: new Set(rows.map((r) => r.employee.id)).size,
+      },
+    };
   }
   const rows = await repo.findPurchases(params);
   return {

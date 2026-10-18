@@ -3,12 +3,12 @@ const { Prisma }      = require("@prisma/client");
 const AppError        = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const { resolveOrderBy } = require("../../utils/sort");
-const { wibDateStr } = require("../../utils/date");
+const { wibDateStr, wibDayEnd } = require("../../utils/date");
 const { buildWorkPeriod, DEFAULT_PAY_DAY } = require("../../utils/payPeriod");
-const { computeMealAllowance, computeTransportAllowance, computeProration, computeAlphaDays, countUnscheduledDays, PRESENT_STATUSES } = require("./payroll.calc");
+const { computeMealAllowance, computeTransportAllowance, computeProration, computeAlphaDays, countUnscheduledDays, isOutsideEmployment, computeEmployerBpjs, PRESENT_STATUSES } = require("./payroll.calc");
 const repo            = require("./payroll.repository");
 const notification = require("../notification/notification.service");
-const { createSyncJob } = require("../syncQueue/syncQueue.service");
+const { createSyncJob, retrySync } = require("../syncQueue/syncQueue.service");
 
 const ORDER_MAP = {
   periodStart:    { periodStart: "asc" },
@@ -249,16 +249,67 @@ const getAll = async ({ page = 1, limit = 20, employeeId, branchId, status, year
     where.periodStart = { gte: periodStart, lte: periodEnd };
   }
   const [rows, total] = await Promise.all([repo.findAll({ skip, take, where, orderBy }), repo.count(where)]);
-  return { data: rows, meta: paginationMeta(total, page, limit) };
+  return { data: await withAccurateSync(rows), meta: paginationMeta(total, page, limit) };
 };
 
 const getById = async (id) => {
   const payroll = await repo.findById(id);
   if (!payroll) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
-  return payroll;
+  const [withSync] = await withAccurateSync([payroll]);
+  return withSync;
+};
+
+/**
+ * Status jurnal Accurate per payroll PAID, dari antrian sync terbaru:
+ *   SYNCED  — jurnal sudah ada di Accurate (accurateJournalId)
+ *   FAILED  — job gagal (errorMessage ditampilkan, bisa "Coba lagi")
+ *   PENDING — menunggu / sedang diproses antrian
+ */
+const withAccurateSync = async (payrolls) => {
+  const paidIds = payrolls.filter((p) => p.status === "PAID" && !p.accurateJournalId).map((p) => p.id);
+  const jobs    = paidIds.length > 0 ? ((await repo.findPayrollSyncJobs(paidIds)) ?? []) : [];
+  const latest  = new Map();
+  for (const j of jobs) if (!latest.has(j.entityId)) latest.set(j.entityId, j);
+
+  return payrolls.map((p) => {
+    if (p.status !== "PAID") return p;
+    if (p.accurateJournalId) return { ...p, accurateSync: { status: "SYNCED", errorMessage: null, jobId: null } };
+    const job = latest.get(p.id);
+    const failed = job?.status === "FAILED";
+    return {
+      ...p,
+      accurateSync: {
+        status:       failed ? "FAILED" : "PENDING",
+        // PENDING setelah percobaan gagal (akan diulang otomatis) tetap menampilkan alasan terakhir
+        errorMessage: job?.errorMessage ?? null,
+        jobId:        job?.id ?? null,
+      },
+    };
+  });
+};
+
+/**
+ * "Coba lagi" sinkronisasi jurnal payroll PAID yang gagal: ulang job FAILED terakhir,
+ * atau buat job baru bila belum ada. Job yang masih menunggu dibiarkan.
+ */
+const retryAccurateSync = async (id) => {
+  const payroll = await repo.findById(id);
+  if (!payroll) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (payroll.status !== "PAID")
+    throw new AppError("Hanya payroll yang sudah dibayar yang dijurnal ke Accurate", StatusCodes.UNPROCESSABLE_ENTITY);
+  if (payroll.accurateJournalId)
+    throw new AppError("Jurnal payroll ini sudah ada di Accurate", StatusCodes.UNPROCESSABLE_ENTITY);
+
+  const jobs = (await repo.findPayrollSyncJobs([id])) ?? [];
+  const job  = jobs[0];
+  if (job?.status === "FAILED") await retrySync(job.id);
+  else if (!job || job.status === "SUCCESS") await createSyncJob({ entityType: "PAYROLL", entityId: id, direction: "APP_TO_ACCURATE" });
+  return getById(id);
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const { PAY_DAY_MESSAGE } = require("./payroll.validation");
+const isValidPayDay = (v) => /^\d+$/.test(String(v)) && Number(v) >= 1 && Number(v) <= 31;
 const wibToday = () => wibDateStr(new Date());
 const fmtDay = (d) =>
   new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
@@ -268,6 +319,8 @@ const fmtDay = (d) =>
  * sama dengan bulk generate dan Komisi Saya. Mode rentang untuk periode transisi / kasus khusus.
  */
 const resolveGeneratePeriod = async ({ employeeId, yearMonth, payDay, periodStart: ps, periodEnd: pe }) => {
+  if (payDay != null && payDay !== "" && !isValidPayDay(payDay))
+    throw new AppError(PAY_DAY_MESSAGE, StatusCodes.BAD_REQUEST);
   if (yearMonth) {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth))
       throw new AppError("Format bulan harus YYYY-MM", StatusCodes.BAD_REQUEST);
@@ -345,6 +398,10 @@ const generate = async ({ employeeId, branchId, yearMonth, payDay, periodStart: 
   const { salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, employment } =
     await repo.getGenerationData(employeeId, branchId, periodStart, periodEnd);
 
+  // Periode seluruhnya sebelum Tanggal Masuk / sesudah tanggal resign → tidak ada yang dibayar
+  if (isOutsideEmployment({ periodStart, periodEnd, hireDate: employment?.hireDate, resignDate: employment?.resignDate }))
+    throw new AppError("Periode di luar masa kerja karyawan", StatusCodes.UNPROCESSABLE_ENTITY);
+
   if (!salarySetting)
     throw new AppError("Pengaturan gaji aktif untuk karyawan ini belum ada. Atur di Settings → Gaji Karyawan.", StatusCodes.BAD_REQUEST);
 
@@ -398,6 +455,9 @@ const recalculate = async (id, userId) => {
   const { salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, employment } =
     await repo.getGenerationData(existing.employeeId, existing.branchId, existing.periodStart, existing.periodEnd, id);
 
+  if (isOutsideEmployment({ periodStart: existing.periodStart, periodEnd: existing.periodEnd, hireDate: employment?.hireDate, resignDate: employment?.resignDate }))
+    throw new AppError("Periode di luar masa kerja karyawan", StatusCodes.UNPROCESSABLE_ENTITY);
+
   if (!salarySetting)
     throw new AppError("Pengaturan gaji aktif untuk karyawan ini belum ada", StatusCodes.BAD_REQUEST);
 
@@ -447,6 +507,18 @@ const submitForApproval = async (id, userId) => {
     submittedByUserId: userId ?? null,
   });
   return updated;
+};
+
+/**
+ * Kembalikan ke Draft: PENDING_APPROVAL → DRAFT supaya bisa dihitung ulang
+ * (mis. gaji bersih minus yang tidak bisa disetujui). Payroll APPROVED / PAID terkunci (PAY-005).
+ */
+const revertToDraft = async (id) => {
+  const existing = await repo.findById(id);
+  if (!existing) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (existing.status !== "PENDING_APPROVAL")
+    throw new AppError("Hanya payroll yang menunggu persetujuan yang bisa dikembalikan ke Draft", StatusCodes.UNPROCESSABLE_ENTITY);
+  return repo.update(id, { status: "DRAFT", submittedBy: null, submittedAt: null });
 };
 
 const approve = async (id, approvedBy) => {
@@ -500,6 +572,8 @@ const markAsPaid = async (id, paidBy) => {
         where: {
           employeeId: existing.employeeId,
           status:     "ACTIVE",
+          // sama dengan saat slip dihitung: hanya kasbon yang mulai paling lambat akhir periode
+          ...(existing.periodEnd && { startDate: { lte: wibDayEnd(existing.periodEnd) } }),
           ...(slipComputedAt && { createdAt: { lte: new Date(slipComputedAt) } }),
         },
         orderBy: { createdAt: "asc" },
@@ -538,7 +612,7 @@ const LOCKED_STATUSES = ["APPROVED", "PAID"];
 const assertNotLocked = (payroll, action) => {
   if (LOCKED_STATUSES.includes(payroll.status)) {
     throw new AppError(
-      `Payroll berstatus ${payroll.status} terkunci dan tidak dapat ${action}. Gunakan Payroll Adjustment untuk koreksi.`,
+      `Payroll berstatus ${({ APPROVED: "Disetujui", PAID: "Dibayar" })[payroll.status] ?? payroll.status} terkunci dan tidak dapat ${action}. Gunakan Payroll Adjustment untuk koreksi.`,
       StatusCodes.UNPROCESSABLE_ENTITY,
     );
   }
@@ -607,26 +681,17 @@ const getBpjsReport = async ({ branchId, yearMonth }) => {
 
   const rows = payrolls.map((p) => {
     const setting    = p.employee.salarySettings?.[0];
-    // BPJS dihitung dari gaji pokok PENUH (PAY-001), bukan gaji pokok proporsional.
-    // Slip tidak proporsional: item gaji = gaji pokok penuh saat itu (historis).
-    // Slip proporsional (masuk/keluar tengah periode): pakai gaji pokok dari Setting Gaji.
-    const gajiItem   = p.items.find((i) => i.category === "gaji");
-    const isProrated = gajiItem?.quantity != null;
-    const baseSalary = isProrated && setting?.baseSalary != null
-      ? Number(setting.baseSalary)
-      : Number(gajiItem?.amount ?? setting?.baseSalary ?? 0);
+    // BPJS perusahaan dari gaji pokok PENUH (PAY-001) — helper yang sama dengan jurnal Accurate
+    const employer   = computeEmployerBpjs({ items: p.items, setting });
+    const baseSalary = employer.baseSalary;
 
     const bpjsJht       = getAmt(p.items, "bpjs_jht");
     const bpjsJp        = getAmt(p.items, "bpjs_jp");
     const bpjsKesehatan = getAmt(p.items, "bpjs_kesehatan");
 
-    const jhtEmpPct      = Number(setting?.bpjsJhtEmployerPercent       ?? 0);
-    const jpEmpPct       = Number(setting?.bpjsJpEmployerPercent        ?? 0);
-    const kesEmpPct      = Number(setting?.bpjsKesehatanEmployerPercent ?? 0);
-
-    const bpjsJhtEmployer       = Math.round(baseSalary * jhtEmpPct / 100);
-    const bpjsJpEmployer        = Math.round(baseSalary * jpEmpPct  / 100);
-    const bpjsKesehatanEmployer = Math.round(baseSalary * kesEmpPct / 100);
+    const bpjsJhtEmployer       = employer.jht;
+    const bpjsJpEmployer        = employer.jp;
+    const bpjsKesehatanEmployer = employer.kes;
 
     const totalEmployee = bpjsJht + bpjsJp + bpjsKesehatan;
     const totalEmployer = bpjsJhtEmployer + bpjsJpEmployer + bpjsKesehatanEmployer;
@@ -709,6 +774,6 @@ const deletePayroll = async (id) => {
 };
 
 module.exports = {
-  getAll, getById, generate, previewPeriod, recalculate, submitForApproval, approve,
-  markAsPaid, updateNotes, getMy, getBpjsReport, bulkGenerate, deletePayroll,
+  getAll, getById, generate, previewPeriod, recalculate, submitForApproval, revertToDraft, approve,
+  markAsPaid, retryAccurateSync, updateNotes, getMy, getBpjsReport, bulkGenerate, deletePayroll,
 };

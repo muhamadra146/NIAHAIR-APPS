@@ -3,10 +3,10 @@ const authenticate = require("../../middlewares/auth.middleware");
 const authorize    = require("../../middlewares/role.middleware");
 const validate     = require("../../middlewares/validate.middleware");
 const { ROLES }   = require("../../common/constants/role.constant");
-const { generateSchema, bulkGenerateSchema, updateNotesSchema } = require("./payroll.validation");
+const { generateSchema, bulkGenerateSchema, updateNotesSchema, validateBody } = require("./payroll.validation");
 const {
   getAllController, getByIdController, generateController, bulkGenerateController, previewPeriodController,
-  recalculateController, submitController, approveController, markAsPaidController,
+  recalculateController, submitController, revertToDraftController, approveController, markAsPaidController, retrySyncController,
   updateNotesController, getMyController, getBpjsReportController, deleteController,
 } = require("./payroll.controller");
 
@@ -25,11 +25,11 @@ router.get("/",    authenticate, authorize(...ALL_ADMIN), getAllController);
 router.get("/:id", authenticate, authorize(...ALL_ADMIN), getByIdController);
 
 router.post("/generate",
-  authenticate, authorize(...ALL_ADMIN), validate(generateSchema), generateController,
+  authenticate, authorize(...ALL_ADMIN), validateBody(generateSchema), generateController,
 );
 
 router.post("/bulk-generate",
-  authenticate, authorize(...ALL_ADMIN), validate(bulkGenerateSchema), bulkGenerateController,
+  authenticate, authorize(...ALL_ADMIN), validateBody(bulkGenerateSchema), bulkGenerateController,
 );
 
 router.post("/:id/recalculate",
@@ -40,12 +40,22 @@ router.post("/:id/submit",
   authenticate, authorize(...ALL_ADMIN), submitController,
 );
 
+// Kembalikan ke Draft (PENDING_APPROVAL → DRAFT): siapa pun yang boleh mengajukan
+router.post("/:id/revert-draft",
+  authenticate, authorize(...ALL_ADMIN), revertToDraftController,
+);
+
 router.post("/:id/approve",
   authenticate, authorize(...APPROVERS), approveController,
 );
 
 router.post("/:id/mark-paid",
   authenticate, authorize(...APPROVERS), markAsPaidController,
+);
+
+// Coba lagi kirim jurnal payroll PAID ke Accurate (job sync gagal)
+router.post("/:id/sync-retry",
+  authenticate, authorize(...ALL_ADMIN), retrySyncController,
 );
 
 router.patch("/:id/notes",

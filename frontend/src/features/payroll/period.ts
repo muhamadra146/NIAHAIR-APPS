@@ -14,6 +14,22 @@ export const payrollRangeLabel = (periodStart: string, periodEnd: string) => {
   return `${s} – ${e}`;
 };
 
+/**
+ * Isian "Filter Tanggal Gajian" (Bulk Generate): kosong = semua karyawan,
+ * selain itu harus bilangan bulat 1–31.
+ */
+export const parsePayDay = (raw: string): { value?: number; error?: string } => {
+  const v = raw.trim();
+  if (v === "") return {};
+  if (!/^\d+$/.test(v) || Number(v) < 1 || Number(v) > 31) {
+    return { error: "Tanggal gajian harus bilangan bulat 1–31" };
+  }
+  return { value: Number(v) };
+};
+
+/** Bulan daftar payroll (YYYY-MM) dari tanggal mulai periode — bulan kerja */
+export const payrollListMonth = (periodStart: string) => periodStart.slice(0, 7);
+
 /** "1 Nov 2026" */
 export const payrollDayLabel = (date: string) =>
   new Date(date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: WIB_TZ });

@@ -23,6 +23,7 @@ const findPayrollForSync = (id) =>
             orderBy: { effectiveDate: "desc" },
             take:    1,
             select: {
+              baseSalary:                   true,   // dasar BPJS perusahaan bila slip proporsional (PAY-001)
               bpjsJhtEmployerPercent:       true,
               bpjsJpEmployerPercent:        true,
               bpjsKesehatanEmployerPercent: true,
@@ -34,7 +35,7 @@ const findPayrollForSync = (id) =>
         select: { id: true, code: true, name: true, accurateBranchId: true },
       },
       items: {
-        select: { type: true, category: true, label: true, amount: true },
+        select: { type: true, category: true, label: true, amount: true, quantity: true },
         orderBy: [{ type: "asc" }, { category: "asc" }],
       },
     },

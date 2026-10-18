@@ -1,7 +1,7 @@
 'use strict';
 
 const prisma           = require("../../config/prisma");
-const { wibDayStart, wibDayEnd, toDateOnly } = require("../../utils/date");
+const { wibDayStart, wibDayEnd } = require("../../utils/date");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -10,14 +10,6 @@ function dateWhere(field, startDate, endDate) {
   const f = {};
   if (startDate) f.gte = wibDayStart(startDate);
   if (endDate)   f.lte = wibDayEnd(endDate);
-  return Object.keys(f).length ? { [field]: f } : {};
-}
-
-// Kolom @db.Date → 00:00 UTC dari tanggal WIB
-function dateOnlyWhere(field, startDate, endDate) {
-  const f = {};
-  if (startDate) f.gte = toDateOnly(startDate);
-  if (endDate)   f.lte = toDateOnly(endDate);
   return Object.keys(f).length ? { [field]: f } : {};
 }
 
@@ -197,12 +189,16 @@ const getCommissionSummary = async ({ branchId, startDate, endDate }) => {
 
 // ── Payroll Summary ───────────────────────────────────────────────────────────
 
+// Gaji dibayar menurut TANGGAL BAYAR (paidAt, batas hari WIB) — keputusan owner 2026-10-18,
+// bukan periode kerja, agar cocok dengan arus kas.
+const paidPayrollWhere = ({ branchId, startDate, endDate }) => ({
+  status: "PAID",
+  ...(branchId ? { branchId } : {}),
+  ...dateWhere("paidAt", startDate, endDate),
+});
+
 const getPayrollSummary = async ({ branchId, startDate, endDate }) => {
-  const where = {
-    status: "PAID",
-    ...(branchId ? { branchId } : {}),
-    ...dateOnlyWhere("periodStart", startDate, endDate),
-  };
+  const where = paidPayrollWhere({ branchId, startDate, endDate });
 
   const agg = await prisma.payroll.aggregate({
     where,
@@ -225,7 +221,22 @@ const getPayrollSummary = async ({ branchId, startDate, endDate }) => {
   };
 };
 
+/** Rincian kartu "Gaji Dibayar": payroll PAID menurut tanggal bayar */
+const findPaidPayrolls = ({ branchId, startDate, endDate }) =>
+  prisma.payroll.findMany({
+    where:   paidPayrollWhere({ branchId, startDate, endDate }),
+    orderBy: { paidAt: "asc" },
+    select: {
+      id: true, periodStart: true, periodEnd: true, paidAt: true,
+      grossIncome: true, totalDeductions: true, netSalary: true,
+      accurateJournalNumber: true,
+      employee: { select: { id: true, name: true, employeeCode: true } },
+      branch:   { select: { id: true, name: true } },
+    },
+  });
+
 module.exports = {
+  findPaidPayrolls,
   getRevenueSummary,
   findInvoicePayments,
   findDepositPayments,

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   fetchPayrolls, fetchPayroll,
   generatePayroll, recalculatePayroll,
-  submitPayroll, approvePayroll, markPayrollAsPaid,
+  submitPayroll, approvePayroll, markPayrollAsPaid, revertPayrollToDraft, retryPayrollSync,
   fetchMyPayrolls, fetchBpjsReport, deletePayroll, bulkGeneratePayroll, previewPayrollPeriod,
 } from "../api/payroll.api";
 import type { PayrollListParams, GeneratePayrollInput, BpjsReportParams, BulkGenerateInput, PayrollPeriodPreviewParams } from "../types";
@@ -49,6 +49,22 @@ export const useSubmitPayroll = (id: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => submitPayroll(id),
+    onSuccess:  () => invalidate(qc, id),
+  });
+};
+
+export const useRevertPayrollToDraft = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => revertPayrollToDraft(id),
+    onSuccess:  () => invalidate(qc, id),
+  });
+};
+
+export const useRetryPayrollSync = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => retryPayrollSync(id),
     onSuccess:  () => invalidate(qc, id),
   });
 };

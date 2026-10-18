@@ -6,8 +6,9 @@ import { Button }            from "@/components/ui/button";
 import { formatDate }        from "@/lib/utils";
 import { useFinanceDetails } from "../hooks";
 import { useFinanceFilters } from "../filters";
-import { FinanceFilterBar, IDR, periodLabel } from "./FinanceDashboardPage";
-import type { IncomeRow, IncomeRowType, PurchaseRow } from "../types";
+import { FinanceFilterBar, IDR, periodLabel, apiErrorMessage } from "./FinanceDashboardPage";
+import { payrollMonthLabel } from "@/features/payroll/period";
+import type { FinanceDetails, IncomeRow, IncomeRowType, PaidPayrollRow, PurchaseRow } from "../types";
 
 const TYPE_LABEL: Record<IncomeRowType, string> = {
   INVOICE_PAYMENT: "Bayar invoice",
@@ -104,13 +105,60 @@ function PurchaseTable({ rows }: { rows: PurchaseRow[] }) {
   );
 }
 
+function PayrollTable({ rows }: { rows: PaidPayrollRow[] }) {
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+          <th className="px-3 py-2.5 font-medium">Tanggal Bayar</th>
+          <th className="px-3 py-2.5 font-medium">Karyawan</th>
+          <th className="px-3 py-2.5 font-medium">Gaji</th>
+          <th className="px-3 py-2.5 font-medium text-right">Pendapatan</th>
+          <th className="px-3 py-2.5 font-medium text-right">Potongan</th>
+          <th className="px-3 py-2.5 font-medium text-right">Gaji Bersih</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.id} className="border-b border-border/50 hover:bg-muted/30">
+            <td className="px-3 py-2 whitespace-nowrap">{formatDate(r.paidAt)}</td>
+            <td className="px-3 py-2">
+              <span className="font-medium">{r.employee.name}</span>
+              <div className="text-xs text-muted-foreground">{r.branch.name}</div>
+            </td>
+            <td className="px-3 py-2 whitespace-nowrap">
+              Gaji {payrollMonthLabel(r.periodStart)}
+              {r.accurateJournalNumber && <div className="text-xs text-muted-foreground">{r.accurateJournalNumber}</div>}
+            </td>
+            <td className="px-3 py-2 text-right whitespace-nowrap">{IDR(r.grossIncome)}</td>
+            <td className="px-3 py-2 text-right whitespace-nowrap">{IDR(r.totalDeductions)}</td>
+            <td className="px-3 py-2 text-right whitespace-nowrap font-semibold">{IDR(r.netSalary)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+const KIND_BY_PARAM: Record<string, FinanceDetails["type"]> = {
+  pendapatan: "revenue",
+  pembelian:  "purchases",
+  gaji:       "payroll",
+};
+
+const TITLE: Record<FinanceDetails["type"], string> = {
+  revenue:   "Rincian Pendapatan",
+  purchases: "Rincian Pembelian Gudang",
+  payroll:   "Rincian Gaji Dibayar",
+};
+
 export function FinanceDetailsPage() {
   const [sp] = useSearchParams();
-  const kind = sp.get("jenis") === "pembelian" ? "purchases" : "revenue";
-  const { startDate, endDate, apiParams, query } = useFinanceFilters();
-  const { data, isLoading, isError, refetch } = useFinanceDetails(kind, apiParams);
+  const kind = KIND_BY_PARAM[sp.get("jenis") ?? ""] ?? "revenue";
+  const { startDate, endDate, apiParams, query, rangeError } = useFinanceFilters();
+  const { data, isLoading, isError, error, refetch } = useFinanceDetails(kind, apiParams, !rangeError);
 
-  const title = kind === "revenue" ? "Rincian Pendapatan" : "Rincian Pembelian Gudang";
+  const title = TITLE[kind];
 
   return (
     <PageContainer
@@ -125,11 +173,11 @@ export function FinanceDetailsPage() {
       <div className="space-y-4">
         <FinanceFilterBar />
 
-        {isLoading ? (
+        {rangeError ? null : isLoading ? (
           <div className="flex justify-center py-16"><Loader2 className="h-7 w-7 animate-spin text-muted-foreground" /></div>
         ) : isError || !data ? (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-8 text-center">
-            <p className="text-sm font-medium text-destructive">Gagal memuat rincian</p>
+            <p className="text-sm font-medium text-destructive">{apiErrorMessage(error, "Gagal memuat rincian")}</p>
             <Button variant="ghost" size="sm" className="mt-2" onClick={() => refetch()}>Coba lagi</Button>
           </div>
         ) : (
@@ -143,6 +191,11 @@ export function FinanceDetailsPage() {
                   </CardContent></Card>
                 ))}
               </div>
+            ) : data.type === "payroll" ? (
+              <Card><CardContent className="py-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Total Gaji Dibayar (menurut tanggal bayar)</p>
+                <p className="mt-1 text-lg font-bold">{IDR(data.summary.total)} <span className="text-sm font-normal text-muted-foreground">· {data.summary.count} slip · {data.summary.employeeCount} karyawan</span></p>
+              </CardContent></Card>
             ) : (
               <Card><CardContent className="py-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Total Pembelian (diposting)</p>
@@ -156,7 +209,9 @@ export function FinanceDetailsPage() {
                   <p className="py-12 text-center text-sm text-muted-foreground">Tidak ada data pada periode ini.</p>
                 ) : (
                   <div className="overflow-x-auto">
-                    {data.type === "revenue" ? <IncomeTable rows={data.rows} /> : <PurchaseTable rows={data.rows} />}
+                    {data.type === "revenue" ? <IncomeTable rows={data.rows} />
+                      : data.type === "payroll" ? <PayrollTable rows={data.rows} />
+                      : <PurchaseTable rows={data.rows} />}
                   </div>
                 )}
               </CardContent>

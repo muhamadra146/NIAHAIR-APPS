@@ -14,6 +14,8 @@ import { Button }            from "@/components/ui/button";
 import { useAllBranches }    from "@/features/settings/hooks";
 import { useFinanceDashboard } from "../hooks";
 import { useFinanceFilters, ALL_BRANCHES } from "../filters";
+import { payrollCardLink } from "../dateRange";
+import { useAuthStore }      from "@/stores/authStore";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -44,7 +46,8 @@ interface KpiCardProps {
   sub?:   string;
   color?: CardColor;
   icon:   React.ElementType;
-  to:     string;
+  /** Tanpa tautan → kartu tidak bisa diklik (mis. Manager tidak boleh melihat rincian gaji) */
+  to?:    string;
 }
 
 const COLOR = {
@@ -58,25 +61,31 @@ const COLOR = {
 
 function KpiCard({ label, value, sub, color = "default", icon: Icon, to }: KpiCardProps) {
   const c = COLOR[color];
-  return (
-    <Link to={to} className="group block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-      <Card className="relative h-full overflow-hidden transition-shadow group-hover:shadow-md">
-        <CardContent className="pt-5 pb-4">
-          <div className="flex items-start justify-between">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-muted-foreground font-medium tracking-wide uppercase leading-snug">{label}</p>
-              <p className={`text-xl font-bold mt-1 leading-none ${c.text}`}>{IDR(value)}</p>
-              {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
-            </div>
-            <div className={`p-2 rounded-lg ${c.bg} ml-3 shrink-0`}>
-              <Icon className={`h-5 w-5 ${c.icon}`} />
-            </div>
+  const card = (
+    <Card className={`relative h-full overflow-hidden ${to ? "transition-shadow group-hover:shadow-md" : ""}`}>
+      <CardContent className="pt-5 pb-4">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-muted-foreground font-medium tracking-wide uppercase leading-snug">{label}</p>
+            <p className={`text-xl font-bold mt-1 leading-none ${c.text}`}>{IDR(value)}</p>
+            {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
           </div>
+          <div className={`p-2 rounded-lg ${c.bg} ml-3 shrink-0`}>
+            <Icon className={`h-5 w-5 ${c.icon}`} />
+          </div>
+        </div>
+        {to && (
           <p className="mt-2 flex items-center gap-0.5 text-[11px] font-medium text-muted-foreground group-hover:text-foreground">
             Lihat data <ChevronRight className="h-3 w-3" />
           </p>
-        </CardContent>
-      </Card>
+        )}
+      </CardContent>
+    </Card>
+  );
+  if (!to) return card;
+  return (
+    <Link to={to} className="group block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      {card}
     </Link>
   );
 }
@@ -142,11 +151,13 @@ const SHORTCUTS = [
 
 /** Periode & cabang — dipakai juga di halaman rincian */
 export function FinanceFilterBar() {
-  const { startDate, endDate, branch, setFilters } = useFinanceFilters();
+  const { startDate, endDate, branch, setFilters, rangeError } = useFinanceFilters();
   const { data: branches = [] } = useAllBranches();
   const inputCls = "h-8 px-2 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring";
+  const dateCls  = `${inputCls} ${rangeError ? "border-red-400 ring-1 ring-red-300" : ""}`;
 
   return (
+    <div className="space-y-2">
     <div className="flex flex-wrap items-center gap-2">
       {SHORTCUTS.map((s) => (
         <Button key={s.label} size="sm" variant="outline" className="h-8 text-xs px-3" onClick={() => setFilters(s.getValue())}>
@@ -158,22 +169,37 @@ export function FinanceFilterBar() {
           {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           <option value={ALL_BRANCHES}>Semua cabang</option>
         </select>
-        <input type="date" value={startDate} onChange={(e) => setFilters({ startDate: e.target.value })} className={inputCls} aria-label="Dari tanggal" />
+        <input type="date" value={startDate} onChange={(e) => setFilters({ startDate: e.target.value })} className={dateCls} aria-label="Dari tanggal" aria-invalid={!!rangeError} />
         <span className="text-muted-foreground text-sm">–</span>
-        <input type="date" value={endDate} onChange={(e) => setFilters({ endDate: e.target.value })} className={inputCls} aria-label="Sampai tanggal" />
+        <input type="date" value={endDate} onChange={(e) => setFilters({ endDate: e.target.value })} className={dateCls} aria-label="Sampai tanggal" aria-invalid={!!rangeError} />
       </div>
     </div>
+    {rangeError && (
+      <p role="alert" className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+        <AlertTriangle className="h-4 w-4 shrink-0" /> {rangeError}. Perbaiki tanggal untuk menampilkan data.
+      </p>
+    )}
+    </div>
   );
+}
+
+/** Pesan error API (Indonesia) untuk blok "gagal memuat" */
+export function apiErrorMessage(error: unknown, fallback: string): string {
+  const msg = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
+  return msg || fallback;
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function FinanceDashboardPage() {
-  const { startDate, endDate, apiParams, query } = useFinanceFilters();
-  const { data, isLoading, isError, refetch, isFetching } = useFinanceDashboard(apiParams);
+  const { startDate, endDate, apiParams, query, rangeError } = useFinanceFilters();
+  const { data, isLoading, isError, error, refetch, isFetching } = useFinanceDashboard(apiParams, !rangeError);
+  const roleCode = useAuthStore((s) => s.user?.roleCode);
 
   const incomeLink   = `/finance/rincian?jenis=pendapatan&${query}`;
   const purchaseLink = `/finance/rincian?jenis=pembelian&${query}`;
+  const payrollLink  = payrollCardLink(roleCode, query);
+  // Daftar Invoice / Komisi hanya membaca startDate & endDate (cabang = cabang aktif di header)
   const dateQuery    = new URLSearchParams({ startDate, endDate }).toString();
 
   const chartData = useMemo(() => (data?.dailyTrend ?? []).map((d) => ({
@@ -202,7 +228,7 @@ export function FinanceDashboardPage() {
           </div>
         ) : isError ? (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-8 text-center">
-            <p className="text-sm font-medium text-destructive">Gagal memuat data keuangan</p>
+            <p className="text-sm font-medium text-destructive">{apiErrorMessage(error, "Gagal memuat data keuangan")}</p>
             <Button variant="ghost" size="sm" className="mt-2" onClick={() => refetch()}>
               <RefreshCw className="h-4 w-4 mr-1" /> Coba lagi
             </Button>
@@ -268,8 +294,8 @@ export function FinanceDashboardPage() {
               <KpiCard
                 label="Gaji Dibayar"
                 value={data.payroll.total}
-                sub={`${data.payroll.employeeCount} karyawan`}
-                color="blue" icon={Users} to="/payroll"
+                sub={`Menurut tanggal bayar · ${data.payroll.employeeCount} karyawan`}
+                color="blue" icon={Users} to={payrollLink}
               />
               <KpiCard
                 label="Arus Kas Bersih"

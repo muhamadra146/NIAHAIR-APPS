@@ -110,9 +110,10 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd, p
       },
     }),
 
-    // Active loans for monthly deduction
+    // Kasbon aktif yang sudah mulai dicicil paling lambat akhir periode
+    // (kasbon dengan tanggal mulai sesudah periode ikut payroll berikutnya)
     prisma.loan.findMany({
-      where: { employeeId, status: "ACTIVE" },
+      where: { employeeId, status: "ACTIVE", startDate: { lte: tsRange.lte } },
     }),
 
     // Approved LATE permissions in period — used to waive late deductions
@@ -250,6 +251,14 @@ const findScheduleDates = (employeeId, periodStart, periodEnd) =>
     select: { workDate: true },
   });
 
+// Job sync PAYROLL (Jurnal Accurate) untuk payroll-payroll ini, terbaru dulu
+const findPayrollSyncJobs = (payrollIds) =>
+  prisma.syncQueue.findMany({
+    where:   { entityType: "PAYROLL", entityId: { in: payrollIds } },
+    orderBy: { createdAt: "desc" },
+    select:  { id: true, entityId: true, status: true, errorMessage: true, attempt: true, maxAttempt: true, updatedAt: true },
+  });
+
 const findEmployeePayDay = async (employeeId) =>
   (await prisma.employee.findUnique({ where: { id: employeeId }, select: { payDay: true } }))?.payDay ?? null;
 
@@ -258,5 +267,5 @@ module.exports = {
   findPreviousPayroll, findEmployeePayDay, findScheduleDates,
   create, update, replaceAutoItems, getGenerationData,
   findByEmployee, countByEmployee, findBpjsData, remove,
-  findEmployeesForBulkGenerate,
+  findEmployeesForBulkGenerate, findPayrollSyncJobs,
 };

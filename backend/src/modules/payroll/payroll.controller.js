@@ -52,6 +52,20 @@ const submitController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const revertToDraftController = async (req, res, next) => {
+  try {
+    const result = await svc.revertToDraft(req.params.id);
+    return success(res, result, "Payroll dikembalikan ke Draft");
+  } catch (err) { next(err); }
+};
+
+const retrySyncController = async (req, res, next) => {
+  try {
+    const result = await svc.retryAccurateSync(req.params.id);
+    return success(res, result, "Sinkronisasi jurnal dijadwalkan ulang");
+  } catch (err) { next(err); }
+};
+
 const approveController = async (req, res, next) => {
   try {
     const result = await svc.approve(req.params.id, req.user.id);
@@ -97,6 +111,6 @@ const deleteController = async (req, res, next) => {
 
 module.exports = {
   getAllController, getByIdController, generateController, bulkGenerateController, previewPeriodController,
-  recalculateController, submitController, approveController, markAsPaidController,
-  updateNotesController, getMyController, getBpjsReportController, deleteController,
+  recalculateController, submitController, revertToDraftController, approveController, markAsPaidController,
+  retrySyncController, updateNotesController, getMyController, getBpjsReportController, deleteController,
 };

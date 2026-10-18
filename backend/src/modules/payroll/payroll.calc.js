@@ -143,6 +143,34 @@ const computeAlphaDays = ({ periodStart, periodEnd, schedules, attendances, holi
     .filter((d) => !offDates.has(d) && !excused.has(d) && !holidaySet.has(d) && !present.has(d)).length;
 };
 
+/**
+ * Periode seluruhnya di luar masa kerja: berakhir sebelum Tanggal Masuk atau mulai sesudah
+ * tanggal resign → tidak ada hari kerja yang bisa dibayar (generate ditolak).
+ */
+const isOutsideEmployment = ({ periodStart, periodEnd, hireDate = null, resignDate = null }) =>
+  (hireDate   != null && dateKey(hireDate)   > dateKey(periodEnd)) ||
+  (resignDate != null && dateKey(resignDate) < dateKey(periodStart));
+
+/**
+ * BPJS bagian perusahaan untuk satu slip — dipakai Laporan BPJS dan jurnal penggajian Accurate
+ * agar angkanya sama. Dasar = gaji pokok PENUH (PAY-001), bukan gaji pokok proporsional:
+ *   · slip tidak proporsional → item gaji = gaji pokok penuh saat slip dibuat (historis)
+ *   · slip proporsional (item gaji punya quantity) → gaji pokok dari Setting Gaji aktif
+ * Tiap komponen dibulatkan ke rupiah (sama dengan Laporan BPJS).
+ */
+const computeEmployerBpjs = ({ items = [], setting = null }) => {
+  const gajiItem   = items.find((i) => i.type !== "DEDUCTION" && i.category === "gaji");
+  const isProrated = gajiItem?.quantity != null;
+  const baseSalary = isProrated && setting?.baseSalary != null
+    ? Number(setting.baseSalary)
+    : Number(gajiItem?.amount ?? setting?.baseSalary ?? 0);
+
+  const jht = Math.round(baseSalary * Number(setting?.bpjsJhtEmployerPercent       ?? 0) / 100);
+  const jp  = Math.round(baseSalary * Number(setting?.bpjsJpEmployerPercent        ?? 0) / 100);
+  const kes = Math.round(baseSalary * Number(setting?.bpjsKesehatanEmployerPercent ?? 0) / 100);
+  return { baseSalary, jht, jp, kes, total: jht + jp + kes };
+};
+
 /** Hari dalam periode yang belum punya jadwal (untuk peringatan sebelum generate) */
 const countUnscheduledDays = ({ periodStart, periodEnd, schedules }) => {
   const scheduled = new Set(schedules.map((sc) => dateKey(sc.workDate)));
@@ -158,4 +186,6 @@ module.exports = {
   computeProration,
   computeAlphaDays,
   countUnscheduledDays,
+  isOutsideEmployment,
+  computeEmployerBpjs,
 };

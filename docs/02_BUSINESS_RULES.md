@@ -4201,6 +4201,10 @@ Finance dianggap valid apabila.
 
 **Arus Kas Bersih** = Pendapatan Kotor (FIN-039) − pembelian gudang − gaji dibayar. Komisi tidak dikurangkan terpisah karena komisi dibayar di dalam gaji (COM-017) (keputusan owner 2026-10-15).
 
+**Gaji Dibayar** = gaji bersih payroll PAID menurut **tanggal bayar** (paidAt, hari WIB), bukan periode kerja (keputusan owner 2026-10-18). Kartu membuka Rincian Gaji Dibayar untuk Super Admin, Owner, dan Finance; untuk Manager kartu tidak bisa diklik karena Manager tidak boleh melihat gaji per karyawan (PAY-001, PAY-032).
+
+Filter tanggal "Dari" sesudah "Sampai" ditolak (400) dan diberi peringatan di layar.
+
 Semua angka dashboard **per cabang** (cabang aktif di header, bisa diganti ke cabang lain atau "Semua cabang"). Setiap kartu bisa diklik ke data di baliknya.
 
 **Finance** dapat membuka Daftar Invoice, detail invoice, dan Pembayaran Invoice dalam mode **lihat saja** (tanpa buat/ubah/bayar/deposit/hapus), supaya kartu dan rincian dashboard bisa ditelusuri ke invoice-nya (keputusan user 2026-10-15). Ubah, batal, pasang DP, dan setup treatment invoice hanya untuk SA, Owner, Manager, dan Kasir.
@@ -4978,6 +4982,8 @@ Hari kerja = hari periode − hari libur (OFF) di jadwal (sama dengan pembagi tr
 
 Contoh: periode 1–31 Okt, OFF 4 hari (27 hari kerja), masuk 15 Okt (15 hari kerja) → gaji pokok 3.000.000 ÷ 27 × 15 = 1.666.667.
 
+Periode yang **seluruhnya** sebelum Tanggal Masuk atau sesudah tanggal resign tidak bisa di-generate / dihitung ulang: ditolak dengan pesan "Periode di luar masa kerja karyawan" (keputusan owner 2026-10-18).
+
 ### Hak Akses Setting Gaji
 
 Setting Gaji karyawan (gaji pokok, tunjangan, potongan, BPJS) hanya dapat dilihat dan diubah oleh SUPER_ADMIN, OWNER, dan FINANCE. MANAGER dan role lain tidak dapat melihat gaji karyawan.
@@ -5051,6 +5057,8 @@ VOID
 ```
 
 Gaji bersih minus (potongan > pendapatan) boleh dibuat dan diajukan, tetapi ditandai peringatan merah di daftar & detail payroll dan **tidak bisa disetujui** sampai absen / potongan diperiksa dan payroll dihitung ulang. Angka tidak dipotong otomatis ke Rp 0 (keputusan user 2026-10-17).
+
+**Kembalikan ke Draft**: payroll yang menunggu persetujuan (PENDING_APPROVAL) dapat dikembalikan ke DRAFT oleh yang boleh mengajukan payroll (Super Admin, Owner, Finance), lalu dihitung ulang dan diajukan lagi. Payroll APPROVED / PAID tetap terkunci (PAY-005). **Setujui** dan **Tandai Dibayar** selalu meminta konfirmasi karena tidak bisa dibatalkan (keputusan owner 2026-10-18).
 
 ---
 
@@ -5309,6 +5317,10 @@ Hari alpha = hari kerja dalam masa kerja tanpa absensi hadir. Tidak dihitung alp
 
 Cuti, sakit, dan izin tidak masuk tidak kena Potongan Absen (sudah memengaruhi transport dan uang makan).
 
+### Potongan Kasbon
+
+Kasbon aktif dipotong di payroll hanya bila **tanggal mulai kasbon ≤ akhir periode**; kasbon yang mulai sesudah periode ikut payroll berikutnya (keputusan owner 2026-10-18).
+
 ### Pulang Cepat
 
 Pulang cepat **tidak dipotong per menit**. Dampaknya hanya ke uang makan: lama kerja di bawah batas setengah hari → uang makan 50% (PAY-018). Kolom potongan pulang cepat di Setting Gaji tidak dipakai lagi. (Keputusan user 2026-10-13.)
@@ -5380,6 +5392,24 @@ Dapat dikonfigurasi.
 Payroll menghasilkan Payroll Payment.
 
 Terpisah dari Customer Payment.
+
+### Jurnal Penggajian ke Accurate
+
+Payroll yang ditandai dibayar dikirim ke Accurate sebagai **Journal Voucher** (Jurnal Umum), satu jurnal per slip, tanggal = tanggal bayar (WIB). Akun diambil dari Settings → Akun Gaji (8 kategori). Kasbon tidak disinkron tersendiri; potongan kasbon hanya tercatat di jurnal ini.
+
+| | Akun (kategori Akun Gaji) | Jumlah |
+|---|---|---|
+| Debit | Beban Gaji Pokok (gaji) | gaji pokok |
+| Debit | Beban Tunjangan Makan | uang makan |
+| Debit | Beban Tunjangan Transport | tunjangan transport |
+| Debit | Beban Tunjangan Lainnya | tunjangan, komisi, lembur, kerja hari libur, bonus omset, payout cuti |
+| Debit | Beban BPJS Perusahaan | BPJS bagian perusahaan, dari gaji pokok penuh (sama dengan Laporan BPJS) |
+| Kredit | Beban Gaji Pokok (gaji) | potongan alpha + terlambat (gaji yang tidak dibayar) |
+| Kredit | Hutang BPJS | BPJS bagian karyawan + bagian perusahaan |
+| Kredit | Piutang Kasbon Karyawan | potongan kasbon |
+| Kredit | Kas/Bank | gaji bersih yang dibayar |
+
+Setiap baris dibulatkan ke rupiah; debit = kredit persis (selisih pembulatan masuk baris Kas/Bank). Item payroll yang belum punya pasangan akun, atau akun induk di Accurate, membuat sinkronisasi gagal; halaman Penggajian menampilkan "Gagal sinkron" beserta alasannya dan tombol "Coba lagi" (keputusan owner 2026-10-18).
 
 ---
 

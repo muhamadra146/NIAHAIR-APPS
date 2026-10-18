@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   ChevronLeft, Plus, RefreshCw, CheckCircle2, Send, Banknote,
-  AlertCircle, Clock, Trash2,
+  AlertCircle, Clock, Trash2, XCircle, RotateCcw,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button }        from "@/components/ui/button";
@@ -17,8 +17,9 @@ import {
   usePayrolls, useGeneratePayroll,
   useRecalculatePayroll, useSubmitPayroll, useApprovePayroll, useMarkPayrollAsPaid,
   useDeletePayroll, useBulkGeneratePayroll, usePayrollPeriodPreview,
+  useRevertPayrollToDraft, useRetryPayrollSync,
 } from "../hooks";
-import { payrollMonthLabel, payrollRangeLabel, payrollDayLabel } from "../period";
+import { payrollMonthLabel, payrollRangeLabel, payrollDayLabel, parsePayDay, payrollListMonth } from "../period";
 import { toast } from "@/lib/toast";
 import { filterInputCls } from "@/lib/ui-utils";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -86,8 +87,19 @@ function StatusBadge({ status }: { status: PayrollStatus }) {
 }
 
 function AccurateJournalBadge({
-  synced, number,
-}: { synced: boolean; number?: string | null }) {
+  synced, number, failed, errorMessage,
+}: { synced: boolean; number?: string | null; failed?: boolean; errorMessage?: string | null }) {
+  if (!synced && failed) {
+    return (
+      <span
+        title={errorMessage ?? "Jurnal gagal dikirim ke Accurate"}
+        className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800"
+      >
+        <XCircle className="h-2.5 w-2.5" />
+        Gagal sinkron
+      </span>
+    );
+  }
   if (synced) {
     return (
       <span
@@ -105,7 +117,7 @@ function AccurateJournalBadge({
       className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800"
     >
       <Clock className="h-2.5 w-2.5" />
-      Pending
+      Menunggu sinkron
     </span>
   );
 }
@@ -113,12 +125,23 @@ function AccurateJournalBadge({
 const CAN_DELETE: string[] = ["SUPER_ADMIN", "OWNER"];
 // Setujui & tandai dibayar: sesuai backend (APPROVERS) — FINANCE hanya generate & submit
 const CAN_APPROVE: string[] = ["SUPER_ADMIN", "OWNER"];
+// Ajukan, kembalikan ke Draft, coba lagi sinkron: semua yang boleh membuka Penggajian (backend ALL_ADMIN)
+const CAN_SUBMIT: string[] = ["SUPER_ADMIN", "OWNER", "FINANCE"];
+
+/** Pesan error API: pesan utama, atau pesan validasi pertama bila pesannya umum */
+const apiError = (e: any, fallback: string): string => {
+  const d = e?.response?.data;
+  if (d?.message && d.message !== "Data tidak valid") return d.message;
+  return d?.errors?.[0]?.message ?? d?.message ?? fallback;
+};
 
 // filterInputCls imported from @/lib/ui-utils
 
 // ── Generate Dialog ───────────────────────────────────────────────────────────
 
-function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function GenerateDialog({ open, onClose, onGenerated }: {
+  open: boolean; onClose: () => void; onGenerated: (yearMonth: string) => void;
+}) {
   const { branchId: sessionBranchId } = useAuthStore();
   const { data: empData }   = useEmployees({ limit: 200, isActive: true });
   const { data: branchData } = useAllBranches();
@@ -155,9 +178,11 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
       const created = await generateMut.mutateAsync(input);
       toast.success("Payroll berhasil dibuat");
       created.warnings?.forEach((w) => toast.warning(w));
+      // Daftar pindah ke bulan payroll yang baru dibuat
+      onGenerated(payrollListMonth(created.periodStart));
       onClose();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Gagal generate payroll");
+      toast.error(apiError(e, "Gagal generate payroll"));
     }
   };
 
@@ -250,7 +275,9 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
 
 // ── Bulk Generate Dialog ──────────────────────────────────────────────────────
 
-function BulkGenerateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function BulkGenerateDialog({ open, onClose, onGenerated }: {
+  open: boolean; onClose: () => void; onGenerated: (yearMonth: string) => void;
+}) {
   const { branchId: sessionBranchId } = useAuthStore();
   const { data: branchData } = useAllBranches();
   const branches = branchData ?? [];
@@ -264,22 +291,25 @@ function BulkGenerateDialog({ open, onClose }: { open: boolean; onClose: () => v
   const [result,   setResult]   = useState<BulkGenerateResult | null>(null);
 
   const bulkMut = useBulkGeneratePayroll();
-  const bulkPayDay = payDay ? Number(payDay) : undefined;
+  const { value: bulkPayDay, error: payDayError } = parsePayDay(payDay);
   const bulkPreview = usePayrollPeriodPreview({ payDay: bulkPayDay, yearMonth }, !!bulkPayDay && !!yearMonth);
 
   const handleSubmit = async () => {
     if (!branchId || !yearMonth) { toast.error("Pilih cabang dan bulan gaji"); return; }
+    if (payDayError) { toast.error(payDayError); return; }
     try {
       const res = await bulkMut.mutateAsync({
         branchId,
         yearMonth,
-        payDay:  payDay ? Number(payDay) : undefined,
+        payDay:  bulkPayDay,
         notes:   notes || undefined,
       });
       setResult(res);
+      // Daftar pindah ke bulan gaji yang baru di-generate
+      onGenerated(yearMonth);
       toast.success(`${res.summary.created} payroll berhasil dibuat`);
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Gagal bulk generate payroll");
+      toast.error(apiError(e, "Gagal bulk generate payroll"));
     }
   };
 
@@ -347,12 +377,15 @@ function BulkGenerateDialog({ open, onClose }: { open: boolean; onClose: () => v
             <div>
               <Label className="text-xs font-medium uppercase tracking-wider text-slate-400">Filter Tanggal Gajian (opsional)</Label>
               <Input
-                type="number" min={1} max={31} placeholder="cth: 7 (kosongkan = semua)"
+                type="number" min={1} max={31} step={1} inputMode="numeric" placeholder="cth: 7 (kosongkan = semua)"
                 value={payDay}
                 onChange={(e) => setPayDay(e.target.value)}
-                className={`mt-1 ${filterInputCls}`}
+                aria-invalid={!!payDayError}
+                className={`mt-1 ${filterInputCls} ${payDayError ? "border-red-400 focus:ring-red-300" : ""}`}
               />
-              <p className="mt-1 text-xs text-muted-foreground">Isi untuk generate hanya karyawan dengan tanggal gajian tertentu</p>
+              {payDayError
+                ? <p className="mt-1 text-xs text-red-600">{payDayError}</p>
+                : <p className="mt-1 text-xs text-muted-foreground">Isi untuk generate hanya karyawan dengan tanggal gajian tertentu</p>}
             </div>
             {bulkPayDay && (
               <PeriodPreviewBox preview={bulkPreview.data} loading={bulkPreview.isLoading} error={bulkPreview.error as Error | null} />
@@ -369,7 +402,7 @@ function BulkGenerateDialog({ open, onClose }: { open: boolean; onClose: () => v
             {result ? "Tutup" : "Batal"}
           </Button>
           {!result && (
-            <Button size="sm" onClick={handleSubmit} disabled={bulkMut.isPending || !branchId || !yearMonth}>
+            <Button size="sm" onClick={handleSubmit} disabled={bulkMut.isPending || !branchId || !yearMonth || !!payDayError}>
               {bulkMut.isPending ? "Memproses…" : "Generate Semua"}
             </Button>
           )}
@@ -414,17 +447,24 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
   const submitMut  = useSubmitPayroll(payroll.id);
   const approveMut = useApprovePayroll(payroll.id);
   const paidMut    = useMarkPayrollAsPaid(payroll.id);
+  const revertMut  = useRevertPayrollToDraft(payroll.id);
+  const retryMut   = useRetryPayrollSync(payroll.id);
   const deleteMut  = useDeletePayroll();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Konfirmasi tindakan yang tidak bisa dibatalkan
+  const [confirm, setConfirm] = useState<"approve" | "paid" | null>(null);
 
   const canDelete  = user ? CAN_DELETE.includes(user.roleCode) : false;
   const canApprove = user ? CAN_APPROVE.includes(user.roleCode) : false;
-  const isActing = recalcMut.isPending || submitMut.isPending || approveMut.isPending || paidMut.isPending || deleteMut.isPending;
+  const canSubmit  = user ? CAN_SUBMIT.includes(user.roleCode) : false;
+  const isActing = recalcMut.isPending || submitMut.isPending || approveMut.isPending || paidMut.isPending
+    || deleteMut.isPending || revertMut.isPending;
   const isNegativeNet = Number(payroll.netSalary) < 0;
+  const sync = payroll.accurateSync;
 
   const handle = async (action: () => Promise<unknown>, msg: string) => {
-    try { await action(); toast.success(msg); }
-    catch (e: any) { toast.error(e?.response?.data?.message ?? "Gagal"); }
+    try { await action(); toast.success(msg); return true; }
+    catch (e: any) { toast.error(apiError(e, "Gagal")); return false; }
   };
 
   return (
@@ -459,19 +499,28 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
               <Trash2 className="h-3 w-3 mr-1" /> Hapus
             </Button>
           )}
+          {payroll.status === "PENDING_APPROVAL" && canSubmit && (
+            <Button
+              size="sm" variant="outline" className="rounded-lg"
+              onClick={() => handle(revertMut.mutateAsync, "Payroll dikembalikan ke Draft — bisa dihitung ulang")}
+              disabled={isActing}
+            >
+              <RotateCcw className="h-3 w-3 mr-1" /> Kembalikan ke Draft
+            </Button>
+          )}
           {payroll.status === "PENDING_APPROVAL" && canApprove && (
             <Button
               size="sm"
               className="rounded-lg"
-              onClick={() => handle(approveMut.mutateAsync, "Payroll disetujui")}
+              onClick={() => setConfirm("approve")}
               disabled={isActing || isNegativeNet}
-              title={isNegativeNet ? "Gaji bersih minus — periksa absen & potongan, lalu hitung ulang" : undefined}
+              title={isNegativeNet ? "Gaji bersih minus — klik Kembalikan ke Draft lalu Hitung Ulang" : undefined}
             >
               <CheckCircle2 className="h-3 w-3 mr-1" /> Setujui
             </Button>
           )}
           {payroll.status === "APPROVED" && canApprove && (
-            <Button size="sm" className="rounded-lg" onClick={() => handle(paidMut.mutateAsync, "Payroll ditandai dibayar")} disabled={isActing}>
+            <Button size="sm" className="rounded-lg" onClick={() => setConfirm("paid")} disabled={isActing}>
               <Banknote className="h-3 w-3 mr-1" /> Tandai Dibayar
             </Button>
           )}
@@ -522,7 +571,10 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
       {isNegativeNet && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <span className="font-semibold">Gaji bersih minus.</span> Potongan lebih besar dari pendapatan.
-          Periksa absen dan potongan karyawan ini, lalu klik Hitung Ulang. Payroll ini belum bisa disetujui.
+          {payroll.status === "PENDING_APPROVAL"
+            ? " Periksa absen dan potongan karyawan ini, klik Kembalikan ke Draft lalu Hitung Ulang."
+            : " Periksa absen dan potongan karyawan ini, lalu klik Hitung Ulang."}
+          {" "}Payroll ini belum bisa disetujui.
         </div>
       )}
 
@@ -591,20 +643,81 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
                   </div>
                 </div>
               </div>
+            ) : sync?.status === "FAILED" ? (
+              <div className="flex items-start gap-3">
+                <XCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <p className="text-sm font-medium text-red-700">Gagal sinkron</p>
+                  {sync.errorMessage && (
+                    <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 break-words">{sync.errorMessage}</p>
+                  )}
+                  {canSubmit && (
+                    <Button
+                      size="sm" variant="outline" className="rounded-lg"
+                      onClick={() => handle(retryMut.mutateAsync, "Sinkronisasi dijadwalkan ulang")}
+                      disabled={retryMut.isPending}
+                    >
+                      <RefreshCw className={`h-3 w-3 mr-1 ${retryMut.isPending ? "animate-spin" : ""}`} /> Coba lagi
+                    </Button>
+                  )}
+                </div>
+              </div>
             ) : (
-              <div className="flex items-center gap-3">
+              <div className="flex items-start gap-3">
                 <Clock className="h-5 w-5 text-amber-500 shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-amber-600">Menunggu sinkronisasi</p>
                   <p className="text-xs text-slate-400 mt-0.5">
                     Jurnal penggajian akan otomatis dikirim ke Accurate Online melalui antrian sync.
                   </p>
+                  {sync?.errorMessage && (
+                    <p className="mt-2 text-xs text-amber-700 break-words">
+                      Percobaan terakhir gagal (akan dicoba lagi otomatis): {sync.errorMessage}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
       )}
+
+      {/* Konfirmasi Setujui / Tandai Dibayar (tidak bisa dibatalkan) */}
+      <Dialog open={!!confirm} onOpenChange={(v) => { if (!v) setConfirm(null); }}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-xl sm:rounded-lg">
+          <DialogHeader>
+            <DialogTitle>{confirm === "paid" ? "Tandai Dibayar" : "Setujui Payroll"}</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-2 text-sm text-muted-foreground">
+            <p>
+              {confirm === "paid" ? "Tandai payroll " : "Setujui payroll "}
+              <span className="font-medium text-foreground">{payroll.employee.name}</span>{" "}
+              <span className="font-medium text-foreground">{fmtPeriod(payroll.periodStart)}</span> dengan gaji bersih{" "}
+              <span className="font-medium text-foreground">{fmtRp(payroll.netSalary)}</span>?
+            </p>
+            <p className="text-xs">
+              {confirm === "paid"
+                ? "Komisi di slip ini ditandai dibayar, cicilan kasbon dipotong, dan jurnal dikirim ke Accurate. Tindakan ini tidak dapat dibatalkan."
+                : "Payroll yang disetujui terkunci dan tidak bisa diubah atau dihitung ulang. Tindakan ini tidak dapat dibatalkan."}
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirm(null)} className="flex-1 sm:flex-none">Batal</Button>
+            <Button
+              disabled={isActing}
+              className="flex-1 sm:flex-none"
+              onClick={async () => {
+                const ok = confirm === "paid"
+                  ? await handle(paidMut.mutateAsync, "Payroll ditandai dibayar")
+                  : await handle(approveMut.mutateAsync, "Payroll disetujui");
+                if (ok) setConfirm(null);
+              }}
+            >
+              {isActing ? "Memproses…" : confirm === "paid" ? "Ya, Tandai Dibayar" : "Ya, Setujui"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirm dialog */}
       <Dialog open={deleteOpen} onOpenChange={(v) => { if (!v) setDeleteOpen(false); }}>
@@ -756,6 +869,8 @@ export function PayrollPage() {
                         <AccurateJournalBadge
                           synced={!!p.accurateJournalId}
                           number={p.accurateJournalNumber}
+                          failed={p.accurateSync?.status === "FAILED"}
+                          errorMessage={p.accurateSync?.errorMessage}
                         />
                       )}
                     </div>
@@ -799,8 +914,8 @@ export function PayrollPage() {
         </div>
       </div>
 
-      <GenerateDialog open={genOpen} onClose={() => setGenOpen(false)} />
-      <BulkGenerateDialog open={bulkOpen} onClose={() => setBulkOpen(false)} />
+      <GenerateDialog open={genOpen} onClose={() => setGenOpen(false)} onGenerated={setYearMonth} />
+      <BulkGenerateDialog open={bulkOpen} onClose={() => setBulkOpen(false)} onGenerated={setYearMonth} />
 
       {/* Delete confirm dialog */}
       <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
