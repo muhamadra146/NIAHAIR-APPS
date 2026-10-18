@@ -57,3 +57,31 @@ test('sisa piutang cukup → nominal ERP dikirim apa adanya', async () => {
   await syncPaymentToAccurate('pay1');
   expect(sentAmount()).toBe(100000);
 });
+
+test('jaring pengaman selisih pembulatan tetap ada dan dicatat ke log saat terpicu (2026-10-17)', async () => {
+  const logger = require('../../utils/logger');
+  const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+  syncRepo.findPaymentForSync.mockResolvedValue(payment(159716.09));
+  accurateRequest
+    .mockResolvedValueOnce({ s: true, d: { primeOwing: 159715.5 } })
+    .mockResolvedValueOnce({ s: true, r: { id: 7, number: 'R-3' } });
+
+  await syncPaymentToAccurate('pay1');
+  expect(sentAmount()).toBe(159715.5);
+  expect(warn).toHaveBeenCalledWith(expect.stringContaining('jaring pengaman selisih pembulatan PPN terpicu'));
+  warn.mockRestore();
+});
+
+test('nominal sama dengan sisa piutang → tidak ada log jaring pengaman', async () => {
+  const logger = require('../../utils/logger');
+  const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+  syncRepo.findPaymentForSync.mockResolvedValue(payment(155391));
+  accurateRequest
+    .mockResolvedValueOnce({ s: true, d: { primeOwing: 155391 } })
+    .mockResolvedValueOnce({ s: true, r: { id: 8, number: 'R-4' } });
+
+  await syncPaymentToAccurate('pay1');
+  expect(sentAmount()).toBe(155391);
+  expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('jaring pengaman'));
+  warn.mockRestore();
+});

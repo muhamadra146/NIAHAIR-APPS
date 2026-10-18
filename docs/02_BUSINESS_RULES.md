@@ -1478,6 +1478,8 @@ Appointment yang sama dipindahkan ke tanggal dan jam baru.
 
 History wajib disimpan.
 
+Yang boleh reschedule: Super Admin, Owner, Manager, Kasir. Office hanya melihat booking (keputusan user 2026-10-18).
+
 ---
 
 # APT-020
@@ -3924,6 +3926,8 @@ PPN.
 Service Tax.
 
 Tax dihitung pada Invoice.
+
+PPN dibulatkan ke rupiah penuh mengikuti Accurate (keputusan user 2026-10-17).
 
 ---
 

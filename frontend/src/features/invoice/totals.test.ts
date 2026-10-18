@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { invoiceBreakdown, lineAmount } from "./totals";
+import { documentTax, invoiceBreakdown, lineAmount } from "./totals";
 import type { Invoice, InvoiceLineItem } from "./types";
 
 // P6 (QA POS 2026-10-17): Subtotal − Diskon + PPN harus = Grand Total; DP tampil dengan nomor DP
@@ -60,5 +60,20 @@ describe("invoiceBreakdown", () => {
 
   it("lineAmount = harga × qty − diskon", () => {
     expect(lineAmount({ price: "100000", qty: "3", discount: "25000" })).toBe(275000);
+  });
+});
+
+// Keputusan user 2026-10-17: PPN dibulatkan ke rupiah penuh mengikuti Accurate (sama dengan backend)
+describe("documentTax", () => {
+  it.each([
+    [143888.37, false, 15828],   // ERP lama 159.716,09 → Accurate 159.716,37
+    [139992,    false, 15399],   // ERP lama 155.391,12 → Accurate 155.391
+    [13650,     false, 1502],    // tepat setengah (1.501,5) → ke atas
+    [20008,     false, 2201],    // per dokumen, bukan Σ per baris (2.200,88)
+    [7700000,   true,  763063],  // inclusive
+    [5997200,   true,  594317],
+    [0,         false, 0],
+  ])("dasar %d inclusive=%s → %d", (base, inclusive, expected) => {
+    expect(documentTax(base, inclusive)).toBe(expected);
   });
 });

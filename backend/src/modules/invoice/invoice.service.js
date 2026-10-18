@@ -57,6 +57,18 @@ const { findJobQtyLimitViolations } = require("../commission/commission.calc");
 
 const D = (v) => new Prisma.Decimal(String(v));
 
+// PPN 11% satu kali per dokumen dari dasar Σ(harga × qty − diskon) baris kena PPN,
+// dibulatkan ke rupiah penuh (setengah ke atas) — sama dengan Accurate (tax1Amount header),
+// sehingga total ERP == total Accurate (keputusan user 2026-10-17).
+//   • exclusive : PPN = bulat(dasar × 11%)
+//   • inclusive : PPN = bulat(dasar × 11/111)  (dasar sudah termasuk PPN)
+const computeDocumentTax = (taxBase, inclusiveTax) => {
+  const base = D(taxBase);
+  if (base.lte(D("0"))) return D("0");
+  const raw = inclusiveTax ? base.mul(D("11")).div(D("111")) : base.mul(D("0.11"));
+  return raw.toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+};
+
 // Guard nominal baris invoice (G1-01): harga tidak negatif, diskon item ≤ harga × qty.
 // Dipakai create & update supaya grandTotal tidak pernah negatif.
 const assertLineAmounts = ({ price, qty, discount }) => {
@@ -105,7 +117,9 @@ const computeInvoiceLines = async ({ items, branchId, taxable, inclusiveTax, act
   let memberEligibleTotal = D("0");
   let totalSubtotal = D("0");
   let totalDiscount = D("0");
-  let totalTax      = D("0");
+  // Dasar PPN = Σ (harga × qty − diskon) baris layanan kena PPN; PPN dihitung SEKALI per dokumen
+  let taxBase        = D("0");
+  let lastTaxableIdx = -1;
   // totalSubtotal / totalTax hanya dari item layanan (isMaterial=false)
   // item bahan baku (isMaterial=true) tidak masuk grand total — hanya COGS internal
 
@@ -175,7 +189,7 @@ const computeInvoiceLines = async ({ items, branchId, taxable, inclusiveTax, act
       lineSubtotal = grossLine;
       itemTax      = D("0");
     } else if (inclusiveTax) {
-      // Price already contains tax; extract DPP
+      // Price already contains tax; extract DPP (dirapikan di level dokumen setelah loop)
       lineSubtotal = grossLine.div(D("1.11")).toDecimalPlaces(2);
       itemTax      = grossLine.sub(lineSubtotal);
     } else {
@@ -188,7 +202,10 @@ const computeInvoiceLines = async ({ items, branchId, taxable, inclusiveTax, act
     if (!isMaterial) {
       totalSubtotal = totalSubtotal.add(lineSubtotal);
       totalDiscount = totalDiscount.add(discount);
-      totalTax      = totalTax.add(itemTax);
+      if (lineTaxable) {
+        taxBase = taxBase.add(grossLine);
+        lastTaxableIdx = itemsData.length;
+      }
       if (memberEligible) memberEligibleTotal = memberEligibleTotal.add(lineSubtotal).add(itemTax);
     }
 
@@ -207,6 +224,20 @@ const computeInvoiceLines = async ({ items, branchId, taxable, inclusiveTax, act
       isMaterial,
       lineGroup:       line.lineGroup ?? null,
     });
+  }
+
+  // PPN dibulatkan ke rupiah penuh per dokumen, mengikuti Accurate (keputusan user 2026-10-17)
+  const totalTax = computeDocumentTax(taxBase, inclusiveTax);
+  if (inclusiveTax && lastTaxableIdx >= 0) {
+    // Inclusive: DPP dokumen = dasar − PPN bulat. Selisih pembulatan DPP per baris
+    // ditaruh di baris kena PPN terakhir agar Σ subtotal + PPN = Σ harga (grand total tetap).
+    const dppPerLine = itemsData.reduce(
+      (s, l) => (l.taxable && !l.isMaterial ? s.add(l.subtotal) : s), D("0"));
+    const adjust = taxBase.sub(totalTax).sub(dppPerLine);
+    if (!adjust.isZero()) {
+      itemsData[lastTaxableIdx].subtotal = itemsData[lastTaxableIdx].subtotal.add(adjust);
+      totalSubtotal = totalSubtotal.add(adjust);
+    }
   }
 
   // Compute membership discount total and final grandTotal
@@ -1265,6 +1296,7 @@ const finalizeCommissionFromCalculator = async (invoiceId, { qtyOverrides = {}, 
 };
 
 module.exports = {
+  computeDocumentTax,
   listInvoices,
   getInvoiceById,
   createInvoice,

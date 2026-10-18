@@ -11,7 +11,10 @@ const ACCURATE_RECEIPT_DELETE = "/sales-receipt/delete.do";
 const ACCURATE_INVOICE_DETAIL = "/sales-invoice/detail.do";
 const ROUNDING_TOLERANCE      = 1; // rupiah
 
-// Nominal penerimaan untuk Accurate: sama dengan ERP, kecuali selisih pembulatan PPN < Rp 1
+// Nominal penerimaan untuk Accurate: sama dengan ERP, kecuali selisih pembulatan PPN < Rp 1.
+// Sejak 2026-10-17 PPN ERP sudah dibulatkan ke rupiah penuh seperti Accurate, jadi selisih ini
+// seharusnya tidak terjadi lagi untuk invoice baru — tetap dipertahankan sebagai jaring pengaman
+// (invoice lama) dan SELALU dicatat ke log bila terpicu agar bisa ditelusuri.
 const resolveReceiptAmount = async (payment) => {
   const amount = Number(payment.amount);
   try {
@@ -19,7 +22,10 @@ const resolveReceiptAmount = async (payment) => {
     const owing = Number(resp.d?.primeOwing);
     if (resp.s && Number.isFinite(owing) && owing > 0 && amount > owing && amount - owing < ROUNDING_TOLERANCE) {
       const adjusted = Math.floor(owing * 100) / 100;
-      logger.warn(`[payment sync] selisih pembulatan PPN: ERP ${amount} → Accurate ${adjusted} (paymentId=${payment.id})`);
+      logger.warn(
+        `[payment sync] jaring pengaman selisih pembulatan PPN terpicu: ERP ${amount} → Accurate ${adjusted} ` +
+        `(selisih ${Math.round((amount - adjusted) * 100) / 100}; paymentId=${payment.id}, invoiceId=${payment.invoiceId ?? payment.invoice?.id ?? "-"})`
+      );
       return adjusted;
     }
   } catch (err) {

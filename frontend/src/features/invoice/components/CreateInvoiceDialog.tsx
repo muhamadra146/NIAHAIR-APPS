@@ -31,7 +31,7 @@ import type {
   MemberEligibilityItem,
 } from "../types";
 import { isMemberDiscountEligible } from "../discount";
-import { lineAmount } from "../totals";
+import { documentTax, lineAmount } from "../totals";
 import { InvoiceTotalsSummary } from "./InvoiceTotalsSummary";
 import { uniqueStaffEmployees } from "@/features/appointment/staff";
 
@@ -549,8 +549,9 @@ export function CreateInvoiceDialog({
     const price = parseFloat(l.price) || 0;
     const qty   = parseFloat(l.qty) || 0;
     const disc  = parseFloat(l.discount) || 0;
+    // Diskon persen dibulatkan 2 desimal seperti backend agar dasar PPN pratinjau sama persis
     const gross = l.discountType === "PERCENT"
-      ? price * qty * (1 - disc / 100)
+      ? price * qty - Math.round(price * qty * disc) / 100
       : price * qty - disc;
     return sum + Math.max(0, gross);
   }, 0);
@@ -560,7 +561,8 @@ export function CreateInvoiceDialog({
     const qty   = parseFloat(l.qty) || 0;
     return sum + price * qty;
   }, 0);
-  const taxEst         = taxable && !inclusiveTax ? subtotalEst * 0.11 : 0;
+  // PPN dibulatkan ke rupiah penuh per dokumen (sama dengan backend & Accurate)
+  const taxEst         = taxable && !inclusiveTax ? documentTax(subtotalEst, false) : 0;
   // Diskon nominal dibatasi total item yang dapat diskon member (sama dengan backend)
   const memberEligibleEst = lines.reduce((sum, l) => {
     if (!isMemberDiscountEligible(l.memberItem, activeMembership, l.isMaterial)) return sum;

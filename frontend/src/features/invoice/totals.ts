@@ -12,6 +12,17 @@ import { invoiceDiscountTotal } from "./discount";
 // Kolom `subtotal` di database adalah DPP setelah diskon (inclusive: sudah dikeluarkan PPN-nya),
 // sehingga TIDAK dipakai sebagai "Subtotal" tampilan.
 
+/**
+ * PPN 11% per dokumen, dibulatkan ke rupiah penuh (setengah ke atas) — sama dengan backend
+ * (computeDocumentTax) dan Accurate, keputusan user 2026-10-17.
+ * `base` = Σ (harga × qty − diskon) baris kena PPN. Inclusive: base sudah termasuk PPN.
+ */
+export const documentTax = (base: number, inclusive: boolean): number => {
+  if (!(base > 0)) return 0;
+  const cents = Math.round(base * 100);            // hindari galat float sebelum membulatkan
+  return Math.round(inclusive ? (cents * 11) / 11100 : (cents * 11) / 10000);
+};
+
 /** Jumlah per baris yang ditagih: harga × qty − diskon (termasuk PPN bila inclusive) */
 export const lineAmount = (item: Pick<InvoiceLineItem, "price" | "qty" | "discount">): number =>
   Number(item.price) * Number(item.qty) - Number(item.discount ?? 0);
