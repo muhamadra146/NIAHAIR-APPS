@@ -223,6 +223,8 @@ export function DepositPaymentPage() {
                     type="date"
                     value={paidAt}
                     onChange={(e) => setPaidAt(e.target.value)}
+                    // Tanggal bayar tidak boleh sebelum tanggal deposit (tanggal Faktur DP di Accurate)
+                    min={deposit ? toWibDateStr(new Date(deposit.paidAt ?? deposit.createdAt)) : undefined}
                     required
                   />
                 </div>

@@ -72,8 +72,10 @@ const findDepositForPayment = (id) =>
     where: { id },
     select: {
       id:     true,
-      amount: true,
-      status: true,
+      amount:    true,
+      status:    true,
+      paidAt:    true,   // tanggal deposit (diisi user) — tanggal Faktur DP di Accurate
+      createdAt: true,   // fallback tanggal deposit bila paidAt kosong
       _count: { select: { invoiceDeposits: true } },
     },
   });
@@ -87,11 +89,13 @@ const findPaymentMethodById = (id) =>
 const create = (data) =>
   prisma.depositPayment.create({ data, select: SELECT });
 
-// Mark deposit as fully paid — called immediately after DepositPayment is created
-const markDepositPaid = (id, paidAt) =>
+// Mark deposit as fully paid — called immediately after DepositPayment is created.
+// Deposit.paidAt = tanggal deposit yang diisi user, TIDAK ditimpa tanggal bayar
+// (tanggal bayar ada di DepositPayment.paidAt).
+const markDepositPaid = (id) =>
   prisma.deposit.update({
     where: { id },
-    data:  { status: "PAID", paidAt },
+    data:  { status: "PAID" },
   });
 
 const removeDepositPayment = (id) =>
@@ -100,7 +104,7 @@ const removeDepositPayment = (id) =>
 const revertDepositToUnpaid = (id) =>
   prisma.deposit.update({
     where: { id },
-    data:  { status: "UNPAID", paidAt: null },
+    data:  { status: "UNPAID" },   // tanggal deposit (paidAt) tetap — milik user
   });
 
 module.exports = {

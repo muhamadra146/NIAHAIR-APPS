@@ -4,7 +4,7 @@ const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 const cloudinary      = require("../../config/cloudinary");
 const { paginate, paginationMeta } = require("../../utils/pagination");
-const { wibDayStart, wibDayEnd }   = require("../../utils/date");
+const { wibDayStart, wibDayEnd, wibDateStr } = require("../../utils/date");
 const prisma                                                       = require("../../config/prisma");
 const { createSyncJob }                                            = require("../syncQueue/syncQueue.service");
 const { deleteDepositPaymentFromAccurate }                         = require("./depositPayment.sync.service");
@@ -86,8 +86,23 @@ const createDepositPayment = async ({ depositId, paymentMethodId, paidAt: paidAt
     throw new AppError("Metode pembayaran tidak aktif", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
+  const paidAt = paidAtInput ? new Date(paidAtInput) : new Date();
+  if (Number.isNaN(paidAt.getTime())) {
+    throw new AppError("Format tanggal bayar tidak valid", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+
+  // Tanggal bayar tidak boleh sebelum tanggal deposit (= tanggal Faktur DP di Accurate);
+  // Accurate menolak "Tanggal Penerimaan Penjualan mendahului Tanggal Faktur". Bandingkan kalender WIB.
+  const depositDate = deposit.paidAt ?? deposit.createdAt;
+  if (depositDate && wibDateStr(paidAt) < wibDateStr(depositDate)) {
+    const [y, m, d] = wibDateStr(depositDate).split("-");
+    throw new AppError(
+      `Tanggal bayar tidak boleh sebelum tanggal deposit (${d}/${m}/${y})`,
+      StatusCodes.UNPROCESSABLE_ENTITY
+    );
+  }
+
   const paymentNo = await buildPaymentNo();
-  const paidAt    = paidAtInput ? new Date(paidAtInput) : new Date();
 
   // Payment amount always equals the deposit amount — never partial
   const created = await create({
@@ -102,8 +117,8 @@ const createDepositPayment = async ({ depositId, paymentMethodId, paidAt: paidAt
     transferProofPublicId: transferProofPublicId ?? null,
   });
 
-  // Immediately mark deposit as PAID
-  await markDepositPaid(depositId, paidAt);
+  // Immediately mark deposit as PAID (tanggal deposit milik user tidak diubah)
+  await markDepositPaid(depositId);
 
   await createSyncJob({
     entityType: "DEPOSIT_PAYMENT",
@@ -111,7 +126,7 @@ const createDepositPayment = async ({ depositId, paymentMethodId, paidAt: paidAt
     direction:  "APP_TO_ACCURATE",
   });
 
-  // Re-read so the response reflects the updated deposit (status:PAID, paidAt set)
+  // Re-read so the response reflects the updated deposit (status:PAID)
   return findById(created.id);
 };
 

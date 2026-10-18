@@ -35,13 +35,18 @@ const D = (v) => new Prisma.Decimal(String(v));
 // ── Computed fields ───────────────────────────────────────────────────
 // usedAmount and remainingAmount are derived from InvoiceDeposit records.
 // They are never stored — calculated at read time.
+// Deposit REFUNDED / CANCELLED tidak punya sisa saldo (uang sudah dikembalikan / batal).
+
+const NO_BALANCE_STATUSES = ["REFUNDED", "CANCELLED"];
 
 const withComputed = (deposit) => {
-  const usedAmount = deposit.invoiceDeposits.reduce(
+  const usedAmount = (deposit.invoiceDeposits ?? []).reduce(
     (sum, id) => sum.add(D(id.amountApplied)),
     D("0")
   );
-  const remainingAmount = D(deposit.amount).sub(usedAmount);
+  const remainingAmount = NO_BALANCE_STATUSES.includes(deposit.status)
+    ? D("0")
+    : D(deposit.amount).sub(usedAmount);
   return { ...deposit, usedAmount, remainingAmount };
 };
 
@@ -57,10 +62,16 @@ const listDeposits = async ({ page, limit, customerId, appointmentId, status, br
   if (status)        where.status        = status;
   if (branchId)      where.branchId      = branchId;
 
+  // Periode memakai tanggal deposit (paidAt, diisi user) — sama dengan yang tampil di daftar;
+  // deposit tanpa tanggal memakai createdAt.
   if (startDate || endDate) {
-    where.createdAt = {};
-    if (startDate) where.createdAt.gte = wibDayStart(startDate);
-    if (endDate)   where.createdAt.lte = wibDayEnd(endDate);
+    const range = {};
+    if (startDate) range.gte = wibDayStart(startDate);
+    if (endDate)   range.lte = wibDayEnd(endDate);
+    where.OR = [
+      { paidAt: range },
+      { paidAt: null, createdAt: range },
+    ];
   }
 
   const [deposits, total] = await Promise.all([

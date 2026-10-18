@@ -506,7 +506,14 @@ function AddPaymentDialog({
 
               <div className="flex flex-col gap-1.5">
                 <Label>Tanggal Pembayaran *</Label>
-                <Input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} required />
+                <Input
+                  type="date"
+                  value={paidAt}
+                  onChange={(e) => setPaidAt(e.target.value)}
+                  // Tanggal bayar tidak boleh sebelum tanggal deposit (tanggal Faktur DP di Accurate)
+                  min={selectedDeposit ? toWibDateStr(new Date(selectedDeposit.paidAt ?? selectedDeposit.createdAt)) : undefined}
+                  required
+                />
               </div>
 
               <div className="flex flex-col gap-1.5">

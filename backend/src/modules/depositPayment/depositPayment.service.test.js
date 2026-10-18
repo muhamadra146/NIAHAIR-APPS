@@ -94,7 +94,7 @@ describe('createDepositPayment', () => {
   test('creates payment, marks deposit PAID, and queues sync', async () => {
     const result = await svc.createDepositPayment({ depositId: 'd1', paymentMethodId: 'pm1' });
     expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ paymentNo: expect.stringMatching(/^DPAY-/) }));
-    expect(repo.markDepositPaid).toHaveBeenCalledWith('d1', expect.any(Date));
+    expect(repo.markDepositPaid).toHaveBeenCalledWith('d1');
     expect(createSyncJob).toHaveBeenCalledWith(expect.objectContaining({ entityType: 'DEPOSIT_PAYMENT' }));
     expect(result).toEqual(DP);
   });
