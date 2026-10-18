@@ -21,4 +21,7 @@ const deleteById = (id) => prisma.commissionCategory.delete({ where: { id } });
 const countRulesByCategory = (commissionCategoryId) =>
   prisma.commissionRule.count({ where: { commissionCategoryId } });
 
-module.exports = { findAll, count, findById, findByCode, create, update, deleteById, countRulesByCategory };
+const countJobsByCategory = (commissionCategoryId) =>
+  prisma.commissionJob.count({ where: { commissionCategoryId } });
+
+module.exports = { findAll, count, findById, findByCode, create, update, deleteById, countRulesByCategory, countJobsByCategory };

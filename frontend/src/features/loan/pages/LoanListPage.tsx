@@ -15,8 +15,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useAuthStore } from "@/stores/authStore";
 import { useViewOnly } from "@/hooks/useViewOnly";
 import { fetchEmployees } from "@/features/settings/api/employee.api";
-import { formatCurrency, formatDate, toWibDateStr, dateStrFromParts } from "@/lib/utils";
+import { formatCurrency, formatDate, toWibDateStr } from "@/lib/utils";
 import { useLoans, useCreateLoan, useDeleteLoan } from "../hooks";
+import { computeLoanTerm, longTermWarning, validateLoanInput } from "../loanTerm";
 import type { Loan } from "../types";
 
 const STATUS_TABS: { key: string; label: string }[] = [
@@ -290,14 +291,11 @@ function CreateLoanDialog({
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Auto-hitung endDate: startDate + Math.ceil(total / monthly) bulan
+  const term        = computeLoanTerm(parseFloat(total), parseFloat(monthly), startDate);
+  const termWarning = longTermWarning(term);
   useEffect(() => {
-    const totalAmt   = parseFloat(total);
-    const monthlyAmt = parseFloat(monthly);
-    if (!startDate || isNaN(totalAmt) || totalAmt <= 0 || isNaN(monthlyAmt) || monthlyAmt <= 0) return;
-    const months = Math.ceil(totalAmt / monthlyAmt);
-    const [y, m, d] = startDate.split("-").map(Number);
-    setEndDate(dateStrFromParts(y, m + months - 1, d));
-  }, [total, monthly, startDate]);
+    if (term) setEndDate(term.endDate);
+  }, [term?.endDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function reset() {
     setEmpSearch(""); setEmpResults([]); setSelectedEmp(null);
@@ -320,9 +318,8 @@ function CreateLoanDialog({
     if (!selectedEmp) { setError("Pilih karyawan"); return; }
     const totalAmt   = parseFloat(total);
     const monthlyAmt = parseFloat(monthly);
-    if (isNaN(totalAmt)   || totalAmt   <= 0) { setError("Total harus > 0"); return; }
-    if (isNaN(monthlyAmt) || monthlyAmt <= 0) { setError("Cicilan harus > 0"); return; }
-    if (!startDate) { setError("Tanggal mulai wajib diisi"); return; }
+    const invalid = validateLoanInput(totalAmt, monthlyAmt, startDate, endDate || undefined);
+    if (invalid) { setError(invalid); return; }
     setError(null);
     try {
       await onSubmit({
@@ -388,15 +385,25 @@ function CreateLoanDialog({
             <div className="flex flex-col gap-1.5">
               <Label className="flex items-center gap-1.5">
                 Tanggal Selesai
-                {parseFloat(total) > 0 && parseFloat(monthly) > 0 && (
+                {term && (
                   <span className="text-[10px] font-normal text-primary bg-primary/10 rounded px-1 py-0.5">
-                    auto · {Math.ceil(parseFloat(total) / parseFloat(monthly))}×
+                    auto · {term.months}×
                   </span>
                 )}
               </Label>
               <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
+
+          {term && (
+            <div className={`rounded-md px-3 py-2 text-xs ${termWarning ? "bg-amber-50 text-amber-800 border border-amber-200" : "bg-muted/50 text-muted-foreground"}`}>
+              <p>
+                {term.months} bulan cicilan · cicilan terakhir{" "}
+                <span className="font-semibold text-foreground">{formatDate(term.endDate)}</span>
+              </p>
+              {termWarning && <p className="mt-0.5">{termWarning}</p>}
+            </div>
+          )}
 
           {/* Notes */}
           <div className="flex flex-col gap-1.5">

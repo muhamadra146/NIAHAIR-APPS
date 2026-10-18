@@ -1,7 +1,18 @@
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
-const { findAll, count, findById, findByCode, create, update, deleteById, countRulesByCategory } = require("./commissionCategory.repository");
+const { findAll, count, findById, findByCode, create, update, deleteById, countRulesByCategory, countJobsByCategory } = require("./commissionCategory.repository");
+
+// Kode kategori: trim, huruf besar, spasi → "_" (sama dengan modul lain); hanya A-Z, 0-9, _
+const CODE_RE = /^[A-Z0-9_]+$/;
+const normalizeCode = (code) => {
+  const c = String(code ?? "").trim().toUpperCase().replace(/\s+/g, "_");
+  if (!c) throw new AppError("Kode wajib diisi", StatusCodes.UNPROCESSABLE_ENTITY);
+  if (!CODE_RE.test(c)) {
+    throw new AppError("Kode hanya boleh huruf, angka, dan garis bawah (_)", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+  return c;
+};
 
 const getAll = async ({ page, limit, search, isActive }) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -33,12 +44,13 @@ const getById = async (id) => {
 };
 
 const createCommissionCategory = async (body) => {
-  const existing = await findByCode(body.code);
+  const code = normalizeCode(body.code);
+  const existing = await findByCode(code);
   if (existing) throw new AppError("Kode kategori komisi sudah digunakan", StatusCodes.CONFLICT);
 
   return create({
-    code:     body.code,
-    name:     body.name,
+    code,
+    name:     body.name.trim(),
     isActive: body.isActive !== undefined ? body.isActive : true,
     allowAnyStaff: body.allowAnyStaff ?? false,
   });
@@ -48,12 +60,17 @@ const updateCommissionCategory = async (id, body) => {
   const category = await findById(id);
   if (!category) throw new AppError("Kategori komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
-  if (body.code && body.code !== category.code) {
-    const existing = await findByCode(body.code);
-    if (existing) throw new AppError("Kode kategori komisi sudah digunakan", StatusCodes.CONFLICT);
+  const data = { ...body };
+  if (body.code !== undefined) {
+    data.code = normalizeCode(body.code);
+    if (data.code !== category.code) {
+      const existing = await findByCode(data.code);
+      if (existing) throw new AppError("Kode kategori komisi sudah digunakan", StatusCodes.CONFLICT);
+    }
   }
+  if (typeof body.name === "string") data.name = body.name.trim();
 
-  return update(id, body);
+  return update(id, data);
 };
 
 const deleteCommissionCategory = async (id) => {
@@ -64,6 +81,15 @@ const deleteCommissionCategory = async (id) => {
   if (rulesCount > 0) {
     throw new AppError(
       `Kategori ini digunakan oleh ${rulesCount} rule komisi. Hapus rule terlebih dahulu.`,
+      StatusCodes.CONFLICT
+    );
+  }
+
+  // Job kategori ber-FK RESTRICT — tanpa cek ini DB menolak dan jadi error 500
+  const jobsCount = await countJobsByCategory(id);
+  if (jobsCount > 0) {
+    throw new AppError(
+      `Kategori masih dipakai oleh ${jobsCount} job; hapus/pindahkan job dulu`,
       StatusCodes.CONFLICT
     );
   }

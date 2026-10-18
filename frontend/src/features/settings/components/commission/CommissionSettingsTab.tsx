@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -174,8 +175,10 @@ function CommissionCategorySection() {
                   className="h-9 text-sm"
                   placeholder="CUTTING"
                   value={form.code}
-                  onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
+                  title="Huruf, angka, dan garis bawah (_) saja"
+                  onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase().replace(/\s+/g, "_") }))}
                 />
+                <p className="text-[10px] text-slate-400">A-Z, 0-9, _</p>
               </div>
               <div className="flex-1 space-y-1">
                 <Label className="text-xs font-medium text-slate-600">Nama Kategori</Label>
@@ -685,22 +688,26 @@ function CommissionRuleSection() {
                       <p className="text-xs text-slate-600">
                         {new Date(rule.effectiveDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ, day: "numeric", month: "short", year: "2-digit" })}
                       </p>
-                      {!rule.isActive && (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">Nonaktif</span>
-                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-0.5">
                         <button className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors" onClick={() => startEdit(rule)} title="Edit">
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
-                        <button
-                          className={`rounded-lg px-2 py-1 text-xs font-medium transition-colors hover:bg-slate-100 ${rule.isActive ? "text-slate-500 hover:text-slate-700" : "text-emerald-600 hover:text-emerald-700"}`}
-                          disabled={toggleMut.isPending}
-                          onClick={() => toggleMut.mutate(rule)}
+                        {/* Saklar aktif/nonaktif rule — label menunjukkan status saat ini */}
+                        <label
+                          className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-xs hover:bg-slate-100"
+                          title={rule.isActive ? "Klik untuk menonaktifkan rule" : "Klik untuk mengaktifkan rule"}
                         >
-                          {rule.isActive ? "Off" : "On"}
-                        </button>
+                          <Switch
+                            checked={rule.isActive}
+                            disabled={toggleMut.isPending}
+                            onCheckedChange={() => toggleMut.mutate(rule)}
+                          />
+                          <span className={`w-14 font-medium ${rule.isActive ? "text-emerald-700" : "text-slate-400"}`}>
+                            {rule.isActive ? "Aktif" : "Nonaktif"}
+                          </span>
+                        </label>
                         <button
                           className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
                           disabled={deleteMut.isPending}

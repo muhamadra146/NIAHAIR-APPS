@@ -8,7 +8,7 @@ const getByEmployee = async (employeeId) => {
 
 const getActive = async (employeeId) => {
   const setting = await repo.findActiveByEmployee(employeeId);
-  if (!setting) throw new AppError("No active salary setting found", StatusCodes.NOT_FOUND);
+  if (!setting) throw new AppError("Setting gaji aktif tidak ditemukan", StatusCodes.NOT_FOUND);
   return setting;
 };
 

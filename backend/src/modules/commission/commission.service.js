@@ -193,13 +193,16 @@ const getCommissionById = async (id) => {
   return commission;
 };
 
+// Label status komisi untuk pesan ke pengguna (sama dengan label di UI)
+const COMMISSION_STATUS_LABEL = { PENDING: "Menunggu Persetujuan", APPROVED: "Disetujui", REJECTED: "Ditolak", PAID: "Dibayar" };
+
 const approveCommission = async (id, userId) => {
   const commission = await findById(id);
   if (!commission) throw new AppError("Komisi tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (commission.status !== "PENDING") {
     throw new AppError(
-      `Cannot approve: status is ${commission.status}, expected PENDING`,
+      `Komisi tidak bisa disetujui: status sudah ${COMMISSION_STATUS_LABEL[commission.status] ?? commission.status}, hanya komisi Menunggu Persetujuan yang bisa disetujui`,
       StatusCodes.UNPROCESSABLE_ENTITY
     );
   }
@@ -558,7 +561,7 @@ const generateCommission = (invoiceId) =>
     const existing = await countByInvoice(invoiceId, tx);
     if (existing > 0) {
       throw new AppError(
-        "Commissions already generated for this invoice. Use regenerateCommission to reset.",
+        "Komisi untuk invoice ini sudah dibuat. Gunakan tombol Regenerate untuk menghitung ulang.",
         StatusCodes.UNPROCESSABLE_ENTITY
       );
     }

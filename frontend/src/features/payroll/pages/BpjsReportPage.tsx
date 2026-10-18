@@ -30,7 +30,8 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
 };
 
 function exportBpjsToCsv(data: BpjsReportResult, yearMonth: string) {
-  const fmtNum = (n: number) => n.toLocaleString("id-ID");
+  // Angka polos tanpa pemisah ribuan agar terbaca sebagai angka di Excel/Sheets
+  const fmtNum = (n: number) => String(Math.round(Number(n) * 100) / 100);
   const headers = [
     "Karyawan", "Jabatan", "Periode", "Status", "Gaji Pokok",
     "JHT Kary", "JHT Per", "JP Kary", "JP Per", "Kes Kary", "Kes Per",
@@ -41,7 +42,7 @@ function exportBpjsToCsv(data: BpjsReportResult, yearMonth: string) {
     row.employee.name,
     row.employee.role.name,
     `${new Date(row.periodStart).toLocaleDateString("id-ID", { timeZone: WIB_TZ })} - ${new Date(row.periodEnd).toLocaleDateString("id-ID", { timeZone: WIB_TZ })}`,
-    row.status,
+    STATUS_MAP[row.status]?.label ?? row.status,
     fmtNum(row.baseSalary),
     fmtNum(row.bpjsJht),
     fmtNum(row.bpjsJhtEmployer),

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ChevronLeft, Plus } from "lucide-react";
+import { ChevronLeft, Pencil, Plus } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency, formatDate, toWibDateStr } from "@/lib/utils";
-import { useLoan, useAddRepayment, useCancelLoan } from "../hooks";
+import { useViewOnly } from "@/hooks/useViewOnly";
+import { useLoan, useAddRepayment, useCancelLoan, useUpdateLoan } from "../hooks";
+import { computeLoanTerm, longTermWarning, isRealDateStr, validateRepaymentDate, MAX_LOAN_AMOUNT } from "../loanTerm";
+import type { Loan, UpdateLoanInput } from "../types";
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE:    "Aktif",
@@ -29,9 +32,13 @@ export function LoanDetailPage() {
   const { data: loan, isLoading, isError } = useLoan(id!);
   const addRepaymentMutation = useAddRepayment(id!);
   const cancelMutation       = useCancelLoan(id!);
+  const updateMutation       = useUpdateLoan(id!);
+  // MANAGER hanya lihat (sidebar viewOnlyRoles) — backend menolak tulis dari MANAGER
+  const isViewOnly           = useViewOnly();
 
   const [repayOpen, setRepayOpen]     = useState(false);
   const [cancelOpen, setCancelOpen]   = useState(false);
+  const [editOpen, setEditOpen]       = useState(false);
 
   if (isLoading) {
     return (
@@ -77,8 +84,12 @@ export function LoanDetailPage() {
             </div>
             <p className="text-sm text-muted-foreground">{loan.employee?.name ?? "—"}</p>
           </div>
-          {isActive && (
+          {isActive && !isViewOnly && (
             <div className="flex gap-2 shrink-0">
+              <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                <Pencil className="mr-1.5 h-4 w-4" />
+                Edit
+              </Button>
               <Button size="sm" onClick={() => setRepayOpen(true)}>
                 <Plus className="mr-1.5 h-4 w-4" />
                 Angsur
@@ -188,12 +199,25 @@ export function LoanDetailPage() {
         open={repayOpen}
         onOpenChange={setRepayOpen}
         maxAmount={Number(loan.remainingAmount)}
+        loanStartDate={loan.startDate}
         onSubmit={async (input) => {
           await addRepaymentMutation.mutateAsync(input);
           setRepayOpen(false);
         }}
         isPending={addRepaymentMutation.isPending}
       />
+
+      {editOpen && (
+        <EditLoanDialog
+          loan={loan}
+          onClose={() => setEditOpen(false)}
+          isPending={updateMutation.isPending}
+          onSubmit={async (input) => {
+            await updateMutation.mutateAsync(input);
+            setEditOpen(false);
+          }}
+        />
+      )}
 
       {/* Cancel confirmation */}
       <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
@@ -225,11 +249,12 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function AddRepaymentDialog({
-  open, onOpenChange, maxAmount, onSubmit, isPending,
+  open, onOpenChange, maxAmount, loanStartDate, onSubmit, isPending,
 }: {
-  open:         boolean;
-  onOpenChange: (v: boolean) => void;
-  maxAmount:    number;
+  open:          boolean;
+  onOpenChange:  (v: boolean) => void;
+  maxAmount:     number;
+  loanStartDate: string;
   onSubmit:     (input: import("../types").AddRepaymentInput) => Promise<void>;
   isPending:    boolean;
 }) {
@@ -247,6 +272,8 @@ function AddRepaymentDialog({
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) { setError("Jumlah harus > 0"); return; }
     if (amt > maxAmount) { setError(`Jumlah tidak boleh melebihi sisa ${formatCurrency(maxAmount)}`); return; }
+    const dateError = validateRepaymentDate(paidAt, loanStartDate, todayStr);
+    if (dateError) { setError(dateError); return; }
     setError(null);
     try { await onSubmit({ amount: amt, paidAt, notes: notes || undefined }); reset(); }
     catch (err: unknown) { setError(err instanceof Error ? err.message : "Gagal mencatat angsuran"); }
@@ -264,7 +291,8 @@ function AddRepaymentDialog({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Tanggal *</Label>
-            <Input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} required />
+            <Input type="date" value={paidAt} max={todayStr} min={toWibDateStr(new Date(loanStartDate))}
+              onChange={(e) => setPaidAt(e.target.value)} required />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Catatan</Label>
@@ -274,6 +302,83 @@ function AddRepaymentDialog({
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => handleClose(false)}>Batal</Button>
+            <Button type="submit" disabled={isPending}>{isPending ? "Menyimpan…" : "Simpan"}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Edit kasbon aktif — field yang diizinkan backend (PUT /loans/:id): cicilan/bulan, tanggal selesai, catatan.
+// Total & tanggal mulai tidak bisa diubah.
+function EditLoanDialog({
+  loan, onClose, onSubmit, isPending,
+}: {
+  loan:      Loan;
+  onClose:   () => void;
+  onSubmit:  (input: UpdateLoanInput) => Promise<void>;
+  isPending: boolean;
+}) {
+  const startStr = toWibDateStr(new Date(loan.startDate));
+  const [monthly, setMonthly] = useState(String(Number(loan.monthlyDeduction)));
+  const [endDate, setEndDate] = useState(loan.endDate ? toWibDateStr(new Date(loan.endDate)) : "");
+  const [notes, setNotes]     = useState(loan.notes ?? "");
+  const [error, setError]     = useState<string | null>(null);
+
+  const total       = Number(loan.totalAmount);
+  const term        = computeLoanTerm(total, parseFloat(monthly), startStr);
+  const termWarning = longTermWarning(term);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const m = parseFloat(monthly);
+    if (isNaN(m) || m <= 0) { setError("Cicilan per bulan harus lebih dari 0"); return; }
+    if (m > MAX_LOAN_AMOUNT) { setError("Cicilan per bulan melebihi batas maksimal"); return; }
+    if (m > total) { setError("Cicilan per bulan tidak boleh melebihi total kasbon"); return; }
+    if (endDate && !isRealDateStr(endDate)) { setError("Tanggal selesai tidak valid"); return; }
+    if (endDate && endDate < startStr) { setError("Tanggal selesai tidak boleh sebelum tanggal mulai"); return; }
+    setError(null);
+    try {
+      await onSubmit({ monthlyDeduction: m, endDate: endDate || undefined, notes });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Gagal menyimpan kasbon");
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader><DialogTitle>Edit Kasbon {loan.loanNo}</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <p className="text-xs text-muted-foreground">
+            Total {formatCurrency(loan.totalAmount)} · mulai {formatDate(loan.startDate)} (tidak bisa diubah)
+          </p>
+          <div className="flex flex-col gap-1.5">
+            <Label>Cicilan/Bulan *</Label>
+            <CurrencyInput value={monthly} onValueChange={setMonthly} placeholder="0" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Tanggal Selesai</Label>
+            <Input type="date" value={endDate} min={startStr} onChange={(e) => setEndDate(e.target.value)} />
+            {term && (
+              <button type="button" className="self-start text-xs text-primary underline"
+                onClick={() => setEndDate(term.endDate)}>
+                Pakai hitungan otomatis: {formatDate(term.endDate)} ({term.months} bulan)
+              </button>
+            )}
+          </div>
+          {termWarning && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{termWarning}</p>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <Label>Catatan</Label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Batal</Button>
             <Button type="submit" disabled={isPending}>{isPending ? "Menyimpan…" : "Simpan"}</Button>
           </DialogFooter>
         </form>

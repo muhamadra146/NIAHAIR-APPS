@@ -88,6 +88,35 @@ export function buildBreakdownLines(b: BreakdownInput): string[] {
 }
 
 /**
+ * Porsi persis dari workRatio tersimpan. workRatio disimpan Decimal(18,6) — mis. 70/120 jadi
+ * 0,583333 — sehingga membagi dengan nilai bulat itu menghasilkan base palsu (Rp 7.700.004
+ * alih-alih Rp 7.700.000). Porsi asli dipulihkan dari pecahan aslinya per mode bagi.
+ */
+export function exactRatio(splitMode: CommissionSplitMode, ratio: number, workQty: number): number {
+  if (!(ratio > 0)) return ratio;
+  if (splitMode === "FULL") return 1;
+  if (splitMode === "EQUAL") return 1 / Math.max(1, Math.round(1 / ratio));
+  if (workQty > 0) {
+    // qty disimpan 2 desimal → qty item juga dibulatkan 2 desimal
+    const itemQty = Math.round((workQty / ratio) * 100) / 100;
+    if (itemQty > 0) return workQty / itemQty;
+  }
+  return ratio;
+}
+
+/**
+ * Base sebelum porsi (sisa base job) dari base staf tersimpan (dibulatkan 2 desimal).
+ * Bila rupiah bulat konsisten dengan base tersimpan, pakai rupiah bulat itu.
+ */
+export function recoverRemainingBase(base: number, ratio: number): number {
+  if (!(ratio > 0)) return base;
+  const raw     = base / ratio;
+  const rounded = Math.round(raw);
+  const tol     = 0.005 / ratio + 1e-9; // galat maksimum dari pembulatan base tersimpan
+  return Math.abs(raw - rounded) <= tol ? rounded : Math.round(raw * 100) / 100;
+}
+
+/**
  * Susun input rincian dari komisi TERSIMPAN (sistem kategori-job).
  * Tersimpan: baseAmount = base staf (sisa base × porsi, atau qty × harga untuk helper).
  * null jika komisi berasal dari sistem lama (tanpa commissionJob).
@@ -103,7 +132,8 @@ export function breakdownFromCommission(c: Commission): BreakdownInput | null {
 
   const base   = Number(c.baseAmount) || 0;
   const qty    = Number(c.workQty) || 0;
-  const ratio  = c.workRatio != null && c.workRatio !== "" ? Number(c.workRatio) : null;
+  const stored = c.workRatio != null && c.workRatio !== "" ? Number(c.workRatio) : null;
+  const ratio  = stored != null ? exactRatio(job.splitMode, stored, qty) : null;
   const value  = Number(c.commissionValue) || 0;
   const amount = Number(c.commissionAmount) || 0;
   const type   = c.commissionType === "FIXED" ? "FIXED" : "PERCENTAGE";
@@ -123,9 +153,9 @@ export function breakdownFromCommission(c: Commission): BreakdownInput | null {
     commissionValue: value,
     workQty:         qty,
     workRatio:       ratio,
-    remainingBase:   ratio && ratio > 0 ? base / ratio : base,
+    remainingBase:   ratio && ratio > 0 ? recoverRemainingBase(base, ratio) : base,
     staffCount:      ratio && ratio > 0 ? Math.round(1 / ratio) : 1,
-    itemQty:         ratio && ratio > 0 && qty > 0 ? Math.round(qty / ratio) : null,
+    itemQty:         ratio && ratio > 0 && qty > 0 ? Math.round((qty / ratio) * 100) / 100 : null,
     effectiveBase:   base,
     grossAmount:     gross,
     flatDeduction:   flat,

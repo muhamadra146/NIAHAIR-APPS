@@ -2,6 +2,7 @@ const { StatusCodes }    = require("http-status-codes");
 const AppError           = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo               = require("./loan.repository");
+const { wibDateStr, toDateStr } = require("../../utils/date");
 
 const getAll = async ({ employeeId, branchId, status, page, limit } = {}) => {
   const { skip, take, page: pageNum, limit: limitNum } = paginate(page, limit);
@@ -24,10 +25,38 @@ const getById = async (id) => {
 };
 
 // ── Validasi nilai kasbon ────────────────────────────────────────────
+// Tanggal harus tanggal kalender yang benar-benar ada. new Date("2026-02-31") di JS
+// bergeser diam-diam ke 3 Maret — itu yang ditolak di sini.
+const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})(T.*)?$/;
 const toDate = (value, label) => {
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) throw new AppError(`${label} tidak valid`, StatusCodes.BAD_REQUEST);
-  return d;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) throw new AppError(`${label} tidak valid`, StatusCodes.BAD_REQUEST);
+    return value;
+  }
+  const m = DATE_RE.exec(String(value ?? "").trim());
+  if (!m) throw new AppError(`${label} tidak valid (format YYYY-MM-DD)`, StatusCodes.BAD_REQUEST);
+  const [, y, mo, d] = m.map(Number);
+  const cal = new Date(Date.UTC(y, mo - 1, d));
+  if (cal.getUTCFullYear() !== y || cal.getUTCMonth() !== mo - 1 || cal.getUTCDate() !== d) {
+    throw new AppError(`${label} tidak valid: ${m[1]}-${m[2]}-${m[3]} tidak ada di kalender`, StatusCodes.BAD_REQUEST);
+  }
+  const date = new Date(String(value).trim());
+  if (Number.isNaN(date.getTime())) throw new AppError(`${label} tidak valid`, StatusCodes.BAD_REQUEST);
+  return date;
+};
+
+// Tanggal angsuran: tidak boleh di masa depan (WIB) dan tidak boleh sebelum tanggal mulai kasbon
+const assertRepaymentDate = (paidAt, loanStartDate) => {
+  const paid    = toDate(paidAt, "Tanggal bayar");
+  const paidStr = toDateStr(typeof paidAt === "string" ? paidAt.trim() : paid);
+  if (paidStr > wibDateStr()) {
+    throw new AppError("Tanggal bayar tidak boleh di masa depan", StatusCodes.BAD_REQUEST);
+  }
+  const startStr = loanStartDate ? wibDateStr(loanStartDate) : null;
+  if (startStr && paidStr < startStr) {
+    throw new AppError(`Tanggal bayar tidak boleh sebelum tanggal mulai kasbon (${startStr})`, StatusCodes.BAD_REQUEST);
+  }
+  return paid;
 };
 
 const assertDeductionWithinTotal = (monthlyDeduction, totalAmount) => {
@@ -37,6 +66,7 @@ const assertDeductionWithinTotal = (monthlyDeduction, totalAmount) => {
 };
 
 const assertDateOrder = (startDate, endDate) => {
+  toDate(startDate, "Tanggal mulai");
   if (!endDate) return;
   if (toDate(endDate, "Tanggal selesai") < toDate(startDate, "Tanggal mulai")) {
     throw new AppError("Tanggal selesai tidak boleh sebelum tanggal mulai", StatusCodes.BAD_REQUEST);
@@ -60,8 +90,8 @@ const createLoan = async (body) => {
       totalAmount:      body.totalAmount,
       remainingAmount:  body.totalAmount,
       monthlyDeduction: body.monthlyDeduction,
-      startDate:        new Date(body.startDate),
-      endDate:          body.endDate ? new Date(body.endDate) : null,
+      startDate:        toDate(body.startDate, "Tanggal mulai"),
+      endDate:          body.endDate ? toDate(body.endDate, "Tanggal selesai") : null,
       notes:            body.notes ?? null,
     };
     return repo.create(data, tx);
@@ -82,7 +112,7 @@ const updateLoan = async (id, body) => {
 
   const data = {};
   if (body.monthlyDeduction !== undefined) data.monthlyDeduction = body.monthlyDeduction;
-  if (body.endDate          !== undefined) data.endDate          = body.endDate ? new Date(body.endDate) : null;
+  if (body.endDate          !== undefined) data.endDate          = body.endDate ? toDate(body.endDate, "Tanggal selesai") : null;
   if (body.notes            !== undefined) data.notes            = body.notes;
   // Bug fix #2: status TIDAK boleh diubah langsung via update.
   // Gunakan cancelLoan() atau alur repayment untuk mengubah status.
@@ -109,7 +139,8 @@ const addRepayment = async (loanId, body) => {
   if (amount > Number(loan.remainingAmount))
     throw new AppError("Nominal melebihi sisa kasbon", StatusCodes.BAD_REQUEST);
 
-  return repo.addRepayment(loanId, amount, new Date(body.paidAt), body.notes, body.payrollId);
+  const paidAt = assertRepaymentDate(body.paidAt, loan.startDate);
+  return repo.addRepayment(loanId, amount, paidAt, body.notes, body.payrollId);
 };
 
 const getRepayments = async (loanId) => {

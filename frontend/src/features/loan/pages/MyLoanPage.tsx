@@ -154,12 +154,12 @@ function LoanCard({ loan, onClick }: { loan: Loan; onClick: () => void }) {
       {/* Progress */}
       <div>
         <div className="flex justify-between text-xs text-muted-foreground mb-1">
-          <span>{isActive ? `Sisa: ${formatCurrency(loan.remainingAmount)}` : "Lunas"}</span>
+          <span>{isActive ? `Sisa: ${formatCurrency(loan.remainingAmount)}` : (STATUS_LABEL[loan.status] ?? loan.status)}</span>
           <span>{pct}%</span>
         </div>
         <div className="h-2 rounded-full bg-muted overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all ${isActive ? "bg-primary" : "bg-green-500"}`}
+            className={`h-full rounded-full transition-all ${isActive ? "bg-primary" : loan.status === "CANCELLED" ? "bg-muted-foreground/40" : "bg-green-500"}`}
             style={{ width: `${pct}%` }}
           />
         </div>
