@@ -134,6 +134,8 @@ export interface Deposit {
   amount:                string;
   status:                DepositStatus;
   notes:                 string | null;
+  /** Tanggal deposit (diisi user saat tambah; diganti tanggal bayar saat DP dibayar); null jika belum ada */
+  paidAt?:               string | null;
   createdAt:             string;
   updatedAt:             string;
   usedAmount:            string;

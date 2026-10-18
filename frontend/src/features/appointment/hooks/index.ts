@@ -17,10 +17,11 @@ import type {
   RescheduleInput,
 } from "../types";
 
-export const useAppointments = (params: AppointmentListParams) =>
+export const useAppointments = (params: AppointmentListParams, enabled = true) =>
   useQuery({
     queryKey: ["appointments", params],
     queryFn:  () => fetchAppointments(params),
+    enabled,
   });
 
 export const useAppointment = (id: string) =>

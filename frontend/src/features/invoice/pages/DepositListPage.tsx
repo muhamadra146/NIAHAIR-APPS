@@ -247,7 +247,11 @@ export function DepositListPage() {
               ))}
             </div>
           ) : deposits.length === 0 ? (
-            <EmptyState title="Belum ada deposit" description="Tambahkan deposit pelanggan untuk memulai" />
+            hasFilter ? (
+              <EmptyState title="Tidak ada deposit yang cocok dengan filter" description="Ubah atau reset filter untuk melihat deposit lain" />
+            ) : (
+              <EmptyState title="Belum ada deposit" description="Tambahkan deposit pelanggan untuk memulai" />
+            )
           ) : (
             <>
               {/* Mobile cards */}
@@ -394,7 +398,7 @@ function DepositCard({ deposit, canDelete, onDelete }: {
               Sisa {formatCurrency(deposit.remainingAmount)}
             </span>
           )}
-          <span className="text-xs text-slate-400">{formatDate(deposit.createdAt)}</span>
+          <span className="text-xs text-slate-400">{formatDate(deposit.paidAt ?? deposit.createdAt)}</span>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1 pt-0.5">
@@ -434,7 +438,7 @@ function DepositRow({ deposit, canDelete, onDelete }: {
         <p className="text-xs text-slate-400 mt-0.5">{deposit.customer?.mobilePhone ?? ""}</p>
       </td>
       <td className="px-5 py-4 text-slate-500 text-sm whitespace-nowrap">
-        {formatDate(deposit.createdAt)}
+        {formatDate(deposit.paidAt ?? deposit.createdAt)}
       </td>
       <td className="px-5 py-4 text-right font-semibold text-slate-800 whitespace-nowrap">
         {formatCurrency(deposit.amount)}

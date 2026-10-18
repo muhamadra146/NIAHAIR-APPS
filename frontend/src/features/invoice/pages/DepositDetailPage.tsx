@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, CreditCard, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { Ban, ChevronLeft, CreditCard, Pencil, RefreshCw, Trash2, Undo2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,11 +10,20 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/stores/authStore";
+import { useViewOnly } from "@/hooks/useViewOnly";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { useDeposit, useDepositPayments, useUpdateDeposit, useDeleteDepositPayment, useResyncDeposit, useResyncDepositPayment } from "../hooks";
+import {
+  useDeposit, useDepositPayments, useUpdateDeposit, useDeleteDepositPayment, useResyncDeposit, useResyncDepositPayment,
+  useCancelDeposit, useRefundDeposit,
+} from "../hooks";
 import type { DepositPayment } from "../types";
 
 const CAN_EDIT: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
+// Batalkan / Refund DP — sesuai hak akses PATCH /deposits/:id/cancel & /refund (FIN-012: Kasir boleh)
+const CAN_CANCEL_REFUND: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER"];
+// Status yang diterima backend (deposit.service.js)
+const CANCELLABLE = ["PENDING", "UNPAID", "PAID"];
+const REFUNDABLE  = ["PAID", "PARTIAL_USED"];
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING:      "Menunggu",
@@ -51,6 +60,11 @@ export function DepositDetailPage() {
   const deletePaymentMutation   = useDeleteDepositPayment();
   const resyncDepositMutation   = useResyncDeposit();
   const resyncPaymentMutation   = useResyncDepositPayment();
+  const isViewOnly              = useViewOnly();
+  const cancelMutation          = useCancelDeposit(id!);
+  const refundMutation          = useRefundDeposit(id!);
+  const [confirmAction, setConfirmAction] = useState<"cancel" | "refund" | null>(null);
+  const canCancelRefund = !isViewOnly && (user ? CAN_CANCEL_REFUND.includes(user.roleCode) : false);
 
   if (isLoading) {
     return (
@@ -77,7 +91,24 @@ export function DepositDetailPage() {
 
   // Bisa bayar jika status UNPAID — tidak perlu cek payments.length
   // (jika payment dihapus, status kembali ke UNPAID dan user harus bisa bayar lagi)
-  const canPay = deposit.status === "UNPAID";
+  // Office/Finance (lihat saja) tidak boleh mencatat pembayaran — POST /deposits/:id/payments hanya POS
+  const canPay = canCancelRefund && deposit.status === "UNPAID";
+
+  const usedInInvoice = (deposit.invoiceDeposits?.length ?? 0) > 0;
+  const showCancel    = canCancelRefund && CANCELLABLE.includes(deposit.status) && !usedInInvoice;
+  const showRefund    = canCancelRefund && REFUNDABLE.includes(deposit.status);
+  const hasPaid       = payments.length > 0;
+  const actionPending = cancelMutation.isPending || refundMutation.isPending;
+
+  async function handleConfirm() {
+    try {
+      if (confirmAction === "cancel") await cancelMutation.mutateAsync();
+      if (confirmAction === "refund") await refundMutation.mutateAsync();
+      setConfirmAction(null);
+    } catch {
+      // pesan error sudah ditampilkan lewat toast di hook
+    }
+  }
 
   return (
     <PageContainer>
@@ -124,7 +155,7 @@ export function DepositDetailPage() {
           <CardContent className="pb-4 space-y-3">
             <Row label="Customer"   value={deposit.customer?.name ?? "—"} />
             <Row label="No. Telepon" value={deposit.customer?.mobilePhone ?? "—"} />
-            <Row label="Tanggal"    value={formatDate(deposit.createdAt)} />
+            <Row label="Tanggal"    value={formatDate(deposit.paidAt ?? deposit.createdAt)} />
             <Row label="Status">
               <Badge variant="outline" className={`text-xs ${STATUS_COLOR[deposit.status] ?? ""}`}>
                 {STATUS_LABEL[deposit.status] ?? deposit.status}
@@ -250,7 +281,66 @@ export function DepositDetailPage() {
             Catat Pembayaran
           </Button>
         )}
+
+        {/* Batalkan / Refund DP */}
+        {(showCancel || showRefund) && (
+          <div className="flex gap-2">
+            {showRefund && (
+              <Button variant="outline" className="flex-1 h-10" onClick={() => setConfirmAction("refund")}>
+                <Undo2 className="h-4 w-4 mr-1.5" />
+                Refund
+              </Button>
+            )}
+            {showCancel && (
+              <Button
+                variant="outline"
+                className="flex-1 h-10 text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setConfirmAction("cancel")}
+              >
+                <Ban className="h-4 w-4 mr-1.5" />
+                Batalkan
+              </Button>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Konfirmasi batalkan / refund deposit */}
+      <Dialog open={!!confirmAction} onOpenChange={(v) => { if (!v && !actionPending) setConfirmAction(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{confirmAction === "refund" ? "Refund Deposit" : "Batalkan Deposit"}</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-muted-foreground py-2 space-y-2">
+            {confirmAction === "refund" ? (
+              <p>
+                Sisa DP sebesar{" "}
+                <span className="font-medium text-foreground">{formatCurrency(deposit.remainingAmount)}</span>{" "}
+                akan dikembalikan ke{" "}
+                <span className="font-medium text-foreground">{deposit.customer?.name ?? "customer"}</span>{" "}
+                dan deposit tidak bisa dipakai lagi.
+              </p>
+            ) : hasPaid ? (
+              <p>
+                Deposit akan dibatalkan dan uang DP sebesar{" "}
+                <span className="font-medium text-foreground">{formatCurrency(deposit.amount)}</span>{" "}
+                dianggap dikembalikan ke customer.
+              </p>
+            ) : (
+              <p>Deposit akan dibatalkan dan tidak bisa dibayar atau dipakai lagi.</p>
+            )}
+            <p>Tindakan ini tidak dapat dibatalkan.</p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" disabled={actionPending} onClick={() => setConfirmAction(null)}>Kembali</Button>
+            <Button variant="destructive" disabled={actionPending} onClick={handleConfirm}>
+              {actionPending
+                ? "Memproses…"
+                : confirmAction === "refund" ? "Ya, Refund" : "Ya, Batalkan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Konfirmasi hapus pembayaran */}
       <Dialog open={!!deletePaymentTarget} onOpenChange={(v) => { if (!v) setDeletePaymentTarget(null); }}>
         <DialogContent className="sm:max-w-sm">

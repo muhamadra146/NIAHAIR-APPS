@@ -73,6 +73,9 @@ const KPI_CONFIG = [
 // Sesuai hak akses backend: /reports/summary dan /loans
 const REPORT_ROLES    = ["SUPER_ADMIN", "OWNER", "MANAGER", "INVENTORY", "OFFICE", "FINANCE"];
 const LOAN_VIEW_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "FINANCE"];
+// GET /deposits/summary dan GET /appointments — INVENTORY tidak punya akses (403)
+const DEPOSIT_SUMMARY_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER", "OFFICE", "FINANCE"];
+const APPOINTMENT_ROLES     = ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER", "STAFF_OPERASIONAL", "OFFICE", "FINANCE"];
 
 // STAFF_OPERASIONAL → tampilkan dashboard sederhana (view-only)
 const STAFF_ONLY_ROLES = ["STAFF_OPERASIONAL"] as const;
@@ -97,6 +100,8 @@ export function DashboardPage() {
   const roleCode   = user?.roleCode ?? "";
   const canReport  = REPORT_ROLES.includes(roleCode);
   const canLoans   = LOAN_VIEW_ROLES.includes(roleCode);
+  const canDeposit = DEPOSIT_SUMMARY_ROLES.includes(roleCode);
+  const canAppts   = APPOINTMENT_ROLES.includes(roleCode);
 
   // ── Data hooks ──────────────────────────────────────────────────────────────
   const { data: summary,      isLoading } = useSummaryReport({
@@ -111,8 +116,8 @@ export function DashboardPage() {
     endDate:   todayStr,
   }, canReport);
 
-  const { data: depositSum  } = useDepositSummary({ branchId: branchId ?? undefined });
-  const { data: todayAppts  } = useAppointments({ startDate: todayStr, endDate: todayStr, limit: 6 });
+  const { data: depositSum  } = useDepositSummary({ branchId: branchId ?? undefined }, canDeposit);
+  const { data: todayAppts  } = useAppointments({ startDate: todayStr, endDate: todayStr, limit: 6 }, canAppts);
   const { data: activeLoans } = useLoans({ status: "ACTIVE", limit: 5 }, canLoans);
 
   // ── Derived values ──────────────────────────────────────────────────────────
@@ -195,7 +200,7 @@ export function DashboardPage() {
           <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
             Ringkasan Hari Ini
           </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className={`grid grid-cols-2 gap-3 ${canDeposit ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
             <TodayCard
               icon={TrendingUp}
               iconClass="bg-emerald-100 text-emerald-600"
@@ -220,14 +225,16 @@ export function DashboardPage() {
               value={String((todaySummary?.invoices.total ?? 0) - (todaySummary?.invoices.paid ?? 0))}
               sub={`dari ${todaySummary?.invoices.total ?? 0} invoice`}
             />
-            <TodayCard
-              icon={Wallet}
-              iconClass="bg-rose-100 text-rose-600"
-              label="Saldo Deposit Aktif"
-              loading={false}
-              value={formatCurrency(depositSaldoTotal)}
-              sub={`${depositSaldoCount} deposit aktif`}
-            />
+            {canDeposit && (
+              <TodayCard
+                icon={Wallet}
+                iconClass="bg-rose-100 text-rose-600"
+                label="Saldo Deposit Aktif"
+                loading={false}
+                value={formatCurrency(depositSaldoTotal)}
+                sub={`${depositSaldoCount} deposit aktif`}
+              />
+            )}
           </div>
         </section>
 
@@ -284,9 +291,11 @@ export function DashboardPage() {
         </section>
 
         {/* ── Widgets ───────────────────────────────────────── */}
+        {(canAppts || canLoans) && (
         <div className="grid gap-6 lg:grid-cols-2">
 
           {/* Today Booking — with appointment status breakdown ── */}
+          {canAppts && (
           <WidgetCard
             title="Booking Hari Ini"
             subtitle={`${todayApptList.length} janji temu`}
@@ -336,8 +345,10 @@ export function DashboardPage() {
               })
             )}
           </WidgetCard>
+          )}
 
           {/* Kasbon Aktif ──────────────────────────────────── */}
+          {canLoans && (
           <WidgetCard
             title="Kasbon Aktif"
             subtitle={`${activeLoanList.length} karyawan`}
@@ -384,8 +395,10 @@ export function DashboardPage() {
               })
             )}
           </WidgetCard>
+          )}
 
         </div>
+        )}
 
         {/* ── Quick Actions ─────────────────────────────────── */}
         <section className="animate-fade-up delay-400">

@@ -23,6 +23,7 @@ import { useInvoices, useDeposits } from "@/features/invoice/hooks";
 import { useTreatments } from "@/features/treatment/hooks";
 import { useConsultationNotes } from "@/features/consultation/hooks";
 import { uploadConsultationNotePhoto } from "@/features/consultation/api";
+import { canModifyNote } from "@/features/consultation/permissions";
 import { toast } from "@/lib/toast";
 import { useAuthStore } from "@/stores/authStore";
 import { useCustomerNotes } from "../hooks/useCustomerNotes";
@@ -660,10 +661,13 @@ function PhotoUploadSlot({
   noteId,
   type,
   url,
+  canEdit,
 }: {
-  noteId: string;
-  type:   "BEFORE" | "AFTER";
-  url:    string | null | undefined;
+  noteId:  string;
+  type:    "BEFORE" | "AFTER";
+  url:     string | null | undefined;
+  /** Hanya penulis catatan atau SA/Owner/Manager (canModifyNote) yang boleh upload/ganti foto */
+  canEdit: boolean;
 }) {
   const qc      = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -674,6 +678,25 @@ function PhotoUploadSlot({
     onSuccess:  () => { void qc.invalidateQueries({ queryKey: ["consultation-notes"] }); },
     onError:    (err: Error) => toast.error(err.message),
   });
+
+  // Mode lihat saja: tampilkan foto (bila ada) tanpa tombol upload/ganti
+  if (!canEdit) {
+    return (
+      <div className="flex-1">
+        {url ? (
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            <img src={url} alt={label} className="w-full h-28 object-cover rounded-lg border border-border" />
+          </a>
+        ) : (
+          <div className="flex w-full h-28 flex-col items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground gap-1">
+            <Camera className="h-4 w-4" />
+            <span className="text-[11px]">Belum ada foto</span>
+          </div>
+        )}
+        <p className="mt-1 text-center text-[10px] text-muted-foreground">{label}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1">
@@ -730,6 +753,7 @@ function PhotoUploadSlot({
 
 function CatatanKlienTab({ customerId }: { customerId: string }) {
   const { data, isLoading } = useConsultationNotes({ customerId, limit: 50 });
+  const user  = useAuthStore((s) => s.user);
   const notes = data?.data ?? [];
 
   if (isLoading) return <TabSkeleton />;
@@ -784,8 +808,8 @@ function CatatanKlienTab({ customerId }: { customerId: string }) {
 
                   {/* ── Foto Before/After ── */}
                   <div className="mt-3 flex gap-2">
-                    <PhotoUploadSlot noteId={note.id} type="BEFORE" url={note.beforePhotoUrl} />
-                    <PhotoUploadSlot noteId={note.id} type="AFTER"  url={note.afterPhotoUrl}  />
+                    <PhotoUploadSlot noteId={note.id} type="BEFORE" url={note.beforePhotoUrl} canEdit={canModifyNote(user, note)} />
+                    <PhotoUploadSlot noteId={note.id} type="AFTER"  url={note.afterPhotoUrl}  canEdit={canModifyNote(user, note)} />
                   </div>
                 </div>
                 <Link

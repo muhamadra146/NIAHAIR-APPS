@@ -248,7 +248,8 @@ export function useRefundDeposit(id: string) {
     mutationFn: () => refundDeposit(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["deposits"] });
-      toast.success("Deposit di-refund");
+      qc.invalidateQueries({ queryKey: ["appointments"] });
+      toast.success("Deposit berhasil di-refund");
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -260,7 +261,8 @@ export function useCancelDeposit(id: string) {
     mutationFn: () => cancelDeposit(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["deposits"] });
-      toast.success("Deposit dibatalkan");
+      qc.invalidateQueries({ queryKey: ["appointments"] });
+      toast.success("Deposit berhasil dibatalkan");
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -300,12 +302,13 @@ export function useAllDepositPayments(params: DepositPaymentListParams = {}) {
   });
 }
 
-export function useDepositSummary(params: { branchId?: string } = {}) {
+export function useDepositSummary(params: { branchId?: string } = {}, enabled = true) {
   return useQuery({
     queryKey:       ["deposits", "summary", params],
     queryFn:        () => fetchDepositSummary(params),
     staleTime:      0,
     refetchOnMount: true,
+    enabled,
   });
 }
 

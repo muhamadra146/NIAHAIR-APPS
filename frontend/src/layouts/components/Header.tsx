@@ -9,10 +9,16 @@ import { NotificationBell } from "@/features/notification/NotificationBell";
 
 function usePageTitle() {
   const { pathname } = useLocation();
-  const match = sidebarNav.find(
-    (item) => pathname === item.href || pathname.startsWith(item.href + "/")
-  );
-  return match?.label ?? "NIAHAIR";
+  const matches = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  // Cari juga di sub-menu (mis. /deposit-payments, /invoice-payments); ambil href terpanjang
+  // yang cocok. Sub-menu dengan href sama dengan induknya tetap memakai label induk.
+  let best: { label: string; href: string } | undefined;
+  for (const item of sidebarNav) {
+    for (const entry of [item, ...(item.children ?? [])]) {
+      if (matches(entry.href) && (!best || entry.href.length > best.href.length)) best = entry;
+    }
+  }
+  return best?.label ?? "NIAHAIR";
 }
 
 function UserAvatar({ name }: { name: string }) {
