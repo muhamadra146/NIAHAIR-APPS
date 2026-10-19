@@ -36,9 +36,10 @@ const getById = async (id, actor = null) => {
 const create = async (employeeId, branchId, { staffScheduleId, attendanceId, requestedCheckIn, requestedCheckOut, reason, branchId: bodyBranchId }) => {
   const resolvedBranchId = branchId ?? bodyBranchId;
   if (!employeeId)       throw new AppError("Data karyawan untuk user ini tidak ditemukan", StatusCodes.BAD_REQUEST);
-  if (!resolvedBranchId) throw new AppError("branchId is required", StatusCodes.BAD_REQUEST);
-  if (!staffScheduleId)  throw new AppError("staffScheduleId is required", StatusCodes.BAD_REQUEST);
-  if (!reason)           throw new AppError("reason is required", StatusCodes.BAD_REQUEST);
+  if (!resolvedBranchId) throw new AppError("Cabang karyawan tidak ditemukan", StatusCodes.BAD_REQUEST);
+  if (!staffScheduleId)  throw new AppError("Jadwal wajib dipilih", StatusCodes.BAD_REQUEST);
+  reason = typeof reason === "string" ? reason.trim() : reason;
+  if (!reason)           throw new AppError("Alasan wajib diisi", StatusCodes.BAD_REQUEST);
   if (!requestedCheckIn && !requestedCheckOut)
     throw new AppError("Isi minimal jam masuk atau jam keluar yang dikoreksi", StatusCodes.BAD_REQUEST);
   if (requestedCheckIn && requestedCheckOut && new Date(requestedCheckOut) <= new Date(requestedCheckIn))
@@ -75,12 +76,15 @@ const review = async (id, reviewerId, { status, reviewNote }, actor = null) => {
   if (!["APPROVED", "REJECTED"].includes(status))
     throw new AppError("Status harus APPROVED atau REJECTED", StatusCodes.BAD_REQUEST);
 
-  // Disetujui: terapkan jam koreksi ke absensi DULU — bila gagal, status tetap PENDING
+  // Disetujui: terapkan jam koreksi ke absensi DULU — bila gagal, status tetap PENDING.
+  // Hanya jam yang dikoreksi yang diubah (jam lain tetap); alasan koreksi jadi catatan absensi
+  // (EMP-011). Tanpa actor: wewenang penyetuju sudah dicek di atas.
   if (status === "APPROVED" && cr.staffScheduleId) {
     await attendanceSvc.manualSet({
       staffScheduleId: cr.staffScheduleId,
       checkInAt:  cr.requestedCheckIn  ? new Date(cr.requestedCheckIn).toISOString()  : undefined,
       checkOutAt: cr.requestedCheckOut ? new Date(cr.requestedCheckOut).toISOString() : undefined,
+      notes:      `Koreksi disetujui: ${String(cr.reason ?? "").trim() || "-"}`,
     });
   }
 

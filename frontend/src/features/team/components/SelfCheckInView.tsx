@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMyToday, useMyAttendance, useCheckIn, useCheckOut } from "../hooks";
 import type { AttendanceStatus } from "../types";
 import { WIB_TZ, toWibTimeStr, wibDateParts } from "@/lib/utils";
+import { APPROVED_ABSENCE, classifyGeoError, isApprovedAbsence } from "../attendanceSummary";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -59,12 +60,16 @@ function statusInfo(s: AttendanceStatus | undefined): { label: string; dot: stri
   }
 }
 
-async function getGeolocation(): Promise<{ latitude?: number; longitude?: number }> {
-  if (!navigator.geolocation) return {};
+type GeoFailure = "DENIED" | "UNAVAILABLE" | null;
+
+// Lokasi untuk absen masuk & keluar. `failure`: DENIED = izin lokasi ditolak,
+// UNAVAILABLE = GPS mati / tidak terdeteksi / browser tanpa geolokasi.
+async function getGeolocation(): Promise<{ latitude?: number; longitude?: number; failure: GeoFailure }> {
+  if (!navigator.geolocation) return { failure: "UNAVAILABLE" };
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-      () => resolve({}),
+      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, failure: null }),
+      (err) => resolve({ failure: err.code === err.PERMISSION_DENIED ? "DENIED" : "UNAVAILABLE" }),
       { timeout: 6000 },
     );
   });
@@ -88,8 +93,10 @@ function HeroCheckInCard() {
   const { data: today, isLoading } = useMyToday();
   const checkInMut  = useCheckIn();
   const checkOutMut = useCheckOut();
-  const [geoError, setGeoError]         = useState(false);
+  const [geoError, setGeoError]         = useState<GeoFailure>(null);
+  const [gpsRequiredMsg, setGpsRequiredMsg] = useState<string | null>(null);
   const [geofenceMsg, setGeofenceMsg]   = useState<string | null>(null);
+  const [actionError, setActionError]   = useState<string | null>(null);
 
   const timeStr = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: WIB_TZ });
   const secStr  = `:${String(now.getSeconds()).padStart(2, "0")}`;
@@ -102,7 +109,9 @@ function HeroCheckInCard() {
   const att    = today?.attendance;
   const hasIn  = !!att?.checkInAt;
   const hasOut = !!att?.checkOutAt;
-  const isOff  = today?.status === "OFF" || today?.status === "LEAVE";
+  // Libur atau cuti / izin / sakit yang disetujui → tidak ada tombol absen
+  const isOff  = today?.status === "OFF" || isApprovedAbsence(today?.status);
+  const offLabel = today?.status === "OFF" ? "Hari libur" : `Hari ${APPROVED_ABSENCE[today?.status ?? "LEAVE"]?.toLowerCase() ?? "cuti"} (disetujui)`;
   const shift  = today?.shift;
 
   // Shift progress bar
@@ -129,35 +138,28 @@ function HeroCheckInCard() {
     return err instanceof Error ? err.message : "Terjadi kesalahan";
   }
 
-  async function handleCheckIn() {
-    setGeoError(false);
+  // Absen masuk & keluar sama: kirim lokasi; tampilkan pesan GPS mati/ditolak vs di luar area
+  async function submitAttendance(kind: "in" | "out") {
+    setGeoError(null);
+    setGpsRequiredMsg(null);
     setGeofenceMsg(null);
-    const coords = await getGeolocation();
-    if (!coords.latitude) setGeoError(true);
+    setActionError(null);
+    const { failure, ...coords } = await getGeolocation();
+    setGeoError(failure);
     try {
-      await checkInMut.mutateAsync({ staffScheduleId: today!.scheduleId, ...coords });
+      const input = { staffScheduleId: today!.scheduleId, ...coords };
+      if (kind === "in") await checkInMut.mutateAsync(input);
+      else await checkOutMut.mutateAsync(input);
     } catch (err) {
       const msg = extractApiMsg(err);
-      if (/terlalu jauh|radius|gps/i.test(msg)) {
-        setGeofenceMsg(msg);
-      }
+      const issue = classifyGeoError(msg);
+      if (issue === "OUTSIDE_AREA") setGeofenceMsg(msg);
+      else if (issue === "GPS_OFF") setGpsRequiredMsg(msg);
+      else setActionError(msg);
     }
   }
-
-  async function handleCheckOut() {
-    setGeoError(false);
-    setGeofenceMsg(null);
-    const coords = await getGeolocation();
-    if (!coords.latitude) setGeoError(true);
-    try {
-      await checkOutMut.mutateAsync({ staffScheduleId: today!.scheduleId, ...coords });
-    } catch (err) {
-      const msg = extractApiMsg(err);
-      if (/terlalu jauh|radius|gps/i.test(msg)) {
-        setGeofenceMsg(msg);
-      }
-    }
-  }
+  const handleCheckIn  = () => submitAttendance("in");
+  const handleCheckOut = () => submitAttendance("out");
 
   return (
     <div className="rounded-2xl overflow-hidden shadow-lg border border-slate-200">
@@ -279,11 +281,33 @@ function HeroCheckInCard() {
           </div>
         )}
 
-        {/* Geo warning (no GPS) */}
-        {geoError && !geofenceMsg && (
-          <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2.5 text-xs text-amber-700">
+        {/* GPS mati / izin lokasi ditolak (ditolak backend, atau tidak terdeteksi di perangkat) */}
+        {!geofenceMsg && gpsRequiredMsg && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5">
+            <div className="flex items-start gap-2.5">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-amber-800">
+                  {geoError === "DENIED" ? "Izin lokasi ditolak" : "GPS mati / lokasi tidak terdeteksi"}
+                </p>
+                <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">{gpsRequiredMsg}</p>
+                <p className="text-xs text-amber-700 mt-1.5">
+                  {geoError === "DENIED"
+                    ? "Izinkan akses lokasi untuk situs ini di pengaturan browser, lalu coba lagi."
+                    : "Aktifkan GPS / layanan lokasi di perangkat, lalu coba lagi."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Error lain dari server (mis. bukan tanggal jadwal) */}
+        {actionError && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-xs text-red-700">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Lokasi tidak terdeteksi. Aktifkan izin lokasi (GPS) di browser lalu coba lagi.
+            {actionError}
           </div>
         )}
 
@@ -296,7 +320,7 @@ function HeroCheckInCard() {
         ) : isOff ? (
           <div className="flex items-center justify-center gap-2 rounded-xl bg-slate-50 border border-slate-100 py-3.5 text-sm text-slate-400">
             <Calendar className="h-4 w-4" />
-            Hari libur / cuti
+            {offLabel} — tidak perlu absen
           </div>
         ) : !hasIn ? (
           <Button

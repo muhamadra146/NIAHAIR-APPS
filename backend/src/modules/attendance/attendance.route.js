@@ -1,8 +1,12 @@
 const { Router }   = require("express");
+const { StatusCodes } = require("http-status-codes");
+const AppError      = require("../../common/errors/AppError");
 const authenticate  = require("../../middlewares/auth.middleware");
 const authorize     = require("../../middlewares/role.middleware");
+const requireApprover = require("../../middlewares/approver.middleware");
 const validate      = require("../../middlewares/validate.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
+const divisionAccess = require("../division/division.access");
 const { checkInSchema, checkOutSchema, manualSetSchema } = require("./attendance.validation");
 const {
   getDailyRosterController, getAllController, getByIdController,
@@ -12,17 +16,29 @@ const {
 
 const router = Router();
 
+// Pantau kehadiran tim (roster, daftar, laporan): role pemantau + manager divisi role apa pun (EMP-033).
+// Batas karyawan yang terlihat dicek di service (Owner/SA/Finance semua; lainnya satu divisi & cabang).
+const MONITOR_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE, ROLES.FINANCE];
+const allowMonitor = async (req, res, next) => {
+  try {
+    if (MONITOR_ROLES.includes(req.user?.roleCode)) return next();
+    const scope = await divisionAccess.getScope(req.user);
+    if (scope.manager) return next();
+    return next(new AppError("Anda tidak berhak memantau kehadiran tim", StatusCodes.FORBIDDEN));
+  } catch (err) { return next(err); }
+};
+
 // GET /attendance/roster?branchId=&date=   — daily roster with attendance status
 router.get("/roster",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE, ROLES.FINANCE),
+  allowMonitor,
   getDailyRosterController,
 );
 
 // GET /attendance/report?branchId=&startDate=&endDate=&employeeId=
 router.get("/report",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE, ROLES.FINANCE),
+  allowMonitor,
   getReportController,
 );
 
@@ -41,12 +57,12 @@ router.get("/my",       authenticate, getMyController);
 // could list all attendance records across the branch.
 router.get("/",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE, ROLES.FINANCE),
+  allowMonitor,
   getAllController,
 );
 router.get("/:id",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE, ROLES.FINANCE),
+  allowMonitor,
   getByIdController,
 );
 
@@ -63,10 +79,11 @@ router.post("/check-out",
   checkOutController,
 );
 
-// Admin/Manager manual set
+// Absensi Manual (keputusan user 2026-10-19): hanya manager divisi karyawan atau Owner / Super Admin.
+// Batas karyawan (satu divisi & cabang) dicek di service.
 router.post("/manual",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.OFFICE),
+  requireApprover,
   validate(manualSetSchema),
   manualSetController,
 );

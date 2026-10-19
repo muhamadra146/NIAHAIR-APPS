@@ -59,11 +59,18 @@ describe('getById', () => {
 // ── checkOut ──────────────────────────────────────────────────────────────────
 
 describe('checkOut', () => {
+  // Absen keluar hanya pada tanggal jadwal (WIB) → jadwal = hari ini
+  const todayStr = require('../../utils/date').wibDateStr();
   const baseRecord = {
     id:           'att1',
-    checkInAt:    new Date('2025-01-15T03:00:00Z'), // 10:00 WIB
+    employeeId:   'e1',
+    branchId:     'b1',
+    workDate:     new Date(`${todayStr}T00:00:00Z`),
+    checkInAt:    new Date(`${todayStr}T10:00:00+07:00`),
     checkOutAt:   null,
     staffSchedule: {
+      workDate: new Date(`${todayStr}T00:00:00Z`),
+      branchId: 'b1',
       shift: { startTime: '09:00', endTime: '17:00' },
     },
   };
@@ -139,6 +146,7 @@ describe('getReport', () => {
       {
         employeeId: 'e1',
         employee:   { id: 'e1', name: 'Nia', employeeCode: 'EMP-001' },
+        workDate:   new Date('2025-01-10T00:00:00Z'), // hari lalu tanpa absensi → Absen
         attendance: null, // ABSENT
       },
     ];

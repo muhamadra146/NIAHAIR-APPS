@@ -22,7 +22,8 @@ const { wibDateStr } = require('../../utils/date');
 const svc         = require('./attendance.service');
 const { manualSetSchema } = require('./attendance.validation');
 
-const today = new Date(`${wibDateStr(new Date())}T00:00:00Z`);
+const todayStr = wibDateStr(new Date());
+const today = new Date(`${todayStr}T00:00:00Z`);
 const SCHED = { id: 'ss1', employeeId: 'e1', branchId: 'b1', workDate: today, status: 'WORKING', shift: { startTime: '09:00', endTime: '18:00' } };
 
 beforeEach(() => {
@@ -33,7 +34,7 @@ beforeEach(() => {
 });
 
 describe('G3-16 validasi absensi manual', () => {
-  const ok = { staffScheduleId: 'ss1', status: 'PRESENT', checkInAt: '2026-11-02T09:00:00+07:00', notes: 'lupa absen' };
+  const ok = { staffScheduleId: 'ss1', status: 'PRESENT', checkInAt: `${todayStr}T09:00:00+07:00`, notes: 'lupa absen' };
   const valid = (body) => safeParse(manualSetSchema, body).success;
 
   test('data lengkap lolos', () => expect(valid(ok)).toBe(true));
@@ -45,7 +46,7 @@ describe('G3-16 validasi absensi manual', () => {
   test('tanggal rusak ditolak', () => expect(valid({ ...ok, checkInAt: 'bukan-tanggal' })).toBe(false));
 
   test('service: jam keluar sebelum/sama dengan jam masuk → 400', async () => {
-    await expect(svc.manualSet({ ...ok, checkOutAt: '2026-11-02T08:00:00+07:00' })).rejects.toMatchObject({ statusCode: 400 });
+    await expect(svc.manualSet({ ...ok, checkOutAt: `${todayStr}T08:00:00+07:00` })).rejects.toMatchObject({ statusCode: 400 });
     expect(repo.upsertBySchedule).not.toHaveBeenCalled();
   });
 
@@ -54,7 +55,7 @@ describe('G3-16 validasi absensi manual', () => {
   });
 
   test('service: data valid tersimpan', async () => {
-    await svc.manualSet({ ...ok, checkOutAt: '2026-11-02T18:00:00+07:00' });
+    await svc.manualSet({ ...ok, checkOutAt: `${todayStr}T18:00:00+07:00` });
     expect(repo.upsertBySchedule).toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import { useAuthStore } from "@/stores/authStore";
 import { useViewOnly } from "@/hooks/useViewOnly";
+import { isDivisionManager } from "@/lib/access";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AttendanceTab } from "../components/AttendanceTab";
@@ -12,7 +13,8 @@ const TEAM_ONLY_ROLES = ["SUPER_ADMIN", "OWNER"];
 const TEAM_AND_SELF_ROLES = ["MANAGER", "OFFICE", "FINANCE"];
 
 export function TeamPage() {
-  const roleCode   = useAuthStore((s) => s.user?.roleCode) ?? "";
+  const user       = useAuthStore((s) => s.user);
+  const roleCode   = user?.roleCode ?? "";
   const isViewOnly = useViewOnly();
 
   if (TEAM_ONLY_ROLES.includes(roleCode)) {
@@ -23,7 +25,8 @@ export function TeamPage() {
     );
   }
 
-  if (TEAM_AND_SELF_ROLES.includes(roleCode)) {
+  // Manager divisi role apa pun ikut memantau timnya (EMP-033; data dibatasi backend)
+  if (TEAM_AND_SELF_ROLES.includes(roleCode) || isDivisionManager(user)) {
     return (
       <PageContainer title="Attendance" subtitle="Catat kehadiran kamu dan monitor kehadiran tim">
         <Tabs defaultValue="self" className="space-y-4">

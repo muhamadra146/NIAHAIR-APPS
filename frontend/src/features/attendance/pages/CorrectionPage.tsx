@@ -7,8 +7,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "@/lib/toast";
 import { api } from "@/lib/axios";
-import { useAuthStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/authStore";
 import { canApprove } from "@/lib/access";
 import {
   useCorrections, useMyCorrections, useCreateCorrection, useReviewCorrection,
@@ -131,7 +132,7 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
   async function handleSubmit() {
     setError(null);
-    const finalReason = customReason || reason;
+    const finalReason = customReason.trim() || reason;
     if (!selected || !finalReason) return;
     if (!checkInTime && !checkOutTime) {
       setError("Isi minimal satu: waktu check-in atau check-out");
@@ -339,7 +340,7 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
             </Button>
           )}
           {step === 3 && (
-            <Button size="sm" onClick={handleSubmit} disabled={createMut.isPending || (!reason && !customReason)}>
+            <Button size="sm" onClick={handleSubmit} disabled={createMut.isPending || (!reason && !customReason.trim())}>
               {createMut.isPending ? "Mengirim..." : "Kirim Koreksi"}
             </Button>
           )}
@@ -354,16 +355,31 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
 function ReviewDialog({ item, onClose }: { item: CorrectionRequest | null; onClose: () => void }) {
   const [status, setStatus] = useState<"APPROVED" | "REJECTED">("APPROVED");
   const [note, setNote]     = useState("");
+  const [error, setError]   = useState<string | null>(null);
   const reviewMut           = useReviewCorrection(item?.id ?? "");
 
-  async function handleSubmit() {
-    if (!item) return;
-    await reviewMut.mutateAsync({ status, reviewNote: note || undefined });
+  function handleClose() {
+    setError(null);
     onClose();
   }
 
+  // Gagal (mis. jam koreksi tidak valid) → dialog tetap terbuka & tampilkan pesan server
+  async function handleSubmit() {
+    if (!item) return;
+    setError(null);
+    try {
+      await reviewMut.mutateAsync({ status, reviewNote: note.trim() || undefined });
+      toast.success(status === "APPROVED" ? "Koreksi disetujui, absensi diperbarui" : "Koreksi ditolak");
+      handleClose();
+    } catch (err) {
+      const msg = apiErr(err);
+      setError(msg);
+      toast.error(msg);
+    }
+  }
+
   return (
-    <Dialog open={Boolean(item)} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog open={Boolean(item)} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader><DialogTitle>Review Koreksi</DialogTitle></DialogHeader>
         {item && (
@@ -390,10 +406,16 @@ function ReviewDialog({ item, onClose }: { item: CorrectionRequest | null; onClo
             </div>
 
             <Input placeholder="Catatan (opsional)" value={note} onChange={(e) => setNote(e.target.value)} />
+
+            {error && (
+              <div role="alert" className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{error}
+              </div>
+            )}
           </div>
         )}
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={onClose} disabled={reviewMut.isPending}>Batal</Button>
+          <Button variant="outline" size="sm" onClick={handleClose} disabled={reviewMut.isPending}>Batal</Button>
           <Button size="sm" onClick={handleSubmit} disabled={reviewMut.isPending}>
             {reviewMut.isPending ? "Menyimpan..." : "Simpan"}
           </Button>

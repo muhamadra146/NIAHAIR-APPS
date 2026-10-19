@@ -1,5 +1,6 @@
 export type ScheduleType    = "WORK" | "OFF" | "LEAVE";
-export type ScheduleStatus  = "WORKING" | "OFF" | "LEAVE";
+// LEAVE / IZIN / SAKIT = cuti, izin tidak masuk, sakit yang sudah disetujui
+export type ScheduleStatus  = "WORKING" | "OFF" | "LEAVE" | "IZIN" | "SAKIT";
 export type AttendanceStatus = "PRESENT" | "LATE" | "ABSENT" | "HALF_DAY" | "EARLY_LEAVE";
 
 export interface EmployeeSchedule {
@@ -73,6 +74,8 @@ export interface RosterAttendanceRow {
   } | null;
   status:     ScheduleStatus;
   attendance: AttendanceRecord | null;
+  /** Boleh Absensi Manual: manager divisi karyawan / Owner / SA, bukan tanggal depan / hari cuti-izin-sakit */
+  canManualSet: boolean;
 }
 
 export interface AvailableStaff {
@@ -99,12 +102,14 @@ export interface CheckInInput {
   notes?:          string;
 }
 
+// Status dihitung backend dari jam & shift; hanya "ABSENT" yang dipilih manual.
+// Jam: undefined = tetap, null = dikosongkan.
 export interface ManualSetInput {
   staffScheduleId: string;
-  status?:         AttendanceStatus;
-  checkInAt?:      string;
-  checkOutAt?:     string;
-  notes?:          string;
+  status?:         "ABSENT";
+  checkInAt?:      string | null;
+  checkOutAt?:     string | null;
+  notes:           string;
 }
 
 export interface MyTodayResponse {

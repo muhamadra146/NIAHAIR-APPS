@@ -3,6 +3,8 @@
 jest.mock('./correction.repository');
 // review(APPROVED) applies corrected times via attendance.manualSet — mock it so no DB is touched
 jest.mock('../attendance/attendance.service', () => ({ manualSet: jest.fn() }));
+// Tanpa mock ini create/review menulis notifikasi ke database lokal yang asli
+jest.mock('../notification/notification.service', () => ({ requestCreated: jest.fn(), requestDecided: jest.fn() }));
 
 const repo          = require('./correction.repository');
 const attendanceSvc = require('../attendance/attendance.service');
@@ -173,10 +175,13 @@ describe('review', () => {
       reviewedBy: 'mgr1',
       reviewedAt: expect.any(Date),
     }));
+    // Regression QA 2026-10-19: alasan koreksi dikirim sebagai catatan (manualSet mewajibkan
+    // alasan, EMP-011) dan jam keluar tidak dikirim (undefined = jam keluar lama tetap)
     expect(attendanceSvc.manualSet).toHaveBeenCalledWith({
       staffScheduleId: 'ss1',
       checkInAt:  '2024-06-01T08:00:00.000Z',
       checkOutAt: undefined,
+      notes:      'Koreksi disetujui: Lupa absen',
     });
     expect(result.status).toBe('APPROVED');
   });

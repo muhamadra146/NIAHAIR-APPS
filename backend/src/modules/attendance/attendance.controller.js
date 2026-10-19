@@ -5,21 +5,21 @@ const { getDailyRoster, getAll, getById, checkIn, checkOut, manualSet, getMyToda
 const getDailyRosterController = async (req, res, next) => {
   try {
     const { branchId, date } = req.query;
-    const result = await getDailyRoster(branchId, date || wibDateStr());
+    const result = await getDailyRoster(branchId, date || wibDateStr(), req.user);
     return success(res, result, "Daily roster fetched");
   } catch (err) { next(err); }
 };
 
 const getAllController = async (req, res, next) => {
   try {
-    const result = await getAll(req.query);
+    const result = await getAll(req.query, req.user);
     return success(res, result, "Attendance records fetched");
   } catch (err) { next(err); }
 };
 
 const getByIdController = async (req, res, next) => {
   try {
-    const result = await getById(req.params.id);
+    const result = await getById(req.params.id, req.user);
     return success(res, result, "Attendance record fetched");
   } catch (err) { next(err); }
 };
@@ -40,7 +40,7 @@ const checkOutController = async (req, res, next) => {
 
 const manualSetController = async (req, res, next) => {
   try {
-    const result = await manualSet(req.body);
+    const result = await manualSet(req.body, req.user);
     return success(res, result, "Attendance set manually");
   } catch (err) { next(err); }
 };
@@ -68,7 +68,7 @@ const getPresentController = async (req, res, next) => {
 
 const getReportController = async (req, res, next) => {
   try {
-    const result = await getReport(req.query);
+    const result = await getReport(req.query, req.user);
     return success(res, result, "Attendance report fetched");
   } catch (err) { next(err); }
 };

@@ -50,7 +50,7 @@ const upsertBySchedule = (staffScheduleId, createData, updateData) =>
     include: INCLUDE,
   });
 
-const getReportData = ({ branchId, startDate, endDate, employeeId }) => {
+const getReportData = ({ branchId, startDate, endDate, employeeId, employeeWhere }) => {
   // BUG 5 FIX: Removed status: "WORKING" filter.
   // Previously this excluded OFF-day schedules, making isHolidayWork always 0 in the report
   // because employees who work on their day off have schedule.status === "OFF".
@@ -60,6 +60,7 @@ const getReportData = ({ branchId, startDate, endDate, employeeId }) => {
     workDate: { gte: startDate, lte: endDate },
   };
   if (employeeId) where.employeeId = employeeId;
+  if (employeeWhere) where.employee = employeeWhere; // lingkup divisi (lihat attendance.service)
 
   return prisma.staffSchedule.findMany({
     where,
