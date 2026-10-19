@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate }      from "react-router-dom";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { ArrowLeft, Plus, Trash2, Loader2, Factory } from "lucide-react";
@@ -19,6 +19,7 @@ import type {
   CreateProductionMaterialInput,
 } from "../types";
 import { toWibDateStr } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 // ── Local form types ──────────────────────────────────────────────────────────
 
@@ -137,7 +138,9 @@ export function ProductionFormPage() {
   const hasZeroAlloc   = watchedItems.some((i) => !i.costAllocationPercentage || parseFloat(i.costAllocationPercentage) <= 0);
   const allocOk        = !hasZeroAlloc && Math.abs(liveTotal - 100) <= 0.01;
 
+  const submittingRef = useRef(false); // cegah klik ganda membuat dua order
   const onSubmit = async (values: FormValues) => {
+    if (submittingRef.current) return;
     if (!values.items.length || values.items.some((i) => !i.itemId || !i.unitId || !i.plannedQuantity)) {
       return;
     }
@@ -173,8 +176,22 @@ export function ProductionFormPage() {
       materials,
     };
 
-    const order = await createOrder.mutateAsync(payload);
-    navigate(`/production/${order.id}`);
+    // Barang jadi tidak boleh sama dengan bahan baku (backend & Accurate juga menolak)
+    const matIds = new Set(materials.map((m) => m.itemId));
+    if (items.some((i) => matIds.has(i.itemId))) {
+      toast.error("Barang jadi tidak boleh sama dengan bahan baku");
+      return;
+    }
+
+    submittingRef.current = true;
+    try {
+      const order = await createOrder.mutateAsync(payload);
+      navigate(`/production/${order.id}`);
+    } catch {
+      // toast error ditangani di hook
+    } finally {
+      submittingRef.current = false;
+    }
   };
 
   return (

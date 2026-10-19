@@ -3,6 +3,7 @@
 const { StatusCodes } = require("http-status-codes");
 const { success }     = require("../../common/responses/apiResponse");
 const {
+  getReturnableQty,
   listPurchaseReturns,
   getPurchaseReturn,
   createPurchaseReturn,
@@ -19,6 +20,13 @@ const listController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const returnableController = async (req, res, next) => {
+  try {
+    const result = await getReturnableQty(req.params.purchaseInvoiceId);
+    success(res, result, "OK");
+  } catch (err) { next(err); }
+};
+
 const getController = async (req, res, next) => {
   try {
     const ret = await getPurchaseReturn(req.params.id);
@@ -28,14 +36,14 @@ const getController = async (req, res, next) => {
 
 const createController = async (req, res, next) => {
   try {
-    const ret = await createPurchaseReturn(req.body, req.employee?.id);
+    const ret = await createPurchaseReturn(req.body, req.user?.employeeId);
     success(res, ret, "Retur pembelian berhasil dibuat", StatusCodes.CREATED);
   } catch (err) { next(err); }
 };
 
 const postController = async (req, res, next) => {
   try {
-    const ret = await postPurchaseReturn(req.params.id, req.employee?.id);
+    const ret = await postPurchaseReturn(req.params.id, req.user?.employeeId);
     success(res, ret, "Retur pembelian berhasil di-posting");
   } catch (err) { next(err); }
 };
@@ -62,6 +70,7 @@ const syncController = async (req, res, next) => {
 };
 
 module.exports = {
+  returnableController,
   listController,
   getController,
   createController,

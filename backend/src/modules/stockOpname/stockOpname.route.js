@@ -3,7 +3,7 @@ const authenticate  = require("../../middlewares/auth.middleware");
 const authorize     = require("../../middlewares/role.middleware");
 const validate      = require("../../middlewares/validate.middleware");
 const { ROLES }     = require("../../common/constants/role.constant");
-const { createOpnameSchema, updateItemsSchema } = require("./stockOpname.validation");
+const { createOpnameSchema, updateItemsSchema, syncOpnameSchema } = require("./stockOpname.validation");
 const {
   getAllController,
   getByIdController,
@@ -72,6 +72,7 @@ router.post(
   "/:id/sync",
   authenticate,
   authorize(...WRITE_ROLES),
+  validate(syncOpnameSchema),
   syncController,
 );
 

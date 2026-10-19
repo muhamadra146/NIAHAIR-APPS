@@ -118,7 +118,33 @@ const assertBranchAccess = (userRole, actingBranchId, warehouseBranchId, message
 // dokumen ini lebih dulu, count = 0 dan transaksi dibatalkan.
 const transitionStatus = async (tx, id, fromStatus, data) => {
   const { count } = await tx.stockTransfer.updateMany({ where: { id, status: fromStatus }, data });
-  if (count === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
+  if (count === 0) {
+    throw new AppError("Dokumen sudah diproses. Muat ulang halaman untuk melihat status terbaru.", StatusCodes.CONFLICT);
+  }
+};
+
+// ── Helper: hapus dokumen Pemindahan Barang di Accurate (ketat, aman diulang) ──
+// Dipanggil di dalam transaksi ERP setelah guard status: bila Accurate menolak ({s:false})
+// atau tidak bisa dihubungi, transaksi ERP ikut dibatalkan sehingga ERP & Accurate tetap
+// konsisten (B7). Dokumen yang sudah tidak ada di Accurate dianggap sudah terhapus.
+const ACCURATE_TX_OPTIONS = { timeout: 60000, maxWait: 10000 };
+
+const deleteAccurateItemTransfer = async (accurateId, label) => {
+  const { accurateRequest } = require("../accurate/accurate.client");
+  let resp;
+  try {
+    resp = await accurateRequest(`/item-transfer/delete.do?id=${accurateId}`, { method: "DELETE" });
+  } catch (err) {
+    throw new AppError(`Gagal menghubungi Accurate untuk menghapus ${label}. Coba lagi nanti.`, StatusCodes.BAD_GATEWAY);
+  }
+  if (resp?.s) return;
+  const detail = await accurateRequest(`/item-transfer/detail.do?id=${accurateId}`, { method: "GET" }).catch(() => null);
+  if (detail && detail.s === false) return; // sudah tidak ada di Accurate
+  const reason = Array.isArray(resp?.d) ? resp.d.join("; ") : (typeof resp?.d === "string" ? resp.d : "ditolak Accurate");
+  throw new AppError(
+    `${label} di Accurate tidak bisa dihapus: ${reason}. Data ERP tidak diubah.`,
+    StatusCodes.UNPROCESSABLE_ENTITY,
+  );
 };
 
 // ── Update status ─────────────────────────────────────────────────────
@@ -137,6 +163,12 @@ const updateStatus = async (id, newStatus, userRole, actingBranchId, receivedIte
       `Status transfer "${transfer.status}" tidak dikenali`,
       StatusCodes.BAD_REQUEST
     );
+  }
+
+  // Klik ganda / tab lain sudah memproses → pesan ramah, bukan "tidak bisa mengubah status"
+  if (transfer.status === newStatus) {
+    const label = { IN_TRANSIT: "dikirim", RECEIVED: "diterima" }[newStatus] ?? "diproses";
+    throw new AppError(`Transfer ini sudah ${label}. Muat ulang halaman untuk melihat status terbaru.`, StatusCodes.CONFLICT);
   }
 
   if (!validTransitions[transfer.status].includes(newStatus)) {
@@ -410,21 +442,11 @@ const deleteTransfer = async (id, userRole, actingBranchId) => {
   // IN_TRANSIT — create reversal movements, delete Accurate, mark CANCELLED
   await validatePeriodOpen(new Date());
 
-  // Delete Accurate TRANSFER_OUT (best effort)
-  if (transfer.accurateTransferId) {
-    try {
-      const { accurateRequest } = require("../accurate/accurate.client");
-      await accurateRequest(`/item-transfer/delete.do?id=${transfer.accurateTransferId}`, { method: "DELETE" });
-    } catch (err) {
-      logger.warn(`[delete transfer] Accurate delete failed (ignored): ${err.message}`);
-    }
-  }
-
   await prisma.$transaction(async (tx) => {
-    await transitionStatus(tx, id, "IN_TRANSIT", {
-      status:                "CANCELLED",
-      accurateTransferId:    null,
-      accurateTransferNumber: null,
+    // Guard dulu (paralel → 409), baru hapus TRANSFER_OUT di Accurate di akhir transaksi
+    await transitionStatus(tx, id, "IN_TRANSIT", { status: "CANCELLED" });
+    const { accurateTransferId } = await tx.stockTransfer.findUnique({
+      where: { id }, select: { accurateTransferId: true },
     });
 
     for (const item of transfer.items) {
@@ -467,7 +489,15 @@ const deleteTransfer = async (id, userRole, actingBranchId) => {
         data:  { qtyOnHand: qtyAfter, qtyAvailable: available },
       });
     }
-  });
+
+    if (accurateTransferId) {
+      await deleteAccurateItemTransfer(accurateTransferId, "Pengiriman transfer");
+      await tx.stockTransfer.update({
+        where: { id },
+        data:  { accurateTransferId: null, accurateTransferNumber: null },
+      });
+    }
+  }, ACCURATE_TX_OPTIONS);
 
   return { cancelled: true };
 };
@@ -491,20 +521,13 @@ const undoReceive = async (id, userRole, actingBranchId) => {
 
   await validatePeriodOpen(new Date());
 
-  // Delete Accurate TRANSFER_IN (best effort)
+  // ID TRANSFER_IN Accurate (raw SQL, kolom baru) — dihapus di akhir transaksi di bawah
   const syncRepo = require("./stockTransfer.sync.repository");
   const accurateReceiveId = await syncRepo.findReceiveAccurateId(id);
-  if (accurateReceiveId) {
-    try {
-      const { accurateRequest } = require("../accurate/accurate.client");
-      await accurateRequest(`/item-transfer/delete.do?id=${accurateReceiveId}`, { method: "DELETE" });
-    } catch (err) {
-      logger.warn(`[undo receive] Accurate delete TRANSFER_IN failed (ignored): ${err.message}`);
-    }
-  }
 
   let nothingReceived = false;
   await prisma.$transaction(async (tx) => {
+
     // Revert status and clear Accurate receive fields — bersyarat status RECEIVED (guard paralel)
     const reverted = await tx.$executeRawUnsafe(
       `UPDATE "stock_transfers"
@@ -616,7 +639,11 @@ const undoReceive = async (id, userRole, actingBranchId) => {
         data:  { qtyOnHand: qtyAfter, qtyAvailable: available },
       });
     }
-  });
+
+    // Hapus TRANSFER_IN di Accurate terakhir (B7): gagal / {s:false} → seluruh pembalikan ERP
+    // di-rollback dengan pesan jelas, sehingga ERP & Accurate tidak berbeda.
+    if (accurateReceiveId) await deleteAccurateItemTransfer(accurateReceiveId, "Penerimaan transfer");
+  }, ACCURATE_TX_OPTIONS);
 
   // Accurate: receive parsial dulu menyamakan qty TRANSFER_OUT dengan qty diterima → kembalikan ke
   // qty dikirim (barang kembali "dalam perjalanan"). Best effort seperti hapus TRANSFER_IN di atas.

@@ -8,12 +8,22 @@ import {
 import type { CreateProductionInput, UpdateStatusInput, SubmitQCInput, ProductionListParams } from "./types";
 import { PRODUCTION_STATUS_LABEL } from "./types";
 
+// Sync Accurate produksi berjalan otomatis (latar belakang) setelah COMPLETED. Selama ~2 menit
+// setelah dokumen berubah dan belum tersinkron, data dimuat ulang tiap 5 detik agar badge sync
+// ikut berubah tanpa refresh manual.
+const SYNC_POLL_WINDOW_MS = 2 * 60 * 1000;
+function productionAwaitingSync(o: { status: string; updatedAt: string; accuratePenyelesaianId?: number | null }): boolean {
+  return o.status === "COMPLETED" && !o.accuratePenyelesaianId
+    && Date.now() - new Date(o.updatedAt).getTime() < SYNC_POLL_WINDOW_MS;
+}
+
 export function useProductionOrders(params: ProductionListParams = {}) {
   return useQuery({
     queryKey:       ["production-orders", params],
     queryFn:        () => fetchProductionOrders(params),
     staleTime:      0,
     refetchOnMount: true,
+    refetchInterval: (query) => (query.state.data?.data?.some(productionAwaitingSync) ? 5000 : false),
   });
 }
 
@@ -23,6 +33,7 @@ export function useProductionOrder(id: string) {
     queryFn:   () => fetchProductionOrder(id),
     staleTime: 0,
     enabled:   !!id,
+    refetchInterval: (query) => (query.state.data && productionAwaitingSync(query.state.data) ? 5000 : false),
   });
 }
 

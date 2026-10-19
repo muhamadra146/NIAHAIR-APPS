@@ -24,10 +24,11 @@ test('production: markPekerjaanSynced & markPenyelesaianSynced menyimpan waktu U
   expectUtc(lastSql());
 });
 
-test('stock opname: markOpnameOrderSynced & markOpnameResultSynced menyimpan waktu UTC', async () => {
-  await opnameRepo.markOpnameOrderSynced({ id: 'o1', accurateOrderId: 1 });
-  expectUtc(lastSql());
-  await opnameRepo.markOpnameResultSynced({ id: 'o1', accurateResultId: 1 });
+test('stock opname: markOpnameAdjustmentSynced & markOpnameNoDifference menyimpan waktu UTC', async () => {
+  const client = { $executeRawUnsafe: prisma.$executeRawUnsafe, inventoryMovement: { updateMany: jest.fn() } };
+  await opnameRepo.markOpnameAdjustmentSynced({ id: 'o1', accurateAdjustmentId: 1, movementIds: ['m1'], glAccountId: 'g1' }, client);
+  expectUtc(prisma.$executeRawUnsafe.mock.calls[0][0]);
+  await opnameRepo.markOpnameNoDifference('o1');
   expectUtc(lastSql());
 });
 

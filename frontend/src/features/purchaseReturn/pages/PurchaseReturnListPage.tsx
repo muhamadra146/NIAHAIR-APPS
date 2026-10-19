@@ -11,7 +11,8 @@ import { usePurchaseReturns } from "../hooks";
 import type { PurchaseReturnStatus } from "../types";
 import { WIB_TZ } from "@/lib/utils";
 
-const WRITE_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "INVENTORY", "FINANCE"];
+// Sesuai backend purchaseReturn.route WRITE_ROLES — FINANCE hanya lihat
+const WRITE_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER", "INVENTORY"];
 
 const STATUS_LABEL: Record<PurchaseReturnStatus, string> = {
   DRAFT:     "Draft",

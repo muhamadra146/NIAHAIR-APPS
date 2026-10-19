@@ -10,6 +10,9 @@ const router = Router();
 
 // B3 fix: OWNER punya akses yang sama dengan SUPER_ADMIN
 router.post("/sync/accurate", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), syncSuppliersController);
-router.get("/",               authenticate, getSuppliersController);
+// Lihat pemasok: peran menu Supplier / Pembelian / Retur Pembelian (sidebar) — U1
+router.get("/", authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.INVENTORY, ROLES.FINANCE, ROLES.OFFICE),
+  getSuppliersController);
 
 module.exports = router;

@@ -653,6 +653,8 @@ CUS-000001
 
 Nomor customer tidak boleh berubah setelah dibuat.
 
+**Nomor final mengikuti Accurate (keputusan owner 2026-10-18).** Nomor `CUS-xxxxxx` hanya nomor sementara selama pelanggan belum tersinkron. Setelah berhasil dikirim ke Accurate, nomor diganti satu kali dengan nomor pelanggan Accurate (`C.xxxxx`) dan sejak itu tidak berubah lagi. Perubahan data pelanggan (nama, HP, email, alamat, kota, provinsi, catatan) ikut dikirim ke Accurate tanpa mengubah nomornya.
+
 ---
 
 # CRM-003
@@ -709,6 +711,8 @@ atau
 
 628xxxxxxxxxx
 ```
+
+Keunikan dicek pada bentuk baku: `08xx`, `628xx`, dan `+62 8xx` (spasi/tanda hubung diabaikan) dianggap nomor yang sama; nomor baru disimpan sebagai `628xx`. Email pelanggan dibandingkan tanpa beda huruf besar/kecil (CRM-001).
 
 ---
 
@@ -880,6 +884,12 @@ Promo
 - Diskon persen dihitung per item yang dapat diskon. Diskon nominal dipotong dari total invoice dan dibatasi total item yang dapat diskon; saat dikirim ke Accurate dibagi proporsional ke item tersebut.
 - Paket baru default mencentang kategori JASA. Paket tanpa kategori tidak memberi diskon apa pun.
 - Hanya Super Admin, Owner, Manager, dan Finance yang dapat mengubah data item (kategori komisi & tanda diskon member).
+
+### Paket Membership (keputusan owner 2026-10-18)
+
+- Nama paket wajib diisi dan unik (tanpa beda huruf besar/kecil).
+- Paket yang **pernah dipakai** pelanggan (ada riwayat langganan apa pun statusnya) **tidak boleh dihapus** agar riwayat tetap tersimpan. Paket yang belum pernah dipakai boleh dihapus.
+- Paket bisa **dinonaktifkan / diaktifkan kembali** (tombol Nonaktifkan / Aktifkan di Pengaturan → Membership; Super Admin, Owner, Manager). Paket nonaktif tidak bisa dipilih saat menetapkan atau mengganti membership pelanggan; membership pelanggan yang sedang berjalan pada paket itu tetap berlaku sampai habis. Daftar paket di Pengaturan default menampilkan yang Aktif dengan filter Aktif / Nonaktif / Semua (keputusan user 2026-10-19).
 
 ---
 
@@ -1112,6 +1122,8 @@ Jika Accurate digunakan sebagai sinkronisasi Customer.
 ERP tetap menjadi sumber operasional.
 
 Sinkronisasi tidak boleh menghapus Customer lokal.
+
+Perubahan data pelanggan di ERP dikirim ulang ke Accurate (lihat CRM-002). Bila Accurate menolak, status pelanggan menjadi "Gagal sinkron" dengan pesan dari Accurate dan dapat dikirim ulang ("Coba lagi").
 
 ---
 
@@ -3234,6 +3246,8 @@ Adjustment Movement.
 
 Tidak mengubah Inventory langsung.
 
+Selisih hasil opname dikirim ke Accurate sebagai satu dokumen Penyesuaian Persediaan (Item Adjustment; lebih = penambahan, kurang = pengurangan) dengan akun penyesuaian pilihan user — tidak pernah membuat Perintah Stok Opname (mengunci seluruh gudang di Accurate). Opname tanpa selisih tidak membuat dokumen Accurate (keputusan owner 2026-10-19).
+
 ---
 
 # INV-015
@@ -3345,6 +3359,8 @@ Raw Material OUT.
 ↓
 
 Finished Goods IN.
+
+Pembatalan produksi yang sudah IN_PROGRESS / QC (material sudah dikonsumsi) wajib dikonfirmasi user dan mengembalikan material ke stok dengan movement pembalik; dokumen Accurate produksi baru ada setelah COMPLETED, jadi tidak ada yang dibalik di Accurate. Hapus produksi membalik stok lalu menghapus dokumen Accurate dalam satu transaksi — gagal di Accurate = ERP tidak berubah (keputusan owner 2026-10-19).
 
 ---
 
@@ -4407,6 +4423,10 @@ Attendance.
 Reporting.
 
 Home Branch tidak membatasi lokasi kerja.
+
+Home Branch selalu ditampilkan sebagai cabang **Utama** di daftar Branch Access, dan otomatis termasuk Branch Access karyawan (QA 2026-10-19).
+
+Akses cabang ("Bisa Bekerja Di") diatur oleh Super Admin dan Owner (keputusan user 2026-10-19).
 
 ---
 

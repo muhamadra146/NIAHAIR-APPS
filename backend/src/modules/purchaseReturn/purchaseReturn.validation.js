@@ -8,20 +8,20 @@ const {
 
 // ── Item schema ────────────────────────────────────────────────────────────────
 const purchaseReturnItemSchema = object({
-  itemId:   pipe(string(), minLength(1, "Item wajib dipilih")),
-  unitId:   pipe(string(), minLength(1, "Satuan wajib dipilih")),
-  qty:      pipe(number(), minValue(0.001, "Qty harus lebih dari 0")),
-  price:    pipe(number(), minValue(0, "Harga tidak boleh negatif")),
-  discount: optional(pipe(number(), minValue(0, "Diskon tidak boleh negatif"), maxValue(100, "Diskon maksimal 100%"))),
-  subtotal: pipe(number(), minValue(0, "Subtotal tidak boleh negatif")),
-  notes:    optional(pipe(string(), maxLength(500))),
+  itemId:   pipe(string("Harus berupa teks"), minLength(1, "Item wajib dipilih")),
+  unitId:   pipe(string("Harus berupa teks"), minLength(1, "Satuan wajib dipilih")),
+  qty:      pipe(number("Harus berupa angka"), minValue(0.001, "Qty harus lebih dari 0")),
+  price:    pipe(number("Harus berupa angka"), minValue(0, "Harga tidak boleh negatif")),
+  discount: optional(pipe(number("Harus berupa angka"), minValue(0, "Diskon tidak boleh negatif"), maxValue(100, "Diskon maksimal 100%"))),
+  subtotal: pipe(number("Harus berupa angka"), minValue(0, "Subtotal tidak boleh negatif")),
+  notes:    optional(pipe(string("Harus berupa teks"), maxLength(500))),
 });
 
 // ── Create schema ──────────────────────────────────────────────────────────────
 const createPurchaseReturnSchema = object({
-  purchaseInvoiceId: pipe(string(), minLength(1, "Invoice induk wajib dipilih")),
-  returnDate:        pipe(string(), minLength(1, "Tanggal retur wajib diisi")),
-  notes:             optional(pipe(string(), maxLength(1000))),
+  purchaseInvoiceId: pipe(string("Harus berupa teks"), minLength(1, "Invoice induk wajib dipilih")),
+  returnDate:        pipe(string("Harus berupa teks"), minLength(1, "Tanggal retur wajib diisi")),
+  notes:             optional(pipe(string("Harus berupa teks"), maxLength(1000))),
   items:             pipe(
     array(purchaseReturnItemSchema),
     minLength(1, "Minimal 1 item harus ditambahkan")

@@ -56,6 +56,7 @@ export interface PurchaseInvoice {
   warehouse: { id: string; name: string } | null;
   createdByEmployee: { id: string; name: string; employeeCode: string } | null;
   items: PurchaseItem[];
+  returns?: { id: string; returnNo: string; status: "DRAFT" | "POSTED" | "CANCELLED" }[];
 }
 
 export interface PurchaseListParams {

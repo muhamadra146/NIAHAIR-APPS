@@ -37,7 +37,7 @@ test('IN_TRANSIT: transisi bersyarat PENDING, count 0 → 409 dan tidak ada move
   prisma.$transaction.mockImplementation((fn) => fn(tx));
 
   await expect(svc.updateStatus('tr1', 'IN_TRANSIT', 'SUPER_ADMIN', null))
-    .rejects.toMatchObject({ statusCode: 409, message: 'Dokumen sudah diproses' });
+    .rejects.toMatchObject({ statusCode: 409, message: expect.stringContaining('Dokumen sudah diproses') });
   expect(tx.stockTransfer.updateMany).toHaveBeenCalledWith({
     where: { id: 'tr1', status: 'PENDING' }, data: { status: 'IN_TRANSIT' },
   });

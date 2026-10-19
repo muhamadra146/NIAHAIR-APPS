@@ -306,8 +306,8 @@ const deleteOpname = async (id) => {
   return { deleted: true, opnameNo: opname.opnameNo };
 };
 
-// ── Sync ke Accurate — 2 dokumen (Perintah → Hasil) ──────────────────────────
-const syncToAccurate = async (id) => {
+// ── Sync ke Accurate — 1 dokumen Penyesuaian Persediaan (keputusan owner 2026-10-19) ──
+const syncToAccurate = async (id, { glAccountId } = {}) => {
   const opname = await repo.findById(id);
   if (!opname) throw new AppError("Opname tidak ditemukan", StatusCodes.NOT_FOUND);
 
@@ -318,7 +318,7 @@ const syncToAccurate = async (id) => {
     );
   }
 
-  await syncOpnameToAccurate(id);
+  await syncOpnameToAccurate(id, { glAccountId });
   return repo.findById(id); // kembalikan data terkini termasuk ID Accurate
 };
 

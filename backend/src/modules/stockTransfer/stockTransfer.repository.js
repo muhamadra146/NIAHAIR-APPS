@@ -5,7 +5,8 @@ const INCLUDE = {
   destinationWarehouse: { select: { id: true, name: true, branchId: true, branch: { select: { id: true, code: true, name: true } } } },
   items: {
     include: {
-      item: { select: { id: true, name: true, itemCode: true, itemType: true } },
+      // defaultUnit: qty transfer dalam satuan dasar item — ditampilkan di tabel & surat jalan
+      item: { select: { id: true, name: true, itemCode: true, itemType: true, defaultUnit: { select: { id: true, name: true } } } },
     },
   },
 };

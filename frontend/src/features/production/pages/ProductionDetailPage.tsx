@@ -147,6 +147,7 @@ export function ProductionDetailPage() {
 
   const [qcOpen, setQcOpen]         = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [transitioning, setTransitioning] = useState<ProductionStatus | null>(null);
 
   const handleTransition = async (newStatus: UpdateStatusInput["status"]) => {
@@ -191,6 +192,8 @@ export function ProductionDetailPage() {
   }
 
   const nextStatuses = NEXT_STATUS[order.status] ?? [];
+  // Material sudah dikonsumsi saat status IN_PROGRESS (dan QC); dipakai untuk teks konfirmasi
+  const materialsConsumed = (order.materials ?? []).some((m) => !!m.inventoryMovementId) || order.status === "COMPLETED";
   const lastQC = order.qcRecords?.[0];
 
   return (
@@ -230,7 +233,7 @@ export function ProductionDetailPage() {
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => handleTransition("CANCELLED")}
+                      onClick={() => setCancelOpen(true)}
                       disabled={updateStatus.isPending}
                     >
                       {transitioning === "CANCELLED" && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
@@ -243,18 +246,16 @@ export function ProductionDetailPage() {
                     key={ns.status}
                     size="sm"
                     variant={ns.variant ?? "default"}
-                    onClick={() => handleTransition(ns.status)}
+                    onClick={() => (ns.status === "CANCELLED" ? setCancelOpen(true) : handleTransition(ns.status))}
                     disabled={updateStatus.isPending}
                   >
                     {transitioning === ns.status && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
                     {ns.label}
                   </Button>
                 ))}
-                {order.status === "DRAFT" && (
-                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteOpen(true)}>
-                    Hapus
-                  </Button>
-                )}
+                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteOpen(true)} disabled={deleteMut.isPending}>
+                  Hapus
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -493,11 +494,29 @@ export function ProductionDetailPage() {
       <ConfirmDialog
         open={deleteOpen}
         title="Hapus Production Order?"
-        description={<><strong>{order.productionNo}</strong> akan dihapus permanen. Aksi ini tidak bisa dibatalkan.</>}
+        description={<>
+          <strong>{order.productionNo}</strong> akan dihapus permanen. Aksi ini tidak bisa dibatalkan.
+          {materialsConsumed && <> Stok yang sudah berubah karena produksi ini (bahan baku / barang jadi) akan dikembalikan.</>}
+          {order.status === "COMPLETED" && <> Dokumen Pekerjaan/Penyelesaian Pesanan di Accurate juga dihapus.</>}
+        </>}
         confirmLabel="Hapus"
         loading={deleteMut.isPending}
         onConfirm={handleDelete}
         onCancel={() => setDeleteOpen(false)}
+      />
+      <ConfirmDialog
+        open={cancelOpen}
+        title="Batalkan Production Order?"
+        description={<>
+          <strong>{order.productionNo}</strong> akan dibatalkan.
+          {materialsConsumed
+            ? <> Bahan baku yang sudah dipakai akan <strong>dikembalikan ke stok</strong> gudang.</>
+            : <> Belum ada bahan baku yang dipakai, stok tidak berubah.</>}
+        </>}
+        confirmLabel="Ya, Batalkan"
+        loading={updateStatus.isPending}
+        onConfirm={() => { handleTransition("CANCELLED").then(() => setCancelOpen(false)).catch(() => { /* toast di hook */ }); }}
+        onCancel={() => setCancelOpen(false)}
       />
     </PageContainer>
   );

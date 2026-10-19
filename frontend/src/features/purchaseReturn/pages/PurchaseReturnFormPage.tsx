@@ -1,7 +1,7 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Controller, useForm, useFieldArray } from "react-hook-form";
-import { ArrowLeft, Trash2, Loader2 } from "lucide-react";
+import { ArrowLeft, Trash2, Loader2, Search, X } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreatePurchaseReturn } from "../hooks";
 import { fetchPurchaseInvoice } from "@/features/purchase/api";
+import { usePurchaseInvoices } from "@/features/purchase/hooks";
+import { fetchReturnableQty } from "../api";
 import type { PurchaseInvoice, PurchaseItem } from "@/features/purchase/types";
 import { WIB_TZ, toWibDateStr } from "@/lib/utils";
 
@@ -20,7 +22,7 @@ interface FormItem {
   itemName: string;
   unitName: string;
   qty:      number;
-  maxQty:   number;   // qty di faktur — retur tidak boleh melebihi (Accurate juga menolak)
+  maxQty:   number;   // sisa yang masih bisa diretur (qty faktur − retur POSTED sebelumnya)
   price:    number;
   discount: number;
   subtotal: number;
@@ -34,21 +36,30 @@ interface FormValues {
   items:             FormItem[];
 }
 
-const fmt = (v: number) => `Rp ${v.toLocaleString("id-ID")}`;
+const fmt = (v: number) => `Rp ${v.toLocaleString("id-ID", { maximumFractionDigits: 2 })}`;
+
+// Subtotal baris = qty × harga − diskon% (sama dengan backend, G4-18)
+const lineTotal = (qty: number, price: number, discount: number) => {
+  const gross = (Number(qty) || 0) * (Number(price) || 0);
+  return gross - gross * ((Number(discount) || 0) / 100);
+};
 
 export function PurchaseReturnFormPage() {
   const navigate       = useNavigate();
   const [searchParams] = useSearchParams();
   const createMutation = useCreatePurchaseReturn();
 
-  const [invoiceId,       setInvoiceId]       = useState(searchParams.get("invoiceId") ?? "");
+  const [invoiceSearch,   setInvoiceSearch]   = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [showPicker,      setShowPicker]      = useState(false);
   const [loadingInvoice,  setLoadingInvoice]   = useState(false);
+  const submittingRef = useRef(false);
   const [invoice,         setInvoice]          = useState<PurchaseInvoice | null>(null);
   const [invoiceError,    setInvoiceError]     = useState<string | null>(null);
 
   const { register, control, watch, setValue, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
-      purchaseInvoiceId: invoiceId,
+      purchaseInvoiceId: searchParams.get("invoiceId") ?? "",
       returnDate:        toWibDateStr(),
       notes:             "",
       items:             [],
@@ -58,7 +69,17 @@ export function PurchaseReturnFormPage() {
   const { fields, remove } = useFieldArray({ control, name: "items" });
 
   const watchedItems = watch("items");
-  const grandTotal = watchedItems.reduce((sum, item) => sum + (item.qty * item.price || 0), 0);
+  const grandTotal = watchedItems.reduce((sum, item) => sum + lineTotal(item.qty, item.price, item.discount), 0);
+
+  // Pilih faktur dari daftar faktur POSTED yang bisa dicari (bukan ketik UUID)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(invoiceSearch.trim()), 300);
+    return () => clearTimeout(t);
+  }, [invoiceSearch]);
+  const { data: invoiceList, isFetching: searchingInvoices } = usePurchaseInvoices({
+    status: "POSTED", search: debouncedSearch || undefined, limit: 10, page: 1,
+  });
+  const invoiceOptions = invoiceList?.data ?? [];
 
   // Load invoice when user types ID or clicks load
   const loadInvoice = useCallback(async (id: string) => {
@@ -68,7 +89,18 @@ export function PurchaseReturnFormPage() {
     try {
       const inv = await fetchPurchaseInvoice(id.trim());
       if (inv.status !== "POSTED") {
-        setInvoiceError(`Invoice ${inv.invoiceNo} bukan POSTED (status: ${inv.status})`);
+        setInvoiceError(`Faktur ${inv.invoiceNo} bukan POSTED (status: ${inv.status})`);
+        setInvoice(null);
+        return;
+      }
+      // Batas qty = sisa yang masih bisa diretur, bukan qty faktur
+      const returnable = await fetchReturnableQty(inv.id);
+      const remainingById = new Map(returnable.map((r) => [r.purchaseInvoiceItemId, Number(r.remainingQty)]));
+      const lines = inv.items
+        .map((item: PurchaseItem) => ({ item, remaining: remainingById.get(item.id) ?? Number(item.qty) }))
+        .filter(({ remaining }) => remaining > 0);
+      if (lines.length === 0) {
+        setInvoiceError(`Semua barang di faktur ${inv.invoiceNo} sudah diretur`);
         setInvoice(null);
         return;
       }
@@ -79,21 +111,21 @@ export function PurchaseReturnFormPage() {
         purchaseInvoiceId: inv.id,
         returnDate:        toWibDateStr(),
         notes:             "",
-        items: inv.items.map((item: PurchaseItem) => ({
+        items: lines.map(({ item, remaining }) => ({
           itemId:   item.itemId,
           unitId:   item.unitId,
           itemName: item.item.name,
           unitName: item.unit.name,
-          qty:      Number(item.qty),
-          maxQty:   Number(item.qty),
+          qty:      remaining,
+          maxQty:   remaining,
           price:    Number(item.price),
           discount: Number(item.discount ?? 0),
-          subtotal: Number(item.qty) * Number(item.price),
+          subtotal: lineTotal(remaining, Number(item.price), Number(item.discount ?? 0)),
           notes:    "",
         })),
       });
     } catch {
-      setInvoiceError("Invoice tidak ditemukan");
+      setInvoiceError("Faktur pembelian tidak ditemukan");
       setInvoice(null);
     } finally {
       setLoadingInvoice(false);
@@ -107,13 +139,16 @@ export function PurchaseReturnFormPage() {
   }, [initialInvoiceId, loadInvoice]);
 
   const onSubmit = async (values: FormValues) => {
+    // Cegah klik ganda membuat dua retur
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     const items = values.items.map((item) => ({
       itemId:   item.itemId,
       unitId:   item.unitId,
       qty:      Number(item.qty),
       price:    Number(item.price),
       discount: Number(item.discount ?? 0) || undefined,
-      subtotal: Number(item.qty) * Number(item.price),
+      subtotal: lineTotal(item.qty, item.price, item.discount),
       notes:    item.notes || undefined,
     }));
 
@@ -127,6 +162,8 @@ export function PurchaseReturnFormPage() {
       navigate(`/purchase-returns/${ret.id}`);
     } catch {
       // error sudah ditangani oleh onError di hook (toast)
+    } finally {
+      submittingRef.current = false;
     }
   };
 
@@ -146,24 +183,48 @@ export function PurchaseReturnFormPage() {
       <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {/* Step 1: Load Invoice */}
         <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-base">1. Pilih Invoice Pembelian</CardTitle></CardHeader>
+          <CardHeader className="pb-3"><CardTitle className="text-base">1. Pilih Faktur Pembelian</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <Label htmlFor="invoiceId">ID Invoice Pembelian</Label>
+            <div className="relative">
+              <Label htmlFor="invoiceSearch">Faktur Pembelian (POSTED)</Label>
+              <div className="relative mt-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
-                  id="invoiceId"
-                  value={invoiceId}
-                  onChange={(e) => setInvoiceId(e.target.value)}
-                  placeholder="Masukkan ID invoice..."
-                  className="font-mono"
+                  id="invoiceSearch"
+                  value={invoiceSearch}
+                  onChange={(e) => { setInvoiceSearch(e.target.value); setShowPicker(true); }}
+                  onFocus={() => setShowPicker(true)}
+                  onBlur={() => setTimeout(() => setShowPicker(false), 150)}
+                  placeholder="Cari no. faktur, no. faktur supplier, atau nama supplier..."
+                  className="pl-8"
+                  autoComplete="off"
                 />
+                {(loadingInvoice || searchingInvoices) && (
+                  <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
               </div>
-              <div className="flex items-end">
-                <Button type="button" variant="outline" onClick={() => loadInvoice(invoiceId)} disabled={loadingInvoice || !invoiceId}>
-                  {loadingInvoice ? <Loader2 className="h-4 w-4 animate-spin" /> : "Muat"}
-                </Button>
-              </div>
+              {showPicker && (
+                <div className="absolute left-0 right-0 z-20 mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-popover shadow-md">
+                  {invoiceOptions.length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">
+                      {searchingInvoices ? "Mencari..." : "Faktur POSTED tidak ditemukan"}
+                    </p>
+                  ) : invoiceOptions.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onMouseDown={() => { setShowPicker(false); setInvoiceSearch(""); void loadInvoice(opt.id); }}
+                      className="w-full border-b border-border/40 px-3 py-2 text-left text-sm last:border-0 hover:bg-accent"
+                    >
+                      <span className="font-mono font-medium">{opt.invoiceNo}</span>
+                      <span className="ml-2 text-muted-foreground">{opt.supplier?.name}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {new Date(opt.invoiceDate).toLocaleDateString("id-ID", { timeZone: WIB_TZ })}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             {invoiceError && <p className="text-sm text-destructive">{invoiceError}</p>}
             {invoice && (
@@ -171,6 +232,14 @@ export function PurchaseReturnFormPage() {
                 <div className="flex gap-4">
                   <span className="text-muted-foreground">No. Invoice:</span>
                   <span className="font-mono font-semibold">{invoice.invoiceNo}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setInvoice(null); reset({ purchaseInvoiceId: "", returnDate: toWibDateStr(), notes: "", items: [] }); }}
+                    className="ml-auto text-muted-foreground hover:text-foreground"
+                    title="Ganti faktur"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
                 <div className="flex gap-4">
                   <span className="text-muted-foreground">Tanggal:</span>
@@ -193,7 +262,15 @@ export function PurchaseReturnFormPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="returnDate">Tanggal Retur *</Label>
-                  <Input id="returnDate" type="date" {...register("returnDate", { required: "Tanggal retur wajib diisi" })} />
+                  <Input
+                    id="returnDate"
+                    type="date"
+                    min={toWibDateStr(new Date(invoice.invoiceDate))}
+                    {...register("returnDate", {
+                      required: "Tanggal retur wajib diisi",
+                      validate: (v) => v >= toWibDateStr(new Date(invoice.invoiceDate)) || "Tanggal retur tidak boleh sebelum tanggal faktur",
+                    })}
+                  />
                   {errors.returnDate && <p className="mt-1 text-xs text-destructive">{errors.returnDate.message}</p>}
                 </div>
               </div>
@@ -232,7 +309,7 @@ export function PurchaseReturnFormPage() {
                     {fields.map((field, idx) => {
                       const qty   = watchedItems[idx]?.qty   ?? 0;
                       const price = watchedItems[idx]?.price ?? 0;
-                      const sub   = Number(qty) * Number(price);
+                      const sub   = lineTotal(qty, price, watchedItems[idx]?.discount ?? 0);
                       const rowErr = errors.items?.[idx];
                       return (
                         <tr key={field.id} className="border-b last:border-0">
@@ -253,7 +330,7 @@ export function PurchaseReturnFormPage() {
                                 valueAsNumber: true,
                                 validate: (v) => {
                                   if (!Number.isFinite(v) || v <= 0) return "Qty harus lebih dari 0";
-                                  if (v > field.maxQty) return `Maks. ${field.maxQty.toLocaleString("id-ID")} (qty faktur)`;
+                                  if (v > field.maxQty) return `Maks. ${field.maxQty.toLocaleString("id-ID")} (sisa yang bisa diretur)`;
                                   return true;
                                 },
                               })}

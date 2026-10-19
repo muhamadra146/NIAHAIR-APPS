@@ -45,6 +45,13 @@ const mapPurchaseInvoiceToAccurate = (invoice, billNumber, accurateBranchId = nu
     if (Number(item.discount) > 0) {
       entry.itemDiscPercent = Number(item.discount);
     }
+    // Faktur ber-PPN: setiap baris ditandai kena PPN (sama dengan faktur penjualan).
+    // Tanpa useTax1 Accurate tidak memungut PPN → total Accurate ≠ total ERP (B1).
+    // Master item Accurate wajib punya pajak — dicek di purchase.accurate.sync.service.
+    if (invoice.taxable) {
+      entry.tax1Name = "PPN";
+      entry.useTax1  = true;
+    }
     return entry;
   });
 

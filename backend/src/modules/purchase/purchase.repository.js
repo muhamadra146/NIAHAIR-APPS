@@ -48,7 +48,11 @@ const countPurchaseInvoices = ({ supplierId, status, synced, startDate, endDate,
 };
 
 const findPurchaseInvoiceById = (id) =>
-  prisma.purchaseInvoice.findUnique({ where: { id }, include: INVOICE_INCLUDE });
+  prisma.purchaseInvoice.findUnique({
+    where:   { id },
+    // Retur ikut dimuat agar UI bisa menyembunyikan Batalkan/Hapus bila ada retur POSTED
+    include: { ...INVOICE_INCLUDE, returns: { select: { id: true, returnNo: true, status: true } } },
+  });
 
 const findMaxPurchaseSeqToday = async (prefix) => {
   const last = await prisma.purchaseInvoice.findFirst({

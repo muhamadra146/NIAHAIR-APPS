@@ -15,6 +15,8 @@ const {
 const router = Router();
 
 const MANAGER_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.INVENTORY];
+// Lihat saja: menu Transfer Stok (MANAGEMENT + INVENTORY) + FINANCE (view-only, U1)
+const VIEW_ROLES    = [...MANAGER_ROLES, ROLES.FINANCE];
 
 const updateStatusSchema = object({
   status:        picklist(["IN_TRANSIT", "RECEIVED"], "Status tidak valid"),
@@ -25,8 +27,8 @@ const updateStatusSchema = object({
   }))),
 });
 
-router.get("/",     authenticate, getAllController);
-router.get("/:id",  authenticate, getByIdController);
+router.get("/",     authenticate, authorize(...VIEW_ROLES), getAllController);
+router.get("/:id",  authenticate, authorize(...VIEW_ROLES), getByIdController);
 router.post("/",    authenticate, authorize(...MANAGER_ROLES), validate(createTransferSchema), createController);
 router.patch("/:id/status",       authenticate, authorize(...MANAGER_ROLES), requireBranch, validate(updateStatusSchema), updateStatusController);
 router.delete("/:id",             authenticate, authorize(...MANAGER_ROLES), requireBranch, deleteController);

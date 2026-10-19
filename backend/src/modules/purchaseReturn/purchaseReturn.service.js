@@ -8,7 +8,8 @@ const repo            = require("./purchaseReturn.repository");
 const { pushPurchaseReturnToAccurate } = require("./purchaseReturn.accurate.sync.service");
 const { createSyncJob }      = require("../syncQueue/syncQueue.service");
 const { validatePeriodOpen } = require("../inventory/inventory.period.service");
-const { toDateOnly }         = require("../../utils/date");
+const { toDateOnly, toDateStr } = require("../../utils/date");
+const { assertUnitsBelongToItems } = require("../item/item.units");
 
 const { toBaseQty }          = require("../inventory/inventory.conversion");
 
@@ -67,6 +68,49 @@ const assertReturnable = async (client, invoiceId, invoiceItems, returnItems, ex
   }
 };
 
+// ── Sisa yang bisa diretur per baris faktur (untuk batas qty di form retur) ───
+// Sisa per item dihitung dalam satuan dasar (faktur − retur POSTED), lalu dikonversi
+// ke satuan baris faktur; dibatasi qty baris tsb.
+const getReturnableQty = async (purchaseInvoiceId) => {
+  const invoice = await prisma.purchaseInvoice.findUnique({
+    where:  { id: purchaseInvoiceId },
+    select: { id: true, items: { select: { id: true, itemId: true, unitId: true, qty: true } } },
+  });
+  if (!invoice) throw new AppError("Faktur pembelian tidak ditemukan", StatusCodes.NOT_FOUND);
+
+  const postedRows = await prisma.purchaseReturnItem.findMany({
+    where:  { purchaseReturn: { purchaseInvoiceId, status: "POSTED" } },
+    select: { itemId: true, unitId: true, qty: true },
+  });
+
+  const remainingBase = new Map();
+  for (const r of invoice.items) {
+    const base = await toBaseQty(prisma, r.itemId, r.unitId, r.qty);
+    remainingBase.set(r.itemId, (remainingBase.get(r.itemId) ?? D(0)).add(base));
+  }
+  for (const r of postedRows) {
+    const base = await toBaseQty(prisma, r.itemId, r.unitId, r.qty);
+    remainingBase.set(r.itemId, (remainingBase.get(r.itemId) ?? D(0)).sub(base));
+  }
+
+  const result = [];
+  for (const line of invoice.items) {
+    const factor    = await toBaseQty(prisma, line.itemId, line.unitId, 1);
+    const baseLeft  = remainingBase.get(line.itemId) ?? D(0);
+    let qtyLeft     = factor.isZero() ? D(0) : baseLeft.div(factor);
+    if (qtyLeft.greaterThan(D(line.qty))) qtyLeft = D(line.qty);
+    if (qtyLeft.lessThan(0)) qtyLeft = D(0);
+    result.push({
+      purchaseInvoiceItemId: line.id,
+      itemId:                line.itemId,
+      unitId:                line.unitId,
+      invoiceQty:            D(line.qty).toString(),
+      remainingQty:          qtyLeft.toDecimalPlaces(4, Prisma.Decimal.ROUND_DOWN).toString(),
+    });
+  }
+  return result;
+};
+
 // ── Auto-number: PR-YYYYMMDD-XXXX ────────────────────────────────────────────
 const buildReturnNo = async () => {
   const now    = new Date(Date.now() + 7 * 3600 * 1000);
@@ -117,7 +161,18 @@ const createPurchaseReturn = async (body, createdByEmployeeId) => {
     );
   }
 
+  // Tanggal retur tidak boleh sebelum tanggal faktur pembelian (kalender WIB)
+  if (invoice.invoiceDate && toDateStr(returnDate) < toDateStr(invoice.invoiceDate)) {
+    throw new AppError(
+      "Tanggal retur tidak boleh sebelum tanggal faktur pembelian",
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
+
   await validatePeriodOpen(returnDate);
+
+  // Satuan harus milik item (B2) — tanpa ini konversi ke satuan dasar salah
+  await assertUnitsBelongToItems(items);
 
   // Item harus ada di faktur dan qty tidak melebihi sisa yang bisa diretur
   await assertReturnable(prisma, purchaseInvoiceId, invoice.items, items);
@@ -313,6 +368,7 @@ const syncReturnToAccurate = async (id) => {
 };
 
 module.exports = {
+  getReturnableQty,
   listPurchaseReturns,
   getPurchaseReturn,
   createPurchaseReturn,

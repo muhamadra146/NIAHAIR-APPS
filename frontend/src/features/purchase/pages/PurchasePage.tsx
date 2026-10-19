@@ -149,6 +149,9 @@ export function PurchasePage() {
           <Input type="date" value={endDate}
             onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
             className="h-9 w-36" title="Sampai tanggal" />
+          {startDate && endDate && endDate < startDate && (
+            <span role="alert" className="self-center text-xs text-destructive">Tanggal akhir sebelum tanggal awal</span>
+          )}
           {(startDate || endDate) && (
             <Button size="sm" variant="ghost" className="h-9 px-2 text-muted-foreground"
               onClick={() => { setStartDate(""); setEndDate(""); setPage(1); }}>

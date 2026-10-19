@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ArrowDown, ArrowUp, Package, Search, Loader2, Check,
   SlidersHorizontal, RefreshCw, Trash2, AlertTriangle,
@@ -342,11 +342,15 @@ function StockTab({ branchId, showAllBranches = false }: { branchId?: string; sh
                           </td>
                         )}
                         <td className="px-4 py-3 text-muted-foreground">{inv.warehouse.name}</td>
-                        <td className="px-4 py-3 text-right font-semibold">{onHand.toLocaleString("id-ID")}</td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          {onHand.toLocaleString("id-ID")}
+                          {inv.item.defaultUnit && <span className="ml-1 text-xs font-normal text-muted-foreground">{inv.item.defaultUnit.name}</span>}
+                        </td>
                         <td className="px-4 py-3 text-right">
                           <span className={`font-semibold ${available < 0 ? "text-red-600" : "text-foreground"}`}>
                             {available.toLocaleString("id-ID")}
                           </span>
+                          {inv.item.defaultUnit && <span className="ml-1 text-xs text-muted-foreground">{inv.item.defaultUnit.name}</span>}
                         </td>
                         {canEditMinStock && (
                           <td className="px-4 py-3 text-right">
@@ -436,7 +440,7 @@ function StockTab({ branchId, showAllBranches = false }: { branchId?: string; sh
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Di tangan: {onHand.toLocaleString("id-ID")}</p>
+                        <p className="text-xs text-muted-foreground">Di tangan: {onHand.toLocaleString("id-ID")}{inv.item.defaultUnit ? ` ${inv.item.defaultUnit.name}` : ""}</p>
                         <p className={`text-sm font-semibold ${available < 0 ? "text-red-600" : ""}`}>
                           Tersedia: {available.toLocaleString("id-ID")}
                         </p>
@@ -635,6 +639,9 @@ function MovementsTab({ branchId, showAllBranches = false }: { branchId?: string
             <Label className="text-xs text-muted-foreground">Sampai</Label>
             <Input type="date" value={endDate} onChange={(e) => { setEnd(e.target.value); setPage(1); }} className="h-9 w-36" />
           </div>
+          {startDate && endDate && endDate < startDate && (
+            <span role="alert" className="self-center text-xs text-destructive">Tanggal akhir sebelum tanggal awal</span>
+          )}
 
           {/* Reset all */}
           {hasFilter && (
@@ -733,7 +740,7 @@ function MovementsTab({ branchId, showAllBranches = false }: { branchId?: string
                       <td className="px-4 py-3">
                         {(m.referenceType || m.referenceNo) && (
                           <span className="text-xs text-muted-foreground font-mono">
-                            {m.referenceNo ?? `${m.referenceType} ...${m.referenceId?.slice(-8).toUpperCase()}`}
+                            {movementReference(m)}
                           </span>
                         )}
                         {m.notes && <p className="text-xs text-muted-foreground">{m.notes}</p>}
@@ -770,7 +777,7 @@ function MovementsTab({ branchId, showAllBranches = false }: { branchId?: string
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span className="font-mono">
-                      {m.referenceNo ?? (m.referenceType && m.referenceId ? `${m.referenceType} ...${m.referenceId.slice(-8).toUpperCase()}` : "—")}
+                      {movementReference(m)}
                     </span>
                     <span>{formatDate(m.createdAt)}</span>
                   </div>
@@ -785,6 +792,14 @@ function MovementsTab({ branchId, showAllBranches = false }: { branchId?: string
       <Pagination page={page} limit={30} total={meta?.total ?? 0} totalPages={totalPages} onPageChange={setPage} />
     </Card>
   );
+}
+
+// Referensi movement: nomor dokumen, atau tipe + potongan ID; penyesuaian manual tanpa ID → "Manual" (B5)
+function movementReference(m: { referenceNo?: string | null; referenceType?: string | null; referenceId?: string | null }): string {
+  if (m.referenceNo) return m.referenceNo;
+  if (m.referenceType && m.referenceId) return `${m.referenceType} ...${m.referenceId.slice(-8).toUpperCase()}`;
+  if (m.referenceType === "MANUAL") return "Manual";
+  return m.referenceType ?? "—";
 }
 
 // ── Batch Adjustment Tab ──────────────────────────────────────────────────────
@@ -1274,12 +1289,13 @@ function LowStockTab({ branchId, showAllBranches = false }: { branchId?: string;
 function OpeningBalanceDialog({ onClose }:{ branchId?: string | null; onClose: () => void }) {
   const [warehouseId, setWarehouseId] = useState("");
   const [notes, setNotes]             = useState("");
-  const [lines, setLines]             = useState<Array<{ itemId: string; itemName: string; itemCode: string | null; qty: string; unitCost: string }>>([]);
+  const [lines, setLines]             = useState<Array<{ itemId: string; itemName: string; itemCode: string | null; unitName: string | null; qty: string; unitCost: string }>>([]);
   const [itemSearch, setItemSearch]   = useState("");
   const [dItemSearch, setDItemSearch] = useState("");
   const [showDrop, setShowDrop]       = useState(false);
 
   const createMut = useCreateOpeningBalance();
+  const submittingRef = useRef(false); // cegah klik ganda
   const { data: warehouseData } = useWarehouses({ limit: 100 });
   const warehouses = warehouseData?.data ?? [];
 
@@ -1296,8 +1312,8 @@ function OpeningBalanceDialog({ onClose }:{ branchId?: string | null; onClose: (
     setShowDrop(val.length >= 1);
   }
 
-  function selectItem(item: { id: string; name: string; itemCode: string | null }) {
-    setLines((prev) => [...prev, { itemId: item.id, itemName: item.name, itemCode: item.itemCode, qty: "0", unitCost: "" }]);
+  function selectItem(item: { id: string; name: string; itemCode: string | null; defaultUnit: { name: string } | null }) {
+    setLines((prev) => [...prev, { itemId: item.id, itemName: item.name, itemCode: item.itemCode, unitName: item.defaultUnit?.name ?? null, qty: "0", unitCost: "" }]);
     setItemSearch(""); setDItemSearch(""); setShowDrop(false);
   }
 
@@ -1321,9 +1337,11 @@ function OpeningBalanceDialog({ onClose }:{ branchId?: string | null; onClose: (
       unitCost: l.unitCost !== "" ? parseFloat(l.unitCost) : null,
     }));
 
+    if (submittingRef.current || createMut.isPending) return;
+    submittingRef.current = true;
     createMut.mutate(
       { warehouseId, notes: notes || null, items } as CreateOpeningBalanceInput,
-      { onSuccess: () => onClose() },
+      { onSuccess: () => onClose(), onSettled: () => { submittingRef.current = false; } },
     );
   }
 
@@ -1379,6 +1397,7 @@ function OpeningBalanceDialog({ onClose }:{ branchId?: string | null; onClose: (
                     >
                       <span className="font-medium">{item.name}</span>
                       {item.itemCode && <span className="ml-2 text-xs text-muted-foreground font-mono">{item.itemCode}</span>}
+                      {item.defaultUnit && <span className="ml-2 text-xs text-muted-foreground">({item.defaultUnit.name})</span>}
                     </button>
                   ))}
                 </div>
@@ -1394,6 +1413,7 @@ function OpeningBalanceDialog({ onClose }:{ branchId?: string | null; onClose: (
                   <tr className="bg-muted/50 border-b">
                     <th className="px-3 py-2 text-left font-medium text-muted-foreground">Barang</th>
                     <th className="px-3 py-2 text-right font-medium text-muted-foreground w-28">Qty</th>
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground w-20">Satuan</th>
                     <th className="px-3 py-2 text-right font-medium text-muted-foreground w-36">Harga Pokok</th>
                     <th className="px-3 py-2 w-8" />
                   </tr>
@@ -1415,6 +1435,7 @@ function OpeningBalanceDialog({ onClose }:{ branchId?: string | null; onClose: (
                           className="h-7 text-right font-mono text-xs w-full"
                         />
                       </td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{line.unitName ?? "—"}</td>
                       <td className="px-3 py-2">
                         <CurrencyInput
                           prefix={false}
@@ -1460,6 +1481,8 @@ function AdjustStockDialog({ target, onClose }: { target: InventoryBalance; onCl
 
   const { data: glAccounts = [], refetch: refetchGl2, isFetching: isRefetchingGl2 } = useGlAccounts({ usage: "STOCK_ADJUSTMENT" });
   const adjustMutation = useCreateStockAdjustment();
+  // Kunci sinkron terhadap klik ganda — isPending baru true setelah render ulang (B4)
+  const submittingRef  = useRef(false);
 
   const parsed = parseFloat(qtyActual);
   const diff   = isNaN(parsed) ? null : parsed - currentQty;
@@ -1485,9 +1508,12 @@ function AdjustStockDialog({ target, onClose }: { target: InventoryBalance; onCl
     if (qtyActual === "" || isNaN(parsed) || parsed < 0) { toast.error("Qty aktual tidak valid"); return; }
     if (!reason)      { toast.error("Alasan wajib dipilih"); return; }
     if (!glAccountId) { toast.error("Akun penyesuaian wajib dipilih"); return; }
+    if (diff === 0)   { toast.error("Tidak ada selisih stok"); return; }
+    if (submittingRef.current || adjustMutation.isPending) return;
+    submittingRef.current = true;
     adjustMutation.mutate(
       { inventoryId: target.id, qtyActual: parsed, reason, glAccountId, notes: notes || undefined },
-      { onSuccess: () => onClose() },
+      { onSuccess: () => onClose(), onSettled: () => { submittingRef.current = false; } },
     );
   }
 

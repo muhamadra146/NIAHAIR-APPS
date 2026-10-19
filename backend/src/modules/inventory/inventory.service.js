@@ -530,12 +530,18 @@ const createStockAdjustment = async (inventoryId, { qtyActual, reason, notes, gl
       where:  { id: inventoryId },
       select: { id: true, qtyOnHand: true, qtyReserved: true, warehouseId: true },
     });
-    if (!inventory) throw new AppError("Inventory not found", StatusCodes.NOT_FOUND);
+    if (!inventory) throw new AppError("Data stok tidak ditemukan", StatusCodes.NOT_FOUND);
 
     const qtyBefore    = D(inventory.qtyOnHand);
     const qtyAfter     = D(qtyActual);
     const qtyChange    = qtyAfter.sub(qtyBefore);
     const newAvailable = computeAvailable(qtyAfter, inventory.qtyReserved);
+
+    // Tanpa selisih tidak ada yang disesuaikan — juga mencegah klik ganda membuat
+    // penyesuaian kedua (B4)
+    if (qtyChange.isZero()) {
+      throw new AppError("Tidak ada selisih stok", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
 
     // Guard lost update (G4-12): update bersyarat qtyOnHand masih sama dengan yang dibaca
     await applyAdjustmentGuarded(tx, inventory, qtyAfter, newAvailable);
@@ -600,12 +606,15 @@ const createBatchStockAdjustment = async ({ glAccountId, reason, notes, items, c
         where:  { id: inventoryId },
         select: { id: true, qtyOnHand: true, qtyReserved: true, warehouseId: true },
       });
-      if (!inventory) throw new AppError(`Inventory ${inventoryId} tidak ditemukan`, StatusCodes.NOT_FOUND);
+      if (!inventory) throw new AppError("Data stok tidak ditemukan", StatusCodes.NOT_FOUND);
 
       const qtyBefore    = D(inventory.qtyOnHand);
       const qtyAfter     = D(qtyActual);
       const qtyChange    = qtyAfter.sub(qtyBefore);
       const newAvailable = computeAvailable(qtyAfter, inventory.qtyReserved);
+
+      // Baris tanpa selisih dilewati (tidak membuat movement / dokumen Accurate kosong)
+      if (qtyChange.isZero()) continue;
 
       // Guard lost update (G4-12): update bersyarat qtyOnHand masih sama dengan yang dibaca
       await applyAdjustmentGuarded(tx, inventory, qtyAfter, newAvailable);
@@ -632,6 +641,9 @@ const createBatchStockAdjustment = async ({ glAccountId, reason, notes, items, c
       ids.push({ movementId: movement.id, qtyBefore: qtyBefore.toFixed(6), qtyChange: qtyChange.toFixed(6), qtyAfter: qtyAfter.toFixed(6) });
     }
 
+    if (ids.length === 0) {
+      throw new AppError("Tidak ada selisih stok", StatusCodes.UNPROCESSABLE_ENTITY);
+    }
     return ids;
   });
 
@@ -676,7 +688,7 @@ const reserveInventory = async (inventoryId, qty, referenceId, createdByEmployee
     where:  { id: inventoryId },
     select: { qtyOnHand: true, qtyReserved: true },
   });
-  if (!inv) throw new AppError(`Inventory ${inventoryId} not found`, StatusCodes.NOT_FOUND);
+  if (!inv) throw new AppError("Data stok tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const reserveQty   = D(qty);
   const newReserved  = D(inv.qtyReserved).plus(reserveQty);
@@ -696,7 +708,7 @@ const releaseReservation = async (inventoryId, qty, tx) => {
     where:  { id: inventoryId },
     select: { qtyOnHand: true, qtyReserved: true },
   });
-  if (!inv) throw new AppError(`Inventory ${inventoryId} not found`, StatusCodes.NOT_FOUND);
+  if (!inv) throw new AppError("Data stok tidak ditemukan", StatusCodes.NOT_FOUND);
 
   const releaseQty   = D(qty);
   const newReserved  = Prisma.Decimal.max(D("0"), D(inv.qtyReserved).sub(releaseQty));

@@ -127,7 +127,7 @@ export interface StockTransferItem {
   itemId:      string;
   qty:         string;
   receivedQty: string | null;
-  item:        { id: string; name: string; itemCode: string; itemType: string };
+  item:        { id: string; name: string; itemCode: string; itemType: string; defaultUnit?: { id: string; name: string } | null };
 }
 
 export interface StockTransfer {

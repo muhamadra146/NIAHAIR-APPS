@@ -19,12 +19,17 @@ test('hapus order: tiap pembalikan stok punya movement pembalik', async () => {
     productionOrder:   { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     inventoryMovement: {
       findUnique: jest.fn(({ where }) => Promise.resolve(movements[where.id])),
+      // saldo bersih movement PRODUCTION baris = movement asli (belum pernah dibalik)
+      aggregate:  jest.fn(({ where }) => Promise.resolve({
+        _sum: { qtyChange: Object.values(movements).find((m) => m.referenceId === where.referenceId).qtyChange },
+      })),
       create:     jest.fn(),
     },
     inventory: {
       findUnique: jest.fn(({ where }) => Promise.resolve({ id: where.id, qtyOnHand: '100', qtyReserved: '0' })),
       update:     jest.fn(),
     },
+    $queryRawUnsafe: jest.fn().mockResolvedValue([{}]),
   };
   prisma.$transaction.mockImplementation((fn) => fn(tx));
   prisma.$queryRawUnsafe.mockResolvedValue([{}]);

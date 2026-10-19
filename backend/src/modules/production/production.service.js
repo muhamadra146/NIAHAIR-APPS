@@ -8,6 +8,7 @@ const { toDateOnly }               = require("../../utils/date");
 const repo                         = require("./production.repository");
 const { syncProductionToAccurate, deleteFromAccurate } = require("./production.sync.service");
 const { toBaseQty }                = require("../inventory/inventory.conversion");
+const { assertUnitsBelongToItems } = require("../item/item.units");
 
 // ── Decimal helper ────────────────────────────────────────────────────────────
 const D = (v) => new Prisma.Decimal(String(v));
@@ -104,6 +105,18 @@ const create = async ({ branchId, warehouseId, productionDate, plannedStartAt, p
     );
   }
 
+  // Barang jadi tidak boleh sama dengan bahan baku mana pun (B9) — Accurate juga menolak
+  const materialIds = new Set(materials.map((m) => m.itemId));
+  if (items.some((it) => materialIds.has(it.itemId))) {
+    throw new AppError(
+      "Barang jadi tidak boleh sama dengan bahan baku",
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
+
+  // Satuan harus milik item (B9) — tanpa ini konversi ke satuan dasar salah
+  await assertUnitsBelongToItems([...items, ...materials]);
+
   return prisma.$transaction(async (tx) => {
     const productionNo = await buildProductionNo(tx);
 
@@ -198,14 +211,20 @@ const updateStatus = async (id, newStatus, employeeId) => {
     }
 
     // ── CANCELLED ───────────────────────────────────────────────────────────
+    // Material yang sudah dikonsumsi (IN_PROGRESS / QC) dikembalikan ke stok dengan
+    // movement pembalik (keputusan owner 2026-10-19). Belum ada dokumen Accurate pada
+    // tahap ini (sync hanya saat COMPLETED), jadi tidak ada yang perlu dibalik di Accurate.
     if (newStatus === "CANCELLED") {
-      // If materials were already consumed, we do NOT auto-reverse them here.
-      // A manual adjustment is needed. Log a timeline note instead.
       if (order.status === "IN_PROGRESS" || order.status === "QC") {
+        const returned = await reverseProductionStock(tx, order, {
+          lines: order.materials, label: "Pembatalan produksi", employeeId,
+        });
         await repo.addTimeline({
           productionOrderId:   id,
           timelineType:        "CANCELLED",
-          description:         "Dibatalkan setelah material dikonsumsi — lakukan penyesuaian stok manual jika diperlukan",
+          description:         returned > 0
+            ? `Dibatalkan — ${returned} material dikembalikan ke stok`
+            : "Dibatalkan",
           createdByEmployeeId: employeeId ?? null,
         }, tx);
       }
@@ -461,92 +480,102 @@ const submitQC = async (id, { status, notes, inspectionDate }, qcEmployeeId) => 
   return { qcRecord, order: await getById(id) };
 };
 
+// ── reverseProductionStock ───────────────────────────────────────────────────
+// Kembalikan stok untuk baris produksi (material / barang jadi) dengan movement pembalik.
+// Idempotent: nilai yang dibalik = saldo bersih movement PRODUCTION baris tsb
+// (konsumsi/penambahan + pembalikan sebelumnya), sehingga batal lalu hapus tidak
+// mengembalikan stok dua kali. Return: jumlah baris yang dibalik.
+const reverseProductionStock = async (tx, order, { lines, label, employeeId = null }) => {
+  let reversed = 0;
+  for (const line of lines) {
+    if (!line.inventoryMovementId) continue;
+    const mv = await tx.inventoryMovement.findUnique({
+      where:  { id: line.inventoryMovementId },
+      select: { inventoryId: true, qtyChange: true, warehouseId: true, referenceId: true },
+    });
+    if (!mv) continue;
+
+    const agg = await tx.inventoryMovement.aggregate({
+      _sum:  { qtyChange: true },
+      where: { inventoryId: mv.inventoryId, referenceType: "PRODUCTION", referenceId: mv.referenceId },
+    });
+    const net = D(agg?._sum?.qtyChange ?? mv.qtyChange);
+    if (net.isZero()) continue; // sudah dibalik sebelumnya
+
+    const inventory = await tx.inventory.findUnique({
+      where:  { id: mv.inventoryId },
+      select: { id: true, qtyOnHand: true, qtyReserved: true },
+    });
+    const reversal  = net.negated();
+    const qtyBefore = D(inventory.qtyOnHand);
+    const qtyAfter  = qtyBefore.plus(reversal);
+
+    await tx.inventoryMovement.create({
+      data: {
+        inventoryId:         mv.inventoryId,
+        movementType:        "PRODUCTION",
+        sourceModule:        "PRODUCTION",
+        createdSource:       "SYSTEM",
+        warehouseId:         mv.warehouseId,
+        qtyBefore,
+        qtyChange:           reversal,
+        qtyAfter,
+        referenceType:       "PRODUCTION",
+        referenceId:         mv.referenceId,
+        referenceNo:         order.productionNo,
+        notes:               `${label}: ${line.item?.name ?? line.itemId}`,
+        createdByEmployeeId: employeeId ?? null,
+      },
+    });
+
+    await tx.inventory.update({
+      where: { id: inventory.id },
+      data:  { qtyOnHand: qtyAfter, qtyAvailable: qtyAfter.minus(D(inventory.qtyReserved)) },
+    });
+    reversed++;
+  }
+  return reversed;
+};
+
 // ── remove ────────────────────────────────────────────────────────────────────
 //
-// Urutan:
-//   1. Hapus dokumen di Accurate (RO → JC) jika sudah pernah di-sync — best effort
+// Satu transaksi (B6/B10):
+//   1. Guard: order masih ada dengan status yang sama (paralel → 409)
 //   2. Reverse inventory movements (kembalikan stok material, kurangi stok barang jadi)
-//   3. Hard delete production order dari DB (cascade items, materials, timelines, dst)
+//   3. Hapus dokumen di Accurate (RO → JC) — gagal = rollback semua, ERP tidak berubah.
+//      Dokumen yang sudah tidak ada di Accurate dianggap terhapus (aman diulang bila
+//      percobaan sebelumnya terhenti setelah Accurate terhapus).
+//   4. Hard delete production order (cascade items, materials, timelines, dst)
 //
 const remove = async (id) => {
   const order = await getById(id);
 
-  // Ambil Accurate IDs via raw SQL (belum ada di Prisma client)
-  const [syncRow] = await prisma.$queryRawUnsafe(
-    `SELECT "accurate_pekerjaan_id"    AS "accuratePekerjaanId",
-            "accurate_penyelesaian_id" AS "accuratePenyelesaianId"
-     FROM   "production_orders" WHERE id = $1`,
-    id,
-  );
-
-  // 1. Hapus dari Accurate (best-effort: jika gagal, log + lanjut delete DB)
-  if (syncRow?.accuratePekerjaanId || syncRow?.accuratePenyelesaianId) {
-    await deleteFromAccurate({
-      accuratePekerjaanId:    syncRow.accuratePekerjaanId,
-      accuratePenyelesaianId: syncRow.accuratePenyelesaianId,
-    }).catch((err) => {
-      logger.error(`[production] Gagal hapus dari Accurate, lanjut hapus DB:`, err?.message ?? err);
-    });
-  }
-
-  // 2. Reverse inventory + hapus order dalam satu transaksi
   await prisma.$transaction(async (tx) => {
     // Guard race condition: order harus masih ada dengan status yang sama saat dibaca
     // (status tidak diubah — hanya mengunci baris; count = 0 → sudah diproses paralel)
     await guardTransition(tx, id, order.status, order.status);
 
     // Balik movement + tulis baris movement pembalik agar kartu stok tetap konsisten (G4-10)
-    const reverseMovement = async (movementId, label) => {
-      if (!movementId) return;
-      const mv = await tx.inventoryMovement.findUnique({
-        where:  { id: movementId },
-        select: { inventoryId: true, qtyChange: true, warehouseId: true, referenceId: true },
-      });
-      if (!mv) return;
-      const inventory = await tx.inventory.findUnique({
-        where:  { id: mv.inventoryId },
-        select: { id: true, qtyOnHand: true, qtyReserved: true },
-      });
-      const reversal  = D(mv.qtyChange).negated();
-      const qtyBefore = D(inventory.qtyOnHand);
-      const qtyAfter  = qtyBefore.plus(reversal);
+    await reverseProductionStock(tx, order, { lines: order.materials, label: "Pembatalan produksi (hapus)" });
+    await reverseProductionStock(tx, order, { lines: order.items,     label: "Pembatalan produksi (hapus)" });
 
-      await tx.inventoryMovement.create({
-        data: {
-          inventoryId:   mv.inventoryId,
-          movementType:  "PRODUCTION",
-          sourceModule:  "PRODUCTION",
-          createdSource: "SYSTEM",
-          warehouseId:   mv.warehouseId,
-          qtyBefore,
-          qtyChange:     reversal,
-          qtyAfter,
-          referenceType: "PRODUCTION",
-          referenceId:   mv.referenceId,
-          referenceNo:   order.productionNo,
-          notes:         `Pembatalan produksi (hapus): ${label}`,
-        },
+    // Accurate IDs via raw SQL (belum ada di Prisma client) — dibaca setelah baris terkunci
+    const [syncRow] = await tx.$queryRawUnsafe(
+      `SELECT "accurate_pekerjaan_id"    AS "accuratePekerjaanId",
+              "accurate_penyelesaian_id" AS "accuratePenyelesaianId"
+       FROM   "production_orders" WHERE id = $1`,
+      id,
+    );
+    if (syncRow?.accuratePekerjaanId || syncRow?.accuratePenyelesaianId) {
+      await deleteFromAccurate({
+        accuratePekerjaanId:    syncRow.accuratePekerjaanId,
+        accuratePenyelesaianId: syncRow.accuratePenyelesaianId,
       });
-
-      await tx.inventory.update({
-        where: { id: inventory.id },
-        data:  { qtyOnHand: qtyAfter, qtyAvailable: qtyAfter.minus(D(inventory.qtyReserved)) },
-      });
-    };
-
-    // Balik konsumsi material (qtyChange negatif → kembalikan ke stok)
-    for (const mat of order.materials) {
-      await reverseMovement(mat.inventoryMovementId, mat.item?.name ?? mat.itemId);
-    }
-
-    // Balik penambahan barang jadi (qtyChange positif → kurangi dari stok)
-    for (const item of order.items) {
-      await reverseMovement(item.inventoryMovementId, item.item?.name ?? item.itemId);
     }
 
     // Hard delete — cascade: items, materials, employees, qcRecords, timelines
     await repo.remove(id, tx);
-  });
+  }, { timeout: 60000, maxWait: 10000 });
 
   return { deleted: true, id };
 };

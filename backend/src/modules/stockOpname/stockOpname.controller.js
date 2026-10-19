@@ -67,7 +67,7 @@ const deleteController = async (req, res, next) => {
 
 const syncController = async (req, res, next) => {
   try {
-    const result = await svc.syncToAccurate(req.params.id);
+    const result = await svc.syncToAccurate(req.params.id, { glAccountId: req.body?.glAccountId });
     success(res, result, "Opname berhasil disinkronkan ke Accurate");
   } catch (err) { next(err); }
 };

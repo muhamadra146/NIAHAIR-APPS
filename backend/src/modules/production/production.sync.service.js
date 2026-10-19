@@ -252,44 +252,34 @@ const syncProductionToAccurate = async (productionOrderId) => {
 // Urutan: hapus RO (Penyelesaian Pesanan) DULU sebelum JC (Pekerjaan Pesanan).
 // Accurate menolak hapus JC jika masih ada RO yang terhubung.
 //
-// Best-effort: error dilog tapi tidak di-throw — caller memutuskan cara handle.
-const deleteFromAccurate = async ({ accuratePekerjaanId, accuratePenyelesaianId }) => {
-  // 1. Hapus Penyelesaian Pesanan (RO) terlebih dahulu
-  if (accuratePenyelesaianId) {
-    try {
-      const resp = await accurateRequest(
-        `${ACCURATE_PENYELESAIAN_DELETE}?id=${accuratePenyelesaianId}`,
-        { method: "DELETE" },
-      );
-      if (!resp.s) {
-        logger.warn(
-          `[production sync] Gagal hapus RO id=${accuratePenyelesaianId}: ${extractAccurateError(resp)}`,
-        );
-      } else {
-        logger.info(`[production sync] RO id=${accuratePenyelesaianId} dihapus dari Accurate`);
-      }
-    } catch (err) {
-      logger.warn(`[production sync] Error hapus RO id=${accuratePenyelesaianId}:`, err?.message);
-    }
+// Ketat (B6/B10): gagal hapus → throw 422, caller (di dalam transaksi ERP) ikut rollback
+// sehingga ERP & Accurate tetap konsisten. Dokumen yang sudah tidak ada di Accurate
+// (detail.do gagal) dianggap terhapus — aman diulang setelah percobaan yang terhenti.
+const deleteAccurateDoc = async (deletePath, detailPath, accurateId, label) => {
+  let resp;
+  try {
+    resp = await accurateRequest(`${deletePath}?id=${accurateId}`, { method: "DELETE" });
+  } catch (err) {
+    throw new AppError(`Gagal menghubungi Accurate saat menghapus ${label}: ${err?.message ?? err}`, StatusCodes.BAD_GATEWAY);
   }
+  if (resp.s) {
+    logger.info(`[production sync] ${label} id=${accurateId} dihapus dari Accurate`);
+    return;
+  }
+  const detail = await accurateRequest(`${detailPath}?id=${accurateId}`, { method: "GET" }).catch(() => null);
+  if (detail && detail.s === false) {
+    logger.info(`[production sync] ${label} id=${accurateId} sudah tidak ada di Accurate`);
+    return;
+  }
+  throw fail(`Tidak bisa menghapus ${label} di Accurate: ${extractAccurateError(resp)}`);
+};
 
-  // 2. Hapus Pekerjaan Pesanan (JC)
+const deleteFromAccurate = async ({ accuratePekerjaanId, accuratePenyelesaianId }) => {
+  if (accuratePenyelesaianId) {
+    await deleteAccurateDoc(ACCURATE_PENYELESAIAN_DELETE, "/roll-over/detail.do", accuratePenyelesaianId, "Penyelesaian Pesanan");
+  }
   if (accuratePekerjaanId) {
-    try {
-      const resp = await accurateRequest(
-        `${ACCURATE_PEKERJAAN_DELETE}?id=${accuratePekerjaanId}`,
-        { method: "DELETE" },
-      );
-      if (!resp.s) {
-        logger.warn(
-          `[production sync] Gagal hapus JC id=${accuratePekerjaanId}: ${extractAccurateError(resp)}`,
-        );
-      } else {
-        logger.info(`[production sync] JC id=${accuratePekerjaanId} dihapus dari Accurate`);
-      }
-    } catch (err) {
-      logger.warn(`[production sync] Error hapus JC id=${accuratePekerjaanId}:`, err?.message);
-    }
+    await deleteAccurateDoc(ACCURATE_PEKERJAAN_DELETE, "/job-order/detail.do", accuratePekerjaanId, "Pekerjaan Pesanan");
   }
 };
 

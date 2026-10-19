@@ -14,6 +14,7 @@ test('stok material kurang → 400, tidak ada movement', async () => {
   const tx = {
     productionOrder:    { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     itemUnit:           { findUnique: jest.fn().mockResolvedValue(null) },
+    item:               { findUnique: jest.fn().mockResolvedValue({ name: 'Cat', defaultUnitId: 'u1' }) },
     inventory:          { upsert: jest.fn().mockResolvedValue({ id: 'inv1', qtyOnHand: '3', qtyReserved: '0' }), update: jest.fn() },
     inventoryMovement:  { create: jest.fn() },
     productionMaterial: { update: jest.fn() },

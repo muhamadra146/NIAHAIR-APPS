@@ -34,6 +34,22 @@ export async function createPurchaseReturn(
   return data.data;
 }
 
+// Sisa qty yang masih bisa diretur per baris faktur (satuan baris faktur)
+export interface ReturnableLine {
+  purchaseInvoiceItemId: string;
+  itemId:                string;
+  unitId:                string;
+  invoiceQty:            string;
+  remainingQty:          string;
+}
+
+export async function fetchReturnableQty(purchaseInvoiceId: string): Promise<ReturnableLine[]> {
+  const { data } = await api.get<ApiResponse<ReturnableLine[]>>(
+    `/purchase-returns/returnable/${purchaseInvoiceId}`,
+  );
+  return data.data;
+}
+
 export async function postPurchaseReturn(id: string): Promise<PurchaseReturn> {
   const { data } = await api.patch<ApiResponse<PurchaseReturn>>(
     `/purchase-returns/${id}/post`,

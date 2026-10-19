@@ -187,8 +187,9 @@ export async function deleteStockOpname(opnameId: string): Promise<{ deleted: bo
   return data.data;
 }
 
-export async function syncStockOpnameToAccurate(opnameId: string): Promise<StockOpname> {
-  const { data } = await api.post<ApiResponse<StockOpname>>(`/stock-opnames/${opnameId}/sync`);
+// Hasil opname dikirim sebagai Penyesuaian Persediaan Accurate dengan akun penyesuaian pilihan user
+export async function syncStockOpnameToAccurate(opnameId: string, glAccountId?: string): Promise<StockOpname> {
+  const { data } = await api.post<ApiResponse<StockOpname>>(`/stock-opnames/${opnameId}/sync`, glAccountId ? { glAccountId } : {});
   return data.data;
 }
 

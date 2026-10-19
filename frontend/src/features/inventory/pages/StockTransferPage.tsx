@@ -1,4 +1,4 @@
-import { useState, Fragment } from "react";
+import { useState, useRef, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeftRight, Check, CheckCircle, ExternalLink, Loader2, Plus,
@@ -41,7 +41,7 @@ const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   CANCELLED:  { label: "Dibatalkan", className: "text-red-700 border-red-300 bg-red-50" },
 };
 
-interface TransferItemLine { itemId: string; qty: number; itemName: string; }
+interface TransferItemLine { itemId: string; qty: number; itemName: string; unitName: string | null; }
 
 // ── Accurate sync mini-badge ──────────────────────────────────────────────────
 
@@ -188,6 +188,9 @@ export function StockTransferPage() {
                   onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
                   className="h-9 text-sm w-36" />
               </div>
+              {startDate && endDate && endDate < startDate && (
+            <span role="alert" className="self-center text-xs text-destructive">Tanggal akhir sebelum tanggal awal</span>
+          )}
               {(search || startDate || endDate) && (
                 <Button variant="ghost" size="sm" className="h-9 text-xs"
                   onClick={() => { setSearch(""); setStartDate(""); setEndDate(""); setPage(1); }}>
@@ -309,7 +312,7 @@ export function StockTransferPage() {
                                       <span className="font-medium">{item.item.name}</span>
                                       <span className="text-muted-foreground">·</span>
                                       <span className="font-semibold">
-                                        {Number(item.qty).toLocaleString("id-ID")} pcs
+                                        {Number(item.qty).toLocaleString("id-ID")} {item.item.defaultUnit?.name ?? ""}
                                       </span>
                                     </div>
                                   ))}
@@ -359,7 +362,7 @@ export function StockTransferPage() {
                             <div key={item.id}
                               className="flex items-center gap-1 bg-muted rounded px-2 py-0.5 text-xs">
                               <span>{item.item.name}</span>
-                              <span className="font-semibold">{Number(item.qty).toLocaleString("id-ID")}</span>
+                              <span className="font-semibold">{Number(item.qty).toLocaleString("id-ID")} {item.item.defaultUnit?.name ?? ""}</span>
                             </div>
                           ))}
                         </div>
@@ -581,7 +584,7 @@ function ReceiveDialog({
               <div key={it.itemId} className="space-y-1">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium">{it.item.name}</Label>
-                  <span className="text-xs text-muted-foreground">Dikirim: {sentQty}</span>
+                  <span className="text-xs text-muted-foreground">Dikirim: {sentQty.toLocaleString("id-ID")} {it.item.defaultUnit?.name ?? ""}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Input
@@ -643,6 +646,7 @@ function CreateTransferDialog({ onClose }: { onClose: () => void }) {
   });
 
   const createTransfer = useCreateStockTransfer();
+  const submittingRef  = useRef(false);
 
   function handleItemSearchChange(val: string) {
     setItemSearch(val);
@@ -653,9 +657,11 @@ function CreateTransferDialog({ onClose }: { onClose: () => void }) {
     setShowItemDrop(val.length >= 2);
   }
 
-  function selectItem(item: { id: string; name: string }) {
+  function selectItem(item: { id: string; name: string; itemUnits?: { isDefault: boolean; conversionFactor: string; unit: { name: string } }[] }) {
     if (lines.find((l) => l.itemId === item.id)) { setShowItemDrop(false); return; }
-    setLines((prev) => [...prev, { itemId: item.id, qty: 1, itemName: item.name }]);
+    // Qty transfer dalam satuan dasar item (faktor konversi 1)
+    const base = item.itemUnits?.find((u) => Number(u.conversionFactor) === 1) ?? item.itemUnits?.find((u) => u.isDefault);
+    setLines((prev) => [...prev, { itemId: item.id, qty: 1, itemName: item.name, unitName: base?.unit.name ?? null }]);
     setItemSearch(""); setDSearch(""); setShowItemDrop(false);
   }
 
@@ -673,6 +679,9 @@ function CreateTransferDialog({ onClose }: { onClose: () => void }) {
     if (sourceWarehouseId === destinationWarehouseId) return toast.error("Gudang asal dan tujuan tidak boleh sama");
     if (lines.length === 0)      return toast.error("Tambahkan minimal 1 item");
     if (lines.some((l) => !l.qty || l.qty <= 0)) return toast.error("Qty harus lebih dari 0");
+    // Cegah klik ganda membuat dua transfer
+    if (submittingRef.current || createTransfer.isPending) return;
+    submittingRef.current = true;
 
     createTransfer.mutate(
       {
@@ -685,6 +694,7 @@ function CreateTransferDialog({ onClose }: { onClose: () => void }) {
       {
         onSuccess: () => { toast.success("Transfer berhasil dibuat"); onClose(); },
         onError:   (e: Error) => toast.error(e.message),
+        onSettled: () => { submittingRef.current = false; },
       },
     );
   }
@@ -777,6 +787,7 @@ function CreateTransferDialog({ onClose }: { onClose: () => void }) {
                     <Input type="number" min={0.001} step={0.001} value={line.qty}
                       onChange={(e) => updateQty(line.itemId, parseFloat(e.target.value) || 0)}
                       className="h-7 w-24 text-right text-xs" />
+                    <span className="w-12 text-xs text-muted-foreground">{line.unitName ?? ""}</span>
                     <button type="button" onClick={() => removeLine(line.itemId)}
                       className="text-muted-foreground hover:text-destructive shrink-0">
                       <Trash2 className="h-3.5 w-3.5" />

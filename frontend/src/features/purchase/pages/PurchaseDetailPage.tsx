@@ -55,6 +55,7 @@ export function PurchaseDetailPage() {
   const canReturn = ["SUPER_ADMIN", "OWNER", "MANAGER", "INVENTORY"].includes(user?.roleCode ?? "");
 
   const { data: invoice, isLoading } = usePurchaseInvoice(id!);
+  const hasPostedReturn = (invoice?.returns ?? []).some((r) => r.status === "POSTED");
   const cancelMutation = useCancelPurchaseInvoice();
   const deleteMutation = useDeletePurchaseInvoice();
 
@@ -163,8 +164,9 @@ export function PurchaseDetailPage() {
                 </Button>
               )}
 
-              {/* Action buttons — hanya SUPER_ADMIN / OWNER */}
-              {canCancelDelete && (
+              {/* Action buttons — hanya SUPER_ADMIN / OWNER, dan tidak bila sudah ada retur POSTED
+                  (backend menolak batal/hapus faktur yang punya retur POSTED) */}
+              {canCancelDelete && !hasPostedReturn && (
                 <div className="flex flex-wrap gap-2 shrink-0">
                   {invoice.status === "POSTED" && (
                     <Button size="sm" variant="outline"

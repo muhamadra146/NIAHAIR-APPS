@@ -48,7 +48,7 @@ test('cancel: pembalikan memakai qty movement PURCHASE asli (−80), bukan qty d
     items: [{ id: 'pii1', itemId: 'i1', unitId: 'TUBE', qty: '1', price: '100', item: { itemType: 'INVENTORY' } }],
   });
   const tx = {
-    purchaseInvoice:   { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    purchaseInvoice:   { updateMany: jest.fn().mockResolvedValue({ count: 1 }), findUnique: jest.fn().mockResolvedValue({ accuratePurchaseInvoiceId: null }) },
     purchaseReturn:    { count: jest.fn().mockResolvedValue(0) },
     inventory:         { findUnique: jest.fn().mockResolvedValue({ id: 'inv1', qtyOnHand: '100', qtyReserved: '0' }), update: jest.fn() },
     inventoryMovement: { aggregate: jest.fn().mockResolvedValue({ _sum: { qtyChange: '80' } }), create: jest.fn() },

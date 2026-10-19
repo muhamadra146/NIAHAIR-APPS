@@ -17,6 +17,9 @@ const { processSyncQueue }   = require("../../workers/accurateSync.worker");
 const { validatePeriodOpen } = require("../inventory/inventory.period.service");
 const { accurateRequest }    = require("../accurate/accurate.client");
 const { toBaseQty }          = require("../inventory/inventory.conversion");
+const { assertUnitsBelongToItems } = require("../item/item.units");
+const { computeDocumentTax } = require("../../utils/tax");
+const { toDateStr, wibDateStr } = require("../../utils/date");
 
 const D = (v) => new Prisma.Decimal(String(v));
 
@@ -51,24 +54,26 @@ const getPurchaseInvoice = async (id) => {
   return invoice;
 };
 
-// ── Validasi satuan: unitId harus satuan milik item (G4-17) ─────────────────
-const assertUnitsBelongToItems = async (items) => {
-  const itemIds = [...new Set(items.map((i) => i.itemId))];
-  const rows = await prisma.item.findMany({
-    where:  { id: { in: itemIds } },
-    select: {
-      id: true, name: true, defaultUnitId: true, purchaseUnitId: true,
-      itemUnits: { select: { unitId: true } },
-    },
-  });
-  const byId = new Map(rows.map((r) => [r.id, r]));
+// ── Validasi baris & tanggal faktur ─────────────────────────────────────────
+// Satu item + satuan hanya boleh muncul sekali (qty digabung di satu baris).
+const assertNoDuplicateLines = (items) => {
+  const seen = new Set();
   for (const line of items) {
-    const it = byId.get(line.itemId);
-    if (!it) throw new AppError("Item tidak ditemukan", StatusCodes.UNPROCESSABLE_ENTITY);
-    const validUnits = new Set([it.defaultUnitId, it.purchaseUnitId, ...it.itemUnits.map((u) => u.unitId)]);
-    if (!validUnits.has(line.unitId)) {
-      throw new AppError(`Satuan tidak valid untuk item "${it.name}"`, StatusCodes.UNPROCESSABLE_ENTITY);
+    const key = `${line.itemId}|${line.unitId}`;
+    if (seen.has(key)) {
+      throw new AppError(
+        "Item yang sama dengan satuan yang sama muncul lebih dari sekali — gabungkan qty-nya dalam satu baris",
+        StatusCodes.UNPROCESSABLE_ENTITY,
+      );
     }
+    seen.add(key);
+  }
+};
+
+// Tanggal faktur pembelian tidak boleh di masa depan (kalender WIB)
+const assertNotFutureDate = (invoiceDate) => {
+  if (toDateStr(invoiceDate) > wibDateStr()) {
+    throw new AppError("Tanggal faktur tidak boleh melebihi hari ini", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 };
 
@@ -102,8 +107,6 @@ const computeItemSubtotal = (qty, price, discountPct) => {
   return gross.sub(discAmount);
 };
 
-const TAX_RATE = D("0.11"); // PPN 11%
-
 const computeTotals = (items, taxable = false, inclusiveTax = false) => {
   let subtotal      = D(0);
   let totalDiscount = D(0);
@@ -115,18 +118,13 @@ const computeTotals = (items, taxable = false, inclusiveTax = false) => {
   }
   const net = subtotal.sub(totalDiscount);
 
+  // PPN satu kali per dokumen, dibulatkan ke rupiah penuh — sama dengan Accurate dan faktur
+  // penjualan (utils/tax.js), sehingga total ERP == total faktur pembelian di Accurate.
   let totalTax   = D(0);
   let grandTotal = net;
   if (taxable) {
-    if (inclusiveTax) {
-      // PPN sudah termasuk dalam harga: tax = net * 11/111
-      totalTax   = net.mul(D(11)).div(D(111));
-      grandTotal = net;
-    } else {
-      // PPN ditambahkan di atas: tax = net * 11%
-      totalTax   = net.mul(TAX_RATE);
-      grandTotal = net.add(totalTax);
-    }
+    totalTax   = computeDocumentTax(net, inclusiveTax);
+    grandTotal = inclusiveTax ? net : net.add(totalTax);
   }
 
   return { subtotal, totalDiscount, totalTax, grandTotal };
@@ -145,6 +143,8 @@ const createPurchaseInvoice = async (body, createdByEmployeeId) => {
     throw new AppError("Gudang tujuan wajib dipilih", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
+  assertNotFutureDate(invoiceDate);
+  assertNoDuplicateLines(items);
   await validatePeriodOpen(invoiceDate);
   await assertUnitsBelongToItems(items);
 
@@ -302,7 +302,9 @@ const updatePurchaseInvoice = async (id, body) => {
   const effectiveTaxable      = taxable      ?? existing.taxable;
   const effectiveInclusiveTax = inclusiveTax ?? existing.inclusiveTax;
 
+  if (invoiceDate) assertNotFutureDate(invoiceDate);
   if (items) {
+    assertNoDuplicateLines(items);
     await assertUnitsBelongToItems(items);
     const mappedItems = items.map((item) => ({
       ...item,
@@ -332,9 +334,32 @@ const updatePurchaseInvoice = async (id, body) => {
   return findPurchaseInvoiceById(id);
 };
 
+// ── Hapus faktur di Accurate (retry-safe) ─────────────────────────────────────
+// Dipanggil DI DALAM transaksi ERP setelah guard status (baris faktur terkunci), sehingga
+// batal/hapus paralel mendapat 409 sebelum menyentuh Accurate, dan bila Accurate menolak
+// seluruh perubahan ERP di-rollback (ERP & Accurate tetap konsisten).
+// Bila dokumen sudah tidak ada di Accurate (mis. percobaan sebelumnya terhenti setelah
+// Accurate terhapus), dianggap sudah terhapus agar bisa diulang.
+const ACCURATE_TX_OPTIONS = { timeout: 60000, maxWait: 10000 };
+
+const deleteInAccurate = async (accurateId, verb) => {
+  let resp;
+  try {
+    resp = await accurateRequest("/purchase-invoice/delete.do", { method: "POST", body: { id: accurateId } });
+  } catch (err) {
+    throw new AppError(`Gagal menghubungi Accurate: ${err.message}`, StatusCodes.BAD_GATEWAY);
+  }
+  if (resp.s) return;
+  const detail = await accurateRequest(`/purchase-invoice/detail.do?id=${accurateId}`, { method: "GET" }).catch(() => null);
+  if (detail && detail.s === false) return; // sudah tidak ada di Accurate
+  const reason = Array.isArray(resp.d) ? resp.d.join("; ") : (resp.d ?? resp.e ?? "ditolak Accurate");
+  throw new AppError(`Tidak bisa ${verb} di Accurate: ${reason}`, StatusCodes.UNPROCESSABLE_ENTITY);
+};
+
 // ── Cancel ────────────────────────────────────────────────────────────────────
 // DRAFT  → cancel langsung (tidak ada inventory movement)
-// POSTED → (1) void di Accurate jika sudah sync, (2) balik inventory, (3) cancel status
+// POSTED → satu transaksi: (1) guard status POSTED → CANCELLED (409 bila paralel),
+//          (2) balik inventory, (3) void di Accurate — gagal di Accurate = rollback semua
 const cancelPurchaseInvoice = async (id) => {
   const invoice = await findPurchaseInvoiceById(id);
   if (!invoice) throw new AppError("Faktur pembelian tidak ditemukan", StatusCodes.NOT_FOUND);
@@ -346,39 +371,19 @@ const cancelPurchaseInvoice = async (id) => {
     await validatePeriodOpen(invoice.invoiceDate);
     await assertNoPostedReturns(prisma, id);
 
-    // Void di Accurate sebelum menyentuh data lokal
-    if (invoice.accuratePurchaseInvoiceId) {
-      let resp;
-      try {
-        resp = await accurateRequest("/purchase-invoice/delete.do", {
-          method: "POST",
-          body:   { id: invoice.accuratePurchaseInvoiceId },
-        });
-      } catch (err) {
-        throw new AppError(`Gagal menghubungi Accurate: ${err.message}`, StatusCodes.BAD_GATEWAY);
-      }
-      if (!resp.s) {
-        const reason = resp.d ?? resp.e ?? JSON.stringify(resp);
-        throw new AppError(`Tidak bisa void di Accurate: ${reason}`, StatusCodes.UNPROCESSABLE_ENTITY);
-      }
-    }
-
     await prisma.$transaction(async (tx) => {
       // Guard race condition: transisi bersyarat POSTED → CANCELLED (mengunci baris faktur),
       // lalu cek ulang retur POSTED di dalam transaksi.
       const { count } = await tx.purchaseInvoice.updateMany({
         where: { id, status: "POSTED" },
-        data:  {
-          status:                      "CANCELLED",
-          // Hapus referensi Accurate karena sudah di-void
-          accuratePurchaseInvoiceId:     null,
-          accuratePurchaseInvoiceNumber: null,
-        },
+        data:  { status: "CANCELLED" },
       });
       if (count === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
       await assertNoPostedReturns(tx, id);
-
-      // Balik setiap inventory movement yang dibuat saat posting
+      // Dibaca ulang setelah baris terkunci — sync worker mungkin baru saja mengisinya
+      const { accuratePurchaseInvoiceId } = await tx.purchaseInvoice.findUnique({
+        where: { id }, select: { accuratePurchaseInvoiceId: true },
+      });
       for (const item of invoice.items) {
         if (item.item.itemType !== "INVENTORY") continue;
 
@@ -419,7 +424,15 @@ const cancelPurchaseInvoice = async (id) => {
         });
       }
 
-    });
+      // Void di Accurate terakhir, setelah guard & pembalikan stok berhasil (B6)
+      if (accuratePurchaseInvoiceId) {
+        await deleteInAccurate(accuratePurchaseInvoiceId, "void");
+        await tx.purchaseInvoice.update({
+          where: { id },
+          data:  { accuratePurchaseInvoiceId: null, accuratePurchaseInvoiceNumber: null },
+        });
+      }
+    }, ACCURATE_TX_OPTIONS);
 
     return { invoiceId: id, cancelled: true };
   }
@@ -436,31 +449,8 @@ const deletePurchaseInvoice = async (id) => {
 
   if (invoice.status === "POSTED") await assertNoPostedReturns(prisma, id);
 
-  // Cek Accurate dulu sebelum menyentuh data lokal —
-  // jika sudah ada pembayaran di Accurate, delete ditolak dan kita block di sini.
-  if (invoice.accuratePurchaseInvoiceId) {
-    let resp;
-    try {
-      resp = await accurateRequest("/purchase-invoice/delete.do", {
-        method: "POST",
-        body:   { id: invoice.accuratePurchaseInvoiceId },
-      });
-    } catch (err) {
-      throw new AppError(
-        `Gagal menghubungi Accurate: ${err.message}`,
-        StatusCodes.BAD_GATEWAY,
-      );
-    }
-    if (!resp.s) {
-      const reason = resp.d ?? resp.e ?? JSON.stringify(resp);
-      throw new AppError(
-        `Tidak bisa hapus di Accurate: ${reason}`,
-        StatusCodes.UNPROCESSABLE_ENTITY,
-      );
-    }
-  }
-
-  // Accurate sudah hapus (atau belum tersinkron) — balik stok jika POSTED
+  // Guard status → balik stok (POSTED) → hapus di Accurate → hapus faktur, satu transaksi (B6).
+  // Accurate menolak (mis. sudah ada pembayaran) = rollback semua.
   if (invoice.status === "POSTED") {
     await validatePeriodOpen(invoice.invoiceDate);
 
@@ -470,6 +460,9 @@ const deletePurchaseInvoice = async (id) => {
       const { count } = await tx.purchaseInvoice.updateMany({ where: { id, status: "POSTED" }, data: { status: "POSTED" } });
       if (count === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
       await assertNoPostedReturns(tx, id);
+      const { accuratePurchaseInvoiceId } = await tx.purchaseInvoice.findUnique({
+        where: { id }, select: { accuratePurchaseInvoiceId: true },
+      });
 
       for (const item of invoice.items) {
         if (item.item.itemType !== "INVENTORY") continue;
@@ -511,12 +504,24 @@ const deletePurchaseInvoice = async (id) => {
         });
       }
 
+      if (accuratePurchaseInvoiceId) await deleteInAccurate(accuratePurchaseInvoiceId, "hapus");
+
       // Hapus invoice di dalam transaksi yang sama → atomic
       await tx.purchaseInvoice.delete({ where: { id } });
-    });
+    }, ACCURATE_TX_OPTIONS);
   } else {
-    // DRAFT atau CANCELLED — tidak ada reversal, hapus langsung
-    await prisma.purchaseInvoice.delete({ where: { id } });
+    // DRAFT atau CANCELLED — tidak ada reversal, hapus langsung (bersyarat status)
+    await prisma.$transaction(async (tx) => {
+      const { count } = await tx.purchaseInvoice.updateMany({
+        where: { id, status: invoice.status }, data: { status: invoice.status },
+      });
+      if (count === 0) throw new AppError("Dokumen sudah diproses", StatusCodes.CONFLICT);
+      const { accuratePurchaseInvoiceId } = await tx.purchaseInvoice.findUnique({
+        where: { id }, select: { accuratePurchaseInvoiceId: true },
+      });
+      if (accuratePurchaseInvoiceId) await deleteInAccurate(accuratePurchaseInvoiceId, "hapus");
+      await tx.purchaseInvoice.delete({ where: { id } });
+    }, ACCURATE_TX_OPTIONS);
   }
 
   return { invoiceId: id, deleted: true };

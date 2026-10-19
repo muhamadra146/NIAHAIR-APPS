@@ -15,6 +15,7 @@ import {
 } from "../hooks";
 import type { PurchaseReturnStatus } from "../types";
 import { WIB_TZ } from "@/lib/utils";
+import { useAuthStore } from "@/stores/authStore";
 
 const STATUS_LABEL: Record<PurchaseReturnStatus, string> = {
   DRAFT:     "Draft",
@@ -56,6 +57,7 @@ function ConfirmDialog({ open, title, description, confirmLabel = "Ya, lanjutkan
 export function PurchaseReturnDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
 
   const { data: ret, isLoading, isError, refetch } = usePurchaseReturn(id!);
   const postMutation   = usePostPurchaseReturn();
@@ -98,6 +100,11 @@ export function PurchaseReturnDetailPage() {
 
   const isDraft     = ret.status === "DRAFT";
   const isPosted    = ret.status === "POSTED";
+  const isCancelled = ret.status === "CANCELLED";
+  const role        = user?.roleCode ?? "";
+  // Sesuai backend purchaseReturn.route: WRITE_ROLES posting/batal, ADMIN_ROLES hapus & sync
+  const canWrite    = ["SUPER_ADMIN", "OWNER", "MANAGER", "INVENTORY"].includes(role);
+  const canAdmin    = ["SUPER_ADMIN", "OWNER"].includes(role);
 
   return (
     <PageContainer>
@@ -121,7 +128,7 @@ export function PurchaseReturnDetailPage() {
           <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
-          {isDraft && (
+          {isDraft && canWrite && (
             <>
               <Button size="sm" onClick={() => setConfirmPost(true)} className="gap-1.5">
                 <CheckCircle className="h-4 w-4" />
@@ -131,13 +138,15 @@ export function PurchaseReturnDetailPage() {
                 <XCircle className="h-4 w-4" />
                 Batalkan
               </Button>
-              <Button variant="destructive" size="sm" onClick={() => setConfirmDelete(true)} className="gap-1.5">
-                <Trash2 className="h-4 w-4" />
-                Hapus
-              </Button>
             </>
           )}
-          {isPosted && !ret.lastSyncAt && (
+          {(isDraft || isCancelled) && canAdmin && (
+            <Button variant="destructive" size="sm" onClick={() => setConfirmDelete(true)} className="gap-1.5">
+              <Trash2 className="h-4 w-4" />
+              Hapus
+            </Button>
+          )}
+          {isPosted && !ret.lastSyncAt && canAdmin && (
             <Button variant="outline" size="sm" onClick={() => syncMutation.mutate(id!)} disabled={syncMutation.isPending} className="gap-1.5">
               {syncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Sync Accurate

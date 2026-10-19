@@ -43,6 +43,20 @@ const STATUS_VARIANT: Record<StockTransferStatus, "default" | "secondary" | "des
 
 // ── Status Timeline ───────────────────────────────────────────────────────────
 
+// Total qty per satuan — qty transfer dalam satuan dasar item, satuan bisa berbeda antar baris.
+// Menjumlahkan GRAM + PCS menjadi satu angka menyesatkan, jadi dikelompokkan per satuan.
+function totalsByUnit(items: StockTransfer["items"], pick: (it: StockTransfer["items"][number]) => number | null): string {
+  const map = new Map<string, number>();
+  for (const it of items) {
+    const v = pick(it);
+    if (v == null) continue;
+    const unit = it.item.defaultUnit?.name ?? "";
+    map.set(unit, (map.get(unit) ?? 0) + v);
+  }
+  if (map.size === 0) return "—";
+  return [...map.entries()].map(([u, q]) => `${q.toLocaleString("id-ID")}${u ? ` ${u}` : ""}`).join(" · ");
+}
+
 function StatusTimeline({ status, createdAt }: { status: StockTransferStatus; createdAt: string }) {
   if (status === "CANCELLED") {
     return (
@@ -288,6 +302,7 @@ function PrintSuratJalan({ transfer }: { transfer: StockTransfer }) {
             <th style={{ border: "1px solid #bbb", padding: "6px 8px", textAlign: "left" }}>Nama Barang</th>
             <th style={{ border: "1px solid #bbb", padding: "6px 8px", textAlign: "left", width: "100px" }}>Kode</th>
             <th style={{ border: "1px solid #bbb", padding: "6px 8px", textAlign: "right", width: "80px" }}>Qty Kirim</th>
+            <th style={{ border: "1px solid #bbb", padding: "6px 8px", textAlign: "left", width: "60px" }}>Satuan</th>
             {isReceived && (
               <th style={{ border: "1px solid #bbb", padding: "6px 8px", textAlign: "right", width: "90px" }}>Qty Terima</th>
             )}
@@ -307,6 +322,7 @@ function PrintSuratJalan({ transfer }: { transfer: StockTransfer }) {
                 <td style={{ border: "1px solid #bbb", padding: "5px 8px", textAlign: "right" }}>
                   {sentQty.toLocaleString("id-ID")}
                 </td>
+                <td style={{ border: "1px solid #bbb", padding: "5px 8px" }}>{item.item.defaultUnit?.name ?? "-"}</td>
                 {isReceived && (
                   <td style={{ border: "1px solid #bbb", padding: "5px 8px", textAlign: "right" }}>
                     {receivedQty != null ? (
@@ -324,16 +340,11 @@ function PrintSuratJalan({ transfer }: { transfer: StockTransfer }) {
         </tbody>
         <tfoot>
           <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
-            <td colSpan={isReceived ? 3 : 3} style={{ border: "1px solid #bbb", padding: "5px 8px", textAlign: "right" }}>Total Item</td>
-            <td style={{ border: "1px solid #bbb", padding: "5px 8px", textAlign: "right" }}>
-              {transfer.items.reduce((s, it) => s + Number(it.qty), 0).toLocaleString("id-ID")}
+            <td colSpan={3} style={{ border: "1px solid #bbb", padding: "5px 8px", textAlign: "right" }}>Jumlah Baris</td>
+            <td colSpan={isReceived ? 4 : 3} style={{ border: "1px solid #bbb", padding: "5px 8px" }}>
+              {transfer.items.length} baris — kirim: {totalsByUnit(transfer.items, (it) => Number(it.qty))}
+              {isReceived && ` · terima: ${totalsByUnit(transfer.items, (it) => it.receivedQty != null ? Number(it.receivedQty) : null)}`}
             </td>
-            {isReceived && (
-              <td style={{ border: "1px solid #bbb", padding: "5px 8px", textAlign: "right" }}>
-                {transfer.items.reduce((s, it) => s + (it.receivedQty != null ? Number(it.receivedQty) : 0), 0).toLocaleString("id-ID")}
-              </td>
-            )}
-            <td style={{ border: "1px solid #bbb", padding: "5px 8px" }}></td>
           </tr>
         </tfoot>
       </table>
@@ -589,6 +600,7 @@ export function StockTransferDetailPage() {
                       <th className="text-left px-4 py-3 font-medium">Barang</th>
                       <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">Kode</th>
                       <th className="text-right px-4 py-3 font-medium">Qty Kirim</th>
+                      <th className="text-left px-4 py-3 font-medium">Satuan</th>
                       {transfer.status === "RECEIVED" && (
                         <th className="text-right px-4 py-3 font-medium">Qty Diterima</th>
                       )}
@@ -614,6 +626,7 @@ export function StockTransferDetailPage() {
                           <td className="px-4 py-3 text-right font-mono">
                             {sentQty.toLocaleString("id-ID")}
                           </td>
+                          <td className="px-4 py-3 text-muted-foreground text-xs">{item.item.defaultUnit?.name ?? "—"}</td>
                           {transfer.status === "RECEIVED" && (
                             <td className="px-4 py-3 text-right font-mono">
                               {receivedQty != null ? receivedQty.toLocaleString("id-ID") : "—"}
@@ -638,12 +651,12 @@ export function StockTransferDetailPage() {
                       <td className="px-4 py-2 text-xs text-muted-foreground" colSpan={transfer.status === "RECEIVED" ? 2 : 2}>
                         Total
                       </td>
-                      <td className="px-4 py-2 text-right font-mono text-sm">
-                        {transfer.items.reduce((s, it) => s + Number(it.qty), 0).toLocaleString("id-ID")}
+                      <td className="px-4 py-2 text-right font-mono text-xs" colSpan={2}>
+                        {totalsByUnit(transfer.items, (it) => Number(it.qty))}
                       </td>
                       {transfer.status === "RECEIVED" && (
-                        <td className="px-4 py-2 text-right font-mono text-sm">
-                          {transfer.items.reduce((s, it) => s + (it.receivedQty != null ? Number(it.receivedQty) : 0), 0).toLocaleString("id-ID")}
+                        <td className="px-4 py-2 text-right font-mono text-xs">
+                          {totalsByUnit(transfer.items, (it) => it.receivedQty != null ? Number(it.receivedQty) : null)}
                         </td>
                       )}
                       {transfer.status === "RECEIVED" && <td />}
@@ -770,14 +783,14 @@ export function StockTransferDetailPage() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Total Qty Kirim</span>
                 <span className="font-mono font-medium">
-                  {transfer.items.reduce((s, it) => s + Number(it.qty), 0).toLocaleString("id-ID")}
+                  {totalsByUnit(transfer.items, (it) => Number(it.qty))}
                 </span>
               </div>
               {transfer.status === "RECEIVED" && (
                 <div className="flex justify-between border-t pt-2">
                   <span className="text-muted-foreground">Total Qty Terima</span>
                   <span className="font-mono font-medium text-green-600">
-                    {transfer.items.reduce((s, it) => s + (it.receivedQty != null ? Number(it.receivedQty) : 0), 0).toLocaleString("id-ID")}
+                    {totalsByUnit(transfer.items, (it) => it.receivedQty != null ? Number(it.receivedQty) : null)}
                   </span>
                 </div>
               )}

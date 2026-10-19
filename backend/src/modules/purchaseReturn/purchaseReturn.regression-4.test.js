@@ -11,6 +11,10 @@ jest.mock('../../config/prisma', () => ({
   purchaseReturn:     { findFirst: jest.fn().mockResolvedValue(null) },
   purchaseReturnItem: { findMany: jest.fn().mockResolvedValue([]) },
   itemUnit:           { findUnique: jest.fn().mockResolvedValue(null) },
+  item:               {
+    findMany:   jest.fn(({ where }) => Promise.resolve(where.id.in.map((id) => ({ id, name: id, defaultUnitId: 'u1', purchaseUnitId: null, itemUnits: [] })))),
+    findUnique: jest.fn(({ where }) => Promise.resolve({ name: where.id, defaultUnitId: 'u1' })),
+  },
   $transaction:       jest.fn(),
 }));
 

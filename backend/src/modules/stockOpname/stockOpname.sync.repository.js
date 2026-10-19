@@ -30,6 +30,9 @@ const findOpnameForSync = async (id) => {
           qtySystem:     true,
           qtyActual:     true,
           qtyDifference: true,
+          inventoryMovement: {
+            select: { id: true, qtyChange: true, accurateAdjustmentId: true },
+          },
           inventory: {
             select: {
               id:   true,
@@ -56,7 +59,7 @@ const findOpnameForSync = async (id) => {
 
   // Field Accurate sync via raw query (belum ada di Prisma client)
   const [syncRow] = await prisma.$queryRawUnsafe(
-    `SELECT "accurateOrderId", "accurateResultId"
+    `SELECT "accurateOrderId", "accurateResultId", "accurateResultNumber", "lastSyncAt"
      FROM   "stock_opnames"
      WHERE  id = $1`,
     id,
@@ -65,31 +68,74 @@ const findOpnameForSync = async (id) => {
   return { ...opname, ...(syncRow ?? {}) };
 };
 
-// ── Write — simpan ID Perintah Stok Opname setelah berhasil sync ─────────────
-const markOpnameOrderSynced = ({ id, accurateOrderId, accurateOrderNumber }) =>
-  prisma.$executeRawUnsafe(
-    `UPDATE "stock_opnames"
-     SET    "accurateOrderId"     = $1,
-            "accurateOrderNumber" = $2,
-            "lastSyncAt"          = (NOW() AT TIME ZONE 'UTC')
-     WHERE  id = $3`,
-    accurateOrderId,
-    accurateOrderNumber ?? null,
+// ── Write — simpan Penyesuaian Persediaan hasil opname (keputusan owner 2026-10-19) ──
+// Kolom accurateResultId/Number dipakai untuk ID/nomor dokumen Penyesuaian Persediaan
+// (tanpa perubahan skema); setiap movement opname ditautkan ke dokumen yang sama.
+const markOpnameAdjustmentSynced = async ({ id, accurateAdjustmentId, accurateAdjustmentNumber, movementIds, glAccountId }, client = prisma) => {
+  await client.$executeRawUnsafe(
+      `UPDATE "stock_opnames"
+       SET    "accurateResultId"     = $1,
+              "accurateResultNumber" = $2,
+              "lastSyncAt"           = (NOW() AT TIME ZONE 'UTC')
+       WHERE  id = $3`,
+      accurateAdjustmentId,
+      accurateAdjustmentNumber ?? null,
+      id,
+  );
+  await client.inventoryMovement.updateMany({
+    where: { id: { in: movementIds } },
+    data:  { accurateAdjustmentId, glAccountId },
+  });
+};
+
+// ── Lock — cegah dua sinkron paralel membuat dua dokumen Accurate ───────────
+// Advisory lock transaksi (lepas otomatis saat transaksi selesai). false = sedang dipakai.
+const tryLockOpnameSync = async (id, client) => {
+  const [row] = await client.$queryRawUnsafe(
+    `SELECT pg_try_advisory_xact_lock(hashtext($1)) AS locked`,
+    `stock_opname_sync:${id}`,
+  );
+  return row?.locked === true;
+};
+
+// ── Read — ID dokumen Accurate terkini (dibaca ulang setelah lock) ────────────
+const findOpnameAccurateResultId = async (id, client = prisma) => {
+  const [row] = await client.$queryRawUnsafe(
+    `SELECT "accurateResultId" FROM "stock_opnames" WHERE id = $1`,
+    id,
+  );
+  return row?.accurateResultId ?? null;
+};
+
+// ── Write — opname tanpa selisih: tidak ada dokumen Accurate, cukup tandai sudah dicek ──
+const markOpnameNoDifference = (id, client = prisma) =>
+  client.$executeRawUnsafe(
+    `UPDATE "stock_opnames" SET "lastSyncAt" = (NOW() AT TIME ZONE 'UTC') WHERE id = $1`,
     id,
   );
 
-// ── Write — simpan ID Hasil Stok Opname setelah berhasil sync ────────────────
-const markOpnameResultSynced = ({ id, accurateResultId, accurateResultNumber }) =>
-  prisma.$executeRawUnsafe(
-    `UPDATE "stock_opnames"
-     SET    "accurateResultId"     = $1,
-            "accurateResultNumber" = $2,
-            "lastSyncAt"           = (NOW() AT TIME ZONE 'UTC')
-     WHERE  id = $3`,
-    accurateResultId,
-    accurateResultNumber ?? null,
-    id,
-  );
+// ── Read — akun penyesuaian aktif yang sudah terhubung ke Accurate ───────────
+const findAdjustmentGlAccounts = () =>
+  prisma.glAccount.findMany({
+    where:  { usage: "STOCK_ADJUSTMENT", isActive: true, accurateGlAccountId: { not: null } },
+    select: { id: true, number: true, name: true, accurateGlAccountId: true },
+  });
+
+const findGlAccountById = (id) =>
+  prisma.glAccount.findUnique({
+    where:  { id },
+    select: { id: true, number: true, name: true, usage: true, isActive: true, accurateGlAccountId: true },
+  });
+
+// ── Read — harga pokok terakhir per item (satuan dasar), sama dengan penyesuaian manual ──
+const findCostPrice = async (itemId, unitId) => {
+  const row = await prisma.itemPrice.findFirst({
+    where:   { itemId, unitId, isActive: true },
+    orderBy: { effectiveDate: "desc" },
+    select:  { costPrice: true },
+  });
+  return row?.costPrice ? Number(row.costPrice) : 0;
+};
 
 // ── Read — ambil sync status ringkas (untuk badge di list/detail) ─────────────
 const findSyncStatus = async (id) => {
@@ -125,8 +171,13 @@ const findSyncStatusBatch = async (ids) => {
 
 module.exports = {
   findOpnameForSync,
-  markOpnameOrderSynced,
-  markOpnameResultSynced,
+  markOpnameAdjustmentSynced,
+  markOpnameNoDifference,
+  tryLockOpnameSync,
+  findOpnameAccurateResultId,
+  findAdjustmentGlAccounts,
+  findGlAccountById,
+  findCostPrice,
   findSyncStatus,
   findSyncStatusBatch,
 };

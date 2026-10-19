@@ -8,6 +8,16 @@ const { mapAdjustmentToAccurate }  = require("./inventory.adjustment.sync.mapper
 
 const ACCURATE_ITEM_ADJUSTMENT_SAVE = "/item-adjustment/save.do";
 
+// Pesan singkat berbahasa Indonesia dari respons Accurate (bukan JSON mentah) — B4.
+// Respons lengkap tetap dicatat di log.
+const accurateReason = (response) => {
+  const d = response?.d;
+  const text = Array.isArray(d) ? d.filter(Boolean).join("; ") : (typeof d === "string" ? d : "");
+  const clean = text.replace(/<[^>]*>/g, "").trim();
+  if (!clean) return "Accurate menolak dokumen";
+  return clean.length > 200 ? `${clean.slice(0, 200)}…` : clean;
+};
+
 const pushAdjustmentToAccurate = async (movementId) => {
   const movement = await prisma.inventoryMovement.findUnique({
     where:  { id: movementId },
@@ -42,7 +52,7 @@ const pushAdjustmentToAccurate = async (movementId) => {
     },
   });
 
-  if (!movement) throw new AppError("Movement not found", StatusCodes.NOT_FOUND);
+  if (!movement) throw new AppError("Mutasi stok tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // Idempotency — skip if already pushed
   if (movement.accurateAdjustmentId) {
@@ -111,10 +121,8 @@ const pushAdjustmentToAccurate = async (movementId) => {
   });
 
   if (!response.s || !response.r?.id) {
-    throw new AppError(
-      `Accurate API error: ${JSON.stringify(response)}`,
-      StatusCodes.BAD_GATEWAY
-    );
+    logger.error("[adjustment sync] Accurate menolak:", JSON.stringify(response));
+    throw new AppError(accurateReason(response), StatusCodes.BAD_GATEWAY);
   }
 
   const accurateAdjustmentId = response.r.id;
@@ -129,4 +137,4 @@ const pushAdjustmentToAccurate = async (movementId) => {
   return { synced: true, accurateAdjustmentId };
 };
 
-module.exports = { pushAdjustmentToAccurate };
+module.exports = { pushAdjustmentToAccurate, accurateReason, ACCURATE_ITEM_ADJUSTMENT_SAVE };

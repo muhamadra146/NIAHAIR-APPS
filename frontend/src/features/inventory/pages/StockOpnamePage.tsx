@@ -20,8 +20,9 @@ import {
   useInventoryPeriods, useClosePeriod, useReopenPeriod,
   useStockOpnames, useStockOpname, useCreateStockOpname,
   useUpdateOpnameItems, usePostStockOpname, useCancelStockOpname,
-  useDeleteStockOpname, useSyncStockOpnameToAccurate,
+  useDeleteStockOpname, useSyncStockOpnameToAccurate, useGlAccounts,
 } from "../hooks";
+import { SimpleSelect } from "@/components/ui/simple-select";
 import { useWarehouses } from "@/features/settings/hooks";
 import type { InventoryPeriod, StockOpnameItemRow, StockOpnameStatus, UpdateOpnameItemInput } from "../types";
 import { WIB_TZ, wibDateParts } from "@/lib/utils";
@@ -206,6 +207,10 @@ function OpnameTab() {
                             <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 gap-1">
                               <Link2 className="h-3 w-3" /> Tersinkron
                             </Badge>
+                          ) : opname.lastSyncAt ? (
+                            <Badge variant="outline" className="text-xs text-muted-foreground gap-1" title="Tidak ada selisih — tidak perlu dokumen Accurate">
+                              Tanpa selisih
+                            </Badge>
                           ) : (
                             <Badge variant="outline" className="text-xs text-muted-foreground gap-1">
                               Belum Sync
@@ -372,6 +377,7 @@ function OpnameDetailDialog({ opnameId, onClose }: { opnameId: string; onClose: 
   const cancelMut  = useCancelStockOpname();
   const deleteMut  = useDeleteStockOpname();
   const syncMut    = useSyncStockOpnameToAccurate();
+  const [showSync, setShowSync] = useState(false);
 
   function setItemEdit(id: string, field: "qtyActual" | "notes", val: string) {
     setEditedItems((prev) => ({
@@ -482,8 +488,10 @@ function OpnameDetailDialog({ opnameId, onClose }: { opnameId: string; onClose: 
                     {opname.accurateResultId ? (
                       <span className="text-xs text-blue-700 font-medium flex items-center gap-1">
                         <Link2 className="h-3 w-3" />
-                        Tersinkron · {opname.accurateOrderNumber ?? "—"} / {opname.accurateResultNumber ?? "—"}
+                        Tersinkron · Penyesuaian Persediaan {opname.accurateResultNumber ?? "—"}
                       </span>
+                    ) : opname.lastSyncAt ? (
+                      <span className="text-xs text-muted-foreground">Tidak ada selisih — tidak perlu dokumen Accurate</span>
                     ) : (
                       <span className="text-xs text-muted-foreground">Belum disinkronkan</span>
                     )}
@@ -668,19 +676,18 @@ function OpnameDetailDialog({ opnameId, onClose }: { opnameId: string; onClose: 
               )}
 
               {/* Tombol Sync ke Accurate — hanya saat POSTED dan user adalah MANAGEMENT */}
-              {opname.status === "POSTED" && canManage && (
+              {opname.status === "POSTED" && canManage && !opname.accurateResultId && !opname.lastSyncAt && (
                 <Button
                   size="sm"
-                  variant={opname.accurateResultId ? "outline" : "default"}
                   className="gap-1.5"
-                  onClick={() => syncMut.mutate(opname.id)}
+                  onClick={() => setShowSync(true)}
                   disabled={syncMut.isPending}
-                  title={opname.accurateResultId ? "Sudah tersinkron — klik untuk sync ulang" : "Sinkronkan ke Accurate Online"}
+                  title="Kirim selisih opname ke Accurate sebagai Penyesuaian Persediaan"
                 >
                   {syncMut.isPending
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     : <Link2 className="h-3.5 w-3.5" />}
-                  {opname.accurateResultId ? "Sync Ulang" : "Sync ke Accurate"}
+                  Sync ke Accurate
                 </Button>
               )}
             </>
@@ -756,11 +763,69 @@ function OpnameDetailDialog({ opnameId, onClose }: { opnameId: string; onClose: 
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Sync ke Accurate — pilih akun penyesuaian */}
+      {showSync && opname && (
+        <SyncOpnameDialog
+          opnameId={opname.id}
+          opnameNo={opname.opnameNo}
+          isPending={syncMut.isPending}
+          onSubmit={(v) => syncMut.mutate(v, { onSuccess: () => setShowSync(false) })}
+          onClose={() => setShowSync(false)}
+        />
+      )}
     </Dialog>
   );
 }
 
 // ── Periode Tab ───────────────────────────────────────────────────────────────
+
+// ── Sync opname → Penyesuaian Persediaan Accurate (keputusan owner 2026-10-19) ──
+// Tidak membuat Perintah Stok Opname (mengunci gudang di Accurate). User memilih akun
+// penyesuaian; bila hanya ada satu akun, otomatis terpilih.
+function SyncOpnameDialog({ opnameId, opnameNo, isPending, onSubmit, onClose }: {
+  opnameId: string; opnameNo: string; isPending: boolean;
+  onSubmit: (v: { opnameId: string; glAccountId?: string }) => void; onClose: () => void;
+}) {
+  const { data: glAccounts = [], isLoading } = useGlAccounts({ usage: "STOCK_ADJUSTMENT" });
+  const [glAccountId, setGlAccount] = useState("");
+  const effective = glAccountId || (glAccounts.length === 1 ? glAccounts[0].id : "");
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o && !isPending) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Sync Opname {opnameNo} ke Accurate</DialogTitle></DialogHeader>
+        <div className="space-y-3 py-1 text-sm">
+          <p className="text-muted-foreground">
+            Selisih hasil hitung fisik dikirim sebagai satu dokumen <strong>Penyesuaian Persediaan</strong> di Accurate
+            (barang lebih = penambahan, barang kurang = pengurangan).
+          </p>
+          <div className="space-y-1.5">
+            <Label className="text-sm">Akun Penyesuaian <span className="text-destructive">*</span></Label>
+            <SimpleSelect
+              value={effective}
+              onChange={setGlAccount}
+              placeholder={isLoading ? "Memuat akun..." : "— Pilih akun penyesuaian —"}
+              searchable
+              searchPlaceholder="Cari nama atau nomor akun..."
+              options={glAccounts.map((a) => ({ value: a.id, label: a.number ? `[${a.number}] ${a.name}` : a.name }))}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isPending}>Batal</Button>
+          <Button
+            onClick={() => onSubmit({ opnameId, glAccountId: effective || undefined })}
+            disabled={isPending || !effective}
+            className="gap-1.5"
+          >
+            {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Kirim ke Accurate
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function ConfirmDialog({ open, action, period, isPending, onConfirm, onCancel }: {
   open: boolean; action: "close" | "reopen"; period: { year: number; month: number } | null;

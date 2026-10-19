@@ -142,6 +142,9 @@ export function ProductionListPage() {
             className="w-36 h-9 text-sm"
             placeholder="Sampai tanggal"
           />
+          {filterStartDate && filterEndDate && filterEndDate < filterStartDate && (
+            <span role="alert" className="self-center text-xs text-destructive">Tanggal akhir sebelum tanggal awal</span>
+          )}
           {hasFilter && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-muted-foreground">
               <X className="h-4 w-4" />

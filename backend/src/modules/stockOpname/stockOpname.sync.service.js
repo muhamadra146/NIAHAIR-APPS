@@ -1,157 +1,135 @@
 ﻿const logger = require('../../utils/logger');
 // ── Accurate Sync — Stock Opname ──────────────────────────────────────────────
 //
-// Alur 2 dokumen di Accurate Online:
-//   1. Perintah Stok Opname  → stock-opname-order/save.do
-//   2. Hasil Stok Opname     → stock-opname-result/save.do
-//      (hanya item yang ada selisih qtyDifference ≠ 0)
+// Keputusan owner 2026-10-19 (INV-014): hasil opname dikirim ke Accurate sebagai SATU
+// dokumen Penyesuaian Persediaan (Item Adjustment, /item-adjustment/save.do) — jalur yang
+// sama dengan penyesuaian stok manual. TIDAK membuat Perintah Stok Opname (mengunci seluruh
+// gudang di Accurate) maupun Hasil Stok Opname (user API tidak berhak).
 //
-// Idempotency:
-//   - Jika accurateOrderId sudah ada → skip Perintah, lanjut ke Hasil
-//   - Jika accurateResultId sudah ada → skip Hasil, return skipped
+//   - Hanya baris yang punya movement penyesuaian (selisih ≠ 0) yang dikirim.
+//   - Akun penyesuaian (glAccountId) dipilih user; bila hanya ada satu akun penyesuaian
+//     aktif yang terhubung ke Accurate, akun itu dipakai otomatis.
+//   - Opname tanpa selisih tidak membuat dokumen Accurate (ditandai sudah dicek).
 //
-const { StatusCodes }                         = require("http-status-codes");
-const AppError                                = require("../../common/errors/AppError");
-const { accurateRequest }                     = require("../accurate/accurate.client");
-const { getAccurateBranchId }                 = require("../branch/branch.repository");
-const { mapOpnameOrderToAccurate,
-        mapOpnameResultToAccurate }           = require("./stockOpname.sync.mapper");
-const {
-  findOpnameForSync,
-  markOpnameOrderSynced,
-  markOpnameResultSynced,
-} = require("./stockOpname.sync.repository");
+// Idempotency: accurateResultId (ID dokumen penyesuaian) sudah ada → skip.
+// Paralel: advisory lock per opname di dalam transaksi → sinkron kedua mendapat 409.
+//
+const { StatusCodes }             = require("http-status-codes");
+const AppError                    = require("../../common/errors/AppError");
+const prisma                      = require("../../config/prisma");
+const { accurateRequest }         = require("../accurate/accurate.client");
+const { getAccurateBranchId }     = require("../branch/branch.repository");
+const { accurateReason, ACCURATE_ITEM_ADJUSTMENT_SAVE } = require("../inventory/inventory.adjustment.sync.service");
+const { mapOpnameToItemAdjustment } = require("./stockOpname.sync.mapper");
+const repo                        = require("./stockOpname.sync.repository");
 
-// Error validasi / respon Accurate → 422 dengan pesan Accurate (bukan 500) — G4-15
+// Error validasi / respon Accurate → 422 dengan pesan jelas (bukan 500) — G4-15
 const fail = (message) => new AppError(message, StatusCodes.UNPROCESSABLE_ENTITY);
 
-// Ekstrak pesan error dari respons Accurate — bisa berupa array atau string
-const extractAccurateError = (response) => {
-  if (Array.isArray(response?.d) && response.d.length > 0) return response.d.join("; ");
-  if (typeof response?.d === "string" && response.d)       return response.d;
-  if (typeof response?.m === "string" && response.m)       return response.m;
-  return JSON.stringify(response);
-};
-
-const ACCURATE_ORDER_SAVE  = "/stock-opname-order/save.do";
-const ACCURATE_RESULT_SAVE = "/stock-opname-result/save.do";
-
-// ── Langkah 1: Buat Perintah Stok Opname ─────────────────────────────────────
-const syncOpnameOrderToAccurate = async (opname, accurateBranchId) => {
-  // Idempotency: sudah ada → return ID yang ada
-  if (opname.accurateOrderId) {
-    logger.info(`[opname sync] Perintah already synced orderId=${opname.accurateOrderId}`);
-    return opname.accurateOrderId;
+// ── Pilih akun penyesuaian ───────────────────────────────────────────────────
+const resolveGlAccount = async (glAccountId) => {
+  if (glAccountId) {
+    const gl = await repo.findGlAccountById(glAccountId);
+    if (!gl || !gl.isActive) throw fail("Akun penyesuaian tidak ditemukan atau tidak aktif");
+    if (gl.usage !== "STOCK_ADJUSTMENT") throw fail("Akun yang dipilih bukan akun penyesuaian stok");
+    if (!gl.accurateGlAccountId) throw fail("Akun penyesuaian belum tersinkron ke Accurate");
+    return gl;
   }
-
-  const payload = mapOpnameOrderToAccurate(opname, accurateBranchId);
-  logger.info("[opname sync] Perintah payload", JSON.stringify(payload));
-
-  const response = await accurateRequest(ACCURATE_ORDER_SAVE, {
-    method: "POST",
-    body:   payload,
-  });
-
-  logger.info("[opname sync] Perintah response", JSON.stringify(response));
-
-  if (!response.s || !response.r?.id) {
-    throw fail(`Gagal membuat Perintah Stok Opname di Accurate: ${extractAccurateError(response)}`);
-  }
-
-  const accurateOrderId     = response.r.id;
-  const accurateOrderNumber = response.r.number ?? response.r.no ?? null;
-
-  await markOpnameOrderSynced({ id: opname.id, accurateOrderId, accurateOrderNumber });
-  logger.info(`[opname sync] Perintah saved orderId=${accurateOrderId} number=${accurateOrderNumber}`);
-
-  return accurateOrderId;
-};
-
-// ── Langkah 2: Buat Hasil Stok Opname ────────────────────────────────────────
-const syncOpnameResultToAccurate = async (opname, accurateOrderId, accurateBranchId) => {
-  // Idempotency: sudah ada → skip
-  if (opname.accurateResultId) {
-    logger.info(`[opname sync] Hasil already synced resultId=${opname.accurateResultId}`);
-    return { skipped: true, reason: "Hasil already synced" };
-  }
-
-  // Hanya item yang ada selisih (qtyDifference != null && != 0)
-  const itemsWithDiff = opname.items.filter((item) => {
-    if (item.qtyDifference === null || item.qtyDifference === undefined) return false;
-    return Number(item.qtyDifference) !== 0;
-  });
-
-  if (itemsWithDiff.length === 0) {
-    logger.info("[opname sync] Tidak ada item dengan selisih — Hasil SO tidak dibuat");
-    return { skipped: true, reason: "No items with difference" };
-  }
-
-  // Validasi setiap item yang punya selisih
-  for (const item of itemsWithDiff) {
-    const it = item.inventory?.item;
-    if (!it?.accurateItemId) {
-      throw fail(
-        `Item belum terhubung ke Accurate: ${it?.itemCode ?? item.id}. Sync item terlebih dahulu.`
-      );
-    }
-    if (!it?.defaultUnit?.accurateUnitId) {
-      throw fail(
-        `Satuan item belum terhubung ke Accurate: ${it?.itemCode ?? item.id}. Sync satuan terlebih dahulu.`
-      );
-    }
-  }
-
-  const payload = mapOpnameResultToAccurate(opname, accurateOrderId, itemsWithDiff, accurateBranchId);
-  logger.info("[opname sync] Hasil payload", JSON.stringify(payload));
-
-  const response = await accurateRequest(ACCURATE_RESULT_SAVE, {
-    method: "POST",
-    body:   payload,
-  });
-
-  logger.info("[opname sync] Hasil response", JSON.stringify(response));
-
-  if (!response.s || !response.r?.id) {
-    throw fail(`Gagal membuat Hasil Stok Opname di Accurate: ${extractAccurateError(response)}`);
-  }
-
-  const accurateResultId     = response.r.id;
-  const accurateResultNumber = response.r.number ?? response.r.no ?? null;
-
-  await markOpnameResultSynced({ id: opname.id, accurateResultId, accurateResultNumber });
-  logger.info(`[opname sync] Hasil saved resultId=${accurateResultId} number=${accurateResultNumber}`);
-
-  return { accurateResultId, accurateResultNumber };
+  const accounts = await repo.findAdjustmentGlAccounts();
+  if (accounts.length === 1) return accounts[0];
+  if (accounts.length === 0) throw fail("Belum ada akun penyesuaian stok yang terhubung ke Accurate");
+  throw fail("Pilih akun penyesuaian terlebih dahulu");
 };
 
 // ── Entry point — dipanggil dari service ─────────────────────────────────────
-const syncOpnameToAccurate = async (opnameId) => {
-  const opname = await findOpnameForSync(opnameId);
+const syncOpnameToAccurate = async (opnameId, { glAccountId } = {}) => {
+  const opname = await repo.findOpnameForSync(opnameId);
   if (!opname) throw new AppError("Opname tidak ditemukan", StatusCodes.NOT_FOUND);
 
   if (opname.status !== "POSTED") {
-    throw fail(
-      `Opname harus berstatus POSTED sebelum sync ke Accurate, status saat ini: ${opname.status}`
-    );
+    throw fail(`Opname harus berstatus POSTED sebelum sync ke Accurate, status saat ini: ${opname.status}`);
+  }
+
+  if (opname.accurateResultId) {
+    logger.info(`[opname sync] sudah tersinkron adjustmentId=${opname.accurateResultId}`);
+    return { skipped: true, reason: "Sudah tersinkron" };
+  }
+
+  // Baris dengan movement penyesuaian (selisih ≠ 0)
+  const diffLines = opname.items.filter((it) =>
+    it.inventoryMovement && Number(it.inventoryMovement.qtyChange) !== 0);
+
+  if (diffLines.length === 0) {
+    await repo.markOpnameNoDifference(opnameId);
+    logger.info(`[opname sync] ${opname.opnameNo} tanpa selisih — tidak ada dokumen Accurate`);
+    return { skipped: true, reason: "Tidak ada selisih stok" };
   }
 
   if (!opname.warehouse?.accurateWarehouseId) {
-    throw fail(
-      `Gudang "${opname.warehouse?.name}" belum terhubung ke Accurate. Hubungkan gudang terlebih dahulu.`
-    );
+    throw fail(`Gudang "${opname.warehouse?.name}" belum terhubung ke Accurate. Hubungkan gudang terlebih dahulu.`);
   }
+
+  const lines = [];
+  for (const it of diffLines) {
+    const item = it.inventory?.item;
+    if (!item?.accurateItemId) {
+      throw fail(`Item belum terhubung ke Accurate: ${item?.itemCode ?? it.id}. Sync item terlebih dahulu.`);
+    }
+    if (!item?.defaultUnit?.accurateUnitId) {
+      throw fail(`Satuan item belum terhubung ke Accurate: ${item?.itemCode ?? it.id}. Sync satuan terlebih dahulu.`);
+    }
+    if (it.inventoryMovement.accurateAdjustmentId) {
+      throw fail(`Mutasi opname ${item.itemCode} sudah tertaut ke dokumen Accurate lain — periksa data`);
+    }
+    lines.push({
+      movement:      it.inventoryMovement,
+      item,
+      unitCostPrice: await repo.findCostPrice(item.id, item.defaultUnit.id),
+    });
+  }
+
+  const gl = await resolveGlAccount(glAccountId);
 
   const accurateBranchId = opname.warehouse?.branchId
     ? await getAccurateBranchId(opname.warehouse.branchId)
     : null;
 
-  // Step 1 — Perintah SO
-  const accurateOrderId = await syncOpnameOrderToAccurate(opname, accurateBranchId);
+  const payload = mapOpnameToItemAdjustment(opname, lines, {
+    accurateGlAccountId: gl.accurateGlAccountId,
+    accurateBranchId,
+  });
 
-  // Step 2 — Hasil SO (hanya jika ada selisih)
-  const hasilResult = await syncOpnameResultToAccurate(opname, accurateOrderId, accurateBranchId);
+  return prisma.$transaction(async (tx) => {
+    if (!(await repo.tryLockOpnameSync(opnameId, tx))) {
+      throw new AppError("Sinkronisasi opname ini sedang berjalan", StatusCodes.CONFLICT);
+    }
+    // Dibaca ulang setelah lock — sinkron sebelumnya mungkin baru selesai
+    if (await repo.findOpnameAccurateResultId(opnameId, tx)) {
+      return { skipped: true, reason: "Sudah tersinkron" };
+    }
 
-  return { accurateOrderId, hasilResult };
+    logger.info("[opname sync] Penyesuaian payload", JSON.stringify(payload));
+    const response = await accurateRequest(ACCURATE_ITEM_ADJUSTMENT_SAVE, { method: "POST", body: payload });
+
+    if (!response.s || !response.r?.id) {
+      logger.error("[opname sync] Accurate menolak:", JSON.stringify(response));
+      throw new AppError(`Accurate menolak penyesuaian opname: ${accurateReason(response)}`, StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+
+    const accurateAdjustmentId     = response.r.id;
+    const accurateAdjustmentNumber = response.r.number ?? response.r.no ?? null;
+
+    await repo.markOpnameAdjustmentSynced({
+      id:          opnameId,
+      accurateAdjustmentId,
+      accurateAdjustmentNumber,
+      movementIds: lines.map((l) => l.movement.id),
+      glAccountId: gl.id,
+    }, tx);
+
+    logger.info(`[opname sync] ${opname.opnameNo} → Penyesuaian ${accurateAdjustmentNumber} (id=${accurateAdjustmentId})`);
+    return { accurateAdjustmentId, accurateAdjustmentNumber, lineCount: lines.length };
+  }, { timeout: 60000, maxWait: 10000 });
 };
 
 module.exports = { syncOpnameToAccurate };

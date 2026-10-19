@@ -17,7 +17,7 @@ import type {
   InventoryListParams, MovementListParams, TransferListParams, CreateTransferInput,
   CreateStockAdjustmentInput, CreateBatchStockAdjustmentInput,
   StockOpnameListParams, CreateOpnameInput, UpdateOpnameItemInput,
-  CreateOpeningBalanceInput,
+  CreateOpeningBalanceInput, StockTransfer,
 } from "./types";
 
 export function useInventories(params: InventoryListParams = {}) {
@@ -46,12 +46,23 @@ export function useStockMovements(params: MovementListParams = {}) {
   });
 }
 
+// Sync Accurate transfer berjalan di antrean setelah Kirim/Terima. Selama ~2 menit setelah
+// dokumen berubah dan belum tersinkron, data dimuat ulang tiap 5 detik agar badge sync ikut
+// berubah tanpa refresh manual.
+const SYNC_POLL_WINDOW_MS = 2 * 60 * 1000;
+function transferAwaitingSync(t: StockTransfer): boolean {
+  const pending = (t.status === "IN_TRANSIT" && !t.accurateTransferId)
+    || (t.status === "RECEIVED" && !t.accurateReceiveId);
+  return pending && Date.now() - new Date(t.updatedAt).getTime() < SYNC_POLL_WINDOW_MS;
+}
+
 export function useStockTransfers(params: TransferListParams = {}) {
   return useQuery({
     queryKey:       ["stock-transfers", params],
     queryFn:        () => fetchStockTransfers(params),
     staleTime:      0,
     refetchOnMount: true,
+    refetchInterval: (query) => (query.state.data?.data?.some(transferAwaitingSync) ? 5000 : false),
   });
 }
 
@@ -61,6 +72,7 @@ export function useStockTransfer(id: string | null | undefined) {
     queryFn:   () => fetchStockTransfer(id!),
     enabled:   !!id,
     staleTime: 0,
+    refetchInterval: (query) => (query.state.data && transferAwaitingSync(query.state.data) ? 5000 : false),
   });
 }
 
@@ -89,6 +101,11 @@ export function useUpdateTransferStatus() {
       qc.invalidateQueries({ queryKey: ["inventories"] });
       qc.invalidateQueries({ queryKey: ["stock-movements"] });
     },
+    // Klik ganda / tab lain sudah memproses (409) → muat ulang agar tombol sesuai status terbaru
+    onError: (_err, vars) => {
+      qc.invalidateQueries({ queryKey: ["stock-transfers"] });
+      qc.invalidateQueries({ queryKey: ["stock-transfer", vars.id] });
+    },
   });
 }
 
@@ -106,7 +123,7 @@ export function useCreateBatchStockAdjustment() {
       } else {
         toast.success(`${result.adjustedCount} item berhasil disesuaikan`);
         if (result.accurateErrors?.length) {
-          toast.error(`Sync Accurate gagal: ${result.accurateErrors[0]}`, { duration: 8000 });
+          toast.error(`Belum terkirim ke Accurate: ${result.accurateErrors[0]}`, { duration: 8000 });
         }
       }
     },
@@ -184,7 +201,7 @@ export function useCreateStockAdjustment() {
         toast.success("Penyesuaian stok berhasil disimpan & tersinkron ke Accurate");
       } else if (result.accurateError) {
         toast.success("Penyesuaian stok berhasil disimpan");
-        toast.error(`Sync Accurate gagal: ${result.accurateError}`, { duration: 6000 });
+        toast.error(`Belum terkirim ke Accurate: ${result.accurateError}`, { duration: 6000 });
       } else {
         toast.success("Penyesuaian stok berhasil disimpan");
       }
@@ -316,7 +333,8 @@ export function useDeleteStockOpname() {
 export function useSyncStockOpnameToAccurate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (opnameId: string) => syncStockOpnameToAccurate(opnameId),
+    mutationFn: ({ opnameId, glAccountId }: { opnameId: string; glAccountId?: string }) =>
+      syncStockOpnameToAccurate(opnameId, glAccountId),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["stock-opnames"] });
       qc.invalidateQueries({ queryKey: ["stock-opname", data.id] });

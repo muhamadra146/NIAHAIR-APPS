@@ -9,6 +9,36 @@ const { getAccurateBranchId } = require("../branch/branch.repository");
 const { mapPurchaseInvoiceToAccurate } = require("./purchase.sync.mapper");
 
 const ACCURATE_PURCHASE_INVOICE_SAVE = "/purchase-invoice/save.do";
+const ACCURATE_ITEM_DETAIL           = "/item/detail.do";
+
+// Baris ber-PPN hanya dikenai pajak oleh Accurate bila master item Accurate punya pajak (PPN).
+// Tanpa itu Accurate diam-diam tidak memungut PPN → total faktur Accurate ≠ total ERP.
+// Cek (baca saja) sebelum kirim, hentikan sync dengan pesan jelas (sama dengan faktur penjualan).
+const assertAccurateItemsTaxable = async (payload, items) => {
+  const taxedIds = new Set((payload.detailItem ?? []).filter((d) => d.useTax1 === true).map((d) => d.itemId));
+  if (taxedIds.size === 0) return;
+
+  const codeById = new Map();
+  for (const line of items) {
+    if (taxedIds.has(line.item.accurateItemId)) codeById.set(line.item.accurateItemId, line.item.itemCode);
+  }
+
+  const missing = [];
+  for (const [accurateItemId, itemCode] of codeById) {
+    const resp = await accurateRequest(`${ACCURATE_ITEM_DETAIL}?id=${accurateItemId}`, { method: "GET" });
+    if (!resp.s) {
+      throw new AppError(`Gagal membaca master item Accurate ${itemCode}`, StatusCodes.BAD_GATEWAY);
+    }
+    if (!(resp.d?.tax1Id ?? resp.d?.tax1)) missing.push(`${itemCode} ${resp.d?.name ?? ""}`.trim());
+  }
+  if (missing.length > 0) {
+    throw new AppError(
+      `PPN belum diatur di master item Accurate: ${missing.join(", ")}. ` +
+      "Atur pajak PPN pada item tersebut di Accurate, lalu ulangi sinkron faktur pembelian ini.",
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
+};
 
 const pushPurchaseInvoiceToAccurate = async (purchaseInvoiceId) => {
   const invoice = await prisma.purchaseInvoice.findUnique({
@@ -31,7 +61,7 @@ const pushPurchaseInvoiceToAccurate = async (purchaseInvoiceId) => {
     },
   });
 
-  if (!invoice) throw new AppError("Purchase invoice not found", StatusCodes.NOT_FOUND);
+  if (!invoice) throw new AppError("Faktur pembelian tidak ditemukan", StatusCodes.NOT_FOUND);
 
   // Jangan push invoice yang sudah dibatalkan — sync job mungkin dibuat sebelum cancel
   if (invoice.status === "CANCELLED") {
@@ -82,6 +112,7 @@ const pushPurchaseInvoiceToAccurate = async (purchaseInvoiceId) => {
   // Try with supplierInvoiceNo first; if Accurate rejects as duplicate, retry with internal invoiceNo
   const primaryBillNo = invoice.supplierInvoiceNo || invoice.invoiceNo;
   let payload  = mapPurchaseInvoiceToAccurate(invoice, primaryBillNo, accurateBranchId);
+  await assertAccurateItemsTaxable(payload, syncableItems);
 
   let response = await accurateRequest(ACCURATE_PURCHASE_INVOICE_SAVE, {
     method: "POST",
@@ -101,8 +132,9 @@ const pushPurchaseInvoiceToAccurate = async (purchaseInvoiceId) => {
   }
 
   if (!response.s || !response.r?.id) {
+    const reason = Array.isArray(response?.d) ? response.d.join("; ") : (response?.d ?? JSON.stringify(response));
     throw new AppError(
-      `Accurate API error: ${JSON.stringify(response)}`,
+      `Accurate menolak faktur pembelian: ${reason}`,
       StatusCodes.BAD_GATEWAY
     );
   }

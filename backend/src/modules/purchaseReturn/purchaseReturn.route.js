@@ -5,6 +5,7 @@ const validate     = require("../../middlewares/validate.middleware");
 const { ROLES }    = require("../../common/constants/role.constant");
 const { createPurchaseReturnSchema } = require("./purchaseReturn.validation");
 const {
+  returnableController,
   listController,
   getController,
   createController,
@@ -29,6 +30,7 @@ const WRITE_ROLES = [
 const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER];
 
 router.get("/",    authenticate, authorize(...READ_ROLES),  listController);
+router.get("/returnable/:purchaseInvoiceId", authenticate, authorize(...READ_ROLES), returnableController);
 router.get("/:id", authenticate, authorize(...READ_ROLES),  getController);
 
 router.post("/", authenticate, authorize(...WRITE_ROLES), validate(createPurchaseReturnSchema), createController);

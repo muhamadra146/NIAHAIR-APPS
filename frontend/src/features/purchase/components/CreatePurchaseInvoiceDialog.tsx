@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Search, Loader2, Trash2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,7 @@ export function CreatePurchaseInvoiceDialog({ open, onClose }: Props) {
   });
   const warehouses = warehouseData?.data ?? [];
   const createMutation = useCreatePurchaseInvoice();
+  const submittingRef  = useRef(false); // cegah klik ganda membuat dua faktur
 
   const [supplierId,        setSupplier]   = useState("");
   const [supplierDiscount,  setSupplierDiscount] = useState<number>(0); // diskon default dari supplier
@@ -150,16 +151,23 @@ export function CreatePurchaseInvoiceDialog({ open, onClose }: Props) {
   const netBeforeTax = lines.reduce((sum, l) => {
     return sum + (Number(l.qty) || 0) * (Number(l.price) || 0) * (1 - (Number(l.discount) || 0) / 100);
   }, 0);
-  const totalTax   = taxable && !inclusiveTax ? netBeforeTax * 0.11 : 0;
+  // PPN per dokumen dibulatkan ke rupiah penuh — sama dengan backend & Accurate
+  const totalTax   = taxable && !inclusiveTax ? Math.round(netBeforeTax * 0.11) : 0;
   const grandTotal = netBeforeTax + totalTax;
 
   function handleSubmit() {
     if (!supplierId)  return toast.error("Pilih pemasok");
     if (!warehouseId) return toast.error("Pilih gudang");
     if (!invoiceDate) return toast.error("Isi tanggal");
+    if (invoiceDate > toWibDateStr()) return toast.error("Tanggal faktur tidak boleh melebihi hari ini");
     if (lines.length === 0) return toast.error("Tambahkan minimal 1 item");
     const invalid = lines.find((l) => !l.qty || Number(l.qty) <= 0);
     if (invalid) return toast.error(`Qty tidak valid: ${invalid.itemName}`);
+    const seen = new Set<string>();
+    const dup  = lines.find((l) => { const k = `${l.itemId}|${l.unitId}`; if (seen.has(k)) return true; seen.add(k); return false; });
+    if (dup) return toast.error(`${dup.itemName} (${dup.unitName}) muncul lebih dari sekali — gabungkan qty-nya dalam satu baris`);
+    if (submittingRef.current || createMutation.isPending) return;
+    submittingRef.current = true;
 
     createMutation.mutate(
       {
@@ -175,7 +183,7 @@ export function CreatePurchaseInvoiceDialog({ open, onClose }: Props) {
           qty: Number(l.qty), price: Number(l.price), discount: Number(l.discount) || 0,
         })),
       },
-      { onSuccess: () => { onClose(); resetForm(); } }
+      { onSuccess: () => { onClose(); resetForm(); }, onSettled: () => { submittingRef.current = false; } }
     );
   }
 
@@ -213,7 +221,7 @@ export function CreatePurchaseInvoiceDialog({ open, onClose }: Props) {
 
             <div className="space-y-1.5">
               <Label className="text-sm">Tanggal <span className="text-destructive">*</span></Label>
-              <Input type="date" value={invoiceDate} onChange={(e) => setDate(e.target.value)} className="h-9" />
+              <Input type="date" value={invoiceDate} max={toWibDateStr()} onChange={(e) => setDate(e.target.value)} className="h-9" />
             </div>
 
             <div className="space-y-1.5">

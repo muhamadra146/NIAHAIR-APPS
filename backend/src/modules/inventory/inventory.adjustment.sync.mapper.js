@@ -13,7 +13,9 @@ const resolveAdjustmentType = (qtyChange) =>
 const mapAdjustmentToAccurate = ({ movement, inventory, glAccount, unitCostPrice = 0, accurateBranchId = null }) => ({
   transDate:   formatDate(movement.createdAt),
   description: movement.notes ?? movement.reason ?? "Penyesuaian Stok",
-  glAccountId: glAccount.accurateGlAccountId,
+  // Accurate membaca akun penyesuaian dari adjustmentAccountId; glAccountId diabaikan (dokumen
+  // jatuh ke akun default) — terverifikasi lewat detail.do 2026-10-19
+  adjustmentAccountId: glAccount.accurateGlAccountId,
   ...(accurateBranchId ? { branchId: accurateBranchId } : {}),
   detailItem: [
     {

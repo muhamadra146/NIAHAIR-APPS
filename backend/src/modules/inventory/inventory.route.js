@@ -37,8 +37,10 @@ router.get("/periods",          authenticate, authorize(ROLES.SUPER_ADMIN, ROLES
 router.post("/periods/close",   authenticate, authorize(ROLES.SUPER_ADMIN), validate(closePeriodSchema),  closePeriodController);
 router.post("/periods/reopen",  authenticate, authorize(ROLES.SUPER_ADMIN), validate(reopenPeriodSchema), reopenPeriodController);
 
-router.get("/movements", authenticate, getMovementsController);
-router.get("/",          authenticate, getInventoriesController);
+// Lihat stok & mutasi: peran menu Stok Barang (sidebar) — U1
+const VIEW_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.MANAGER, ROLES.INVENTORY, ROLES.OFFICE, ROLES.FINANCE];
+router.get("/movements", authenticate, authorize(...VIEW_ROLES), getMovementsController);
+router.get("/",          authenticate, authorize(...VIEW_ROLES), getInventoriesController);
 
 // Service movement — peran yang mencatat treatment / pemakaian material (G4-24b)
 router.post(
