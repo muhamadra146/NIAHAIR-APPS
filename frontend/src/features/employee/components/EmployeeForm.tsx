@@ -202,7 +202,7 @@ function EmployeeFormFields({
   const divisionId = (watch("divisionId") as string | undefined) ?? "";
   const ktpInputRef      = useRef<HTMLInputElement>(null);
   const contractInputRef = useRef<HTMLInputElement>(null);
-  // Akses cabang hanya diubah Super Admin (PATCH /employees/:id/branches) — B12
+  // Akses cabang diubah Super Admin & Owner (PATCH /employees/:id/branches) — B12, EMP-005
   const canEditBranches = canEditBranchAccess(useAuthStore((s) => s.user?.roleCode));
   const [fileErrors, setFileErrors] = useState<{ ktp?: string | null; contract?: string | null }>({});
 

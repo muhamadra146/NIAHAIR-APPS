@@ -4,9 +4,17 @@ const { paginate, paginationMeta } = require("../../utils/pagination");
 const prisma = require("../../config/prisma");
 const repo = require("./membership.repository");
 
-const getAll = async ({ page = 1, limit = 20 } = {}) => {
+/** Filter status paket: "true"/"false" (query string) atau boolean; kosong/"all" = semua */
+const parseIsActive = (isActive) => {
+  if (isActive === undefined || isActive === null || isActive === "" || isActive === "all") return undefined;
+  return isActive === true || isActive === "true";
+};
+
+const getAll = async ({ page = 1, limit = 20, isActive } = {}) => {
   const { skip, take } = paginate(page, limit);
   const where = {};
+  const active = parseIsActive(isActive);
+  if (active !== undefined) where.isActive = active;
   const [rows, total] = await Promise.all([repo.findAll({ skip, take, where }), repo.count(where)]);
   return { data: rows, meta: paginationMeta(total, page, limit) };
 };
@@ -69,9 +77,14 @@ const update = async (id, body) => {
   if (durationDays  !== undefined) data.durationDays  = durationDays;
   if (discountType  !== undefined) data.discountType  = discountType;
   if (discountValue !== undefined) data.discountValue = discountValue;
+  // Paket nonaktif tidak bisa dipilih untuk pelanggan; langganan berjalan tetap berlaku sampai habis
+  if (body.isActive !== undefined) data.isActive      = body.isActive;
   data.categoryIds = await normalizeCategoryIds(body.categoryIds);
   return repo.update(id, data);
 };
+
+// Paket yang sudah dipakai dinonaktifkan, bukan dihapus (keputusan user 2026-10-19)
+const DEACTIVATE_HINT = "Gunakan tombol Nonaktifkan agar paket tidak bisa dipilih lagi.";
 
 const remove = async (id) => {
   await getById(id);
@@ -80,7 +93,7 @@ const remove = async (id) => {
   const activeCustomerCount = await repo.countCustomers(id);
   if (activeCustomerCount > 0) {
     throw new AppError(
-      `Tidak bisa dihapus: ${activeCustomerCount} pelanggan masih menggunakan membership ini`,
+      `Tidak bisa dihapus: ${activeCustomerCount} pelanggan masih menggunakan membership ini. ${DEACTIVATE_HINT}`,
       StatusCodes.CONFLICT
     );
   }
@@ -91,7 +104,7 @@ const remove = async (id) => {
   });
   if (activeSubscriptionCount > 0) {
     throw new AppError(
-      `Tidak bisa dihapus: ${activeSubscriptionCount} pelanggan masih memiliki subscription membership aktif`,
+      `Tidak bisa dihapus: ${activeSubscriptionCount} pelanggan masih memiliki subscription membership aktif. ${DEACTIVATE_HINT}`,
       StatusCodes.CONFLICT
     );
   }
@@ -100,7 +113,7 @@ const remove = async (id) => {
   const invoiceCount = await prisma.invoice.count({ where: { membershipId: id } });
   if (invoiceCount > 0) {
     throw new AppError(
-      `Tidak bisa dihapus: ${invoiceCount} invoice masih terhubung ke membership ini`,
+      `Tidak bisa dihapus: ${invoiceCount} invoice masih terhubung ke membership ini. ${DEACTIVATE_HINT}`,
       StatusCodes.CONFLICT
     );
   }
@@ -109,7 +122,7 @@ const remove = async (id) => {
   // statusnya) tidak boleh dihapus — riwayat pelanggan harus tetap ada.
   if ((await repo.countUsageHistory(id)) > 0) {
     throw new AppError(
-      "Paket sudah pernah dipakai pelanggan sehingga tidak bisa dihapus (riwayat membership harus tetap tersimpan)",
+      "Paket sudah pernah dipakai pelanggan sehingga tidak bisa dihapus (riwayat membership harus tetap tersimpan). " + DEACTIVATE_HINT,
       StatusCodes.CONFLICT
     );
   }
@@ -144,6 +157,10 @@ const assignMembership = async (customerId, membershipId, createdBy) => {
   ]);
   if (!customer)   throw new AppError("Customer tidak ditemukan", StatusCodes.NOT_FOUND);
   if (!membership) throw new AppError("Membership tidak ditemukan", StatusCodes.NOT_FOUND);
+  // Paket nonaktif tidak bisa ditetapkan / diperpanjang (keputusan user 2026-10-19)
+  if (membership.isActive === false) {
+    throw new AppError("Paket membership tidak aktif", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
 
   const now      = new Date();
   const endDate  = new Date(now);

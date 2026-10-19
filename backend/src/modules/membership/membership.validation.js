@@ -1,4 +1,4 @@
-const { object, string, number, pipe, minLength, maxLength, minValue, picklist, optional, array, integer, trim } = require("valibot");
+const { object, string, number, boolean, pipe, minLength, maxLength, minValue, picklist, optional, array, integer, trim } = require("valibot");
 
 // Kategori item yang dapat diskon membership (kategori induk mencakup sub-kategorinya)
 const categoryIds = optional(array(pipe(string(), minLength(1))));
@@ -27,6 +27,8 @@ const updateMembershipSchema = object({
   discountType:  optional(picklist(["PERCENTAGE", "FIXED_AMOUNT"], "Tipe diskon tidak valid")),
   discountValue: optional(pipe(number("Nilai diskon wajib diisi"), minValue(0, "Nilai diskon tidak boleh negatif"))),
   categoryIds,
+  // Nonaktifkan / aktifkan paket (keputusan user 2026-10-19)
+  isActive:      optional(boolean("Status aktif harus true/false")),
 });
 
 module.exports = { createMembershipSchema, updateMembershipSchema };

@@ -36,11 +36,14 @@ router.patch("/:id/files",      authenticate, authorize(...EMPLOYEE_WRITE_ROLES)
 router.patch("/:id/deactivate", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), deactivateController);
 router.delete("/:id",           authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.OWNER), deleteController);
 
+// Akses cabang ("Bisa Bekerja Di") diatur Super Admin dan Owner (EMP-005, keputusan user 2026-10-19)
+const BRANCH_ACCESS_ROLES = [ROLES.SUPER_ADMIN, ROLES.OWNER];
+
 // Must be declared after GET /:id — different method (PATCH), no conflict
 router.patch(
   "/:id/branches",
   authenticate,
-  authorize(ROLES.SUPER_ADMIN),
+  authorize(...BRANCH_ACCESS_ROLES),
   validate(updateEmployeeBranchesSchema),
   updateBranchesController
 );

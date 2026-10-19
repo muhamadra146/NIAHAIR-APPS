@@ -51,9 +51,11 @@ describe("B4 — body ubah karyawan", () => {
 });
 
 describe("B12 — akses cabang", () => {
-  test("hanya Super Admin yang boleh mengubah akses cabang", () => {
+  test("Super Admin dan Owner boleh mengubah akses cabang (EMP-005, 2026-10-19)", () => {
     expect(canEditBranchAccess("SUPER_ADMIN")).toBe(true);
-    for (const r of ["OWNER", "MANAGER", "OFFICE"]) expect(canEditBranchAccess(r)).toBe(false);
+    expect(canEditBranchAccess("OWNER")).toBe(true);
+    expect(canEditBranchAccess(undefined)).toBe(false);
+    for (const r of ["MANAGER", "OFFICE", "FINANCE"]) expect(canEditBranchAccess(r)).toBe(false);
   });
 
   test("branchesChanged hanya true bila daftar berbeda", () => {

@@ -407,6 +407,9 @@ model Membership {
   discountType  DiscountType
   discountValue Decimal      @db.Decimal(18, 2)
 
+  // Paket yang pernah dipakai tidak bisa dihapus, hanya dinonaktifkan (keputusan user 2026-10-19)
+  isActive Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -1,4 +1,23 @@
-import type { DiscountType } from "../../types";
+import type { DiscountType, MembershipListParams } from "../../types";
+
+/** Filter status paket di Pengaturan → Membership (default Aktif, seperti Metode Pembayaran) */
+export type MembershipStatusFilter = "active" | "inactive" | "all";
+
+export const MEMBERSHIP_STATUS_FILTERS: readonly (readonly [MembershipStatusFilter, string])[] = [
+  ["active", "Aktif"], ["inactive", "Nonaktif"], ["all", "Semua"],
+];
+
+/** Filter → query GET /memberships ("all" = tanpa isActive) */
+export function membershipListParams(filter: MembershipStatusFilter, limit = 100): MembershipListParams {
+  return filter === "all" ? { limit } : { limit, isActive: filter === "active" };
+}
+
+/** Pilihan paket saat menetapkan membership ke pelanggan: hanya paket aktif (CRM-014, 2026-10-19) */
+export const ASSIGNABLE_MEMBERSHIP_PARAMS: MembershipListParams = { limit: 100, isActive: true };
+
+/** Hanya Super Admin, Owner, Manager yang boleh mengubah paket (membership.route ADMIN_ROLES) */
+const PACKAGE_EDIT_ROLES = ["SUPER_ADMIN", "OWNER", "MANAGER"];
+export const canEditMembershipPackage = (roleCode: string | null | undefined) => PACKAGE_EDIT_ROLES.includes(roleCode ?? "");
 
 export type MembershipFieldErrors = Partial<Record<"name" | "price" | "durationDays" | "discountValue" | "categoryIds", string>>;
 

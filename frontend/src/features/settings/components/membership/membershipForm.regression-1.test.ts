@@ -1,7 +1,28 @@
 // Regression: QA Data menu 2026-10-18 — B8/B9: form paket membership hanya menampilkan
 // "Data tidak valid" tanpa pesan per kolom; nama spasi saja lolos.
 import { describe, expect, test } from "vitest";
-import { membershipApiErrors, validateMembershipForm } from "./membershipForm";
+import {
+  membershipApiErrors, validateMembershipForm, membershipListParams, canEditMembershipPackage, ASSIGNABLE_MEMBERSHIP_PARAMS,
+} from "./membershipForm";
+
+// Keputusan user 2026-10-19 (CRM-014): paket bisa dinonaktifkan; filter Aktif/Nonaktif/Semua,
+// pilihan paket untuk pelanggan hanya paket aktif.
+describe("status paket membership", () => {
+  test("filter → query isActive", () => {
+    expect(membershipListParams("active")).toEqual({ limit: 100, isActive: true });
+    expect(membershipListParams("inactive")).toEqual({ limit: 100, isActive: false });
+    expect(membershipListParams("all")).toEqual({ limit: 100 });
+  });
+
+  test("pilihan paket untuk pelanggan hanya paket aktif", () => {
+    expect(ASSIGNABLE_MEMBERSHIP_PARAMS.isActive).toBe(true);
+  });
+
+  test("tombol ubah paket hanya SA, Owner, Manager", () => {
+    for (const r of ["SUPER_ADMIN", "OWNER", "MANAGER"]) expect(canEditMembershipPackage(r)).toBe(true);
+    for (const r of ["CASHIER", "OFFICE", "FINANCE", undefined]) expect(canEditMembershipPackage(r)).toBe(false);
+  });
+});
 
 const OK = { name: "Gold", price: "100000", durationDays: "30", discountType: "PERCENTAGE" as const, discountValue: "10" };
 

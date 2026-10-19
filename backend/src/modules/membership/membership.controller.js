@@ -3,8 +3,8 @@ const svc = require("./membership.service");
 
 const getAllController = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
-    const result = await svc.getAll({ page: Number(page), limit: Number(limit) });
+    const { page = 1, limit = 20, isActive } = req.query;
+    const result = await svc.getAll({ page: Number(page), limit: Number(limit), isActive });
     return success(res, result, "Memberships fetched");
   } catch (err) { next(err); }
 };

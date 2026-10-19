@@ -259,7 +259,12 @@ const updateEmployee = async (id, body, actor) => {
 const updateEmployeeBranches = async (id, branchIds) => {
   const employee = await findById(id);
   if (!employee) throw new AppError("Karyawan tidak ditemukan", StatusCodes.NOT_FOUND);
-  return updateBranches(id, branchIds);
+  const updated = await updateBranches(id, branchIds);
+  // Home Branch selalu termasuk akses cabang walau tidak dikirim (EMP-005)
+  if (employee.homeBranchId && !branchIds.includes(employee.homeBranchId)) {
+    return (await syncPrimaryBranch(id, employee.homeBranchId)) ?? updated;
+  }
+  return updated;
 };
 
 const uploadEmployeeFiles = async (id, { ktpFileUrl, ktpFilePublicId, contractFileUrl, contractFilePublicId }) => {

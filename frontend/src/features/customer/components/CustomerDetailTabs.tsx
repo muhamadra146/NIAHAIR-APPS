@@ -18,7 +18,8 @@ import {
 import type { Customer } from "../types";
 import { customerSyncView, GENDER_LABEL, SYNC_LABEL } from "../syncStatus";
 import { customerPermissions } from "../permissions";
-import { useAllMemberships, useCustomerMembership, useAssignMembership, useCancelCustomerMembership } from "@/features/settings/hooks";
+import { useMemberships, useCustomerMembership, useAssignMembership, useCancelCustomerMembership } from "@/features/settings/hooks";
+import { ASSIGNABLE_MEMBERSHIP_PARAMS } from "@/features/settings/components/membership/membershipForm";
 import { useAppointments } from "@/features/appointment/hooks";
 import { AppointmentStatusBadge } from "@/features/appointment/components/AppointmentStatusBadge";
 import { useInvoices, useDeposits } from "@/features/invoice/hooks";
@@ -838,7 +839,9 @@ function MembershipTab({ customer }: { customer: Customer }) {
   const [error, setError] = useState<string | null>(null);
 
   const { data: membershipData, isLoading } = useCustomerMembership(customer.id);
-  const { data: allMemberships = [] } = useAllMemberships();
+  // Hanya paket aktif yang bisa ditetapkan / dipakai mengganti (CRM-014, 2026-10-19)
+  const { data: assignableData } = useMemberships(ASSIGNABLE_MEMBERSHIP_PARAMS);
+  const allMemberships = assignableData?.data ?? [];
   const assignMut = useAssignMembership(customer.id);
   const cancelMut = useCancelCustomerMembership(customer.id);
   // Tetapkan / ganti / batalkan membership hanya SA, Owner, Manager (membership.route) — B6

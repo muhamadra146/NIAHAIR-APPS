@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, Pencil, Trash2, Power, RotateCcw } from "lucide-react";
+import { toast } from "@/lib/toast";
+import { useAuthStore } from "@/stores/authStore";
+import { updateMembership } from "../../api/membership.api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -12,7 +16,10 @@ import { useMemberships, useCreateMembership, useUpdateMembership, useDeleteMemb
 import { useItemCategories } from "@/features/inventory/hooks";
 import type { ItemCategory } from "@/features/inventory/types";
 import type { Membership, CreateMembershipInput, UpdateMembershipInput, DiscountType } from "../../types";
-import { membershipApiErrors, validateMembershipForm, type MembershipFieldErrors } from "./membershipForm";
+import {
+  membershipApiErrors, validateMembershipForm, membershipListParams, canEditMembershipPackage,
+  MEMBERSHIP_STATUS_FILTERS, type MembershipFieldErrors, type MembershipStatusFilter,
+} from "./membershipForm";
 
 function FieldError({ msg }: { msg?: string }) {
   return msg ? <p className="text-xs text-red-600">{msg}</p> : null;
@@ -106,14 +113,38 @@ export function MembershipTab() {
   const [fieldErrors, setFieldErrors] = useState<MembershipFieldErrors>({});
   const [deleteId, setDeleteId]   = useState<string | null>(null);
 
-  const { data, isLoading } = useMemberships({ limit: 100 });
+  // Default hanya paket aktif; nonaktif bisa dilihat & diaktifkan lagi lewat filter (CRM-014, 2026-10-19)
+  const [statusFilter, setStatusFilter] = useState<MembershipStatusFilter>("active");
+  const [toggleItem, setToggleItem] = useState<Membership | null>(null);
+  const canEdit = canEditMembershipPackage(useAuthStore((s) => s.user?.roleCode));
+
+  const { data, isLoading } = useMemberships(membershipListParams(statusFilter));
   const { data: categories = [] } = useItemCategories();
   const memberships = data?.data ?? [];
 
+  const qc = useQueryClient();
   const createMut = useCreateMembership();
   const updateMut = useUpdateMembership(editItem?.id ?? "");
   const deleteMut = useDeleteMembership();
+  const toggleMut = useMutation({
+    mutationFn: (m: Membership) => updateMembership(m.id, { isActive: !m.isActive }),
+    onSuccess: (m) => {
+      qc.invalidateQueries({ queryKey: ["memberships"] });
+      toast.success(m.isActive ? `Paket "${m.name}" diaktifkan kembali` : `Paket "${m.name}" dinonaktifkan`);
+    },
+    onError: (err: unknown) => toast.error(membershipApiErrors(err).message),
+  });
   const isPending = createMut.isPending || updateMut.isPending || deleteMut.isPending;
+
+  async function handleToggle() {
+    if (!toggleItem) return;
+    try {
+      await toggleMut.mutateAsync(toggleItem);
+      setToggleItem(null);
+    } catch {
+      // error ditampilkan lewat toast onError
+    }
+  }
 
   function openCreate() {
     setEditItem(null);
@@ -185,25 +216,43 @@ export function MembershipTab() {
           <h2 className="text-base font-semibold">Membership</h2>
           <p className="text-sm text-muted-foreground">Kelola paket membership pelanggan</p>
         </div>
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="h-4 w-4 mr-1" /> Tambah Membership
-        </Button>
+        {canEdit && (
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="h-4 w-4 mr-1" /> Tambah Membership
+          </Button>
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        {MEMBERSHIP_STATUS_FILTERS.map(([value, label]) => (
+          <Button
+            key={value}
+            size="sm"
+            variant={statusFilter === value ? "default" : "outline"}
+            className="h-8 rounded-full"
+            onClick={() => setStatusFilter(value)}
+          >
+            {label}
+          </Button>
+        ))}
       </div>
 
       <div className="rounded-lg border overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-slate-50/70">
-              {["Nama", "Harga", "Durasi", "Tipe Diskon", "Nilai Diskon", "Diskon Untuk", ""].map((h) => (
+              {["Nama", "Harga", "Durasi", "Tipe Diskon", "Nilai Diskon", "Diskon Untuk", "Status", ""].map((h) => (
                 <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {isLoading ? (
-              <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Memuat...</td></tr>
+              <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">Memuat...</td></tr>
             ) : memberships.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Belum ada membership</td></tr>
+              <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">
+                {statusFilter === "inactive" ? "Tidak ada paket nonaktif" : "Belum ada membership"}
+              </td></tr>
             ) : memberships.map((m) => (
               <tr key={m.id} className="hover:bg-slate-50/70">
                 <td className="px-4 py-3 font-medium">{m.name}</td>
@@ -228,15 +277,29 @@ export function MembershipTab() {
                         ))}
                       </div>}
                 </td>
+                <td className="px-4 py-3">
+                  <Badge variant={m.isActive ? "success" : "secondary"}>{m.isActive ? "Aktif" : "Nonaktif"}</Badge>
+                </td>
                 <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => openEdit(m)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(m.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  {canEdit && (
+                    <div className="flex justify-end gap-1">
+                      <Button size="sm" variant="ghost" title="Edit" onClick={() => openEdit(m)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      {m.isActive ? (
+                        <Button size="sm" variant="ghost" title="Nonaktifkan" className="text-amber-600 hover:text-amber-700" onClick={() => setToggleItem(m)}>
+                          <Power className="h-4 w-4 mr-1" /> Nonaktifkan
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="ghost" title="Aktifkan" className="text-emerald-600 hover:text-emerald-700" onClick={() => setToggleItem(m)}>
+                          <RotateCcw className="h-4 w-4 mr-1" /> Aktifkan
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" title="Hapus" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(m.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -340,12 +403,32 @@ export function MembershipTab() {
             <DialogTitle>Hapus Membership</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground py-2">
-            Yakin ingin menghapus paket ini? Paket yang sudah pernah dipakai pelanggan tidak bisa dihapus agar riwayat membership tetap tersimpan.
+            Yakin ingin menghapus paket ini? Paket yang sudah pernah dipakai pelanggan tidak bisa dihapus agar riwayat membership tetap tersimpan — gunakan tombol Nonaktifkan.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>Batal</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleteMut.isPending}>
               {deleteMut.isPending ? "Menghapus..." : "Hapus"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Nonaktifkan / Aktifkan Confirm Dialog */}
+      <Dialog open={Boolean(toggleItem)} onOpenChange={() => setToggleItem(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{toggleItem?.isActive ? "Nonaktifkan Paket" : "Aktifkan Paket"}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            {toggleItem?.isActive
+              ? <>Paket <strong>{toggleItem?.name}</strong> tidak bisa dipilih lagi saat menetapkan atau mengganti membership pelanggan. Pelanggan yang sedang memakai paket ini tetap mendapat diskon sampai masa berlakunya habis.</>
+              : <>Paket <strong>{toggleItem?.name}</strong> bisa dipilih lagi untuk pelanggan.</>}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setToggleItem(null)}>Batal</Button>
+            <Button variant={toggleItem?.isActive ? "destructive" : "default"} onClick={handleToggle} disabled={toggleMut.isPending}>
+              {toggleMut.isPending ? "Menyimpan..." : toggleItem?.isActive ? "Nonaktifkan" : "Aktifkan"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -370,6 +370,8 @@ export interface Membership {
   discountValue: string;
   /** Kategori item yang dapat diskon (kategori induk mencakup sub-kategorinya) */
   discountCategories?: { categoryId: string; category: { id: string; name: string; parentId: string | null } }[];
+  /** Paket nonaktif tidak bisa dipilih untuk pelanggan (CRM-014, 2026-10-19) */
+  isActive:     boolean;
   createdAt:    string;
   updatedAt:    string;
 }
@@ -383,11 +385,13 @@ export interface CreateMembershipInput {
   categoryIds?:  string[];
 }
 
-export type UpdateMembershipInput = Partial<CreateMembershipInput>;
+export type UpdateMembershipInput = Partial<CreateMembershipInput> & { isActive?: boolean };
 
 export interface MembershipListParams {
   page?:  number;
   limit?: number;
+  /** Kosong = semua paket */
+  isActive?: boolean;
 }
 
 export interface CustomerMembershipRecord {

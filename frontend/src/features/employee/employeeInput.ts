@@ -7,8 +7,9 @@ const OPTIONAL_FIELDS = [
 
 const DATE_FIELDS = new Set(["hireDate", "birthDate", "resignDate"]);
 
-/** Hanya Super Admin yang boleh mengubah akses cabang (PATCH /employees/:id/branches) */
-export const canEditBranchAccess = (roleCode: string | null | undefined) => roleCode === "SUPER_ADMIN";
+/** Super Admin dan Owner boleh mengubah akses cabang (PATCH /employees/:id/branches; EMP-005, keputusan user 2026-10-19) */
+const BRANCH_ACCESS_ROLES = ["SUPER_ADMIN", "OWNER"];
+export const canEditBranchAccess = (roleCode: string | null | undefined) => BRANCH_ACCESS_ROLES.includes(roleCode ?? "");
 
 /** Form → body POST /employees (kolom kosong tidak dikirim, tanggal gajian kosong = null) */
 export function toCreateEmployeeInput(v: CreateEmployeeFormValues, canSetDivision: boolean): CreateEmployeeInput {

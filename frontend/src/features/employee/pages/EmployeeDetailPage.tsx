@@ -137,7 +137,7 @@ export function EmployeeDetailPage() {
     let step = "data karyawan";
     try {
       await updateMutation.mutateAsync(toUpdateEmployeeInput(values, employee, isFullAccess(user)));
-      // Akses cabang hanya Super Admin & hanya bila berubah (PATCH /branches = SUPER_ADMIN)
+      // Akses cabang hanya Super Admin/Owner & hanya bila berubah (PATCH /branches = SUPER_ADMIN, OWNER)
       if (canEditBranchAccess(user?.roleCode) && branchesChanged(values.branchIds, employee)) {
         step = "akses cabang";
         await updateBranchMutation.mutateAsync({ branchIds: values.branchIds ?? [] });
