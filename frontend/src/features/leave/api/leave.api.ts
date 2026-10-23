@@ -1,6 +1,6 @@
 import { api } from "@/lib/axios";
 import type { ApiResponse, PaginatedResponse } from "@/types/api";
-import type { Leave, LeaveListParams, CreateLeaveInput } from "../types";
+import type { Leave, LeaveListParams, CreateLeaveInput, LeaveWorkingDays } from "../types";
 
 type LeaveListResult = { data: Leave[]; meta: PaginatedResponse<Leave>["meta"] };
 
@@ -36,5 +36,17 @@ export const rejectLeave = async (id: string): Promise<Leave> => {
 
 export const cancelLeave = async (id: string): Promise<Leave> => {
   const { data } = await api.delete<ApiResponse<Leave>>(`/leaves/${id}`);
+  return data.data;
+};
+
+/** Batalkan cuti yang sudah disetujui (penyetuju; hanya bila belum dimulai) */
+export const cancelApprovedLeave = async (id: string): Promise<Leave> => {
+  const { data } = await api.post<ApiResponse<Leave>>(`/leaves/${id}/cancel`);
+  return data.data;
+};
+
+/** Pratinjau durasi cuti dalam hari kerja (OFF & libur nasional tidak dihitung) */
+export const fetchLeaveWorkingDays = async (params: { startDate: string; endDate: string }): Promise<LeaveWorkingDays> => {
+  const { data } = await api.get<ApiResponse<LeaveWorkingDays>>("/leaves/working-days", { params });
   return data.data;
 };

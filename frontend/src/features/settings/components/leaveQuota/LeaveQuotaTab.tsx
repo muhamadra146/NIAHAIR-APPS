@@ -60,7 +60,9 @@ export function LeaveQuotaTab() {
     } catch (err) { setError(apiErr(err)); }
   }
 
-  const remaining = (total: number, used: number) => total - used;
+  // Sisa = jatah − terpakai − menunggu persetujuan (EMP-012); remainingDays dihitung server
+  const remaining = (q: { totalDays: number; usedDays: number; pendingDays?: number; remainingDays?: number }) =>
+    q.remainingDays ?? q.totalDays - q.usedDays - (q.pendingDays ?? 0);
 
   return (
     <div className="space-y-4">
@@ -97,18 +99,18 @@ export function LeaveQuotaTab() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-slate-50/70">
-              {["Karyawan", "Tipe Cuti", "Total", "Terpakai", "Sisa", "Status"].map((h) => (
+              {["Karyawan", "Tipe Cuti", "Total", "Terpakai", "Menunggu", "Sisa", "Status"].map((h) => (
                 <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {isLoading ? (
-              <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Memuat...</td></tr>
+              <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Memuat...</td></tr>
             ) : quotas.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Belum ada kuota cuti</td></tr>
+              <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Belum ada kuota cuti</td></tr>
             ) : quotas.map((q) => {
-              const rem = remaining(q.totalDays, q.usedDays);
+              const rem = remaining(q);
               return (
                 <tr key={q.id} className="hover:bg-slate-50/70">
                   <td className="px-4 py-3">
@@ -121,6 +123,7 @@ export function LeaveQuotaTab() {
                   </td>
                   <td className="px-4 py-3 text-center font-medium">{q.totalDays}</td>
                   <td className="px-4 py-3 text-center">{q.usedDays}</td>
+                  <td className="px-4 py-3 text-center text-amber-600">{q.pendingDays ?? 0}</td>
                   <td className="px-4 py-3 text-center font-semibold">
                     <span className={rem <= 0 ? "text-red-600" : rem <= 3 ? "text-amber-600" : "text-emerald-700"}>
                       {rem}

@@ -7,7 +7,7 @@ jest.mock('../leaveQuota/leaveQuota.service');
 jest.mock('../../config/prisma', () => ({
   leaveType: { findUnique: jest.fn() },
   $transaction: jest.fn((fn) => fn({
-    staffSchedule: { upsert: jest.fn() },
+    staffSchedule: { upsert: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
     leave:         { update: jest.fn() },
   })),
 }));
@@ -30,6 +30,11 @@ const LEAVE = {
 };
 
 beforeEach(() => jest.clearAllMocks());
+
+// Pengajuan tidak boleh berlaku mundur (cuti) / maks. 7 hari ke belakang (izin, sakit) —
+// "hari ini" dipatok sebelum tanggal uji 2024-06.
+beforeAll(() => jest.useFakeTimers({ now: new Date('2024-05-30T03:00:00Z'), doNotFake: ['nextTick', 'setImmediate', 'setTimeout', 'setInterval', 'queueMicrotask'] }));
+afterAll(() => jest.useRealTimers());
 
 // ── getAll ─────────────────────────────────────────────────────────────
 

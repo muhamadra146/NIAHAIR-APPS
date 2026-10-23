@@ -26,6 +26,11 @@ const SICK = {
 
 beforeEach(() => jest.clearAllMocks());
 
+// Pengajuan tidak boleh berlaku mundur (cuti) / maks. 7 hari ke belakang (izin, sakit) —
+// "hari ini" dipatok sebelum tanggal uji 2024-06.
+beforeAll(() => jest.useFakeTimers({ now: new Date('2024-05-30T03:00:00Z'), doNotFake: ['nextTick', 'setImmediate', 'setTimeout', 'setInterval', 'queueMicrotask'] }));
+afterAll(() => jest.useRealTimers());
+
 // ── getAll ─────────────────────────────────────────────────────────────
 
 describe('getAll', () => {

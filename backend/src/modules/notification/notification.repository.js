@@ -21,6 +21,13 @@ const findOwned = (userId, id) =>
 const markAllRead = (userId) =>
   prisma.notification.updateMany({ where: { userId, isRead: false }, data: { isRead: true, readAt: new Date() } });
 
+/** Perbarui notifikasi pengajuan (mis. saat pengajuan dibatalkan) yang cocok dengan jenis & isi pesan */
+const updateRequestNotifications = ({ type, messageContains, since = null, data }) =>
+  prisma.notification.updateMany({
+    where: { type, message: { contains: messageContains }, ...(since ? { createdAt: { gte: since } } : {}) },
+    data,
+  });
+
 // ── Penerima ───────────────────────────────────────────────────────────
 
 const ACTIVE_USER = { isActive: true };
@@ -58,6 +65,6 @@ const countPendingRequests = async (employeeWhere) => {
 };
 
 module.exports = {
-  createMany, findForUser, countUnread, markRead, markAllRead, findOwned,
+  createMany, findForUser, countUnread, markRead, markAllRead, findOwned, updateRequestNotifications,
   findUsersByRoles, findUsersByEmployeeIds, findEmployeeName, findInvoiceNo, countPendingRequests,
 };

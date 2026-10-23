@@ -107,8 +107,8 @@ const requestCreated = async (kind, { employeeId, detail = "" }) => {
   }
 };
 
-/** Pengajuan disetujui / ditolak → karyawan yang mengajukan */
-const requestDecided = async (kind, { employeeId, approved, note = "" }) => {
+/** Pengajuan disetujui / ditolak → karyawan yang mengajukan (detail = tanggal pengajuan) */
+const requestDecided = async (kind, { employeeId, approved, note = "", detail = "" }) => {
   try {
     const label = REQUEST_LABEL[kind];
     const users = await repo.findUsersByEmployeeIds([employeeId]);
@@ -116,11 +116,57 @@ const requestDecided = async (kind, { employeeId, approved, note = "" }) => {
     return notifyUsers(users, {
       type:    "REQUEST_DECIDED",
       title:   `Pengajuan ${label.name} Anda ${status}`,
-      message: `Pengajuan ${label.name} Anda telah ${status}.${note ? ` Catatan: ${note}` : ""}`,
+      message: `Pengajuan ${label.name} Anda${detail ? ` (${detail})` : ""} telah ${status}.${note ? ` Catatan: ${note}` : ""}`,
       link:    label.link.replace("/pengajuan?", "/pengajuan?lihat=saya&"),
     });
   } catch (err) {
     logger.error(`[notification] requestDecided ${kind}: ${err.message}`);
+    return 0;
+  }
+};
+
+/**
+ * Pengajuan dibatalkan karyawan → notifikasi "Menunggu persetujuan Anda" milik penyetuju
+ * diperbarui menjadi "dibatalkan" (tidak perlu tindakan) dan ditandai sudah dibaca.
+ * detail = awal keterangan saat pengajuan dibuat (tanggal), dipakai mencocokkan notifikasinya.
+ */
+const requestCancelled = async (kind, { employeeId, detail = "", since = null }) => {
+  try {
+    const label = REQUEST_LABEL[kind];
+    const name  = (await repo.findEmployeeName(employeeId))?.name ?? "Karyawan";
+    // Notifikasi dibuat sesaat setelah pengajuan tersimpan
+    const from  = since ? new Date(new Date(since).getTime() - 60 * 1000) : null;
+    const result = await repo.updateRequestNotifications({
+      type:            `${kind}_REQUEST`,
+      messageContains: `${name} mengajukan ${label.name}${detail ? ` (${detail}` : ""}`,
+      since:           from,
+      data: {
+        title:   `Pengajuan ${label.name} dibatalkan — ${name}`,
+        message: `${name} membatalkan pengajuan ${label.name}${detail ? ` (${detail})` : ""}. Tidak perlu tindakan.`,
+        isRead:  true,
+        readAt:  new Date(),
+      },
+    });
+    return result?.count ?? 0;
+  } catch (err) {
+    logger.error(`[notification] requestCancelled ${kind}: ${err.message}`);
+    return 0;
+  }
+};
+
+/** Pengajuan yang sudah disetujui dibatalkan atasan → karyawan yang mengajukan */
+const requestRevoked = async (kind, { employeeId, detail = "", note = "" }) => {
+  try {
+    const label = REQUEST_LABEL[kind];
+    const users = await repo.findUsersByEmployeeIds([employeeId]);
+    return notifyUsers(users, {
+      type:    "REQUEST_DECIDED",
+      title:   `${label.name[0].toUpperCase()}${label.name.slice(1)} Anda dibatalkan`,
+      message: `${label.name[0].toUpperCase()}${label.name.slice(1)} Anda${detail ? ` (${detail})` : ""} yang sudah disetujui telah dibatalkan oleh atasan.${note ? ` ${note}` : ""}`,
+      link:    label.link.replace("/pengajuan?", "/pengajuan?lihat=saya&"),
+    });
+  } catch (err) {
+    logger.error(`[notification] requestRevoked ${kind}: ${err.message}`);
     return 0;
   }
 };
@@ -224,6 +270,6 @@ const markAllRead = (userId)     => repo.markAllRead(userId);
 
 module.exports = {
   notifyUsers, findApproverUsers,
-  requestCreated, requestDecided, jobsReadyForCalculation, commissionPending, payrollPending, loanCreated,
+  requestCreated, requestDecided, requestCancelled, requestRevoked, jobsReadyForCalculation, commissionPending, payrollPending, loanCreated,
   listMine, summary, markRead, markAllRead,
 };

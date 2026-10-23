@@ -3,6 +3,7 @@ import { toast } from "@/lib/toast";
 import {
   fetchLeaves, fetchMyLeaves, fetchLeave,
   createLeave, approveLeave, rejectLeave, cancelLeave,
+  cancelApprovedLeave, fetchLeaveWorkingDays,
 } from "../api/leave.api";
 import type { LeaveListParams, CreateLeaveInput } from "../types";
 
@@ -21,6 +22,15 @@ export const useMyLeaves = (params: Omit<LeaveListParams, "employeeId" | "branch
     enabled,
   });
 
+/** Pratinjau "N hari kerja" untuk form pengajuan cuti */
+export const useLeaveWorkingDays = (startDate: string, endDate: string, enabled = true) =>
+  useQuery({
+    queryKey: ["leaveWorkingDays", startDate, endDate],
+    queryFn:  () => fetchLeaveWorkingDays({ startDate, endDate }),
+    enabled:  enabled && !!startDate && !!endDate && endDate >= startDate,
+    retry:    false,
+  });
+
 export const useLeave = (id: string) =>
   useQuery({
     queryKey: ["leaves", id],
@@ -36,6 +46,7 @@ export const useCreateLeave = () => {
       qc.invalidateQueries({ queryKey: ["notifications"] });
       qc.invalidateQueries({ queryKey: ["myLeaves"] });
       qc.invalidateQueries({ queryKey: ["leaves"] });
+      qc.invalidateQueries({ queryKey: ["leaveQuotas"] }); // sisa jatah (menunggu persetujuan)
       toast.success("Pengajuan cuti berhasil dikirim");
     },
     onError: (err: any) => toast.error(err?.response?.data?.message ?? "Gagal mengajukan cuti"),
@@ -49,7 +60,10 @@ export const useApproveLeave = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notifications"] });
       qc.invalidateQueries({ queryKey: ["leaves"] });
-      qc.invalidateQueries({ queryKey: ["schedules"] });
+      qc.invalidateQueries({ queryKey: ["myLeaves"] });
+      qc.invalidateQueries({ queryKey: ["leaveQuotas"] });
+      qc.invalidateQueries({ queryKey: ["roster"] });
+      qc.invalidateQueries({ queryKey: ["my-schedules"] });
       toast.success("Cuti disetujui");
     },
     onError: (err: any) => toast.error(err?.response?.data?.message ?? "Gagal menyetujui cuti"),
@@ -63,6 +77,8 @@ export const useRejectLeave = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notifications"] });
       qc.invalidateQueries({ queryKey: ["leaves"] });
+      qc.invalidateQueries({ queryKey: ["myLeaves"] });
+      qc.invalidateQueries({ queryKey: ["leaveQuotas"] });
       toast.success("Cuti ditolak");
     },
     onError: (err: any) => toast.error(err?.response?.data?.message ?? "Gagal menolak cuti"),
@@ -76,7 +92,27 @@ export const useCancelLeave = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notifications"] });
       qc.invalidateQueries({ queryKey: ["myLeaves"] });
+      qc.invalidateQueries({ queryKey: ["leaves"] });
+      qc.invalidateQueries({ queryKey: ["leaveQuotas"] });
       toast.success("Pengajuan cuti dibatalkan");
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message ?? "Gagal membatalkan cuti"),
+  });
+};
+
+/** Penyetuju membatalkan cuti yang sudah disetujui (jatah dikembalikan, jadwal dipulihkan) */
+export const useCancelApprovedLeave = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => cancelApprovedLeave(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      qc.invalidateQueries({ queryKey: ["leaves"] });
+      qc.invalidateQueries({ queryKey: ["myLeaves"] });
+      qc.invalidateQueries({ queryKey: ["leaveQuotas"] });
+      qc.invalidateQueries({ queryKey: ["roster"] });
+      qc.invalidateQueries({ queryKey: ["my-schedules"] });
+      toast.success("Cuti dibatalkan — jatah dikembalikan dan jadwal dipulihkan");
     },
     onError: (err: any) => toast.error(err?.response?.data?.message ?? "Gagal membatalkan cuti"),
   });

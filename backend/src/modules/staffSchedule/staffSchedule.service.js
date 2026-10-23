@@ -3,6 +3,7 @@ const AppError        = require("../../common/errors/AppError");
 const prisma          = require("../../config/prisma");
 const repo            = require("./staffSchedule.repository");
 const divisionAccess  = require("../division/division.access");
+const { MANUAL_STATUSES } = require("./staffSchedule.validation");
 const { wibDayStart, wibDayEnd, toDateOnly, wibDateStr, wibParts } = require("../../utils/date");
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -20,8 +21,8 @@ const toDateStr = (date) => date.toISOString().split("T")[0];
 // Jadwal yang terlihat: Owner/SA semua; karyawan → rekan satu divisi di cabangnya;
 // tanpa divisi → hanya dirinya. canEdit = boleh diubah oleh user ini (manager divisi / Owner / SA).
 const getRoster = async ({ startDate, days = 7, branchId }, user = null) => {
-  if (!startDate) throw new AppError("startDate is required", StatusCodes.BAD_REQUEST);
-  if (!branchId)  throw new AppError("branchId is required",  StatusCodes.BAD_REQUEST);
+  if (!startDate) throw new AppError("Tanggal mulai wajib diisi", StatusCodes.BAD_REQUEST);
+  if (!branchId)  throw new AppError("Cabang wajib dipilih",  StatusCodes.BAD_REQUEST);
 
   const numDays = Math.min(Math.max(parseInt(days) || 7, 1), 62);
 
@@ -105,7 +106,7 @@ const assertNoApprovedAbsence = async (items) => {
 };
 
 const bulkUpsert = async ({ branchId, schedules }, user = null) => {
-  if (!branchId)  throw new AppError("branchId is required",   StatusCodes.BAD_REQUEST);
+  if (!branchId)  throw new AppError("Cabang wajib dipilih",   StatusCodes.BAD_REQUEST);
   if (!schedules?.length) return { updated: 0 };
 
   // Hanya manager divisi (untuk stafnya) atau Owner / Super Admin yang boleh mengubah jadwal
@@ -116,19 +117,45 @@ const bulkUpsert = async ({ branchId, schedules }, user = null) => {
     }
   }
 
-  // Validate shiftId references exist
-  const shiftIds = [...new Set(schedules.map((s) => s.shiftId).filter(Boolean))];
-  if (shiftIds.length) {
-    const found = await prisma.shift.findMany({ where: { id: { in: shiftIds } }, select: { id: true } });
-    if (found.length !== shiftIds.length)
-      throw new AppError("Ada shift yang tidak valid", StatusCodes.BAD_REQUEST);
+  // Cuti / Izin / Sakit hanya dari pengajuan yang disetujui — tidak bisa diatur manual (keputusan user 2026-10-19)
+  const manual = schedules.find((s) => s.status != null && !MANUAL_STATUSES.includes(s.status));
+  if (manual) {
+    throw new AppError(
+      "Status Cuti / Izin / Sakit hanya bisa berasal dari pengajuan yang disetujui, tidak bisa diatur di jadwal",
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
   }
 
+  // Validate shiftId references exist
+  const shiftIds = [...new Set(schedules.map((s) => s.shiftId).filter(Boolean))];
+  const shiftById = new Map();
+  if (shiftIds.length) {
+    const found = await prisma.shift.findMany({ where: { id: { in: shiftIds } }, select: { id: true, code: true, isWorking: true } });
+    if (found.length !== shiftIds.length)
+      throw new AppError("Ada shift yang tidak valid", StatusCodes.BAD_REQUEST);
+    found.forEach((s) => shiftById.set(s.id, s));
+  }
+
+  // workDate: tanggal mustahil (2026-02-30) → 400 "Tanggal tidak valid"
   const items = schedules.map((item) => ({
     ...item,
     workDate: toDateOnly(item.date),
     isClear:  item.status === null && item.shiftId === null,
   }));
+
+  // SCH-002: jadwal masuk kerja (WORKING) wajib punya shift kerja
+  for (const item of items) {
+    if (item.isClear) continue;
+    const status = item.status ?? (item.shiftId ? "WORKING" : "OFF");
+    if (status !== "WORKING") continue;
+    if (!item.shiftId) {
+      throw new AppError(`Shift wajib dipilih untuk jadwal masuk kerja (${toDateStr(item.workDate)})`, StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+    const shift = shiftById.get(item.shiftId);
+    if (shift && shift.isWorking === false) {
+      throw new AppError(`Shift ${shift.code} bukan shift kerja — pilih OFF untuk hari libur`, StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+  }
 
   // EMP-006: karyawan hanya boleh dijadwalkan di cabang yang boleh ia tempati
   // (cabang utama atau akses cabang aktif). Menghapus jadwal tetap boleh.
@@ -176,8 +203,8 @@ const bulkUpsert = async ({ branchId, schedules }, user = null) => {
 // ── Available staff (for Appointment selector) ────────────────────────────────
 
 const getAvailableStaff = async ({ date, branchId, startTime, endTime, excludeAppointmentId }) => {
-  if (!date)     throw new AppError("date is required",     StatusCodes.BAD_REQUEST);
-  if (!branchId) throw new AppError("branchId is required", StatusCodes.BAD_REQUEST);
+  if (!date)     throw new AppError("Tanggal wajib diisi",     StatusCodes.BAD_REQUEST);
+  if (!branchId) throw new AppError("Cabang wajib dipilih", StatusCodes.BAD_REQUEST);
 
   const workDate = toDateOnly(date);
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Info } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -7,6 +7,7 @@ import { Button }   from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label }    from "@/components/ui/label";
 import type { Shift, ScheduleCell, RosterEmployee, ScheduleStatus } from "../types";
+import { ABSENCE_STYLE } from "../scheduleStatus";
 import { WIB_TZ } from "@/lib/utils";
 
 interface Props {
@@ -47,6 +48,9 @@ export function ShiftCellDialog({
   if (!employee || !date) return null;
 
   const workingShifts = shifts.filter((s) => s.isWorking && s.isActive);
+  const absence = cell?.status === "LEAVE" || cell?.status === "IZIN" || cell?.status === "SAKIT"
+    ? ABSENCE_STYLE[cell.status]
+    : null;
 
   const handleSave = (shiftId: string | null, status: ScheduleStatus | null) => {
     onSave(shiftId, status, notes.trim() || null);
@@ -63,6 +67,17 @@ export function ShiftCellDialog({
         </DialogHeader>
 
         <div className="space-y-2 py-1">
+          {/* Cuti / izin / sakit hanya dari pengajuan yang disetujui (keputusan user 2026-10-19) */}
+          {absence && (
+            <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>
+                Hari ini berstatus <strong>{absence.label}</strong> ({absence.hint.toLowerCase()}).
+                Perubahan dilakukan lewat menu Pengajuan — mis. membatalkan cuti yang disetujui.
+              </span>
+            </div>
+          )}
+
           {/* Working shifts */}
           {workingShifts.map((shift) => {
             const isSelected = cell?.shift?.id === shift.id && cell?.status === "WORKING";
@@ -104,20 +119,6 @@ export function ShiftCellDialog({
             <p className="mt-0.5 text-xs opacity-75">Hari libur</p>
           </button>
 
-          {/* LEAVE */}
-          <button
-            type="button"
-            onClick={() => handleSave(null, "LEAVE")}
-            disabled={isPending}
-            className={[
-              "w-full rounded-lg border-2 px-4 py-3 text-left transition-all",
-              "bg-yellow-50 border-yellow-200 text-yellow-700",
-              cell?.status === "LEAVE" ? "ring-2 ring-offset-1 ring-primary" : "hover:opacity-80",
-            ].join(" ")}
-          >
-            <span className="font-semibold">LEAVE</span>
-            <p className="mt-0.5 text-xs opacity-75">Cuti / izin</p>
-          </button>
 
           {/* Notes */}
           <div className="pt-1 space-y-1.5">
@@ -154,7 +155,7 @@ export function ShiftCellDialog({
             Tutup
           </Button>
           {/* "Simpan" — only shown when there's an existing schedule to update notes on */}
-          {cell?.scheduleId && (
+          {cell?.scheduleId && !absence && (
             <Button
               size="sm"
               onClick={() => handleSave(cell.shift?.id ?? null, cell.status ?? null)}

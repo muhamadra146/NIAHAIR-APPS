@@ -1,4 +1,5 @@
 import type { RosterData, Shift } from "../types";
+import { ABSENCE_STYLE } from "../scheduleStatus";
 import { WIB_TZ } from "@/lib/utils";
 
 interface Props {
@@ -16,7 +17,7 @@ function shiftHours(startTime: string, endTime: string): number {
 
 function formatShortDate(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { weekday: "short", day: "numeric", timeZone: WIB_TZ });
+  return d.toLocaleDateString("id-ID", { weekday: "short", day: "numeric", timeZone: WIB_TZ });
 }
 
 export function RosterSummary({ data, shifts }: Props) {
@@ -64,7 +65,7 @@ export function RosterSummary({ data, shifts }: Props) {
     <div className="space-y-4">
       {/* ── Legend — all active master shifts ──────── */}
       <div className="rounded-xl border border-border bg-card p-4">
-        <h3 className="mb-3 text-sm font-semibold">Legend</h3>
+        <h3 className="mb-3 text-sm font-semibold">Keterangan</h3>
         <div className="space-y-2.5">
           {activeShifts.map((shift) => {
             const hex = shift.color ?? "#3b82f6";
@@ -85,6 +86,16 @@ export function RosterSummary({ data, shifts }: Props) {
             );
           })}
 
+          {(["LEAVE", "IZIN", "SAKIT"] as const).map((k) => (
+            <div key={k} className="flex items-center gap-2.5">
+              <div className={`h-4 w-7 rounded border shrink-0 ${ABSENCE_STYLE[k].cell}`} />
+              <span className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{ABSENCE_STYLE[k].label}</span>
+                {" — "}{ABSENCE_STYLE[k].hint}
+              </span>
+            </div>
+          ))}
+
           {unassigned > 0 && (
             <div className="flex items-center gap-2.5">
               <div className="h-4 w-7 rounded border border-dashed border-gray-300 shrink-0" />
@@ -98,15 +109,15 @@ export function RosterSummary({ data, shifts }: Props) {
 
       {/* ── Daily Staff Count ────────────────────────── */}
       <div className="rounded-xl border border-border bg-card p-4">
-        <h3 className="mb-3 text-sm font-semibold">Daily Staff Count</h3>
+        <h3 className="mb-3 text-sm font-semibold">Jumlah Karyawan per Hari</h3>
         <div className="space-y-1.5">
           {dailySummary.map(({ date, working, off }) => (
             <div key={date} className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">{formatShortDate(date)}</span>
               <div className="flex items-center gap-1.5">
                 <span className="font-semibold text-green-600">{working}</span>
-                <span className="text-muted-foreground">working /</span>
-                <span className="text-muted-foreground">{off} off</span>
+                <span className="text-muted-foreground">masuk /</span>
+                <span className="text-muted-foreground">{off} tidak masuk</span>
               </div>
             </div>
           ))}
@@ -115,15 +126,15 @@ export function RosterSummary({ data, shifts }: Props) {
 
       {/* ── Weekly Hours ─────────────────────────────── */}
       <div className="rounded-xl border border-border bg-card p-4">
-        <h3 className="mb-3 text-sm font-semibold">Weekly Hours</h3>
+        <h3 className="mb-3 text-sm font-semibold">Total Jam Kerja</h3>
         <div className="space-y-1.5">
           {employeeHours.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Belum ada jadwal assigned.</p>
+            <p className="text-xs text-muted-foreground">Belum ada jadwal.</p>
           ) : (
             employeeHours.map(({ name, hours }) => (
               <div key={name} className="flex items-center justify-between text-xs">
                 <span className="truncate max-w-[110px] text-muted-foreground">{name}</span>
-                <span className="font-semibold">{hours}h</span>
+                <span className="font-semibold">{hours} jam</span>
               </div>
             ))
           )}

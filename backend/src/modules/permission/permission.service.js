@@ -6,11 +6,10 @@ const repo    = require("./permission.repository");
 const divisionAccess = require("../division/division.access");
 const { assertNoOverlappingRequest } = require("../leave/leave.overlap");
 
-const toDateOnly = (d) => {
-  const date = new Date(d);
-  date.setUTCHours(0, 0, 0, 0);
-  return date;
-};
+const { toDateOnly, addDaysDateOnly } = require("../../utils/date");
+
+// Izin boleh diajukan paling lama 7 hari ke belakang (WIB) — keputusan user 2026-10-19
+const MAX_BACKDATE_DAYS = 7;
 
 const getAll = async ({ page = 1, limit = 20, employeeId, branchId, status }, scope = null) => {
   const { skip, take } = paginate(page, limit);
@@ -44,8 +43,16 @@ const create = async (employeeId, branchId, { type, date, reason, notes, estimat
   if (!employeeId) throw new AppError("Karyawan tidak ditemukan", StatusCodes.BAD_REQUEST);
 
   const permType = type ?? "ABSENCE";
-  const permDate = toDateOnly(date);
-  if (Number.isNaN(permDate.getTime())) throw new AppError("Tanggal tidak valid", StatusCodes.BAD_REQUEST);
+  const permDate = toDateOnly(date); // tanggal mustahil (2026-02-30) → 400 "Tanggal tidak valid"
+  if (permDate < addDaysDateOnly(undefined, -MAX_BACKDATE_DAYS)) {
+    throw new AppError(
+      `Izin hanya bisa diajukan paling lama ${MAX_BACKDATE_DAYS} hari ke belakang`,
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
+
+  const trimmedReason = typeof reason === "string" ? reason.trim() : "";
+  if (trimmedReason.length < 3) throw new AppError("Alasan minimal 3 karakter", StatusCodes.BAD_REQUEST);
 
   // estimatedArrival required for LATE
   if (permType === "LATE" && !estimatedArrival) {
@@ -71,8 +78,8 @@ const create = async (employeeId, branchId, { type, date, reason, notes, estimat
     branchId:         resolvedBranchId,
     type:             permType,
     date:             permDate,
-    reason,
-    notes:            notes ?? null,
+    reason:           trimmedReason,
+    notes:            notes?.trim() || null,
     estimatedArrival: estimatedArrival ?? null,
     status:           "PENDING",
   });
@@ -129,21 +136,28 @@ const cancel = async (id, employeeId) => {
 // ── Notifikasi (lihat notification.service) ─────────────────────────
 const notification = require("../notification/notification.service");
 const _tgl = (d) => new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const _detail = (r) => (r.type === "LATE" ? `terlambat, ${_tgl(r.date)}` : `tidak masuk, ${_tgl(r.date)}`);
 
 const createNotify = async (...args) => {
   const r = await create(...args);
-  await notification.requestCreated("PERMISSION", { employeeId: r.employeeId, detail: r.type === "LATE" ? `terlambat, ${_tgl(r.date)}` : `tidak masuk, ${_tgl(r.date)}` });
+  await notification.requestCreated("PERMISSION", { employeeId: r.employeeId, detail: _detail(r) });
   return r;
 };
 const approveNotify = async (id, reviewedBy, reviewNote, actor) => {
   const r = await approve(id, reviewedBy, reviewNote, actor);
-  await notification.requestDecided("PERMISSION", { employeeId: r.employeeId, approved: true, note: reviewNote });
+  await notification.requestDecided("PERMISSION", { employeeId: r.employeeId, approved: true, note: reviewNote, detail: _detail(r) });
   return r;
 };
 const rejectNotify = async (id, reviewedBy, reviewNote, actor) => {
   const r = await reject(id, reviewedBy, reviewNote, actor);
-  await notification.requestDecided("PERMISSION", { employeeId: r.employeeId, approved: false, note: reviewNote });
+  await notification.requestDecided("PERMISSION", { employeeId: r.employeeId, approved: false, note: reviewNote, detail: _detail(r) });
+  return r;
+};
+// Pengajuan dibatalkan → notifikasi "menunggu persetujuan" milik penyetuju diperbarui
+const cancelNotify = async (...args) => {
+  const r = await cancel(...args);
+  await notification.requestCancelled("PERMISSION", { employeeId: r.employeeId, detail: _detail(r), since: r.createdAt });
   return r;
 };
 
-module.exports = { getAll, getMy, getById, create: createNotify, approve: approveNotify, reject: rejectNotify, cancel };
+module.exports = { getAll, getMy, getById, create: createNotify, approve: approveNotify, reject: rejectNotify, cancel: cancelNotify };

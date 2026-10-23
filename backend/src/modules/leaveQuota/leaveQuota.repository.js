@@ -36,6 +36,30 @@ const sumPendingDays = async (employeeId, year, leaveTypeId = undefined) => {
   return Object.fromEntries(rows.map((r) => [r.leaveTypeId, Number(r._sum.totalDays ?? 0)]));
 };
 
+/**
+ * Hari cuti MENUNGGU persetujuan untuk banyak kuota sekaligus.
+ * @returns {Record<string, number>} kunci "employeeId|leaveTypeId|tahun" (tahun = tahun tanggal mulai)
+ */
+const sumPendingDaysMany = async (quotas) => {
+  const employeeIds = [...new Set(quotas.map((q) => q.employeeId))];
+  const years       = quotas.map((q) => q.year);
+  const rows = await prisma.leave.findMany({
+    where: {
+      employeeId:  { in: employeeIds },
+      status:      "PENDING",
+      leaveTypeId: { not: null },
+      startDate:   { gte: new Date(Date.UTC(Math.min(...years), 0, 1)), lt: new Date(Date.UTC(Math.max(...years) + 1, 0, 1)) },
+    },
+    select: { employeeId: true, leaveTypeId: true, startDate: true, totalDays: true },
+  });
+  const out = {};
+  for (const r of rows) {
+    const k = `${r.employeeId}|${r.leaveTypeId}|${new Date(r.startDate).getUTCFullYear()}`;
+    out[k] = (out[k] ?? 0) + Number(r.totalDays ?? 0);
+  }
+  return out;
+};
+
 const findById = (id) =>
   prisma.leaveQuota.findUnique({ where: { id }, include: INCLUDE });
 
@@ -64,4 +88,4 @@ const decrementUsed = (employeeId, leaveTypeId, year, days) =>
 const findEmployeeById = (id) =>
   prisma.employee.findUnique({ where: { id }, select: { id: true } });
 
-module.exports = { findEmployeeById, findAll, count, findMany, findOne, sumPendingDays, findById, upsert, incrementUsed, decrementUsed };
+module.exports = { findEmployeeById, findAll, count, findMany, findOne, sumPendingDays, sumPendingDaysMany, findById, upsert, incrementUsed, decrementUsed };

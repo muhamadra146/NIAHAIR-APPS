@@ -15,7 +15,11 @@ import {
   useCreatePermission, useApprovePermission, useRejectPermission, useCancelPermission,
 } from "../hooks";
 import type { PermissionRequest, PermissionType } from "../types";
-import { WIB_TZ, toWibDateStr } from "@/lib/utils";
+import { WIB_TZ, toWibDateStr, addDaysToDateStr } from "@/lib/utils";
+import { ConfirmDialog } from "@/features/leave/components/ConfirmDialog";
+
+// Izin boleh diajukan paling lama 7 hari ke belakang (WIB) — keputusan user 2026-10-19
+const MAX_BACKDATE_DAYS = 7;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -135,7 +139,8 @@ function ReviewDialog({ perm, onClose }: { perm: PermissionRequest; onClose: () 
 // ── Create dialog (employee) ──────────────────────────────────────────────────
 
 function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const today = toWibDateStr();
+  const today   = toWibDateStr();
+  const minDate = addDaysToDateStr(today, -MAX_BACKDATE_DAYS);
   const [type,             setType            ] = useState<PermissionType>("ABSENCE");
   const [date,             setDate            ] = useState(today);
   const [estimatedArrival, setEstimatedArrival] = useState("");
@@ -152,6 +157,8 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!reason.trim()) { setErr("Alasan wajib diisi"); return; }
+    if (reason.trim().length < 3) { setErr("Alasan minimal 3 karakter"); return; }
+    if (!date || date < minDate) { setErr(`Izin hanya bisa diajukan paling lama ${MAX_BACKDATE_DAYS} hari ke belakang`); return; }
     if (type === "LATE" && !estimatedArrival) { setErr("Estimasi jam datang wajib diisi"); return; }
     setErr(null);
     try {
@@ -197,7 +204,8 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
           <div className="space-y-1.5">
             <Label className="text-xs">Tanggal <span className="text-destructive">*</span></Label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} min={today} />
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} min={minDate} />
+            <p className="text-[11px] text-muted-foreground">Boleh diajukan sampai {MAX_BACKDATE_DAYS} hari ke belakang.</p>
           </div>
 
           {type === "LATE" && (
@@ -252,7 +260,7 @@ function PermissionCard({
   perm:     PermissionRequest;
   isAdmin:  boolean;
   onReview: (p: PermissionRequest) => void;
-  onCancel: (id: string) => void;
+  onCancel: (p: PermissionRequest) => void;
 }) {
   return (
     <div className="rounded-xl border bg-card p-4 shadow-sm">
@@ -295,7 +303,7 @@ function PermissionCard({
           {perm.status === "PENDING" && !isAdmin && (
             <Button size="sm" variant="ghost"
               className="h-7 text-xs text-destructive hover:text-destructive"
-              onClick={() => onCancel(perm.id)}>
+              onClick={() => onCancel(perm)}>
               Batalkan
             </Button>
           )}
@@ -315,6 +323,7 @@ export function PermissionPanel({ createOpen, onCreateClose, asApprover }: { cre
   const { user } = useAuthStore();
   const isAdmin  = asApprover ?? canApprove(user);
   const [reviewing,    setReviewing  ] = useState<PermissionRequest | null>(null);
+  const [cancelling,   setCancelling ] = useState<PermissionRequest | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
 
   const myQuery  = useMyPermissions({ status: (statusFilter as PermissionRequest["status"]) || undefined }, !isAdmin);
@@ -325,8 +334,10 @@ export function PermissionPanel({ createOpen, onCreateClose, asApprover }: { cre
   const pending    = items.filter((p) => p.status === "PENDING").length;
   const cancelMut  = useCancelPermission();
 
-  async function handleCancel(id: string) {
-    try { await cancelMut.mutateAsync(id); } catch { /* errors surfaced globally */ }
+  async function handleCancel() {
+    if (!cancelling) return;
+    try { await cancelMut.mutateAsync(cancelling.id); } catch { /* errors surfaced globally */ }
+    setCancelling(null);
   }
 
   return (
@@ -383,7 +394,7 @@ export function PermissionPanel({ createOpen, onCreateClose, asApprover }: { cre
                 perm={perm}
                 isAdmin={isAdmin}
                 onReview={setReviewing}
-                onCancel={handleCancel}
+                onCancel={setCancelling}
               />
             ))}
           </div>
@@ -395,6 +406,14 @@ export function PermissionPanel({ createOpen, onCreateClose, asApprover }: { cre
       {reviewing && (
         <ReviewDialog perm={reviewing} onClose={() => setReviewing(null)} />
       )}
+      <ConfirmDialog
+        open={!!cancelling}
+        title="Batalkan pengajuan izin?"
+        description={cancelling ? `Pengajuan izin ${fmtDate(cancelling.date)} akan dibatalkan dan tidak bisa dikembalikan.` : undefined}
+        isPending={cancelMut.isPending}
+        onConfirm={handleCancel}
+        onClose={() => setCancelling(null)}
+      />
     </>
   );
 }

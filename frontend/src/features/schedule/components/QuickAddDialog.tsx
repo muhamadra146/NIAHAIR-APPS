@@ -4,7 +4,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label }  from "@/components/ui/label";
-import type { Shift, RosterEmployee, ScheduleStatus } from "../types";
+import type { Shift, RosterEmployee, ManualScheduleStatus } from "../types";
 import { WIB_TZ } from "@/lib/utils";
 
 interface Props {
@@ -14,7 +14,7 @@ interface Props {
   employees:    RosterEmployee[];
   shifts:       Shift[];
   isPending:    boolean;
-  onSave:       (employeeId: string, shiftId: string | null, status: ScheduleStatus) => void;
+  onSave:       (employeeId: string, shiftId: string | null, status: ManualScheduleStatus) => void;
 }
 
 function shiftColorStyle(hex: string | null): React.CSSProperties {
@@ -27,7 +27,7 @@ function shiftColorStyle(hex: string | null): React.CSSProperties {
 }
 
 function formatDateLabel(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", { timeZone: WIB_TZ,
+  return new Date(dateStr).toLocaleDateString("id-ID", { timeZone: WIB_TZ,
     weekday: "long",
     month:   "long",
     day:     "numeric",
@@ -49,7 +49,7 @@ export function QuickAddDialog({
 
   const workingShifts = shifts.filter((s) => s.isWorking && s.isActive);
 
-  function save(shiftId: string | null, status: ScheduleStatus) {
+  function save(shiftId: string | null, status: ManualScheduleStatus) {
     if (!selectedId) return;
     onSave(selectedId, shiftId, status);
   }
@@ -58,13 +58,13 @@ export function QuickAddDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-base">Add Schedule</DialogTitle>
+          <DialogTitle className="text-base">Tambah Jadwal</DialogTitle>
           <p className="text-xs text-muted-foreground mt-0.5">{formatDateLabel(date)}</p>
         </DialogHeader>
 
         {employees.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            All employees already have a schedule for this date.
+            Semua karyawan yang Anda atur sudah punya jadwal di tanggal ini.
           </p>
         ) : (
           <div className="space-y-4 py-1">
@@ -115,18 +115,11 @@ export function QuickAddDialog({
                 className="w-full rounded-lg border-2 border-gray-200 bg-gray-100 px-4 py-3 text-left text-gray-500 transition-all hover:opacity-80 disabled:opacity-40"
               >
                 <span className="font-semibold">OFF</span>
-                <p className="mt-0.5 text-xs opacity-70">Day off</p>
+                <p className="mt-0.5 text-xs opacity-70">Hari libur</p>
               </button>
-
-              <button
-                type="button"
-                onClick={() => save(null, "LEAVE")}
-                disabled={isPending || !selectedId}
-                className="w-full rounded-lg border-2 border-yellow-200 bg-yellow-50 px-4 py-3 text-left text-yellow-800 transition-all hover:opacity-80 disabled:opacity-40"
-              >
-                <span className="font-semibold">LEAVE</span>
-                <p className="mt-0.5 text-xs opacity-70">Leave / cuti</p>
-              </button>
+              <p className="text-[11px] text-muted-foreground">
+                Cuti / izin / sakit tercatat otomatis dari pengajuan yang disetujui.
+              </p>
             </div>
           </div>
         )}

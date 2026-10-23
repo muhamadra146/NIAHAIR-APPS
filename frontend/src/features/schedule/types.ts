@@ -1,4 +1,8 @@
-export type ScheduleStatus = "WORKING" | "OFF" | "LEAVE";
+// LEAVE (cuti) / IZIN / SAKIT berasal dari pengajuan yang disetujui — hanya ditampilkan
+export type ScheduleStatus = "WORKING" | "OFF" | "LEAVE" | "IZIN" | "SAKIT";
+
+/** Status yang boleh diatur manual di roster */
+export type ManualScheduleStatus = "WORKING" | "OFF";
 
 export interface Shift {
   id:        string;

@@ -16,7 +16,7 @@ interface Props {
 
 function monthLabel(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: WIB_TZ });
+  return d.toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: WIB_TZ });
 }
 
 function weekLabel(startDate: string, days: number): string {
@@ -24,7 +24,7 @@ function weekLabel(startDate: string, days: number): string {
   const end   = new Date(startDate);
   end.setUTCDate(end.getUTCDate() + days - 1);
   const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", timeZone: WIB_TZ };
-  return `${start.toLocaleDateString("en-US", opts)} – ${end.toLocaleDateString("en-US", { ...opts, year: "numeric" })}`;
+  return `${start.toLocaleDateString("id-ID", opts)} – ${end.toLocaleDateString("id-ID", { ...opts, year: "numeric" })}`;
 }
 
 export function RosterNav({
@@ -38,7 +38,7 @@ export function RosterNav({
     <div className="flex flex-wrap items-center justify-between gap-3">
       {/* Left: navigation */}
       <div className="flex items-center gap-1.5">
-        <Button variant="outline" size="icon" onClick={onPrev} className="h-8 w-8">
+        <Button variant="outline" size="icon" onClick={onPrev} className="h-8 w-8" aria-label="Sebelumnya">
           <ChevronLeft className="h-4 w-4" />
         </Button>
 
@@ -48,12 +48,12 @@ export function RosterNav({
           </p>
         </div>
 
-        <Button variant="outline" size="icon" onClick={onNext} className="h-8 w-8">
+        <Button variant="outline" size="icon" onClick={onNext} className="h-8 w-8" aria-label="Berikutnya">
           <ChevronRight className="h-4 w-4" />
         </Button>
 
         <Button variant="outline" size="sm" onClick={onToday} className="ml-1 h-8">
-          {viewMode === "week" ? "This Week" : "This Month"}
+          {viewMode === "week" ? "Minggu Ini" : "Bulan Ini"}
         </Button>
 
         {/* Copy Last Week — only in week view */}
@@ -80,7 +80,7 @@ export function RosterNav({
       {/* Right: view toggle + month label */}
       <div className="flex items-center gap-2">
         <p className="hidden sm:block text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          NIAHAIR STAFF ROSTER&nbsp;&nbsp;{monthLabel(startDate)}
+          ROSTER KARYAWAN NIAHAIR&nbsp;&nbsp;{monthLabel(startDate)}
         </p>
 
         {/* View toggle */}
@@ -96,7 +96,7 @@ export function RosterNav({
             ].join(" ")}
           >
             <CalendarDays className="h-3.5 w-3.5" />
-            Week
+            Minggu
           </button>
           <button
             type="button"
@@ -108,7 +108,7 @@ export function RosterNav({
                 : "bg-background text-muted-foreground hover:bg-muted",
             ].join(" ")}
           >
-            Month
+            Bulan
           </button>
         </div>
       </div>

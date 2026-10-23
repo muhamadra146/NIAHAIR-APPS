@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { Plus, X } from "lucide-react";
-import type { RosterData, ScheduleCell, RosterEmployee, Shift, ScheduleStatus } from "../types";
+import type { RosterData, ScheduleCell, RosterEmployee, Shift, ScheduleStatus, ManualScheduleStatus } from "../types";
+import { ABSENCE_STYLE } from "../scheduleStatus";
 import { ShiftCellDialog } from "./ShiftCellDialog";
 import { QuickAddDialog }  from "./QuickAddDialog";
 import { WIB_TZ } from "@/lib/utils";
@@ -32,8 +33,8 @@ function shiftHours(startTime: string, endTime: string): number {
 function formatDayHeader(dateStr: string): { day: string; num: string } {
   const d = new Date(dateStr);
   return {
-    day: d.toLocaleDateString("en-US", { weekday: "short", timeZone: WIB_TZ }).toUpperCase(),
-    num: d.toLocaleDateString("en-US", { day: "numeric", timeZone: WIB_TZ }),
+    day: d.toLocaleDateString("id-ID", { weekday: "short", timeZone: WIB_TZ }).toUpperCase(),
+    num: d.toLocaleDateString("id-ID", { day: "numeric", timeZone: WIB_TZ }),
   };
 }
 
@@ -57,8 +58,8 @@ function UnassignBtn({ onUnassign }: { onUnassign: () => void }) {
       type="button"
       onClick={(e) => { e.stopPropagation(); onUnassign(); }}
       className="absolute top-1 right-1 z-10 flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white/90 text-gray-400 opacity-0 group-hover:opacity-100 hover:border-red-300 hover:bg-red-50 hover:text-red-500 transition-opacity shadow-sm"
-      title="Remove schedule"
-      aria-label="Remove schedule"
+      title="Hapus jadwal"
+      aria-label="Hapus jadwal"
     >
       <X className="h-2.5 w-2.5" />
     </button>
@@ -83,7 +84,7 @@ function ShiftCell({
         type="button"
         onClick={onClick}
         className="w-full min-h-[68px] rounded-xl border border-dashed border-gray-200 hover:border-primary/40 hover:bg-primary/5 transition-colors"
-        aria-label="Add schedule"
+        aria-label="Tambah jadwal"
       />
     );
   }
@@ -110,19 +111,19 @@ function ShiftCell({
     );
   }
 
-  // LEAVE
-  if (cell.status === "LEAVE") {
+  // CUTI / IZIN / SAKIT — dari pengajuan yang disetujui; tidak bisa dihapus dari roster
+  if (cell.status === "LEAVE" || cell.status === "IZIN" || cell.status === "SAKIT") {
+    const st = ABSENCE_STYLE[cell.status];
     return (
-      <div className="relative group">
-        {!readOnly && <UnassignBtn onUnassign={onUnassign} />}
-        <button
-          type="button"
-          onClick={onClick}
-          className="w-full min-h-[68px] rounded-xl border border-yellow-200 bg-yellow-50 flex items-center justify-center cursor-pointer hover:bg-yellow-100 transition-colors"
-        >
-          <span className="text-sm font-semibold text-yellow-700">LEAVE</span>
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={onClick}
+        title={`${st.hint} — ubah lewat menu Pengajuan`}
+        className={`w-full min-h-[68px] rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-colors ${st.cell} ${readOnly ? "cursor-default" : "cursor-pointer"}`}
+      >
+        <span className={`text-sm font-semibold ${st.text}`}>{st.label}</span>
+        {cell.shift?.code && <span className={`text-[10px] opacity-60 ${st.text}`}>({cell.shift.code})</span>}
+      </button>
     );
   }
 
@@ -151,7 +152,7 @@ function ShiftCell({
             </span>
           </>
         ) : (
-          <span className="text-xs font-semibold">WORKING</span>
+          <span className="text-xs font-semibold">MASUK</span>
         )}
       </button>
     </div>
@@ -207,12 +208,14 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave, read
     return { date, working, off, hours };
   });
 
-  // Employees who have no schedule for the quick-add date
+  // Karyawan yang BOLEH diatur user ini dan belum punya jadwal pada tanggal quick-add
   const unscheduledForDate: RosterEmployee[] = quickAddDate
     ? rows
+        .filter((r) => r.canEdit !== false)
         .filter((r) => !r.schedules.find((s) => s.date === quickAddDate)?.status)
         .map((r) => r.employee)
     : [];
+  const anyEditable = rows.some((r) => r.canEdit !== false);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -233,7 +236,7 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave, read
   );
 
   const handleQuickSave = useCallback(
-    (employeeId: string, shiftId: string | null, status: ScheduleStatus) => {
+    (employeeId: string, shiftId: string | null, status: ManualScheduleStatus) => {
       if (!quickAddDate) return;
       onCellSave(employeeId, quickAddDate, shiftId, status);
       setQuickAddDate(null);
@@ -256,7 +259,7 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave, read
           <thead>
             <tr className="border-b border-border">
               <th className={`sticky left-0 z-30 bg-card px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide ${viewMode === "month" ? "min-w-[160px]" : "w-[160px]"}`}>
-                Staff Names
+                Nama Karyawan
               </th>
               {dates.map((date) => {
                 const { day, num } = formatDayHeader(date);
@@ -266,11 +269,11 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave, read
                       <span className="text-xs font-bold text-foreground">
                         {day} {num}
                       </span>
-                      {!readOnly && <button
+                      {!readOnly && anyEditable && <button
                         type="button"
                         onClick={() => setQuickAddDate(date)}
                         className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border text-muted-foreground hover:border-primary hover:bg-primary hover:text-primary-foreground transition-colors"
-                        title={`Add schedule — ${day} ${num}`}
+                        title={`Tambah jadwal — ${day} ${num}`}
                       >
                         <Plus className="h-3 w-3" />
                       </button>}
@@ -283,7 +286,7 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave, read
             {/* Sub-header: daily working/off summary ──────────────────── */}
             <tr className="border-b border-border bg-muted/20">
               <td className="sticky left-0 z-30 bg-card shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)] px-4 py-2 text-xs font-semibold text-muted-foreground">
-                Staff Member
+                Masuk / Tidak masuk
               </td>
               {dailyStats.map(({ date, working, off }) => (
                 <td key={date} className="px-2 py-2 text-center text-xs font-semibold text-muted-foreground">
@@ -305,7 +308,7 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave, read
                     Belum ada karyawan di cabang ini
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Tambahkan karyawan ke cabang ini melalui menu Employees.
+                    Tambahkan karyawan ke cabang ini melalui menu Karyawan.
                   </p>
                 </td>
               </tr>
@@ -331,7 +334,12 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave, read
                     <ShiftCell
                       cell={cell}
                       readOnly={readOnly || row.canEdit === false}
-                      onClick={() => { if (!(readOnly || row.canEdit === false)) openEdit(row.employee, cell.date, cell); }}
+                      onClick={() => {
+                        if (readOnly || row.canEdit === false) return;
+                        // Hari Cuti / Izin / Sakit: dialog menampilkan keterangan; bila berasal dari
+                        // pengajuan yang disetujui, backend menolak perubahan (ubah lewat Pengajuan)
+                        openEdit(row.employee, cell.date, cell);
+                      }}
                       onUnassign={() => onCellSave(row.employee.id, cell.date, null, null)}
                     />
                   </td>
@@ -344,7 +352,7 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave, read
           <tfoot>
             <tr className="border-t-2 border-border bg-muted/20">
               <td className="sticky left-0 z-30 bg-card shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)] px-4 py-2.5 text-xs font-semibold text-muted-foreground">
-                Daily Count
+                Jumlah Harian
               </td>
               {dailyStats.map(({ date, working, off }) => (
                 <td key={date} className="px-2 py-2.5 text-center text-xs font-semibold">
@@ -356,11 +364,11 @@ export function RosterGrid({ data, shifts, viewMode, isPending, onCellSave, read
 
             <tr className="border-t border-border bg-muted/10">
               <td className="sticky left-0 z-30 bg-card shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)] px-4 py-2.5 text-xs font-semibold text-muted-foreground">
-                Weekly Hours
+                Total Jam
               </td>
               {dailyStats.map(({ date, hours }) => (
                 <td key={date} className="px-2 py-2.5 text-center text-xs font-medium text-muted-foreground">
-                  {hours > 0 ? `${hours}h` : "—"}
+                  {hours > 0 ? `${hours} jam` : "—"}
                 </td>
               ))}
             </tr>

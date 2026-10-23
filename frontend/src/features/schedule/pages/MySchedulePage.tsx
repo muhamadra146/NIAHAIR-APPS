@@ -58,6 +58,11 @@ function isToday(dateStr: string): boolean {
   return toWibDateStr() === dateStr;
 }
 
+/** Tanggal (YYYY-MM-DD) sudah lewat atau hari ini menurut WIB — hari mendatang belum bisa "belum absen" */
+function isPastOrToday(dateStr: string): boolean {
+  return dateStr <= toWibDateStr();
+}
+
 // ── Status display helpers ─────────────────────────────────────────────────────
 
 function ScheduleStatusBadge({ status }: { status: MyScheduleItem["status"] }) {
@@ -78,7 +83,21 @@ function ScheduleStatusBadge({ status }: { status: MyScheduleItem["status"] }) {
   if (status === "LEAVE") {
     return (
       <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400">
-        Cuti / Izin
+        Cuti
+      </Badge>
+    );
+  }
+  if (status === "IZIN") {
+    return (
+      <Badge className="bg-sky-100 text-sky-700 hover:bg-sky-100 border-sky-200 dark:bg-sky-900/30 dark:text-sky-400">
+        Izin
+      </Badge>
+    );
+  }
+  if (status === "SAKIT") {
+    return (
+      <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400">
+        Sakit
       </Badge>
     );
   }
@@ -176,7 +195,7 @@ function DayCard({ dateStr, item }: { dateStr: string; item: MyScheduleItem | nu
             </div>
           )}
 
-          {!item.attendance && (
+          {!item.attendance && isPastOrToday(dateStr) && (
             <p className="text-xs text-muted-foreground italic">Belum absen</p>
           )}
         </div>
@@ -187,7 +206,15 @@ function DayCard({ dateStr, item }: { dateStr: string; item: MyScheduleItem | nu
       )}
 
       {item && item.status === "LEAVE" && (
-        <p className="text-xs text-muted-foreground">Cuti / izin yang disetujui</p>
+        <p className="text-xs text-muted-foreground">Cuti yang disetujui</p>
+      )}
+
+      {item && item.status === "IZIN" && (
+        <p className="text-xs text-muted-foreground">Izin tidak masuk yang disetujui</p>
+      )}
+
+      {item && item.status === "SAKIT" && (
+        <p className="text-xs text-muted-foreground">Sakit yang disetujui</p>
       )}
 
       {/* Notes */}
@@ -205,9 +232,10 @@ function DayCard({ dateStr, item }: { dateStr: string; item: MyScheduleItem | nu
 function WeekSummary({ items }: { items: MyScheduleItem[] }) {
   const working = items.filter((i) => i.status === "WORKING").length;
   const off     = items.filter((i) => i.status === "OFF").length;
-  const leave   = items.filter((i) => i.status === "LEAVE").length;
+  const leave   = items.filter((i) => i.status === "LEAVE" || i.status === "IZIN" || i.status === "SAKIT").length;
+  // Hanya hari kerja yang sudah lewat / hari ini; hari mendatang belum bisa dihitung "belum absen"
   const absent  = items.filter(
-    (i) => i.status === "WORKING" && !i.attendance?.checkIn,
+    (i) => i.status === "WORKING" && !i.attendance?.checkIn && isPastOrToday(i.workDate.split("T")[0]),
   ).length;
 
   return (
@@ -222,7 +250,7 @@ function WeekSummary({ items }: { items: MyScheduleItem[] }) {
       </div>
       <div className="text-center">
         <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{leave}</p>
-        <p className="text-xs text-muted-foreground">Cuti</p>
+        <p className="text-xs text-muted-foreground">Cuti/Izin/Sakit</p>
       </div>
       <div className="text-center">
         <p className="text-xl font-bold text-rose-500 dark:text-rose-400">{absent}</p>
@@ -298,7 +326,7 @@ export function MySchedulePage() {
           <p className="text-base font-semibold text-foreground">Akun ini tidak memiliki jadwal karyawan</p>
           <p className="mt-2 text-sm text-muted-foreground">
             Jadwal Saya hanya tersedia untuk karyawan yang terdaftar di cabang.
-            Gunakan menu <strong>Schedule</strong> untuk mengelola jadwal tim.
+            Gunakan menu <strong>Jadwal</strong> untuk mengelola jadwal tim.
           </p>
         </div>
       </PageContainer>

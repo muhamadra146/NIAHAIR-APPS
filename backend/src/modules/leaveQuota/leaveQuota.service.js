@@ -19,7 +19,17 @@ const getQuotas = async ({ employeeId, year, page, limit } = {}, actor = null) =
     repo.findAll({ skip, take, where }),
     repo.count(where),
   ]);
-  return { data, meta: paginationMeta(total, pageNum, limitNum) };
+  return { data: await withRemainingMany(data), meta: paginationMeta(total, pageNum, limitNum) };
+};
+
+/** Daftar kuota (Pengaturan → Kuota Cuti): sisa = jatah − terpakai − menunggu persetujuan */
+const withRemainingMany = async (quotas) => {
+  if (!quotas?.length) return quotas ?? [];
+  const pending = (await repo.sumPendingDaysMany(quotas)) ?? {};
+  return quotas.map((q) => {
+    const pendingDays = pending[`${q.employeeId}|${q.leaveTypeId}|${q.year}`] ?? 0;
+    return { ...q, pendingDays, remainingDays: q.totalDays - q.usedDays - pendingDays };
+  });
 };
 
 // Self-service: kuota milik sendiri — bounded per karyawan (max N jenis cuti)
@@ -48,7 +58,7 @@ const getMyQuotas = async (employeeId, { year, page, limit } = {}) => {
 
 const assign = async ({ employeeId, leaveTypeId, year, totalDays }, actor = null) => {
   if (!employeeId || !leaveTypeId || !year || totalDays === undefined)
-    throw new AppError("employeeId, leaveTypeId, year, totalDays are required", StatusCodes.BAD_REQUEST);
+    throw new AppError("Karyawan, jenis cuti, tahun, dan jatah cuti wajib diisi", StatusCodes.BAD_REQUEST);
 
   const days = Number(totalDays);
   if (!Number.isInteger(days) || days < 0) {

@@ -5,6 +5,16 @@ const repo            = require("./shift.repository");
 
 const LOCKED_FIELDS = ["code", "startTime", "endTime", "isWorking"];
 
+/**
+ * Jam pulang harus setelah jam masuk. Dokumentasi (SCH-007) tidak mengatur shift lintas
+ * tengah malam, jadi 22:00–06:00 ditolak. Shift tanpa jam (mis. OFF) tetap boleh.
+ */
+const assertTimeOrder = (startTime, endTime) => {
+  if (startTime && endTime && endTime <= startTime) {
+    throw new AppError("Jam pulang harus setelah jam masuk", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+};
+
 const getAll = async ({ isActive, page, limit } = {}) => {
   const where = {};
   if (isActive !== undefined && isActive !== "") {
@@ -29,6 +39,7 @@ const getById = async (id) => {
 const createShift = async (body) => {
   const existing = await repo.findByCode(body.code);
   if (existing) throw new AppError("Kode shift sudah digunakan", StatusCodes.CONFLICT);
+  assertTimeOrder(body.startTime || null, body.endTime || null);
   const shift = await repo.create({
     code:      body.code,
     name:      body.name,
@@ -52,10 +63,17 @@ const updateShift = async (id, body) => {
     );
     if (attemptedLocked.length > 0) {
       throw new AppError(
-        "Cannot change working time because shift already has schedules. Create a new shift instead.",
+        "Jam kerja shift tidak bisa diubah karena shift sudah dipakai di jadwal. Buat shift baru.",
         StatusCodes.UNPROCESSABLE_ENTITY,
       );
     }
+  }
+
+  if (!isUsed) {
+    assertTimeOrder(
+      body.startTime !== undefined ? body.startTime || null : shift.startTime,
+      body.endTime   !== undefined ? body.endTime   || null : shift.endTime,
+    );
   }
 
   if (!isUsed && body.code && body.code !== shift.code) {

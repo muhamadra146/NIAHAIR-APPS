@@ -1,6 +1,7 @@
 import React from "react";
 import { Plus, X } from "lucide-react";
 import type { RosterData, ScheduleCell, RosterEmployee } from "../types";
+import { ABSENCE_STYLE, isAbsenceStatus } from "../scheduleStatus";
 import { WIB_TZ } from "@/lib/utils";
 
 interface Props {
@@ -58,15 +59,15 @@ function CellPill({
   if (status === "OFF") {
     pillClass += " bg-gray-100 text-gray-500 border-gray-200";
     content = "OFF";
-  } else if (status === "LEAVE") {
-    pillClass += " bg-yellow-50 text-yellow-700 border-yellow-300";
-    content = "LEAVE";
+  } else if (status === "LEAVE" || status === "IZIN" || status === "SAKIT") {
+    pillClass += ` ${ABSENCE_STYLE[status].pill}`;
+    content = ABSENCE_STYLE[status].label;
   } else {
     // WORKING
     pillStyle = shiftColorStyle(shift?.color ?? null);
     content = shift
       ? `${shift.code} ${shift.startTime}–${shift.endTime}`
-      : "WORKING";
+      : "MASUK";
   }
 
   if (isViewOnly) {
@@ -83,7 +84,7 @@ function CellPill({
       >
         {content}
       </button>
-      {cell.scheduleId && (
+      {cell.scheduleId && !isAbsenceStatus(status) && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onUnassign(); }}

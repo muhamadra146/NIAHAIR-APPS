@@ -10,7 +10,11 @@ export const shiftSchema = z.object({
   color:     z.string().optional().or(z.literal("")),
   isWorking: z.boolean().default(true),
   isActive:  z.boolean().optional(),
-});
+}).refine(
+  // Jam pulang harus setelah jam masuk (shift lintas tengah malam tidak didukung)
+  (v) => !v.startTime || !v.endTime || v.endTime > v.startTime,
+  { message: "Jam pulang harus setelah jam masuk", path: ["endTime"] },
+);
 
 export type ShiftFormValues = z.infer<typeof shiftSchema>;
 export type ShiftFormInput = z.input<typeof shiftSchema>;

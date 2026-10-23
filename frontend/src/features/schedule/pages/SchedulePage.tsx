@@ -13,6 +13,7 @@ import { RosterSummary }    from "../components/RosterSummary";
 import { MobileRosterView } from "../components/MobileRosterView";
 import { ShiftCellDialog }  from "../components/ShiftCellDialog";
 import type { RosterData, ScheduleStatus, ViewMode, ScheduleCell, RosterEmployee, BulkScheduleItem } from "../types";
+import { isAbsenceStatus } from "../scheduleStatus";
 import { wibDateParts } from "@/lib/utils";
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
@@ -47,6 +48,12 @@ function addMonths(date: Date, n: number): Date {
   d.setUTCMonth(d.getUTCMonth() + n);
   d.setUTCDate(1);
   return d;
+}
+
+/** Pesan galat dari respons API (fallback ke pesan umum) */
+function apiErrorMessage(err: unknown, fallback: string): string {
+  const r = (err as { response?: { data?: { message?: string; errors?: { message?: string }[] } } })?.response?.data;
+  return r?.errors?.[0]?.message ?? r?.message ?? fallback;
 }
 
 function daysInMonth(dateStr: string): number {
@@ -158,7 +165,7 @@ export function SchedulePage() {
     if (!branchId || viewMode !== "week") return;
 
     const confirmed = window.confirm(
-      "Salin semua jadwal dari minggu lalu ke minggu ini?\nJadwal yang sudah ada di minggu ini akan diganti.",
+      "Salin jadwal dari minggu lalu ke minggu ini?\nJadwal yang sudah ada di minggu ini akan diganti.\nHari Cuti / Izin / Sakit tidak ikut disalin dan tidak ditimpa.",
     );
     if (!confirmed) return;
 
@@ -167,15 +174,31 @@ export function SchedulePage() {
 
     setIsCopyPending(true);
     try {
-      const prevRoster = await fetchRoster({ startDate: prevStart, days: 7, branchId });
+      const [prevRoster, thisRoster] = await Promise.all([
+        fetchRoster({ startDate: prevStart, days: 7, branchId }),
+        fetchRoster({ startDate, days: 7, branchId }),
+      ]);
 
-      // Build bulk items: shift each date forward by 7 days
+      // Hari Cuti / Izin / Sakit minggu ini (dari pengajuan yang disetujui) tidak boleh ditimpa
+      const absentThisWeek = new Set<string>();
+      for (const row of thisRoster.rows) {
+        for (const cell of row.schedules) {
+          if (isAbsenceStatus(cell.status)) absentThisWeek.add(`${row.employee.id}|${cell.date}`);
+        }
+      }
+
+      // Build bulk items: shift each date forward by 7 days.
+      // Cuti / Izin / Sakit minggu lalu TIDAK disalin (hanya berasal dari pengajuan — keputusan user 2026-10-19)
       const schedules: BulkScheduleItem[] = [];
+      let skippedSource = 0, skippedTarget = 0;
       for (const row of prevRoster.rows) {
         if (row.canEdit === false) continue;            // hanya staf yang boleh diubah
         for (const cell of row.schedules) {
           if (!cell.status) continue;                    // skip unscheduled
+          if (isAbsenceStatus(cell.status)) { skippedSource++; continue; }
+          if (cell.status === "WORKING" && !cell.shift?.id) { skippedSource++; continue; } // SCH-002
           const newDate = toISODate(addDays(new Date(cell.date), 7));
+          if (absentThisWeek.has(`${row.employee.id}|${newDate}`)) { skippedTarget++; continue; }
           schedules.push({
             employeeId: row.employee.id,
             date:       newDate,
@@ -187,13 +210,21 @@ export function SchedulePage() {
       }
 
       if (schedules.length === 0) {
-        setCopyError("Minggu lalu tidak ada jadwal yang bisa disalin.");
+        setCopyError(
+          skippedSource + skippedTarget > 0
+            ? "Tidak ada jadwal yang bisa disalin — jadwal minggu lalu hanya berisi hari Cuti / Izin / Sakit atau bentrok dengan Cuti / Izin / Sakit minggu ini."
+            : "Minggu lalu tidak ada jadwal yang bisa disalin.",
+        );
         return;
       }
 
       await bulkMut.mutateAsync({ branchId, schedules });
-    } catch {
-      setCopyError("Gagal menyalin jadwal minggu lalu. Coba lagi.");
+      const notes: string[] = [];
+      if (skippedSource > 0) notes.push(`${skippedSource} hari Cuti/Izin/Sakit minggu lalu tidak disalin`);
+      if (skippedTarget > 0) notes.push(`${skippedTarget} hari Cuti/Izin/Sakit minggu ini tidak ditimpa`);
+      toast.success(`${schedules.length} jadwal disalin dari minggu lalu${notes.length ? ` (${notes.join("; ")})` : ""}.`);
+    } catch (err) {
+      setCopyError(apiErrorMessage(err, "Gagal menyalin jadwal minggu lalu. Coba lagi."));
     } finally {
       setIsCopyPending(false);
     }
@@ -214,10 +245,14 @@ export function SchedulePage() {
         toast.error("Jadwal ini hanya bisa diubah oleh manager divisinya atau Owner / Super Admin.");
         return;
       }
-      await bulkMut.mutateAsync({
-        branchId,
-        schedules: [{ employeeId, date, shiftId, status, notes }],
-      });
+      try {
+        await bulkMut.mutateAsync({
+          branchId,
+          schedules: [{ employeeId, date, shiftId, status, notes }],
+        });
+      } catch (err) {
+        toast.error(apiErrorMessage(err, "Gagal menyimpan jadwal. Coba lagi."));
+      }
     },
     [branchId, bulkMut, rosterData],
   );
@@ -285,7 +320,7 @@ export function SchedulePage() {
       {rosterLoading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Loading schedule…</span>
+          <span>Memuat jadwal…</span>
         </div>
       )}
 

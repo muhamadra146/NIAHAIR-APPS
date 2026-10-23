@@ -3,11 +3,8 @@ const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const repo     = require("./holiday.repository");
 
-const toDateOnly = (d) => {
-  const date = new Date(d);
-  date.setUTCHours(0, 0, 0, 0);
-  return date;
-};
+// Tanggal "YYYY-MM-DD" → 00:00 UTC (@db.Date); tanggal mustahil (2026-02-30) → 400 "Tanggal tidak valid"
+const { toDateOnly } = require("../../utils/date");
 
 const getAll = async ({ year, page, limit } = {}) => {
   const where = year ? { year: Number(year) } : {};
@@ -26,7 +23,7 @@ const getById = async (id) => {
 };
 
 const create = async ({ date, name }) => {
-  const d = toDateOnly(new Date(date));
+  const d = toDateOnly(date);
   const existing = await repo.findByDate(d);
   if (existing) throw new AppError("Sudah ada libur pada tanggal tersebut", StatusCodes.CONFLICT);
   return repo.create({ date: d, name, year: d.getUTCFullYear() });
@@ -39,7 +36,7 @@ const update = async (id, { date, name }) => {
   const data = {};
   if (name !== undefined) data.name = name;
   if (date !== undefined) {
-    const d = toDateOnly(new Date(date));
+    const d = toDateOnly(date);
     const existing = await repo.findByDate(d);
     if (existing && existing.id !== id) throw new AppError("Sudah ada libur pada tanggal tersebut", StatusCodes.CONFLICT);
     data.date = d;

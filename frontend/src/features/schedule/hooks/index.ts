@@ -25,7 +25,10 @@ export const useBulkSchedule = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: BulkScheduleInput) => bulkUpsertSchedule(input),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: ["roster"] }),
+    onSuccess:  () => {
+      qc.invalidateQueries({ queryKey: ["roster"] });
+      qc.invalidateQueries({ queryKey: ["my-schedules"] });
+    },
   });
 };
 

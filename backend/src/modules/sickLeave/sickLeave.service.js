@@ -8,10 +8,15 @@ const { assertNoOverlappingRequest } = require("../leave/leave.overlap");
 
 const MAX_NO_LETTER_PER_YEAR = 2;
 
-const toDateOnly = (d) => {
-  const date = new Date(d);
-  date.setUTCHours(0, 0, 0, 0);
-  return date;
+const { toDateOnly, addDaysDateOnly } = require("../../utils/date");
+
+// Sakit boleh diajukan paling lama 7 hari ke belakang (WIB) — keputusan user 2026-10-19
+const MAX_BACKDATE_DAYS = 7;
+
+// "dr. Budi" → "Budi": label "dr." ditambahkan saat ditampilkan (cegah "dr. dr. Budi")
+const cleanDoctorName = (name) => {
+  const n = String(name ?? "").trim().replace(/^(dr\.?\s+)+/i, "").trim();
+  return n || null;
 };
 
 const calcTotalDays = (start, end) =>
@@ -63,10 +68,16 @@ const create = async (employeeId, branchId, body) => {
 
   const { startDate, endDate, hasLetter = false, letterDate, doctorName, diagnosis, clinicName } = body;
 
+  // Tanggal mustahil (2026-02-30) → 400 "Tanggal tidak valid"
   const start = toDateOnly(startDate);
   const end   = toDateOnly(endDate);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) throw new AppError("Tanggal tidak valid", StatusCodes.BAD_REQUEST);
   if (end < start) throw new AppError("Tanggal selesai harus setelah tanggal mulai", StatusCodes.BAD_REQUEST);
+  if (start < addDaysDateOnly(undefined, -MAX_BACKDATE_DAYS)) {
+    throw new AppError(
+      `Sakit hanya bisa diajukan paling lama ${MAX_BACKDATE_DAYS} hari ke belakang`,
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
 
   const totalDays = calcTotalDays(start, end);
 
@@ -104,7 +115,7 @@ const create = async (employeeId, branchId, body) => {
     totalDays,
     hasLetter,
     letterDate: hasLetter && letterDate ? toDateOnly(letterDate) : null,
-    doctorName: hasLetter && doctorName ? doctorName.trim() : null,
+    doctorName: hasLetter ? cleanDoctorName(doctorName) : null,
     diagnosis:  diagnosis ? diagnosis.trim() : null,
     clinicName: hasLetter && clinicName ? clinicName.trim() : null,
     status: "PENDING",
@@ -168,6 +179,10 @@ const uploadDocument = async (id, employeeId, file) => {
   const sick = await repo.findById(id);
   if (!sick) throw new AppError("Data sakit tidak ditemukan", StatusCodes.NOT_FOUND);
   if (sick.employeeId !== employeeId) throw new AppError("Akses ditolak", StatusCodes.FORBIDDEN);
+  // Dokumen hanya bisa ditambahkan / diganti selama pengajuan masih menunggu persetujuan
+  if (sick.status !== "PENDING") {
+    throw new AppError("Dokumen hanya bisa diunggah untuk pengajuan yang masih menunggu persetujuan", StatusCodes.BAD_REQUEST);
+  }
 
   return repo.update(id, {
     letterPhotoUrl:      file.path,
@@ -179,20 +194,28 @@ const uploadDocument = async (id, employeeId, file) => {
 const notification = require("../notification/notification.service");
 const _tgl = (d) => new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
+const _detail = (r) => `${_tgl(r.startDate)} – ${_tgl(r.endDate)}`;
+
 const createNotify = async (...args) => {
   const r = await create(...args);
-  await notification.requestCreated("SICK", { employeeId: r.employeeId, detail: `${_tgl(r.startDate)} – ${_tgl(r.endDate)}` });
+  await notification.requestCreated("SICK", { employeeId: r.employeeId, detail: _detail(r) });
   return r;
 };
 const approveNotify = async (id, reviewedBy, reviewNote, actor) => {
   const r = await approve(id, reviewedBy, reviewNote, actor);
-  await notification.requestDecided("SICK", { employeeId: r.employeeId, approved: true, note: reviewNote });
+  await notification.requestDecided("SICK", { employeeId: r.employeeId, approved: true, note: reviewNote, detail: _detail(r) });
   return r;
 };
 const rejectNotify = async (id, reviewedBy, reviewNote, actor) => {
   const r = await reject(id, reviewedBy, reviewNote, actor);
-  await notification.requestDecided("SICK", { employeeId: r.employeeId, approved: false, note: reviewNote });
+  await notification.requestDecided("SICK", { employeeId: r.employeeId, approved: false, note: reviewNote, detail: _detail(r) });
+  return r;
+};
+// Pengajuan dibatalkan → notifikasi "menunggu persetujuan" milik penyetuju diperbarui
+const cancelNotify = async (...args) => {
+  const r = await cancel(...args);
+  await notification.requestCancelled("SICK", { employeeId: r.employeeId, detail: _detail(r), since: r.createdAt });
   return r;
 };
 
-module.exports = { getAll, getMy, getById, create: createNotify, approve: approveNotify, reject: rejectNotify, cancel, uploadDocument };
+module.exports = { getAll, getMy, getById, create: createNotify, approve: approveNotify, reject: rejectNotify, cancel: cancelNotify, uploadDocument };

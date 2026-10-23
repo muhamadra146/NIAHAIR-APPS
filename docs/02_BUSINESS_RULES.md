@@ -1802,6 +1802,8 @@ Shift menentukan:
 
 Shift tidak boleh kosong apabila status adalah WORKING.
 
+Jadwal WORKING tanpa shift, atau dengan shift non-kerja, ditolak (422). Jam pulang shift harus setelah jam masuk; shift lintas tengah malam tidak didukung (keputusan user 2026-10-19).
+
 ---
 
 # SCH-003
@@ -1936,6 +1938,8 @@ Employee tidak bekerja.
 Tidak dapat menerima Appointment.
 
 Payroll mengikuti aturan Leave.
+
+Status CUTI (LEAVE), IZIN, dan SAKIT **hanya berasal dari pengajuan yang disetujui** — tidak bisa diatur manual di roster (validasi & UI); roster tetap menampilkannya dengan label masing-masing (keputusan user 2026-10-19).
 
 ---
 
@@ -2135,6 +2139,8 @@ Hari ini.
 ↓
 
 Minggu depan.
+
+"Salin Minggu Lalu" tidak menyalin hari Cuti / Izin / Sakit dan tidak menimpa hari Cuti / Izin / Sakit minggu tujuan; jumlah hari yang dilewati dilaporkan (keputusan user 2026-10-19).
 
 ---
 
@@ -4508,6 +4514,25 @@ Employee memiliki Schedule.
 
 Attendance tidak boleh dibuat manual tanpa alasan.
 
+### Absen Masuk / Keluar (keputusan user 2026-10-19)
+
+- Absen masuk **dan absen keluar** hanya untuk jadwal sendiri, **pada tanggal jadwal (WIB)**, dan wajib GPS di dalam **radius cabang yang sama**. Karyawan di daftar pengecualian geofence (Pengaturan) dikecualikan untuk keduanya.
+- Lupa absen keluar di hari jadwal → lewat **Koreksi Jam Kerja**.
+- Hari **cuti / izin tidak masuk / sakit yang sudah disetujui** (status jadwal LEAVE / IZIN / SAKIT) tidak bisa absen; tombol absen disembunyikan.
+
+### Absensi Manual (keputusan user 2026-10-19)
+
+- Hanya **manager divisi karyawan** (EMP-033: staf satu divisi & cabang, bukan dirinya / sesama manager) atau **Owner / Super Admin**. Role lain (termasuk Office yang bukan manager divisi) ditolak.
+- Tidak untuk **tanggal yang akan datang** dan tidak untuk hari **cuti / izin / sakit yang disetujui**.
+- Jam masuk / keluar harus **pada tanggal jadwal (WIB)**; jam keluar setelah jam masuk.
+- Status **dihitung otomatis** dari jam & shift (Hadir / Terlambat / Pulang Cepat / Setengah Hari). Yang dipilih manual hanya **Absen** (tanpa jam).
+- Persetujuan Koreksi Jam Kerja menerapkan jam yang dikoreksi saja (jam lain tetap) dengan catatan "Koreksi disetujui: alasan"; aturan tanggal di atas tetap berlaku.
+
+### Kehadiran Tim & Laporan Kehadiran
+
+- Owner, Super Admin & Finance melihat semua karyawan; lainnya (termasuk manager divisi) hanya rekan **satu divisi di cabangnya**.
+- Hari kerja **setelah hari ini (WIB)** tanpa absensi belum dihitung Absen maupun hari terjadwal. Hari ini tanpa absensi tampil **Belum absen** di Kehadiran Tim; cuti / izin / sakit dihitung terpisah.
+
 ---
 
 # EMP-012
@@ -4531,6 +4556,15 @@ Leave membuat Employee tidak Available.
 - **Sisa jatah = jatah − terpakai (disetujui) − pengajuan yang masih menunggu persetujuan**, per jenis cuti per tahun. Pengajuan yang melebihi sisa ditolak.
 - Form pengajuan menampilkan sisa jatah, hari terpakai, dan hari yang masih menunggu; tombol Ajukan nonaktif bila jenis belum dipilih, jatah belum ditetapkan, atau durasi melebihi sisa.
 - Jenis cuti yang jatahnya belum ditetapkan untuk karyawan tidak bisa diajukan ("Hubungi HRD").
+
+### Hari Kerja, Tanggal Mundur & Pembatalan (keputusan user 2026-10-19)
+
+- **Durasi cuti = hari kerja.** Satu tanggal di rentang cuti memakai jatah **kecuali** jadwal karyawan pada tanggal itu OFF (status OFF atau shift tanpa jam) atau tanggal itu **hari libur nasional** (Pengaturan → Hari Libur). Tanggal **tanpa jadwal tetap dihitung** (sama dengan payroll: hari tanpa jadwal = hari kerja). Berlaku untuk cek sisa jatah, jumlah menunggu, penambahan / pengembalian hari terpakai, dan pratinjau "N hari kerja" di form. Rentang yang seluruhnya OFF / libur ditolak.
+- Hari kerja **dihitung ulang saat disetujui** (jadwal bisa berubah sejak diajukan); nilai itu yang menambah hari terpakai. Saat disetujui, hari OFF tetap OFF; hari lain di jadwal menjadi CUTI (LEAVE).
+- **Tanggal mundur:** izin dan sakit boleh diajukan paling lama **7 hari ke belakang** (WIB); cuti harus mulai **hari ini atau sesudahnya**. Selain itu ditolak (422).
+- Tanggal yang tidak ada di kalender (mis. 30 Februari) ditolak "Tanggal tidak valid" (400) — tidak digeser ke tanggal lain.
+- **Pembatalan cuti yang sudah disetujui:** oleh Owner / Super Admin / manager divisi (sesuai EMP-033), hanya bila cuti **belum dimulai** (tanggal mulai ≥ hari ini WIB). Status menjadi Dibatalkan, jatah dikembalikan (terpakai − hari kerja cuti tsb), jadwal CUTI dipulihkan: baris yang punya shift kembali ke shift itu (MASUK, atau OFF bila shift tanpa jam); baris tanpa shift (dibuat oleh persetujuan cuti) dihapus — tanggal kembali "belum dijadwalkan" dan manager mengisinya ulang. Karyawan diberi notifikasi. Izin / sakit yang sudah disetujui belum bisa dibatalkan.
+- Pengajuan yang dibatalkan karyawan memperbarui notifikasi penyetuju menjadi "dibatalkan — tidak perlu tindakan". Notifikasi pengajuan & keputusan menyebut tanggalnya.
 
 ---
 

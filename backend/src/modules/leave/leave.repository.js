@@ -32,4 +32,19 @@ const findOverlapping = (employeeId, start, end) =>
     select: { id: true, startDate: true, endDate: true, status: true },
   });
 
-module.exports = { findAll, count, findById, create, update, findOverlapping };
+/** Jadwal karyawan (semua cabang) dalam rentang tanggal — untuk menghitung hari kerja cuti */
+const findSchedulesInRange = (employeeId, start, end, client = prisma) =>
+  client.staffSchedule.findMany({
+    where:  { employeeId, workDate: { gte: start, lte: end } },
+    select: {
+      id: true, branchId: true, workDate: true, status: true, shiftId: true, notes: true,
+      shift:      { select: { id: true, startTime: true, isWorking: true } },
+      attendance: { select: { id: true } },
+    },
+  });
+
+/** Hari libur nasional (Pengaturan → Hari Libur) dalam rentang tanggal */
+const findHolidaysInRange = (start, end, client = prisma) =>
+  client.holiday.findMany({ where: { date: { gte: start, lte: end } }, select: { date: true } });
+
+module.exports = { findAll, count, findById, create, update, findOverlapping, findSchedulesInRange, findHolidaysInRange };

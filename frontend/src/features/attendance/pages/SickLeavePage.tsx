@@ -16,7 +16,19 @@ import {
   useUploadSickLeaveDocument,
 } from "../hooks";
 import type { SickLeave } from "../types";
-import { WIB_TZ, toWibDateStr, wibDateParts } from "@/lib/utils";
+import { WIB_TZ, toWibDateStr, wibDateParts, addDaysToDateStr } from "@/lib/utils";
+import { ConfirmDialog } from "@/features/leave/components/ConfirmDialog";
+import { toast } from "@/lib/toast";
+
+// Sakit boleh diajukan paling lama 7 hari ke belakang (WIB) — keputusan user 2026-10-19
+const MAX_BACKDATE_DAYS = 7;
+// Backend menerima foto & PDF (uploadSickLeave.middleware)
+const DOC_ACCEPT = "image/jpeg,image/png,image/webp,image/heic,application/pdf";
+
+const isPdf = (url: string) => /\.pdf($|\?)/i.test(url);
+
+// Nama dokter disimpan tanpa awalan "dr." — tampilkan dengan satu awalan saja
+const doctorLabel = (name: string) => `dr. ${name.replace(/^(dr\.?\s+)+/i, "")}`;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -128,7 +140,7 @@ function ReviewDialog({
                 {sl.hasLetter ? "Ada" : "Tidak ada"}
               </span>
             </p>
-            {sl.doctorName && <p className="text-muted-foreground">Dokter: {sl.doctorName}</p>}
+            {sl.doctorName && <p className="text-muted-foreground">Dokter: {doctorLabel(sl.doctorName)}</p>}
             {sl.diagnosis  && <p className="text-muted-foreground">Diagnosa: {sl.diagnosis}</p>}
             {sl.clinicName && <p className="text-muted-foreground">Klinik: {sl.clinicName}</p>}
             {sl.letterPhotoUrl && (
@@ -137,7 +149,7 @@ function ReviewDialog({
                 onClick={() => onViewPhoto(sl.letterPhotoUrl!)}
                 className="inline-flex items-center gap-1 text-blue-600 hover:underline text-xs"
               >
-                <FileImage className="h-3.5 w-3.5" /> Lihat Foto Dokumen
+                <FileImage className="h-3.5 w-3.5" /> Lihat Dokumen
               </button>
             )}
           </div>
@@ -175,7 +187,8 @@ function CreateDialog({
   onClose: () => void;
   noLetterCount: number;
 }) {
-  const today = toWibDateStr();
+  const today   = toWibDateStr();
+  const minDate = addDaysToDateStr(today, -MAX_BACKDATE_DAYS);
   const [startDate,  setStartDate ] = useState(today);
   const [endDate,    setEndDate   ] = useState(today);
   const [hasLetter,  setHasLetter ] = useState(false);
@@ -200,9 +213,11 @@ function CreateDialog({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (endDate < startDate) { setErr("Tanggal selesai tidak boleh sebelum tanggal mulai"); return; }
+    if (startDate < minDate) { setErr(`Sakit hanya bisa diajukan paling lama ${MAX_BACKDATE_DAYS} hari ke belakang`); return; }
     setErr(null);
+    let sl: SickLeave;
     try {
-      const sl = await createMut.mutateAsync({
+      sl = await createMut.mutateAsync({
         startDate,
         endDate,
         hasLetter,
@@ -213,12 +228,18 @@ function CreateDialog({
           clinicName: clinicName.trim() || undefined,
         }),
       });
-      if (docFile) {
+    } catch (e) { setErr(apiErr(e)); return; }
+    // Pengajuan sudah tersimpan. Bila unggah dokumen gagal, beri tahu — dokumen bisa
+    // diunggah ulang dari kartu pengajuan (tombol "Unggah Dokumen").
+    if (docFile) {
+      try {
         await uploadMut.mutateAsync({ id: sl.id, file: docFile });
+      } catch (e) {
+        toast.error(`Pengajuan sakit tersimpan, tetapi dokumen gagal diunggah: ${apiErr(e)}. Unggah ulang lewat tombol "Unggah Dokumen" pada pengajuan.`);
       }
-      reset();
-      onClose();
-    } catch (e) { setErr(apiErr(e)); }
+    }
+    reset();
+    onClose();
   }
 
   return (
@@ -247,7 +268,7 @@ function CreateDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">Tanggal Mulai <span className="text-destructive">*</span></Label>
-              <Input type="date" value={startDate}
+              <Input type="date" value={startDate} min={minDate}
                 onChange={(e) => { setStartDate(e.target.value); if (e.target.value > endDate) setEndDate(e.target.value); }}
               />
             </div>
@@ -294,13 +315,15 @@ function CreateDialog({
             </>
           )}
 
+          <p className="-mt-2 text-[11px] text-muted-foreground">Boleh diajukan sampai {MAX_BACKDATE_DAYS} hari ke belakang.</p>
+
           {/* Document upload */}
           <div className="space-y-1.5">
-            <Label className="text-xs">Foto Dokumen <span className="text-muted-foreground">(opsional)</span></Label>
+            <Label className="text-xs">Dokumen (foto / PDF) <span className="text-muted-foreground">(opsional)</span></Label>
             <input
               ref={fileRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic"
+              accept={DOC_ACCEPT}
               className="hidden"
               onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
             />
@@ -323,7 +346,7 @@ function CreateDialog({
                 className="w-full rounded-lg border border-dashed border-border px-4 py-3 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors flex items-center justify-center gap-2"
               >
                 <Paperclip className="h-3.5 w-3.5" />
-                Pilih foto surat dokter
+                Pilih foto / PDF surat dokter
               </button>
             )}
           </div>
@@ -351,9 +374,24 @@ function SickLeaveCard({
   sl:          SickLeave;
   isAdmin:     boolean;
   onReview:    (sl: SickLeave) => void;
-  onCancel:    (id: string) => void;
+  onCancel:    (sl: SickLeave) => void;
   onViewPhoto: (url: string) => void;
 }) {
+  const uploadMut = useUploadSickLeaveDocument();
+  const fileRef   = useRef<HTMLInputElement>(null);
+
+  async function handleUpload(file: File | undefined) {
+    if (!file) return;
+    try {
+      await uploadMut.mutateAsync({ id: sl.id, file });
+      toast.success("Dokumen berhasil diunggah");
+    } catch (e) {
+      toast.error(`Dokumen gagal diunggah: ${apiErr(e)}`);
+    } finally {
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
   return (
     <div className="rounded-xl border bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -382,7 +420,7 @@ function SickLeaveCard({
           )}
           {sl.doctorName && (
             <p className="mt-0.5 text-xs text-muted-foreground">
-              dr. {sl.doctorName}{sl.clinicName ? ` — ${sl.clinicName}` : ""}
+              {doctorLabel(sl.doctorName)}{sl.clinicName ? ` — ${sl.clinicName}` : ""}
             </p>
           )}
           {sl.letterPhotoUrl && (
@@ -392,8 +430,24 @@ function SickLeaveCard({
               className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700 hover:bg-blue-100 transition-colors"
             >
               <FileImage className="h-3 w-3" />
-              Lihat Foto Dokumen
+              Lihat Dokumen
             </button>
+          )}
+          {/* Unggah / ganti dokumen selama pengajuan masih menunggu */}
+          {sl.status === "PENDING" && !isAdmin && (
+            <>
+              <input ref={fileRef} type="file" accept={DOC_ACCEPT} className="hidden"
+                onChange={(e) => handleUpload(e.target.files?.[0])} />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploadMut.isPending}
+                className="mt-1.5 ml-1.5 inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors disabled:opacity-50"
+              >
+                <Paperclip className="h-3 w-3" />
+                {uploadMut.isPending ? "Mengunggah…" : sl.letterPhotoUrl ? "Ganti Dokumen" : "Unggah Dokumen"}
+              </button>
+            </>
           )}
           {sl.reviewNote && (
             <p className="mt-1 text-xs rounded-md bg-muted/50 px-2 py-1">
@@ -411,7 +465,7 @@ function SickLeaveCard({
           {sl.status === "PENDING" && !isAdmin && (
             <Button size="sm" variant="ghost"
               className="h-7 text-xs text-destructive hover:text-destructive"
-              onClick={() => onCancel(sl.id)}>
+              onClick={() => onCancel(sl)}>
               Batalkan
             </Button>
           )}
@@ -433,6 +487,13 @@ export function SickLeavePanel({ createOpen, onCreateClose, asApprover }: { crea
   const [reviewing,    setReviewing   ] = useState<SickLeave | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [lightboxUrl,  setLightboxUrl ] = useState<string | null>(null);
+  const [cancelling,   setCancelling ] = useState<SickLeave | null>(null);
+
+  // PDF dibuka di tab baru; foto ditampilkan di lightbox
+  const viewDocument = (url: string) => {
+    if (isPdf(url)) window.open(url, "_blank", "noopener,noreferrer");
+    else setLightboxUrl(url);
+  };
 
   const myQuery  = useMySickLeaves({ status: (statusFilter as SickLeave["status"]) || undefined }, !isAdmin);
   const allQuery = useSickLeaves({ status: (statusFilter as SickLeave["status"]) || undefined }, isAdmin);
@@ -451,8 +512,10 @@ export function SickLeavePanel({ createOpen, onCreateClose, asApprover }: { crea
     return wibDateParts(new Date(sl.startDate)).year === currentYear;
   }).length;
 
-  async function handleCancel(id: string) {
-    try { await cancelMut.mutateAsync(id); } catch { /* errors surfaced globally */ }
+  async function handleCancel() {
+    if (!cancelling) return;
+    try { await cancelMut.mutateAsync(cancelling.id); } catch { /* errors surfaced globally */ }
+    setCancelling(null);
   }
 
   return (
@@ -525,8 +588,8 @@ export function SickLeavePanel({ createOpen, onCreateClose, asApprover }: { crea
                 sl={sl}
                 isAdmin={isAdmin}
                 onReview={setReviewing}
-                onCancel={handleCancel}
-                onViewPhoto={setLightboxUrl}
+                onCancel={setCancelling}
+                onViewPhoto={viewDocument}
               />
             ))}
           </div>
@@ -535,7 +598,15 @@ export function SickLeavePanel({ createOpen, onCreateClose, asApprover }: { crea
 
       {/* Dialogs */}
       <CreateDialog open={createOpen} onClose={() => onCreateClose()} noLetterCount={noLetterCount} />
-      {reviewing   && <ReviewDialog sl={reviewing} onClose={() => setReviewing(null)} onViewPhoto={setLightboxUrl} />}
+      {reviewing   && <ReviewDialog sl={reviewing} onClose={() => setReviewing(null)} onViewPhoto={viewDocument} />}
+      <ConfirmDialog
+        open={!!cancelling}
+        title="Batalkan pengajuan sakit?"
+        description={cancelling ? `Pengajuan sakit ${fmtDate(cancelling.startDate)} – ${fmtDate(cancelling.endDate)} akan dibatalkan dan tidak bisa dikembalikan.` : undefined}
+        isPending={cancelMut.isPending}
+        onConfirm={handleCancel}
+        onClose={() => setCancelling(null)}
+      />
       {lightboxUrl && <PhotoLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
     </>
   );

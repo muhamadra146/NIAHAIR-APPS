@@ -52,7 +52,22 @@ const cancelController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const workingDaysController = async (req, res, next) => {
+  try {
+    const result = await svc.previewWorkingDays(req.user.employeeId, req.query);
+    return success(res, result, "Hari kerja cuti dihitung");
+  } catch (err) { next(err); }
+};
+
+const cancelApprovedController = async (req, res, next) => {
+  try {
+    const result = await svc.cancelApproved(req.params.id, req.user);
+    return success(res, result, "Cuti dibatalkan");
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   getAllController, getMyController, getByIdController,
   createController, approveController, rejectController, cancelController,
+  workingDaysController, cancelApprovedController,
 };

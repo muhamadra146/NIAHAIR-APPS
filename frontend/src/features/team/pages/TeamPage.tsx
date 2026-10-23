@@ -28,7 +28,7 @@ export function TeamPage() {
   // Manager divisi role apa pun ikut memantau timnya (EMP-033; data dibatasi backend)
   if (TEAM_AND_SELF_ROLES.includes(roleCode) || isDivisionManager(user)) {
     return (
-      <PageContainer title="Attendance" subtitle="Catat kehadiran kamu dan monitor kehadiran tim">
+      <PageContainer title="Absensi"subtitle="Catat kehadiran kamu dan monitor kehadiran tim">
         <Tabs defaultValue="self" className="space-y-4">
           <TabsList>
             <TabsTrigger value="self">Absensi Saya</TabsTrigger>

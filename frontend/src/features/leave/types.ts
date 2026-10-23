@@ -33,6 +33,14 @@ export interface LeaveListParams {
   status?:     LeaveStatus | "";  // CANCELLED included via LeaveStatus union
 }
 
+/** Durasi cuti: hari kerja = hari kalender − OFF − libur nasional */
+export interface LeaveWorkingDays {
+  totalDays:    number;
+  calendarDays: number;
+  offDays:      number;
+  holidayDays:  number;
+}
+
 export interface CreateLeaveInput {
   startDate:   string;
   endDate:     string;
