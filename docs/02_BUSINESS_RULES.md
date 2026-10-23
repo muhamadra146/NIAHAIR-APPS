@@ -884,6 +884,9 @@ Promo
 - Diskon persen dihitung per item yang dapat diskon. Diskon nominal dipotong dari total invoice dan dibatasi total item yang dapat diskon; saat dikirim ke Accurate dibagi proporsional ke item tersebut.
 - Paket baru default mencentang kategori JASA. Paket tanpa kategori tidak memberi diskon apa pun.
 - Hanya Super Admin, Owner, Manager, dan Finance yang dapat mengubah data item (kategori komisi & tanda diskon member).
+- **Diskon manual vs diskon membership persen (keputusan owner 2026-10-23):** pada item yang dapat diskon member, bila kasir memberi diskon manual (persen atau nominal), baris memakai **yang nominalnya lebih besar** — diskon membership (harga × qty × persen paket, dibulatkan ke rupiah) atau diskon manual. Tidak pernah ditumpuk; bila sama besar dihitung sebagai diskon membership. Yang dipakai dicatat sesuai jenisnya (diskon membership atau diskon item) di invoice, struk, dan laporan. Contoh Gold 10%, layanan Rp 500.000: manual 20% → diskon item Rp 100.000; manual 5% → diskon membership Rp 50.000; manual Rp 30.000 → diskon membership Rp 50.000; manual Rp 80.000 → diskon item Rp 80.000. Item yang tidak dapat diskon member hanya memakai diskon manual.
+- Mengedit invoice member setelah membership pelanggan berakhir/dibatalkan tetap memakai paket membership asal invoice.
+- **Masa berlaku (keputusan owner 2026-10-23):** membership berlaku sampai **akhir hari WIB (23:59:59 WIB)** pada tanggal kedaluwarsa = tanggal penetapan/perpanjangan (WIB) + durasi hari paket. Contoh: ditetapkan 23 Okt 2026, 365 hari → berlaku sepanjang 23 Okt 2027, tidak berlaku mulai 24 Okt 2027 00:00 WIB.
 
 ### Paket Membership (keputusan owner 2026-10-18)
 

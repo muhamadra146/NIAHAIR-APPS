@@ -45,7 +45,9 @@ const STATUS_COLOR: Record<InvoiceStatus, string> = {
   CANCELLED: "",
 };
 
+// Sama dengan backend: DELETE /payments/:id dan DELETE /invoices/:id hanya Super Admin/Owner/Manager
 const CAN_DELETE_PAYMENT: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
+const CAN_DELETE_INVOICE: string[] = ["SUPER_ADMIN", "OWNER", "MANAGER"];
 
 export function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -69,6 +71,7 @@ export function InvoiceDetailPage() {
   // Finance: lihat saja — tanpa tombol edit/bayar/deposit/hapus
   const isViewOnly       = useViewOnly();
   const canDeletePayment = !isViewOnly && (user ? CAN_DELETE_PAYMENT.includes(user.roleCode) : false);
+  const canDeleteInvoice = !isViewOnly && (user ? CAN_DELETE_INVOICE.includes(user.roleCode) : false);
 
   if (isLoading) {
     return (
@@ -158,7 +161,7 @@ export function InvoiceDetailPage() {
                   Struk
                 </Button>
               )}
-              {!isViewOnly && invoice.status !== "PAID" && (
+              {canDeleteInvoice && invoice.status !== "PAID" && (
                 // Ikuti Accurate: invoice yang masih punya pembayaran tidak bisa dihapus/dibatalkan
                 <div className="flex flex-col items-end">
                   <Button

@@ -52,7 +52,8 @@ const {
   findByIdForWorksheet,
 } = require("./invoice.repository");
 const { getActiveMembership } = require("../membership/membership.service");
-const { isMemberDiscountEligible } = require("../membership/membership.discount");
+const { isMemberDiscountEligible, memberLineDiscount } = require("../membership/membership.discount");
+const { findById: findMembershipById } = require("../membership/membership.repository");
 const { findJobQtyLimitViolations } = require("../commission/commission.calc");
 const { computeDocumentTax }        = require("../../utils/tax");
 
@@ -99,14 +100,18 @@ const rupiah = (v) => `Rp ${Number(v).toLocaleString("id-ID", { maximumFractionD
 //
 // Satu sumber perhitungan supaya edit invoice selalu menghasilkan angka yang sama dengan
 // create untuk input yang sama (P2: diskon membership tidak boleh terpotong dua kali).
-// Diskon membership persen dihitung dari harga asli (price × qty), bukan dari nilai yang
-// sudah didiskon. Bila body membawa membershipDiscountTotal (override dari POS), diskon
-// per baris dipakai apa adanya dan membership tidak ditambahkan lagi.
+// Diskon membership persen dihitung dari harga asli (price × qty) dan dibandingkan dengan
+// diskon manual baris: yang nominalnya lebih besar yang dipakai, tidak ditumpuk (keputusan
+// owner 2026-10-23). Baris dari POS berisi diskon manual saja; membershipDiscountTotal dari
+// POS = 0 berarti kasir mematikan diskon membership, selain itu persen dihitung ulang di sini.
 const computeInvoiceLines = async ({ items, branchId, taxable, inclusiveTax, activeMembership, membershipDiscountOverride, bodyMembershipDiscount }) => {
   const itemsData    = [];
   let membershipDiscountRunning = D("0");
   // Total (setelah diskon item + PPN) item yang dapat diskon membership — batas diskon nominal
   let memberEligibleTotal = D("0");
+  // Membership persen berlaku kecuali kasir mematikannya (POS mengirim membershipDiscountTotal = 0)
+  const memberPercentOn = activeMembership?.membership?.discountType === "PERCENTAGE"
+    && !(membershipDiscountOverride && (bodyMembershipDiscount ?? D("0")).lte(D("0")));
   let totalSubtotal = D("0");
   let totalDiscount = D("0");
   // Dasar PPN = Σ (harga × qty − diskon) baris layanan kena PPN; PPN dihitung SEKALI per dokumen
@@ -156,19 +161,14 @@ const computeInvoiceLines = async ({ items, branchId, taxable, inclusiveTax, act
       : D(line.discountAmount ?? 0);
     assertLineAmounts({ price, qty, discount });
 
-    // Apply PERCENTAGE membership discount hanya pada item yang dapat diskon member
-    if (
-      !isMaterial &&
-      !membershipDiscountOverride &&
-      activeMembership?.membership?.discountType === "PERCENTAGE" &&
-      memberEligible
-    ) {
-      const membershipItemDiscount = price.mul(qty)
-        .mul(D(activeMembership.membership.discountValue))
-        .div(D("100"))
-        .toDecimalPlaces(0);
-      discount = discount.add(membershipItemDiscount);
-      membershipDiscountRunning = membershipDiscountRunning.add(membershipItemDiscount);
+    // Diskon membership persen vs diskon manual baris: dipakai yang NOMINALNYA LEBIH BESAR,
+    // tidak ditumpuk (keputusan owner 2026-10-23). Seri → diskon membership.
+    if (!isMaterial && memberPercentOn && memberEligible) {
+      const membershipItemDiscount = memberLineDiscount(price, qty, activeMembership.membership.discountValue);
+      if (membershipItemDiscount.gte(discount)) {
+        discount = membershipItemDiscount;
+        membershipDiscountRunning = membershipDiscountRunning.add(membershipItemDiscount);
+      }
     }
 
     const grossLine       = price.mul(qty).sub(discount);
@@ -236,17 +236,17 @@ const computeInvoiceLines = async ({ items, branchId, taxable, inclusiveTax, act
   let membershipDiscountTotal = D("0");
   const membershipId = activeMembership?.membership?.id ?? null;
 
-  if (membershipDiscountOverride) {
+  if (activeMembership?.membership?.discountType === "PERCENTAGE") {
+    // Persen: dihitung ulang per baris di atas (angka dari POS hanya penanda aktif/tidak)
+    membershipDiscountTotal = membershipDiscountRunning;
+  } else if (membershipDiscountOverride) {
     membershipDiscountTotal = bodyMembershipDiscount;
     // Nominal: tidak boleh melebihi total item yang dapat diskon
     if (activeMembership?.membership?.discountType === "FIXED_AMOUNT" && membershipDiscountTotal.gt(memberEligibleTotal)) {
       membershipDiscountTotal = memberEligibleTotal;
     }
   } else if (activeMembership) {
-    if (activeMembership.membership.discountType === "PERCENTAGE") {
-      membershipDiscountTotal = membershipDiscountRunning;
-      // grandTotal unaffected here — PERCENTAGE was folded into per-item discount above
-    } else if (activeMembership.membership.discountType === "FIXED_AMOUNT") {
+    if (activeMembership.membership.discountType === "FIXED_AMOUNT") {
       const discountValue    = D(activeMembership.membership.discountValue);
       membershipDiscountTotal = discountValue.gt(memberEligibleTotal) ? memberEligibleTotal : discountValue;
     }
@@ -570,6 +570,16 @@ const updateInvoice = async (id, body, userId) => {
     activeMembership = await getActiveMembership(existing.customerId);
   } catch (err) {
     logger.warn(`[invoice update] membership fetch failed for customer ${existing.customerId}: ${err.message}`);
+  }
+  // Membership pelanggan sudah berakhir/dibatalkan, tetapi POS meminta diskon membership invoice
+  // dipertahankan (membershipDiscountTotal > 0): hitung ulang dengan paket asal invoice.
+  if (!activeMembership && existing.membershipId && bodyMembershipDiscount?.gt(D("0"))) {
+    try {
+      const original = await findMembershipById(existing.membershipId);
+      if (original) activeMembership = { membership: original };
+    } catch (err) {
+      logger.warn(`[invoice update] original membership fetch failed for invoice ${id}: ${err.message}`);
+    }
   }
 
   // Re-resolve prices and build new line items — fungsi yang SAMA dengan createInvoice (P2)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { itemDiscountParts, invoiceDiscountSummary, invoiceDiscountTotal, discountText, isMemberDiscountEligible, posMembershipPercentTotal, type PosDiscountLine } from "./discount";
+import { itemDiscountParts, invoiceDiscountSummary, invoiceDiscountTotal, discountText, isMemberDiscountEligible, posMembershipPercentTotal, effectiveLineDiscount, type PosDiscountLine } from "./discount";
 import type { Invoice, InvoiceLineItem } from "./types";
 
 // Requirement Finance #2: teks diskon "Diskon 10% Rp 50.000" & jenis diskon dibedakan
@@ -34,12 +34,21 @@ describe("itemDiscountParts", () => {
     expect(parts.map((p) => p.kind)).toEqual(["item", "membership"]);
   });
 
-  it("diskon nominal + membership persen dipisah", () => {
+  // CRM-014 (keputusan owner 2026-10-23): yang lebih besar dipakai, tidak ditumpuk
+  it("diskon nominal lebih besar dari membership → seluruhnya diskon item", () => {
     const parts = itemDiscountParts(
       line({ discount: "45000" }),
       inv({ totalDiscount: "45000", membershipDiscountTotal: "25000", membership: GOLD }),
     );
-    expect(parts.map(discountText)).toEqual(["Diskon Rp 20.000", "Diskon Membership Gold 5% Rp 25.000"]);
+    expect(parts.map(discountText)).toEqual(["Diskon Rp 45.000"]);
+  });
+
+  it("membership lebih besar dari diskon nominal → seluruhnya diskon membership", () => {
+    const parts = itemDiscountParts(
+      line({ discount: "25000" }),
+      inv({ totalDiscount: "25000", membershipDiscountTotal: "25000", membership: GOLD }),
+    );
+    expect(parts.map(discountText)).toEqual(["Diskon Membership Gold 5% Rp 25.000"]);
   });
 
   it("membership persen tidak berlaku untuk item yang kategorinya tidak dicentang di paket", () => {
@@ -97,13 +106,22 @@ describe("isMemberDiscountEligible", () => {
     expect(parts.map(discountText)).toEqual(["Diskon Membership Gold 10% Rp 50.000"]);
   });
 
-  it("baris POS dinaikkan kasir ke 20% (Gold 10%) → 10% membership + 10% diskon item", () => {
+  it("manual 20% lebih besar dari Gold 10% → seluruhnya diskon item 20%", () => {
     const GOLD10 = { ...GOLD, discountValue: "10" };
     const parts = itemDiscountParts(
       line({ price: "250000", qty: "2", discount: "100000", discountType: "PERCENT", discountPercent: "20" }),
-      inv({ totalDiscount: "100000", membershipDiscountTotal: "50000", membership: GOLD10 }),
+      inv({ totalDiscount: "100000", membershipDiscountTotal: "0", membership: GOLD10 }),
     );
-    expect(parts.map(discountText)).toEqual(["Diskon 10% Rp 50.000", "Diskon Membership Gold 10% Rp 50.000"]);
+    expect(parts.map(discountText)).toEqual(["Diskon 20% Rp 100.000"]);
+  });
+
+  it("manual 5% lebih kecil dari Gold 10% → diskon membership 10% (input 5% tetap tersimpan)", () => {
+    const GOLD10 = { ...GOLD, discountValue: "10" };
+    const parts = itemDiscountParts(
+      line({ price: "250000", qty: "2", discount: "50000", discountType: "PERCENT", discountPercent: "5" }),
+      inv({ totalDiscount: "50000", membershipDiscountTotal: "50000", membership: GOLD10 }),
+    );
+    expect(parts.map(discountText)).toEqual(["Diskon Membership Gold 10% Rp 50.000"]);
   });
 
   it("diskon nominal pada item dikecualikan tidak dibaca sebagai diskon membership", () => {
@@ -115,23 +133,30 @@ describe("isMemberDiscountEligible", () => {
   });
 });
 
-describe("posMembershipPercentTotal", () => {
+describe("effectiveLineDiscount / posMembershipPercentTotal — yang lebih besar (CRM-014)", () => {
   const GOLD10 = { ...GOLD, discountValue: "10" };
   const jasa  = { categoryId: "jasa", excludeMemberDiscount: false, category: { parentId: null } };
   const pos = (over: Partial<PosDiscountLine>): PosDiscountLine =>
-    ({ price: "250000", qty: "2", discount: "10", discountType: "PERCENT", isMaterial: false, memberItem: jasa, ...over });
+    ({ price: "250000", qty: "2", discount: "0", discountType: "AMOUNT", isMaterial: false, memberItem: jasa, ...over });
 
-  it("persen membership per baris dibatasi persen paket (20% kasir → 10% membership)", () => {
-    expect(posMembershipPercentTotal([pos({})], GOLD10)).toBe(50000);
-    expect(posMembershipPercentTotal([pos({ discount: "20" })], GOLD10)).toBe(50000);
-    expect(posMembershipPercentTotal([pos({ discount: "5" })], GOLD10)).toBe(25000);
+  it.each([
+    ["tanpa diskon manual → member 10%", {}, 50000, 50000],
+    ["manual 20% > member 10% → manual", { discountType: "PERCENT" as const, discount: "20" }, 100000, 0],
+    ["manual 5% < member 10% → member", { discountType: "PERCENT" as const, discount: "5" }, 50000, 50000],
+    ["manual 10% = member 10% → member", { discountType: "PERCENT" as const, discount: "10" }, 50000, 50000],
+    ["nominal 30rb < member 50rb → member", { discount: "30000" }, 50000, 50000],
+    ["nominal 80rb > member 50rb → manual", { discount: "80000" }, 80000, 0],
+  ])("%s", (_l, over, discount, memberShare) => {
+    const r = effectiveLineDiscount(pos(over), GOLD10);
+    expect(r.discount).toBe(discount);
+    expect(r.memberShare).toBe(memberShare);
+    expect(posMembershipPercentTotal([pos(over)], GOLD10)).toBe(memberShare);
   });
 
-  it("baris nominal, bahan baku, dan item dikecualikan tidak dihitung", () => {
-    expect(posMembershipPercentTotal([
-      pos({ discountType: "AMOUNT", discount: "30000" }),
-      pos({ isMaterial: true }),
-      pos({ memberItem: { ...jasa, excludeMemberDiscount: true } }),
-    ], GOLD10)).toBe(0);
+  it("membership dimatikan / bahan baku / item dikecualikan → hanya diskon manual", () => {
+    expect(effectiveLineDiscount(pos({ discount: "30000" }), null).discount).toBe(30000);
+    expect(effectiveLineDiscount(pos({ isMaterial: true }), GOLD10).discount).toBe(0);
+    expect(effectiveLineDiscount(pos({ memberItem: { ...jasa, excludeMemberDiscount: true }, discount: "1000" }), GOLD10))
+      .toEqual({ discount: 1000, memberShare: 0, manual: 1000, member: 0 });
   });
 });

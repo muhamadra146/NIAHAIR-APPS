@@ -1,3 +1,5 @@
+const { Prisma } = require("@prisma/client");
+
 // ── Item yang dapat diskon membership (keputusan user 2026-10-14) ─────────────
 // Satu persen/nominal per paket, berlaku hanya untuk item yang:
 //   1. bukan bahan baku treatment,
@@ -21,6 +23,14 @@ const isMemberDiscountEligible = (item, membership, isMaterial = false) => {
   return !!parentId && ids.has(parentId);
 };
 
+/**
+ * Nominal diskon membership persen satu baris: harga × qty × persen, dibulatkan ke rupiah.
+ * Dibandingkan dengan diskon manual baris — yang lebih besar yang dipakai (keputusan owner 2026-10-23).
+ * Frontend memakai rumus yang sama (features/invoice/discount.ts memberLineDiscount).
+ */
+const memberLineDiscount = (price, qty, percent) =>
+  new Prisma.Decimal(String(price)).mul(String(qty)).mul(String(percent)).div(100).toDecimalPlaces(0);
+
 // Field item yang dibutuhkan isMemberDiscountEligible — dipakai di select Prisma
 const ELIGIBILITY_ITEM_SELECT = {
   categoryId:            true,
@@ -30,4 +40,4 @@ const ELIGIBILITY_ITEM_SELECT = {
 
 const DISCOUNT_CATEGORIES_SELECT = { select: { categoryId: true } };
 
-module.exports = { isMemberDiscountEligible, ELIGIBILITY_ITEM_SELECT, DISCOUNT_CATEGORIES_SELECT };
+module.exports = { isMemberDiscountEligible, memberLineDiscount, ELIGIBILITY_ITEM_SELECT, DISCOUNT_CATEGORIES_SELECT };

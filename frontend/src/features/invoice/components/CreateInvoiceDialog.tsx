@@ -30,7 +30,7 @@ import type {
   UpdateInvoiceInput,
   MemberEligibilityItem,
 } from "../types";
-import { isMemberDiscountEligible, posMembershipPercentTotal } from "../discount";
+import { isMemberDiscountEligible, posMembershipPercentTotal, effectiveLineDiscount, itemDiscountParts } from "../discount";
 import { documentTax, lineAmount } from "../totals";
 import { InvoiceTotalsSummary } from "./InvoiceTotalsSummary";
 import { uniqueStaffEmployees } from "@/features/appointment/staff";
@@ -84,6 +84,10 @@ function resolvePrice(prices: ItemPriceOption[], unitId: string, branchId: strin
   return global ? global.sellingPrice : "0";
 }
 
+
+/** Pesan bila item dipilih tetapi belum punya satuan (buildLineFromItem → null) */
+const NO_UNIT_MESSAGE = (name: string) =>
+  `${name}: Item belum punya satuan — atur di master item Accurate lalu sinkron item`;
 
 function buildLineFromItem(
   item: { id: string; name: string; itemCode: string; itemType: string; itemPrices: ItemPriceOption[]; itemUnits: ItemUnitOption[] } & MemberEligibilityItem,
@@ -260,7 +264,7 @@ export function CreateInvoiceDialog({
     if (activeMembership) {
       setMembershipDiscApplied(true);
       if (activeMembership.discountType === "PERCENTAGE") {
-        setLines((prev) => prev.map((l) => applyDiscountToLine(l, activeMembership)));
+        // Persen: dihitung per baris saat pratinjau/simpan (lebih besar dari diskon manual)
         setFixedMembershipDiscount("0");
       } else {
         // FIXED_AMOUNT: clear any stale per-item discounts from previous membership
@@ -407,12 +411,9 @@ export function CreateInvoiceDialog({
     // Cek duplikat di section layanan saja
     if (lines.find((l) => l.itemId === item.id && !l.isMaterial)) return;
     const lineGroup = crypto.randomUUID(); // UUID unik untuk setiap layanan
-    let line = buildLineFromItem(item, branchId, false, lineGroup);
-    if (!line) return;
-    if (membershipDiscApplied && activeMembership) {
-      line = applyDiscountToLine(line, activeMembership);
-    }
-    setLines((prev) => [...prev, line!]);
+    const line = buildLineFromItem(item, branchId, false, lineGroup);
+    if (!line) { toast.error(NO_UNIT_MESSAGE(item.name)); return; }
+    setLines((prev) => [...prev, line]);
     setItemSearch(""); setItemResults([]);
   }
 
@@ -421,12 +422,9 @@ export function CreateInvoiceDialog({
     try {
       const full = await fetchFullItem(serviceItem.id);
       const lineGroup = crypto.randomUUID(); // UUID unik untuk layanan ini
-      let line = buildLineFromItem(full, branchId, false, lineGroup);
-      if (!line) return;
-      if (membershipDiscApplied && activeMembership) {
-        line = applyDiscountToLine(line, activeMembership);
-      }
-      setLines((prev) => [...prev, line!]);
+      const line = buildLineFromItem(full, branchId, false, lineGroup);
+      if (!line) { toast.error(NO_UNIT_MESSAGE(full.name)); return; }
+      setLines((prev) => [...prev, line]);
     } catch {
       // can't fetch item details
     }
@@ -452,37 +450,19 @@ export function CreateInvoiceDialog({
   function addMaterialLine(item: Parameters<typeof buildLineFromItem>[0], lineGroup: string) {
     // Bahan baku mewarisi lineGroup dari layanan induknya
     const line = buildLineFromItem(item, branchId, true, lineGroup);
-    if (!line) return;
+    if (!line) { toast.error(NO_UNIT_MESSAGE(item.name)); return; }
     setLines((prev) => [...prev, line]);
     closeMaterialSearch();
   }
 
-  function applyDiscountToLine(line: LineItem, m: NonNullable<typeof activeMembership>): LineItem {
-    // Membership discount hanya untuk item yang kategorinya dicentang di paket & tidak dikecualikan
-    if (m.discountType === "PERCENTAGE" && isMemberDiscountEligible(line.memberItem, m, line.isMaterial)) {
-      return { ...line, discountType: "PERCENT", discount: String(m.discountValue) };
-    }
-    return line; // FIXED_AMOUNT handled at invoice level; item lain tidak berubah
-  }
-
   function toggleMembershipDiscount() {
     if (!activeMembership) return;
+    // Persen: diskon manual baris tidak diubah — diskon member dihitung per baris (yang lebih besar)
     if (membershipDiscApplied) {
-      if (activeMembership.discountType === "PERCENTAGE") {
-        setLines((prev) => prev.map((l) =>
-          isMemberDiscountEligible(l.memberItem, activeMembership, l.isMaterial)
-            ? { ...l, discount: "0", discountType: "AMOUNT" as const }
-            : l));
-      } else {
-        setFixedMembershipDiscount("0");
-      }
+      if (activeMembership.discountType !== "PERCENTAGE") setFixedMembershipDiscount("0");
       setMembershipDiscApplied(false);
     } else {
-      if (activeMembership.discountType === "PERCENTAGE") {
-        setLines((prev) => prev.map((l) => applyDiscountToLine(l, activeMembership)));
-      } else {
-        setFixedMembershipDiscount(String(activeMembership.discountValue));
-      }
+      if (activeMembership.discountType !== "PERCENTAGE") setFixedMembershipDiscount(String(activeMembership.discountValue));
       setMembershipDiscApplied(true);
     }
   }
@@ -545,15 +525,14 @@ export function CreateInvoiceDialog({
 
   // ── Estimate totals (client-side preview) ─────────────────────────────
   // Hanya hitung dari layanan (isMaterial=false) — bahan baku tidak masuk tagihan
+  // Paket persen yang sedang diterapkan — diskon baris = yang lebih besar dari diskon member
+  // dan diskon manual (CRM-014, sama dengan backend computeInvoiceLines)
+  const percentMembership = membershipDiscApplied && activeMembership?.discountType === "PERCENTAGE"
+    ? activeMembership : null;
   const subtotalEst = lines.filter((l) => !l.isMaterial).reduce((sum, l) => {
     const price = parseFloat(l.price) || 0;
     const qty   = parseFloat(l.qty) || 0;
-    const disc  = parseFloat(l.discount) || 0;
-    // Diskon persen dibulatkan 2 desimal seperti backend agar dasar PPN pratinjau sama persis
-    const gross = l.discountType === "PERCENT"
-      ? price * qty - Math.round(price * qty * disc) / 100
-      : price * qty - disc;
-    return sum + Math.max(0, gross);
+    return sum + Math.max(0, price * qty - effectiveLineDiscount(l, percentMembership).discount);
   }, 0);
   // Total bahan baku (COGS internal — hanya untuk info internal)
   const materialTotalEst = lines.filter((l) => l.isMaterial).reduce((sum, l) => {
@@ -625,7 +604,11 @@ export function CreateInvoiceDialog({
           unitId:       li.unitId,
           qty:          String(li.qty),
           price:        String(li.price),
-          discount:     li.discountType === "PERCENT" ? String(li.discountPercent ?? "0") : String(li.discount),
+          // Form berisi diskon MANUAL. Nominal yang tersimpan bisa berupa diskon membership
+          // (yang lebih besar) — bagian itu bukan input kasir sehingga tidak dimuat ke form.
+          discount:     li.discountType === "PERCENT"
+            ? String(li.discountPercent ?? "0")
+            : String(itemDiscountParts(li, existingInvoice).filter((p) => p.kind === "item").reduce((a, p) => a + p.amount, 0)),
           discountType: (li.discountType as "AMOUNT" | "PERCENT") ?? "AMOUNT",
           isMaterial:   li.isMaterial ?? false,
           lineGroup,
@@ -728,7 +711,7 @@ export function CreateInvoiceDialog({
           membershipDiscountTotalValue = fixedMembershipDiscountAmt;
         } else {
           // PERCENTAGE: jumlah diskon persen pada item yang dapat diskon member
-          membershipDiscountTotalValue = posMembershipPercentTotal(lines, activeMembership);
+          membershipDiscountTotalValue = posMembershipPercentTotal(lines, percentMembership);
         }
       } else if (isEdit) {
         // Membership tidak aktif lagi / gagal dimuat: diskon baris tersimpan dipakai apa adanya
@@ -1421,10 +1404,8 @@ export function CreateInvoiceDialog({
                     );
                     const _price = parseFloat(line.price) || 0;
                     const _qty   = parseFloat(line.qty) || 0;
-                    const _disc  = parseFloat(line.discount) || 0;
-                    const sub    = Math.max(0, line.discountType === "PERCENT"
-                      ? _price * _qty * (1 - _disc / 100)
-                      : _price * _qty - _disc);
+                    const eff    = effectiveLineDiscount(line, percentMembership);
+                    const sub    = Math.max(0, _price * _qty - eff.discount);
                     const groupHPP = materialLines.reduce(
                       (s, m) => s + (parseFloat(m.price) || 0) * (parseFloat(m.qty) || 0),
                       0
@@ -1445,6 +1426,16 @@ export function CreateInvoiceDialog({
                               </span>
                             </div>
                             {sub > 0 && <p className="text-[10px] text-muted-foreground mt-0.5">= {formatCurrency(sub)}</p>}
+                            {eff.memberShare > 0 && (
+                              <p className="text-[10px] font-medium text-purple-600 mt-0.5">
+                                Diskon member {activeMembership?.name} {Number(activeMembership?.discountValue)}% −{formatCurrency(eff.memberShare)}
+                              </p>
+                            )}
+                            {eff.member > 0 && eff.memberShare === 0 && (
+                              <p className="text-[10px] font-medium text-muted-foreground mt-0.5">
+                                Diskon manual dipakai (lebih besar dari diskon member)
+                              </p>
+                            )}
                             {!(parseFloat(line.price) > 0) && (
                               <p className="text-[10px] font-medium text-amber-600 mt-0.5">⚠ Harga Rp 0 — periksa harga</p>
                             )}

@@ -3,6 +3,7 @@ const AppError = require("../../common/errors/AppError");
 const { paginate, paginationMeta } = require("../../utils/pagination");
 const prisma = require("../../config/prisma");
 const repo = require("./membership.repository");
+const { wibDayEnd, addDaysDateOnly } = require("../../utils/date");
 
 /** Filter status paket: "true"/"false" (query string) atau boolean; kosong/"all" = semua */
 const parseIsActive = (isActive) => {
@@ -150,6 +151,15 @@ const getCustomerMembership = async (customerId) => {
   };
 };
 
+/**
+ * Masa berlaku membership berakhir di AKHIR HARI WIB (23:59:59.999 WIB) tanggal kedaluwarsa
+ * = tanggal mulai (WIB) + durationDays, sehingga berlaku sepanjang hari pada tanggal tsb
+ * (keputusan owner 2026-10-23). Pengecekan aktif (endDate > sekarang) dan worker kedaluwarsa
+ * (endDate <= sekarang) otomatis mengikuti tanggal WIB.
+ */
+const membershipEndDate = (start, durationDays) =>
+  wibDayEnd(addDaysDateOnly(start, durationDays).toISOString().slice(0, 10));
+
 const assignMembership = async (customerId, membershipId, createdBy) => {
   const [customer, membership] = await Promise.all([
     prisma.customer.findUnique({ where: { id: customerId } }),
@@ -162,9 +172,8 @@ const assignMembership = async (customerId, membershipId, createdBy) => {
     throw new AppError("Paket membership tidak aktif", StatusCodes.UNPROCESSABLE_ENTITY);
   }
 
-  const now      = new Date();
-  const endDate  = new Date(now);
-  endDate.setUTCDate(endDate.getUTCDate() + membership.durationDays);
+  const now     = new Date();
+  const endDate = membershipEndDate(now, membership.durationDays);
 
   return prisma.$transaction(async (tx) => {
     // Expire any existing active membership record
@@ -206,4 +215,4 @@ const cancelMembership = async (customerId) => {
   });
 };
 
-module.exports = { getAll, getById, create, update, remove, getActiveMembership, getCustomerMembership, assignMembership, cancelMembership };
+module.exports = { getAll, getById, create, update, remove, getActiveMembership, getCustomerMembership, assignMembership, cancelMembership, membershipEndDate };

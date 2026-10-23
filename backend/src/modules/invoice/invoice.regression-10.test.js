@@ -26,6 +26,7 @@ jest.mock('../inventory/inventory.service', () => ({
 jest.mock('../accurate/accurate.client', () => ({ accurateRequest: jest.fn() }));
 jest.mock('./invoice.workflow', () => ({ handleInvoicePaid: jest.fn() }));
 jest.mock('../membership/membership.service', () => ({ getActiveMembership: jest.fn() }));
+jest.mock('../membership/membership.repository', () => ({ findById: jest.fn().mockResolvedValue(null) }));
 jest.mock('../consultation/consultation.repository', () => ({ findByInvoiceId: jest.fn(), buildFirstInvoiceMap: jest.fn() }));
 jest.mock('../treatment/treatmentJobAssignment.repository', () => ({ upsertMany: jest.fn() }));
 jest.mock('../../config/prisma', () => ({

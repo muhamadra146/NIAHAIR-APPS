@@ -17,40 +17,62 @@ export function isMemberDiscountEligible(
   return !!parentId && ids.has(parentId);
 }
 
-/** Baris POS yang dibutuhkan untuk menghitung diskon membership persen */
+/**
+ * Nominal diskon membership persen satu baris: harga × qty × persen, dibulatkan ke rupiah.
+ * Sama dengan backend membership.discount.js memberLineDiscount.
+ */
+export function memberLineDiscount(price: string | number, qty: string | number, percent: string | number): number {
+  return Math.round((Number(price) * Number(qty) * Number(percent)) / 100);
+}
+
+/** Baris POS (input kasir) yang dibutuhkan untuk menghitung diskon efektif */
 export interface PosDiscountLine {
   price:        string;
   qty:          string;
-  discount:     string;
+  discount:     string;               // diskon MANUAL kasir (persen atau nominal)
   discountType: "AMOUNT" | "PERCENT";
   isMaterial:   boolean;
   memberItem?:  MemberEligibilityItem | null;
 }
 
+type PercentMembership = (MemberDiscountConfig & { discountType?: string; discountValue: string | number }) | null | undefined;
+
+export interface LineDiscountResult {
+  discount:     number;   // diskon yang dipakai pada baris
+  memberShare:  number;   // bagian membership (0 bila diskon manual yang dipakai)
+  manual:       number;   // nominal diskon manual
+  member:       number;   // nominal diskon membership (0 bila tidak berlaku)
+}
+
 /**
- * Total diskon membership persen dari baris POS (dikirim sebagai membershipDiscountTotal).
- * Di POS persen membership dipasang langsung sebagai persen baris; bagian membership per baris
- * maksimal persen paket — persen yang dinaikkan kasir (mis. 20% untuk Gold 10%) kelebihannya
- * adalah diskon item, bukan diskon membership.
+ * Diskon efektif satu baris POS (keputusan owner 2026-10-23, CRM-014): pada item yang dapat
+ * diskon member, dipakai yang NOMINALNYA lebih besar antara diskon membership persen dan diskon
+ * manual — tidak ditumpuk; seri → membership. Sama dengan backend computeInvoiceLines.
+ * `membership` = paket persen yang sedang diterapkan (null bila tidak ada / dimatikan kasir).
  */
-export function posMembershipPercentTotal(
-  lines: PosDiscountLine[],
-  membership: (MemberDiscountConfig & { discountValue: string | number }) | null | undefined,
-): number {
-  if (!membership) return 0;
-  const memberPct = Number(membership.discountValue) || 0;
-  return lines.reduce((sum, l) => {
-    if (!isMemberDiscountEligible(l.memberItem, membership, l.isMaterial) || l.discountType !== "PERCENT") return sum;
-    const price = parseFloat(l.price) || 0;
-    const qty   = parseFloat(l.qty)   || 0;
-    const pct   = Math.min(parseFloat(l.discount) || 0, memberPct);
-    return sum + (price * qty * pct) / 100;
-  }, 0);
+export function effectiveLineDiscount(l: PosDiscountLine, membership: PercentMembership): LineDiscountResult {
+  const price  = parseFloat(l.price) || 0;
+  const qty    = parseFloat(l.qty)   || 0;
+  const disc   = parseFloat(l.discount) || 0;
+  // Persen dibulatkan 2 desimal seperti backend
+  const manual = l.discountType === "PERCENT" ? Math.round(price * qty * disc) / 100 : disc;
+  const member = membership && membership.discountType !== "FIXED_AMOUNT"
+    && isMemberDiscountEligible(l.memberItem, membership, l.isMaterial)
+    ? memberLineDiscount(price, qty, membership.discountValue)
+    : 0;
+  if (member > 0 && member >= manual) return { discount: member, memberShare: member, manual, member };
+  return { discount: manual, memberShare: 0, manual, member };
+}
+
+/** Total diskon membership persen dari baris POS (dikirim sebagai membershipDiscountTotal) */
+export function posMembershipPercentTotal(lines: PosDiscountLine[], membership: PercentMembership): number {
+  return lines.reduce((sum, l) => sum + effectiveLineDiscount(l, membership).memberShare, 0);
 }
 
 // ── Teks diskon invoice ──────────────────────────────────────────────────────
-// Kolom `discount` per item menyimpan diskon item DITAMBAH diskon membership persen
-// (khusus item yang dapat diskon member). Fungsi di sini memisahkan keduanya untuk ditampilkan:
+// Kolom `discount` per item menyimpan diskon yang dipakai: diskon membership persen ATAU diskon
+// item, mana yang lebih besar (keputusan owner 2026-10-23; data lama bisa berisi keduanya
+// ditumpuk). Fungsi di sini menentukan jenisnya untuk ditampilkan:
 //   "Diskon 10% Rp 50.000"            ← diskon item
 //   "Diskon Membership Gold 10% Rp …" ← diskon membership
 
@@ -75,26 +97,24 @@ export function itemDiscountParts(item: InvoiceLineItem, invoice: Invoice): Disc
   const total = Number(item.discount);
   if (!(total > 0)) return [];
 
-  const gross   = Number(item.price) * Number(item.qty);
-  const memPct  = isMemberDiscountEligible(item.item, invoice.membership, item.isMaterial ?? false) ? membershipPercent(invoice) : 0;
-  let   memPart = memPct > 0 ? Math.round((gross * memPct) / 100) : 0;
-  let   own: number;
+  const memPct = isMemberDiscountEligible(item.item, invoice.membership, item.isMaterial ?? false) ? membershipPercent(invoice) : 0;
+  const ownPct = item.discountType === "PERCENT" && item.discountPercent != null ? Number(item.discountPercent) : null;
+  let own     = total;
+  let memPart = 0;
 
-  let ownPct = item.discountPercent != null ? Number(item.discountPercent) : null;
-  if (item.discountType === "PERCENT" && ownPct != null) {
-    own     = Math.round(((gross * ownPct) / 100) * 100) / 100;
-    memPart = Math.max(0, total - own);
-    if (memPct > 0 && memPart <= 0.009) {
-      // Invoice dari POS: persen membership dipasang langsung sebagai persen baris (tidak ditambah).
-      // Bagian membership = min(persen baris, persen paket); sisanya diskon item.
-      const memLinePct = Math.min(ownPct, memPct);
-      memPart = Math.min(total, Math.round(((gross * memLinePct) / 100) * 100) / 100);
-      own     = Math.max(0, total - memPart);
-      ownPct  = ownPct - memLinePct;
+  if (memPct > 0) {
+    const gross     = Number(item.price) * Number(item.qty);
+    const memberAmt = memberLineDiscount(item.price, item.qty, memPct);
+    const ownAmt    = ownPct != null ? Math.round(((gross * ownPct) / 100) * 100) / 100 : null;
+    if (Math.abs(total - memberAmt) < 0.01) {
+      // Diskon membership yang dipakai (lebih besar / sama dengan diskon manual)
+      memPart = total;
+      own     = 0;
+    } else if (ownAmt != null && total - ownAmt > 0.009) {
+      // Data lama (sebelum 2026-10-23): diskon item + membership ditumpuk
+      memPart = total - ownAmt;
+      own     = ownAmt;
     }
-  } else {
-    memPart = Math.min(memPart, total);
-    own     = Math.max(0, total - memPart);
   }
 
   const parts: DiscountPart[] = [];
