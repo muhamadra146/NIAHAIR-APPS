@@ -1505,6 +1505,8 @@ Deposit belum menjadi pendapatan.
 
 Deposit baru dianggap digunakan saat Invoice dibuat.
 
+Tanggal deposit adalah tanggal yang diisi user (tidak boleh setelah hari ini, WIB) dan dipakai sebagai tanggal Faktur DP di Accurate. Tanggal pembayaran DP **tidak boleh sebelum tanggal deposit** — ditolak (422), tidak disesuaikan otomatis. Tanggal deposit tidak berubah saat DP dibayar atau pembayarannya dihapus (keputusan user 2026-10-23).
+
 ---
 
 # APT-021
@@ -4530,7 +4532,7 @@ Attendance tidak boleh dibuat manual tanpa alasan.
 
 ### Kehadiran Tim & Laporan Kehadiran
 
-- Owner, Super Admin & Finance melihat semua karyawan; lainnya (termasuk manager divisi) hanya rekan **satu divisi di cabangnya**.
+- Owner, Super Admin & Finance melihat semua karyawan (Finance untuk keperluan gaji — dikonfirmasi user 2026-10-23); lainnya (termasuk manager divisi) hanya rekan **satu divisi di cabangnya**.
 - Hari kerja **setelah hari ini (WIB)** tanpa absensi belum dihitung Absen maupun hari terjadwal. Hari ini tanpa absensi tampil **Belum absen** di Kehadiran Tim; cuti / izin / sakit dihitung terpisah.
 
 ---
@@ -4563,7 +4565,7 @@ Leave membuat Employee tidak Available.
 - Hari kerja **dihitung ulang saat disetujui** (jadwal bisa berubah sejak diajukan); nilai itu yang menambah hari terpakai. Saat disetujui, hari OFF tetap OFF; hari lain di jadwal menjadi CUTI (LEAVE).
 - **Tanggal mundur:** izin dan sakit boleh diajukan paling lama **7 hari ke belakang** (WIB); cuti harus mulai **hari ini atau sesudahnya**. Selain itu ditolak (422).
 - Tanggal yang tidak ada di kalender (mis. 30 Februari) ditolak "Tanggal tidak valid" (400) — tidak digeser ke tanggal lain.
-- **Pembatalan cuti yang sudah disetujui:** oleh Owner / Super Admin / manager divisi (sesuai EMP-033), hanya bila cuti **belum dimulai** (tanggal mulai ≥ hari ini WIB). Status menjadi Dibatalkan, jatah dikembalikan (terpakai − hari kerja cuti tsb), jadwal CUTI dipulihkan: baris yang punya shift kembali ke shift itu (MASUK, atau OFF bila shift tanpa jam); baris tanpa shift (dibuat oleh persetujuan cuti) dihapus — tanggal kembali "belum dijadwalkan" dan manager mengisinya ulang. Karyawan diberi notifikasi. Izin / sakit yang sudah disetujui belum bisa dibatalkan.
+- **Pembatalan cuti yang sudah disetujui:** oleh Owner / Super Admin / manager divisi (sesuai EMP-033), hanya bila cuti **belum dimulai** (tanggal mulai ≥ hari ini WIB). Status menjadi Dibatalkan, jatah dikembalikan (terpakai − hari kerja cuti tsb), jadwal CUTI dipulihkan: baris yang punya shift kembali ke shift itu (MASUK, atau OFF bila shift tanpa jam); baris tanpa shift (dibuat oleh persetujuan cuti) dihapus — tanggal kembali "belum dijadwalkan" dan manager mengisinya ulang. Karyawan diberi notifikasi. Cuti yang **sudah berjalan** (sebagian tanggal lewat) tidak bisa dibatalkan, termasuk untuk sisa harinya; izin / sakit yang sudah disetujui juga tidak bisa dibatalkan (keputusan user 2026-10-23).
 - Pengajuan yang dibatalkan karyawan memperbarui notifikasi penyetuju menjadi "dibatalkan — tidak perlu tindakan". Notifikasi pengajuan & keputusan menyebut tanggalnya.
 
 ---
@@ -5045,7 +5047,7 @@ Payroll mode **Rentang Tanggal** (periode transisi / kasus khusus, COM-017) tida
 - Contoh: rentang 2–5 Nov, gaji pokok 3.000.000 → 3.000.000 × 4/30 = 400.000 (bukan 3.000.000).
 - Contoh: rentang 28 Okt – 3 Nov → gaji pokok × (4/31 + 3/30).
 - Tunjangan transport hasil proporsi dibagi rata ke hari kerja rentang (hari − OFF); hari tidak hadir dipotong sebesar bagian harian itu (PAY-018).
-- Uang makan, potongan alpha, lembur, dan kerja hari libur tetap per hari (PAY-018, PAY-019). BPJS tetap dari gaji pokok penuh.
+- Uang makan, potongan alpha, lembur, dan kerja hari libur tetap per hari (PAY-018, PAY-019). BPJS tetap dari gaji pokok penuh dan dipotong penuh sebulan; cicilan kasbon juga penuh sebulan (keputusan user 2026-10-23).
 - Rentang yang persis sama dengan satu periode gaji penuh (tanggal gajian s/d sehari sebelum tanggal gajian bulan berikutnya) dihitung seperti mode Per Bulan. Mode Per Bulan tidak berubah.
 
 ### Hak Akses Setting Gaji
@@ -5385,6 +5387,10 @@ Cuti, sakit, dan izin tidak masuk tidak kena Potongan Absen (sudah memengaruhi t
 
 Kasbon aktif dipotong di payroll hanya bila **tanggal mulai kasbon ≤ akhir periode**; kasbon yang mulai sesudah periode ikut payroll berikutnya (keputusan owner 2026-10-18).
 
+Cicilan kasbon dipotong **penuh per bulan**, juga pada payroll mode Rentang Tanggal (tidak diproporsikan) (keputusan user 2026-10-23).
+
+Tanggal kasbon (mulai, selesai, angsuran) harus tanggal yang ada di kalender (mis. 31 Februari ditolak, tidak digeser). Tanggal angsuran tidak boleh di masa depan (WIB) dan tidak boleh sebelum tanggal mulai kasbon. Cicilan per bulan > 0 dan tidak melebihi total kasbon (keputusan user 2026-10-23).
+
 ### Pulang Cepat
 
 Pulang cepat **tidak dipotong per menit**. Dampaknya hanya ke uang makan: lama kerja di bawah batas setengah hari → uang makan 50% (PAY-018). Kolom potongan pulang cepat di Setting Gaji tidak dipakai lagi. (Keputusan user 2026-10-13.)
@@ -5722,6 +5728,8 @@ Cara hitung komisi ditentukan oleh konfigurasi Job, bukan hardcode.
 ### Rule
 
 Setiap Commission Category memiliki satu atau lebih Commission Job.
+
+Kode Commission Category dirapikan otomatis (spasi di tepi dibuang, huruf besar, spasi di tengah menjadi `_`) dan hanya boleh berisi huruf besar, angka, dan `_` (`^[A-Z0-9_]+$`). Kategori yang masih dipakai job tidak bisa dihapus; job harus dihapus / dipindah dulu (keputusan user 2026-10-23).
 
 Setiap Commission Job memiliki:
 
