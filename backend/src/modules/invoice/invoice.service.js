@@ -593,13 +593,19 @@ const updateInvoice = async (id, body, userId) => {
 
   const newStatus = resolveInvoiceStatus(safeOutstanding, existingTotalDeposit.add(existingPaidAmount));
 
+  // Membership pelanggan sudah berakhir/dibatalkan tetapi diskon membership yang tersimpan
+  // dipertahankan (override dari POS): tetap tautkan ke paket asal invoice. Tanpa ini
+  // membershipId menjadi null sehingga diskon tampil dua kali (Diskon Item + Diskon Membership).
+  const keptMembershipId = membershipId
+    ?? (membershipDiscountTotal.gt(D("0")) ? existing.membershipId ?? null : null);
+
   const invoiceData = {
     subtotal:               totalSubtotal,
     totalDiscount,
     totalTax,
     grandTotal,
     membershipDiscountTotal,
-    membershipId,
+    membershipId:           keptMembershipId,
     outstandingAmount:      safeOutstanding,
     status:                 newStatus,
     notes:                  notes ?? null,

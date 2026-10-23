@@ -17,6 +17,37 @@ export function isMemberDiscountEligible(
   return !!parentId && ids.has(parentId);
 }
 
+/** Baris POS yang dibutuhkan untuk menghitung diskon membership persen */
+export interface PosDiscountLine {
+  price:        string;
+  qty:          string;
+  discount:     string;
+  discountType: "AMOUNT" | "PERCENT";
+  isMaterial:   boolean;
+  memberItem?:  MemberEligibilityItem | null;
+}
+
+/**
+ * Total diskon membership persen dari baris POS (dikirim sebagai membershipDiscountTotal).
+ * Di POS persen membership dipasang langsung sebagai persen baris; bagian membership per baris
+ * maksimal persen paket — persen yang dinaikkan kasir (mis. 20% untuk Gold 10%) kelebihannya
+ * adalah diskon item, bukan diskon membership.
+ */
+export function posMembershipPercentTotal(
+  lines: PosDiscountLine[],
+  membership: (MemberDiscountConfig & { discountValue: string | number }) | null | undefined,
+): number {
+  if (!membership) return 0;
+  const memberPct = Number(membership.discountValue) || 0;
+  return lines.reduce((sum, l) => {
+    if (!isMemberDiscountEligible(l.memberItem, membership, l.isMaterial) || l.discountType !== "PERCENT") return sum;
+    const price = parseFloat(l.price) || 0;
+    const qty   = parseFloat(l.qty)   || 0;
+    const pct   = Math.min(parseFloat(l.discount) || 0, memberPct);
+    return sum + (price * qty * pct) / 100;
+  }, 0);
+}
+
 // ── Teks diskon invoice ──────────────────────────────────────────────────────
 // Kolom `discount` per item menyimpan diskon item DITAMBAH diskon membership persen
 // (khusus item yang dapat diskon member). Fungsi di sini memisahkan keduanya untuk ditampilkan:
@@ -49,9 +80,18 @@ export function itemDiscountParts(item: InvoiceLineItem, invoice: Invoice): Disc
   let   memPart = memPct > 0 ? Math.round((gross * memPct) / 100) : 0;
   let   own: number;
 
-  if (item.discountType === "PERCENT" && item.discountPercent != null) {
-    own     = Math.round(((gross * Number(item.discountPercent)) / 100) * 100) / 100;
+  let ownPct = item.discountPercent != null ? Number(item.discountPercent) : null;
+  if (item.discountType === "PERCENT" && ownPct != null) {
+    own     = Math.round(((gross * ownPct) / 100) * 100) / 100;
     memPart = Math.max(0, total - own);
+    if (memPct > 0 && memPart <= 0.009) {
+      // Invoice dari POS: persen membership dipasang langsung sebagai persen baris (tidak ditambah).
+      // Bagian membership = min(persen baris, persen paket); sisanya diskon item.
+      const memLinePct = Math.min(ownPct, memPct);
+      memPart = Math.min(total, Math.round(((gross * memLinePct) / 100) * 100) / 100);
+      own     = Math.max(0, total - memPart);
+      ownPct  = ownPct - memLinePct;
+    }
   } else {
     memPart = Math.min(memPart, total);
     own     = Math.max(0, total - memPart);
@@ -59,8 +99,8 @@ export function itemDiscountParts(item: InvoiceLineItem, invoice: Invoice): Disc
 
   const parts: DiscountPart[] = [];
   if (own > 0.009) {
-    const label = item.discountType === "PERCENT" && item.discountPercent != null
-      ? `Diskon ${pct(Number(item.discountPercent))}`
+    const label = item.discountType === "PERCENT" && ownPct != null
+      ? `Diskon ${pct(ownPct)}`
       : "Diskon";
     parts.push({ label, amount: own, kind: "item" });
   }

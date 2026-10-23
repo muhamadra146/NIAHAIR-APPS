@@ -30,7 +30,7 @@ import type {
   UpdateInvoiceInput,
   MemberEligibilityItem,
 } from "../types";
-import { isMemberDiscountEligible } from "../discount";
+import { isMemberDiscountEligible, posMembershipPercentTotal } from "../discount";
 import { documentTax, lineAmount } from "../totals";
 import { InvoiceTotalsSummary } from "./InvoiceTotalsSummary";
 import { uniqueStaffEmployees } from "@/features/appointment/staff";
@@ -728,13 +728,7 @@ export function CreateInvoiceDialog({
           membershipDiscountTotalValue = fixedMembershipDiscountAmt;
         } else {
           // PERCENTAGE: jumlah diskon persen pada item yang dapat diskon member
-          membershipDiscountTotalValue = lines.reduce((sum, l) => {
-            if (!isMemberDiscountEligible(l.memberItem, activeMembership, l.isMaterial) || l.discountType !== "PERCENT") return sum;
-            const price = parseFloat(l.price) || 0;
-            const qty   = parseFloat(l.qty)   || 0;
-            const pct   = parseFloat(l.discount) || 0;
-            return sum + (price * qty * pct) / 100;
-          }, 0);
+          membershipDiscountTotalValue = posMembershipPercentTotal(lines, activeMembership);
         }
       } else if (isEdit) {
         // Membership tidak aktif lagi / gagal dimuat: diskon baris tersimpan dipakai apa adanya
