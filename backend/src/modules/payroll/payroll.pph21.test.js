@@ -97,6 +97,41 @@ describe('generate', () => {
   });
 });
 
+describe('semua komponen penghasilan masuk bruto pajak', () => {
+  // Gaji Desember 2027 (dibayar 1 Jan 2028 → masa Januari 2028, TER): semua komponen sekaligus
+  test('gaji + tunjangan + komisi + lembur + bonus omset + payout cuti − alpha − terlambat', async () => {
+    const setting = {
+      ...SALARY_SETTING, baseSalary: '6000000', tunjangan: '1000000', overtimeRatePerHour: '25000', absentDeductionPerDay: '0',
+      lateDeductionBracket1: '25000', lateDeductionBracket2: '50000', lateDeductionBracket3: '75000',
+      bpjsKesehatanEmployerPercent: '0', bpjsJkkEmployerPercent: '0', bpjsJkmEmployerPercent: '0',
+    };
+    repo.getGenerationData.mockResolvedValue({
+      ...genData({ ptkpStatus: 'TK0' }),
+      salarySetting: setting,
+      attendances: [
+        { workDate: new Date('2027-12-06'), status: 'LATE', lateMinutes: 45, overtimeMinutes: 120 },
+      ],
+      commissions: [{ id: 'c1', commissionAmount: '400000' }],
+      omsetBonusTiers: [{ minimumOmset: '10000000', percentage: '1' }],
+      branchOmset: 30000000,
+      unusedLeavePayouts: [{ totalDays: 12, usedDays: 4, leaveType: { name: 'Cuti Tahunan', unusedDayPayoutRate: '100000' } }],
+    });
+    prisma.$transaction.mockImplementation((fn) => fn({
+      payroll:    { create: jest.fn(({ data }) => { created = data; return { id: 'pr1', ...data, items: data.items.createMany.data }; }) },
+      commission: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    }));
+
+    const r = await generate('2027-12');
+    const amt = (c) => Number(r.items.find((i) => i.category === c)?.amount ?? 0);
+    expect([amt('gaji'), amt('tunjangan'), amt('komisi'), amt('lembur'), amt('bonus_omset'), amt('payout_cuti'), amt('terlambat')])
+      .toEqual([6000000, 1000000, 400000, 50000, 300000, 800000, 50000]);
+    // bruto = 6 jt + 1 jt + 400.000 + 50.000 + 300.000 + 800.000 − 50.000 = 8.500.000 → TER A 1,5%
+    expect(Number(created.taxGross)).toBe(8500000);
+    expect(Number(created.taxTerRate)).toBe(1.5);
+    expect(amt('pph21')).toBe(127500);
+  });
+});
+
 describe('approve', () => {
   test('slip kena pajak tanpa status PTKP tidak bisa disetujui', async () => {
     repo.findById.mockResolvedValue({ id: 'pr1', status: 'PENDING_APPROVAL', netSalary: '1000000', taxPeriod: '2027-03', taxPtkpStatus: null });
