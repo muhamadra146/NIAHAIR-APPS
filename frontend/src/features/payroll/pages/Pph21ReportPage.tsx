@@ -5,7 +5,7 @@ import { Button }         from "@/components/ui/button";
 import { Input }          from "@/components/ui/input";
 import { useAllBranches } from "@/features/settings/hooks";
 import { useAuthStore }   from "@/stores/authStore";
-import { exportCSV }      from "@/lib/export";
+import { exportXLSX }     from "@/lib/export";
 import { toWibDateStr }   from "@/lib/utils";
 import { usePph21Monthly, usePph21Annual } from "../hooks";
 import type { Pph21MonthlyResult, Pph21AnnualResult } from "../types";
@@ -15,7 +15,7 @@ import { fmtTaxPeriod } from "../types";
 //   Bulanan : BPMP (pegawai tetap, masa Jan–Nov) / BP21 (tidak tetap)
 //   Tahunan : A1 (masa terakhir: Desember / resign)
 //   Masa sebelum Januari 2027 = simulasi uji coba (dihitung tanpa disimpan)
-// Pelaporan tetap dilakukan manual di Coretax; CSV disalin ke template impor Coretax.
+// Pelaporan tetap dilakukan manual di Coretax; file Excel disalin ke template impor Coretax.
 
 const PPH21_START_PERIOD = "2027-01";
 const TKU_STORAGE_KEY    = "niahair-pph21-id-tku";
@@ -27,8 +27,6 @@ const fmtDate = (ymd: string) => {
   return `${d}/${m}/${y}`;
 };
 const pct = (n: number | null) => (n == null ? "—" : `${String(n).replace(".", ",")}%`);
-// NIK diawali tanda kutip agar Excel tidak mengubah 16 digit jadi notasi ilmiah
-const nikCell = (nik: string | null) => (nik ? `'${nik}` : "");
 
 const filterCls =
   "h-9 rounded-xl border border-slate-200 bg-white shadow-sm text-sm transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring/30";
@@ -49,59 +47,66 @@ function exportMonthly(data: Pph21MonthlyResult, document: "BPMP" | "BP21", idTk
   const [year, month] = data.taxPeriod.split("-");
   const rows = data.data.filter((r) => r.document === document).map((r) => ({
     month:    Number(month),
-    year,
+    year:     Number(year),
     opt:      "Resident",
-    tin:      nikCell(r.employee.nikKtp),
+    tin:      r.employee.nikKtp ?? "",
     name:     r.employee.name,
     ptkp:     r.ptkpLabel ?? "",
     position: r.employee.position ?? "",
     facility: "N/A",
     code:     r.taxObjectCode,
     gross:    Math.round(r.gross),
-    rate:     r.terRate ?? "",
+    rate:     r.terRate,
     pph21:    Math.round(r.pph21),
     tku:      idTku,
     date:     r.withholdingDate,
   }));
-  exportCSV(rows, `ebupot-${document.toLowerCase()}-${data.taxPeriod}`, {
-    month:    "Masa Pajak (TaxPeriodMonth)",
-    year:     "Tahun Pajak (TaxPeriodYear)",
-    opt:      "Status Penerima (CounterpartOpt)",
-    tin:      "NIK/NPWP (CounterpartTin)",
-    name:     "Nama",
-    ptkp:     "Status PTKP (StatusTaxExemption)",
-    position: "Jabatan (Position)",
-    facility: "Fasilitas (TaxCertificate)",
-    code:     "Kode Objek Pajak (TaxObjectCode)",
-    gross:    "Penghasilan Bruto (Gross)",
-    rate:     "Tarif TER % (Rate)",
-    pph21:    "PPh 21 Dipotong",
-    tku:      "ID TKU Pemotong (IDPlaceOfBusinessActivity)",
-    date:     "Tanggal Pemotongan (WithholdingDate)",
-  });
+  return exportXLSX(rows, `ebupot-${document.toLowerCase()}-${data.taxPeriod}`, [
+    { key: "month",    header: "Masa Pajak (TaxPeriodMonth)",                 type: "number" },
+    { key: "year",     header: "Tahun Pajak (TaxPeriodYear)",                 type: "number" },
+    { key: "opt",      header: "Status Penerima (CounterpartOpt)" },
+    { key: "tin",      header: "NIK/NPWP (CounterpartTin)",                   type: "text", width: 20 },
+    { key: "name",     header: "Nama",                                        width: 28 },
+    { key: "ptkp",     header: "Status PTKP (StatusTaxExemption)" },
+    { key: "position", header: "Jabatan (Position)" },
+    { key: "facility", header: "Fasilitas (TaxCertificate)" },
+    { key: "code",     header: "Kode Objek Pajak (TaxObjectCode)",            type: "text" },
+    { key: "gross",    header: "Penghasilan Bruto (Gross)",                   type: "money" },
+    { key: "rate",     header: "Tarif TER % (Rate)",                          type: "number" },
+    { key: "pph21",    header: "PPh 21 Dipotong",                             type: "money" },
+    { key: "tku",      header: "ID TKU Pemotong (IDPlaceOfBusinessActivity)", type: "text", width: 26 },
+    { key: "date",     header: "Tanggal Pemotongan (WithholdingDate)",        type: "text" },
+  ], { sheetName: document });
 }
 
-/** Lembar uji coba: hitungan aplikasi berdampingan dengan kolom hitungan manual konsultan */
+/** Lembar uji coba: hitungan aplikasi berdampingan dengan kolom hitungan manual konsultan; Selisih dihitung otomatis */
 function exportSimulation(data: Pph21MonthlyResult) {
   const rows = data.data.map((r) => ({
     name:   r.employee.name,
-    nik:    nikCell(r.employee.nikKtp),
+    nik:    r.employee.nikKtp ?? "",
     ptkp:   r.ptkpLabel ?? "BELUM DIISI",
     gross:  Math.round(r.gross),
-    rate:   r.terRate ?? "",
+    rate:   r.terRate,
     pph21:  Math.round(r.pph21),
-    manual: "",
-    diff:   "",
+    manual: null,
+    diff:   null,
   }));
-  exportCSV(rows, `uji-coba-pph21-${data.taxPeriod}`, {
-    name: "Karyawan", nik: "NIK", ptkp: "Status PTKP", gross: "Bruto (aplikasi)", rate: "TER % (aplikasi)",
-    pph21: "PPh 21 (aplikasi)", manual: "PPh 21 (hitung manual)", diff: "Selisih",
-  });
+  return exportXLSX(rows, `uji-coba-pph21-${data.taxPeriod}`, [
+    { key: "name",   header: "Karyawan",                width: 28 },
+    { key: "nik",    header: "NIK",                     type: "text", width: 20 },
+    { key: "ptkp",   header: "Status PTKP",             width: 14 },
+    { key: "gross",  header: "Bruto (aplikasi)",        type: "money", width: 16 },
+    { key: "rate",   header: "TER % (aplikasi)",        type: "number", width: 14 },
+    { key: "pph21",  header: "PPh 21 (aplikasi)",       type: "money", width: 16 },
+    { key: "manual", header: "PPh 21 (hitung manual)",  type: "money", width: 20 },
+    // Selisih = manual − aplikasi; kosong sampai kolom manual diisi
+    { key: "diff",   header: "Selisih (manual − aplikasi)", type: "money", width: 22, formula: (r) => `IF(G${r}="","",G${r}-F${r})` },
+  ], { sheetName: `Uji coba ${data.taxPeriod}` });
 }
 
 function exportA1(data: Pph21AnnualResult, idTku: string) {
   const rows = data.data.map((r) => ({
-    tin:      nikCell(r.employee.nikKtp),
+    tin:      r.employee.nikKtp ?? "",
     name:     r.employee.name,
     ptkp:     r.ptkpLabel ?? "",
     position: r.employee.position ?? "",
@@ -123,15 +128,29 @@ function exportA1(data: Pph21AnnualResult, idTku: string) {
     final:    Math.round(r.finalPeriodTax),
     tku:      idTku,
   }));
-  exportCSV(rows, `ebupot-a1-${data.year}`, {
-    tin: "NIK/NPWP", name: "Nama", ptkp: "Status PTKP", position: "Jabatan", code: "Kode Objek Pajak",
-    from: "Masa Awal", to: "Masa Akhir",
-    salary: "1. Gaji", other: "3. Tunjangan Lainnya, Lembur, dsb.", premium: "5. Premi Asuransi dibayar Pemberi Kerja",
-    bonus: "7. Tantiem, Bonus, THR", gross: "8. Jumlah Penghasilan Bruto",
-    posCost: "9. Biaya Jabatan", pension: "10. Iuran Pensiun/JHT", neto: "14. Penghasilan Neto Setahun",
-    ptkpAmt: "PTKP", pkp: "PKP Setahun", annual: "PPh 21 Terutang Setahun",
-    before: "PPh 21 Dipotong Masa Sebelumnya", final: "PPh 21 Masa Terakhir", tku: "ID TKU Pemotong",
-  });
+  return exportXLSX(rows, `ebupot-a1-${data.year}`, [
+    { key: "tin",      header: "NIK/NPWP",                                type: "text", width: 20 },
+    { key: "name",     header: "Nama",                                    width: 28 },
+    { key: "ptkp",     header: "Status PTKP" },
+    { key: "position", header: "Jabatan" },
+    { key: "code",     header: "Kode Objek Pajak",                        type: "text" },
+    { key: "from",     header: "Masa Awal",                               type: "number" },
+    { key: "to",       header: "Masa Akhir",                              type: "number" },
+    { key: "salary",   header: "1. Gaji",                                 type: "money" },
+    { key: "other",    header: "3. Tunjangan Lainnya, Lembur, dsb.",      type: "money" },
+    { key: "premium",  header: "5. Premi Asuransi dibayar Pemberi Kerja", type: "money" },
+    { key: "bonus",    header: "7. Tantiem, Bonus, THR",                  type: "money" },
+    { key: "gross",    header: "8. Jumlah Penghasilan Bruto",             type: "money" },
+    { key: "posCost",  header: "9. Biaya Jabatan",                        type: "money" },
+    { key: "pension",  header: "10. Iuran Pensiun/JHT",                   type: "money" },
+    { key: "neto",     header: "14. Penghasilan Neto Setahun",            type: "money" },
+    { key: "ptkpAmt",  header: "PTKP",                                    type: "money" },
+    { key: "pkp",      header: "PKP Setahun",                             type: "money" },
+    { key: "annual",   header: "PPh 21 Terutang Setahun",                 type: "money" },
+    { key: "before",   header: "PPh 21 Dipotong Masa Sebelumnya",         type: "money" },
+    { key: "final",    header: "PPh 21 Masa Terakhir",                    type: "money" },
+    { key: "tku",      header: "ID TKU Pemotong",                         type: "text", width: 26 },
+  ], { sheetName: `A1 ${data.year}` });
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -250,12 +269,12 @@ export function Pph21ReportPage() {
           <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs text-blue-800">
             <Info className="h-4 w-4 shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <p>Dari slip yang sudah <strong>disetujui/dibayar</strong>. CSV disalin ke template impor bukti potong di Coretax (nama field Coretax tertera di judul kolom) — cocokkan dengan template terbaru dari Coretax sebelum diunggah. Pelaporan tetap dilakukan di Coretax.</p>
+              <p>Dari slip yang sudah <strong>disetujui/dibayar</strong>. File Excel disalin ke template impor bukti potong di Coretax (nama field Coretax tertera di judul kolom) — cocokkan dengan template terbaru dari Coretax sebelum diunggah. Pelaporan tetap dilakukan di Coretax.</p>
               {tab === "monthly"
                 ? <p>Masa Januari–November: bukti potong bulanan (BPMP pegawai tetap, BP21 tidak tetap). Masa terakhir (Desember / resign) dilaporkan lewat bukti potong A1 — lihat tab Tahunan.</p>
                 : <p>A1 dibuat untuk karyawan tetap yang sudah punya slip masa terakhir (Desember atau resign) di tahun ini.</p>}
               {missingNik > 0 && <p className="font-medium text-amber-700">{missingNik} karyawan belum punya NIK — lengkapi di data karyawan.</p>}
-              {!idTku && <p className="font-medium text-amber-700">Isi ID TKU pemotong (NPWP perusahaan 16 digit + 000000) agar kolomnya terisi di CSV.</p>}
+              {!idTku && <p className="font-medium text-amber-700">Isi ID TKU pemotong (NPWP perusahaan 16 digit + 000000) agar kolomnya terisi di file Excel.</p>}
             </div>
           </div>
         )}

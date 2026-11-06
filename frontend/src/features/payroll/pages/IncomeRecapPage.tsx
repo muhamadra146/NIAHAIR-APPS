@@ -7,6 +7,7 @@ import { useAuthStore }      from "@/stores/authStore";
 import { useIncomeRecap }    from "../hooks";
 import type { IncomeRecapAmounts, IncomeRecapResult } from "../types";
 import { WIB_TZ, toWibDateStr } from "@/lib/utils";
+import { exportXLSX, type XlsxColumn } from "@/lib/export";
 
 // Rekap Penghasilan (PAY-036) — komponen slip per karyawan + bruto pajak & PPh 21 (PAY-037).
 
@@ -56,9 +57,8 @@ const TAX_COLS: { key: AmountKey; label: string }[] = [
 
 const TOTAL_COLS = 3 + INCOME_COLS.length + 2 + EMPLOYEE_BPJS_COLS.length + EMPLOYER_BPJS_COLS.length + TAX_COLS.length + 1;
 
-function exportIncomeRecapToCsv(data: IncomeRecapResult, fileLabel: string) {
-  // Angka polos tanpa pemisah ribuan agar terbaca sebagai angka di Excel/Sheets
-  const fmtNum = (n: number) => String(Math.round(Number(n) * 100) / 100);
+// Export .xlsx (bukan CSV) agar kolom tetap terpisah di Excel ber-setelan Indonesia
+function exportIncomeRecap(data: IncomeRecapResult, fileLabel: string) {
   const amountCols = [
     ...INCOME_COLS,
     { key: "totalIncome" as AmountKey,   label: "Total Penghasilan" },
@@ -68,32 +68,28 @@ function exportIncomeRecapToCsv(data: IncomeRecapResult, fileLabel: string) {
     ...TAX_COLS,
     { key: "netSalary" as AmountKey,     label: "Gaji Bersih" },
   ];
-  const headers = ["Karyawan", "Kode", "Jabatan", "NIK", "Periode", "Jumlah Slip", ...amountCols.map((c) => c.label)];
+  const columns: XlsxColumn[] = [
+    { key: "name",   header: "Karyawan", width: 28 },
+    { key: "code",   header: "Kode", type: "text" },
+    { key: "role",   header: "Jabatan" },
+    { key: "nik",    header: "NIK", type: "text", width: 20 },
+    { key: "period", header: "Periode", width: 28 },
+    { key: "slips",  header: "Jumlah Slip", type: "number" },
+    ...amountCols.map((c): XlsxColumn => ({ key: c.key, header: c.label, type: "money", width: 16 })),
+  ];
 
-  const rows = data.data.map((row) => [
-    row.employee.name,
-    row.employee.employeeCode ?? "",
-    row.employee.role.name,
-    // Awali tanda kutip agar NIK 16 digit tidak diubah Excel jadi notasi ilmiah
-    row.employee.nikKtp ? `'${row.employee.nikKtp}` : "",
-    `${fmtDate(row.periodStart)} - ${fmtDate(row.periodEnd)}`,
-    String(row.slipCount),
-    ...amountCols.map((c) => fmtNum(row[c.key])),
-  ]);
-  rows.push(["TOTAL", "", "", "", "", "", ...amountCols.map((c) => fmtNum(data.totals[c.key]))]);
+  const rows = data.data.map((row) => ({
+    name:   row.employee.name,
+    code:   row.employee.employeeCode ?? "",
+    role:   row.employee.role.name,
+    nik:    row.employee.nikKtp ?? "",
+    period: `${fmtDate(row.periodStart)} - ${fmtDate(row.periodEnd)}`,
+    slips:  row.slipCount,
+    ...Object.fromEntries(amountCols.map((c) => [c.key, row[c.key]])),
+  }));
+  const totals = { name: "TOTAL", ...Object.fromEntries(amountCols.map((c) => [c.key, data.totals[c.key]])) };
 
-  const csvContent = [headers, ...rows]
-    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-
-  // BOM for Excel UTF-8 compatibility
-  const blob = new Blob(["﻿" + csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `rekap-penghasilan-${fileLabel}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  return exportXLSX(rows, `rekap-penghasilan-${fileLabel}`, columns, { sheetName: `Rekap ${fileLabel}`, totals });
 }
 
 export function IncomeRecapPage() {
@@ -181,10 +177,10 @@ export function IncomeRecapPage() {
               size="sm"
               className="gap-1.5"
               disabled={!data || data.data.length === 0}
-              onClick={() => data && exportIncomeRecapToCsv(data, fileLabel)}
+              onClick={() => data && exportIncomeRecap(data, fileLabel)}
             >
               <Download className="h-4 w-4" />
-              Export CSV
+              Export Excel
             </Button>
           </div>
         </div>
