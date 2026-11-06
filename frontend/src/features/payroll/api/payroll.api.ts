@@ -1,6 +1,6 @@
 import { api } from "@/lib/axios";
 import type { ApiResponse, PaginatedResponse } from "@/types/api";
-import type { Payroll, GeneratePayrollInput, PayrollListParams, BpjsReportResult, BpjsReportParams, IncomeRecapResult, IncomeRecapParams, Pph21MonthlyResult, Pph21AnnualResult, BulkGenerateInput, BulkGenerateResult, PayrollPeriodPreview, PayrollPeriodPreviewParams } from "../types";
+import type { Payroll, GeneratePayrollInput, PayrollListParams, BpjsReportResult, BpjsReportParams, IncomeRecapResult, IncomeRecapParams, Pph21MonthlyResult, Pph21AnnualResult, ManualItemInput, BulkGenerateInput, BulkGenerateResult, PayrollPeriodPreview, PayrollPeriodPreviewParams } from "../types";
 
 export const deletePayroll = async (id: string): Promise<void> => {
   await api.delete(`/payroll/${id}`);
@@ -68,6 +68,22 @@ export const fetchBpjsReport = async (params: BpjsReportParams): Promise<BpjsRep
 
 export const fetchIncomeRecap = async (params: IncomeRecapParams): Promise<IncomeRecapResult> => {
   const { data } = await api.get<ApiResponse<IncomeRecapResult>>("/payroll/income-recap", { params });
+  return data.data;
+};
+
+// Item gaji manual (PAY-038) — respons = payroll setelah dihitung ulang
+export const addPayrollItem = async (id: string, input: ManualItemInput): Promise<Payroll> => {
+  const { data } = await api.post<ApiResponse<Payroll>>(`/payroll/${id}/items`, input);
+  return data.data;
+};
+
+export const updatePayrollItem = async (id: string, itemId: string, input: ManualItemInput): Promise<Payroll> => {
+  const { data } = await api.put<ApiResponse<Payroll>>(`/payroll/${id}/items/${itemId}`, { amount: input.amount, notes: input.notes });
+  return data.data;
+};
+
+export const deletePayrollItem = async (id: string, itemId: string): Promise<Payroll> => {
+  const { data } = await api.delete<ApiResponse<Payroll>>(`/payroll/${id}/items/${itemId}`);
   return data.data;
 };
 

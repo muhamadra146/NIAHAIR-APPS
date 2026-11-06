@@ -4571,6 +4571,11 @@ Leave membuat Employee tidak Available.
 - **Pembatalan cuti yang sudah disetujui:** oleh Owner / Super Admin / manager divisi (sesuai EMP-033), hanya bila cuti **belum dimulai** (tanggal mulai ≥ hari ini WIB). Status menjadi Dibatalkan, jatah dikembalikan (terpakai − hari kerja cuti tsb), jadwal CUTI dipulihkan: baris yang punya shift kembali ke shift itu (MASUK, atau OFF bila shift tanpa jam); baris tanpa shift (dibuat oleh persetujuan cuti) dihapus — tanggal kembali "belum dijadwalkan" dan manager mengisinya ulang. Karyawan diberi notifikasi. Cuti yang **sudah berjalan** (sebagian tanggal lewat) tidak bisa dibatalkan, termasuk untuk sisa harinya; izin / sakit yang sudah disetujui juga tidak bisa dibatalkan (keputusan user 2026-10-23).
 - Pengajuan yang dibatalkan karyawan memperbarui notifikasi penyetuju menjadi "dibatalkan — tidak perlu tindakan". Notifikasi pengajuan & keputusan menyebut tanggalnya.
 
+### Sisa Cuti Akhir Tahun (keputusan owner 2026-11-06)
+
+- Sisa cuti tahunan yang tidak diambil sampai pergantian tahun **hangus** — tidak dibayar (payout) dan tidak dibawa ke tahun berikutnya.
+- Karena itu tarif payout sisa cuti (`unusedDayPayoutRate`) di semua jenis cuti tetap **Rp0**; item "Payout Cuti" tidak muncul di payroll.
+
 ---
 
 # EMP-013
@@ -5697,6 +5702,32 @@ Dasar: PP 58/2023, PMK 168/2023, tarif Pasal 17 UU HPP.
 - Export CSV; pelaporan tetap manual di Coretax.
 
 Insentif PPh 21 DTP 2027 ditangani setelah PMK terbit.
+
+---
+
+# PAY-038
+## Item Gaji Manual (penyesuaian sekali bayar)
+
+Keputusan owner 2026-11-06.
+
+Perubahan permanen (mis. tunjangan turun dari 1,5 jt ke 1,3 jt) dilakukan lewat **Setting Gaji** baru — sudah bisa oleh Finance, Owner, Super Admin. Item manual untuk penyesuaian **satu slip** saja.
+
+**Jenis item** (nominal diketik manual, tidak dihitung otomatis):
+
+| Jenis | Tipe | PPh 21 | Akun Gaji (Accurate) |
+|---|---|---|---|
+| THR | Penghasilan | Menambah bruto | Beban THR (debit) |
+| Bonus / Insentif | Penghasilan | Menambah bruto | Beban Bonus / Insentif (debit) |
+| Rapel / Kekurangan Gaji | Penghasilan | Menambah bruto | Beban Rapel Gaji (debit) |
+| Koreksi Kelebihan Bayar | Potongan | Mengurangi bruto | Koreksi Kelebihan Bayar Gaji (kredit) |
+| Potongan Lainnya | Potongan | Tidak memengaruhi bruto (seperti kasbon) | Potongan Lain Karyawan (kredit) |
+
+**Aturan:**
+- Ditambah, diubah, atau dihapus oleh Finance, Owner, Super Admin, hanya saat payroll **Draft**. Slip tetap harus disetujui Owner / Super Admin (PAY-005).
+- **Keterangan wajib** (mis. "THR Idul Fitri 2027"); tercatat siapa yang menambahkan dan kapan.
+- Setiap perubahan item manual menghitung ulang payroll (total, PPh 21). Item manual tetap ada saat payroll dihitung ulang.
+- Item manual masuk masa pajak slip itu (bulan tanggal gajian) — THR/bonus membuat PPh bulan itu lebih besar sesuai TER.
+- Reimburse (penggantian biaya) dan pesangon **tidak** lewat item ini.
 
 ---
 

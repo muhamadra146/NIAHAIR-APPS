@@ -12,6 +12,27 @@ export interface PayrollItem {
   rate:      number | null;
   isAuto:    boolean;
   notes:     string | null;
+  /** Item manual (PAY-038): penambah & waktu */
+  createdBy?: string | null;
+  createdAt?: string;
+  creator?:   { id: string; email: string; employee: { name: string } | null } | null;
+}
+
+// ── Item gaji manual (PAY-038) ────────────────────────────────────────
+export type ManualItemCategory = "thr" | "bonus_insentif" | "rapel" | "koreksi_lebih_bayar" | "potongan_lain";
+
+export const MANUAL_ITEM_TYPES: { value: ManualItemCategory; label: string; type: PayrollItemType; hint: string }[] = [
+  { value: "thr",                 label: "THR",                     type: "INCOME",    hint: "Penghasilan · menambah bruto PPh 21" },
+  { value: "bonus_insentif",      label: "Bonus / Insentif",        type: "INCOME",    hint: "Penghasilan · menambah bruto PPh 21" },
+  { value: "rapel",               label: "Rapel / Kekurangan Gaji", type: "INCOME",    hint: "Penghasilan · menambah bruto PPh 21" },
+  { value: "koreksi_lebih_bayar", label: "Koreksi Kelebihan Bayar", type: "DEDUCTION", hint: "Potongan · mengurangi bruto PPh 21" },
+  { value: "potongan_lain",       label: "Potongan Lainnya",        type: "DEDUCTION", hint: "Potongan · tidak memengaruhi PPh 21 (seperti kasbon)" },
+];
+
+export interface ManualItemInput {
+  category?: ManualItemCategory;
+  amount:    number;
+  notes:     string;
 }
 
 /** Status PTKP singkat (TK/0 …) untuk tampilan PPh 21 */
@@ -242,6 +263,8 @@ export interface IncomeRecapAmounts {
   lainnya:               number;
   totalIncome:           number;
   potonganAbsen:         number;
+  /** Koreksi kelebihan bayar (item manual, PAY-038) — mengurangi bruto pajak */
+  koreksi:               number;
   bpjsJht:               number;
   bpjsJp:                number;
   bpjsKesehatan:         number;

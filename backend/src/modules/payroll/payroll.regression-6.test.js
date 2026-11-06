@@ -13,7 +13,7 @@ const { accurateRequest } = require('../accurate/accurate.client');
 const syncRepo = require('./payroll.sync.repository');
 const { buildJournalLines, syncPayrollToAccurate, INCOME_ITEM_TO_GL, DEDUCTION_ITEM_TO_GL } = require('./payroll.sync.service');
 const { DEFAULT_MAPPINGS_FOR_TEST } = (() => ({
-  DEFAULT_MAPPINGS_FOR_TEST: ['gaji', 'tunjangan_makan', 'tunjangan_transport', 'tunjangan_lain', 'bpjs_perusahaan', 'hutang_bpjs', 'hutang_pph21', 'kasbon', 'kas_bank'],
+  DEFAULT_MAPPINGS_FOR_TEST: ['gaji', 'tunjangan_makan', 'tunjangan_transport', 'tunjangan_lain', 'bpjs_perusahaan', 'beban_thr', 'beban_bonus', 'beban_rapel', 'hutang_bpjs', 'hutang_pph21', 'kasbon', 'koreksi_gaji', 'potongan_lain', 'kas_bank'],
 }))();
 
 const NO = {
@@ -113,7 +113,7 @@ describe('buildJournalLines', () => {
     expect(buildJournalLines(p, GL_MAP).unknownCategories).toHaveLength(1);
   });
 
-  test('setiap kategori item payroll memetakan ke salah satu dari 9 kategori Akun Gaji', () => {
+  test('setiap kategori item payroll memetakan ke salah satu dari 14 kategori Akun Gaji', () => {
     for (const cat of [...Object.values(INCOME_ITEM_TO_GL), ...Object.values(DEDUCTION_ITEM_TO_GL)]) {
       expect(DEFAULT_MAPPINGS_FOR_TEST).toContain(cat);
     }

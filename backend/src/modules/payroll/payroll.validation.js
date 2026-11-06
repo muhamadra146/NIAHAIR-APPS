@@ -1,4 +1,4 @@
-const { object, string, number, integer, minValue, maxValue, pipe, minLength, optional, regex, safeParse } = require("valibot");
+const { object, string, number, integer, minValue, maxValue, pipe, minLength, maxLength, optional, regex, safeParse, picklist, trim } = require("valibot");
 const { StatusCodes } = require("http-status-codes");
 const AppError        = require("../../common/errors/AppError");
 
@@ -34,6 +34,31 @@ const updateNotesSchema = object({
   notes: optional(string()),
 });
 
+// Item gaji manual (PAY-038) — nominal diketik manual, keterangan wajib
+const MANUAL_ITEM_CATEGORIES = ["thr", "bonus_insentif", "rapel", "koreksi_lebih_bayar", "potongan_lain"];
+const manualItemAmount = pipe(
+  number("Nominal harus angka"),
+  minValue(1, "Nominal harus lebih dari 0"),
+  maxValue(10_000_000_000, "Nominal terlalu besar"),
+);
+const manualItemNotes = pipe(
+  string("Keterangan wajib diisi"),
+  trim(),
+  minLength(3, "Keterangan wajib diisi (minimal 3 karakter)"),
+  maxLength(200, "Keterangan maksimal 200 karakter"),
+);
+
+const createManualItemSchema = object({
+  category: picklist(MANUAL_ITEM_CATEGORIES, "Jenis item tidak valid"),
+  amount:   manualItemAmount,
+  notes:    manualItemNotes,
+});
+
+const updateManualItemSchema = object({
+  amount: manualItemAmount,
+  notes:  manualItemNotes,
+});
+
 /**
  * Validasi body dengan pesan utama = pesan masalah pertama (mis. "Tanggal gajian harus bilangan bulat 1–31"),
  * bukan "Data tidak valid" umum, supaya toast di layar langsung jelas. Detail tetap di `errors`.
@@ -51,4 +76,7 @@ const validateBody = (schema) => (req, _res, next) => {
   return next(new AppError(errors[0]?.message ?? "Data tidak valid", StatusCodes.UNPROCESSABLE_ENTITY, errors));
 };
 
-module.exports = { generateSchema, bulkGenerateSchema, updateNotesSchema, validateBody, PAY_DAY_MESSAGE };
+module.exports = {
+  generateSchema, bulkGenerateSchema, updateNotesSchema, createManualItemSchema, updateManualItemSchema,
+  validateBody, PAY_DAY_MESSAGE, MANUAL_ITEM_CATEGORIES,
+};

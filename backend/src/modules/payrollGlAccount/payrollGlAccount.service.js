@@ -13,10 +13,16 @@ const DEFAULT_MAPPINGS = [
   { category: "tunjangan_transport",label: "Beban Tunjangan Transport",  type: "DEBIT"  },
   { category: "tunjangan_lain",     label: "Beban Tunjangan Lainnya",    type: "DEBIT"  },
   { category: "bpjs_perusahaan",    label: "Beban BPJS Perusahaan",      type: "DEBIT"  },
+  // Item gaji manual (PAY-038) — tiap jenis punya akun sendiri
+  { category: "beban_thr",          label: "Beban THR",                  type: "DEBIT"  },
+  { category: "beban_bonus",        label: "Beban Bonus / Insentif",     type: "DEBIT"  },
+  { category: "beban_rapel",        label: "Beban Rapel Gaji",           type: "DEBIT"  },
   // ── Credit (liability / asset reduction) ──────────────────────────
   { category: "hutang_bpjs",        label: "Hutang BPJS",                type: "CREDIT" },
   { category: "hutang_pph21",       label: "Utang PPh 21",               type: "CREDIT" },
   { category: "kasbon",             label: "Piutang Kasbon Karyawan",    type: "CREDIT" },
+  { category: "koreksi_gaji",       label: "Koreksi Kelebihan Bayar Gaji", type: "CREDIT" },
+  { category: "potongan_lain",      label: "Potongan Lain Karyawan",     type: "CREDIT" },
   { category: "kas_bank",           label: "Kas/Bank Pembayaran Gaji",   type: "CREDIT" },
 ];
 

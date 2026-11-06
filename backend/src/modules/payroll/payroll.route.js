@@ -3,12 +3,13 @@ const authenticate = require("../../middlewares/auth.middleware");
 const authorize    = require("../../middlewares/role.middleware");
 const validate     = require("../../middlewares/validate.middleware");
 const { ROLES }   = require("../../common/constants/role.constant");
-const { generateSchema, bulkGenerateSchema, updateNotesSchema, validateBody } = require("./payroll.validation");
+const { generateSchema, bulkGenerateSchema, updateNotesSchema, createManualItemSchema, updateManualItemSchema, validateBody } = require("./payroll.validation");
 const {
   getAllController, getByIdController, generateController, bulkGenerateController, previewPeriodController,
   recalculateController, submitController, revertToDraftController, approveController, markAsPaidController, retrySyncController,
   updateNotesController, getMyController, getBpjsReportController, getIncomeRecapController,
   getPph21MonthlyController, getPph21AnnualController, deleteController,
+  addManualItemController, updateManualItemController, deleteManualItemController,
 } = require("./payroll.controller");
 
 const router = Router();
@@ -38,6 +39,17 @@ router.post("/bulk-generate",
 
 router.post("/:id/recalculate",
   authenticate, authorize(...ALL_ADMIN), recalculateController,
+);
+
+// Item gaji manual (PAY-038): Finance, Owner, Super Admin — hanya saat Draft
+router.post("/:id/items",
+  authenticate, authorize(...ALL_ADMIN), validateBody(createManualItemSchema), addManualItemController,
+);
+router.put("/:id/items/:itemId",
+  authenticate, authorize(...ALL_ADMIN), validateBody(updateManualItemSchema), updateManualItemController,
+);
+router.delete("/:id/items/:itemId",
+  authenticate, authorize(...ALL_ADMIN), deleteManualItemController,
 );
 
 router.post("/:id/submit",

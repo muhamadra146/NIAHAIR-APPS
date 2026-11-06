@@ -4,8 +4,9 @@ import {
   generatePayroll, recalculatePayroll,
   submitPayroll, approvePayroll, markPayrollAsPaid, revertPayrollToDraft, retryPayrollSync,
   fetchMyPayrolls, fetchBpjsReport, fetchIncomeRecap, fetchPph21Monthly, fetchPph21Annual, deletePayroll, bulkGeneratePayroll, previewPayrollPeriod,
+  addPayrollItem, updatePayrollItem, deletePayrollItem,
 } from "../api/payroll.api";
-import type { PayrollListParams, GeneratePayrollInput, BpjsReportParams, IncomeRecapParams, BulkGenerateInput, PayrollPeriodPreviewParams } from "../types";
+import type { PayrollListParams, GeneratePayrollInput, BpjsReportParams, IncomeRecapParams, BulkGenerateInput, PayrollPeriodPreviewParams, ManualItemInput } from "../types";
 
 const QK = "payrolls";
 
@@ -41,6 +42,31 @@ export const useRecalculatePayroll = (id: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => recalculatePayroll(id),
+    onSuccess:  () => invalidate(qc, id),
+  });
+};
+
+// Item gaji manual (PAY-038)
+export const useAddPayrollItem = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ManualItemInput) => addPayrollItem(id, input),
+    onSuccess:  () => invalidate(qc, id),
+  });
+};
+
+export const useUpdatePayrollItem = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, input }: { itemId: string; input: ManualItemInput }) => updatePayrollItem(id, itemId, input),
+    onSuccess:  () => invalidate(qc, id),
+  });
+};
+
+export const useDeletePayrollItem = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) => deletePayrollItem(id, itemId),
     onSuccess:  () => invalidate(qc, id),
   });
 };

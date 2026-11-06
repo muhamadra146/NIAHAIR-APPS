@@ -249,9 +249,20 @@ const NO_TAX_FIELDS = { taxPeriod: null, taxPtkpStatus: null, taxGross: null, ta
  * Slip dengan tanggal gajian < 2027-01-01 tidak dihitung; status PTKP kosong → masa pajak dicatat
  * tanpa PPh (payroll tidak bisa disetujui sampai PTKP diisi dan dihitung ulang).
  */
-const applyPayrollTax = async (built, { employeeId, periodEnd, salarySetting, employment, excludeId = null }) => {
+/** Total slip dari semua item (otomatis + manual) */
+const slipTotals = (items) => {
+  const grossIncome     = items.filter((i) => i.type === "INCOME")   .reduce((a, i) => a.plus(D(i.amount)), D(0));
+  const totalDeductions = items.filter((i) => i.type === "DEDUCTION").reduce((a, i) => a.plus(D(i.amount)), D(0));
+  return { grossIncome, totalDeductions, netSalary: grossIncome.minus(totalDeductions) };
+};
+
+/**
+ * @param manualItems item manual yang sudah tersimpan (PAY-038) — ikut bruto pajak & total slip,
+ *                    tetapi tidak dikembalikan di `items` (yang disimpan ulang hanya item otomatis)
+ */
+const applyPayrollTax = async (built, { employeeId, periodEnd, salarySetting, employment, excludeId = null, manualItems = [] }) => {
   const items = built.items.filter((i) => !TAX_ITEM_CATEGORIES.includes(i.category));
-  if (!isTaxable(periodEnd)) return { ...built, items, taxFields: NO_TAX_FIELDS };
+  if (!isTaxable(periodEnd)) return { ...built, items, ...slipTotals([...items, ...manualItems]), taxFields: NO_TAX_FIELDS };
 
   const year       = Number(taxPeriodOf(periodEnd).slice(0, 4));
   const [setting, priorSlips] = await Promise.all([
@@ -260,8 +271,9 @@ const applyPayrollTax = async (built, { employeeId, periodEnd, salarySetting, em
   ]);
   if (!setting) throw new AppError(`Tarif PPh 21 tahun ${year} belum diatur`, StatusCodes.UNPROCESSABLE_ENTITY);
 
+  const allItems = [...items, ...manualItems];
   const tax = computePayrollTax({
-    items,
+    items:          allItems,
     employer:       computeEmployerBpjs({ items, setting: salarySetting }),
     periodEnd,
     ptkpStatus:     employment?.ptkpStatus ?? null,
@@ -272,18 +284,15 @@ const applyPayrollTax = async (built, { employeeId, periodEnd, salarySetting, em
   });
 
   if (tax.missingPtkp) {
-    return { ...built, items, taxFields: { ...NO_TAX_FIELDS, taxPeriod: tax.taxPeriod } };
+    return { ...built, items, ...slipTotals(allItems), taxFields: { ...NO_TAX_FIELDS, taxPeriod: tax.taxPeriod } };
   }
 
   if (tax.item) items.push({ ...tax.item, amount: D(tax.item.amount), quantity: null, rate: null, isAuto: true });
 
-  const grossIncome     = items.filter((i) => i.type === "INCOME")   .reduce((a, i) => a.plus(i.amount), D(0));
-  const totalDeductions = items.filter((i) => i.type === "DEDUCTION").reduce((a, i) => a.plus(i.amount), D(0));
-
   return {
     ...built,
-    items, grossIncome, totalDeductions,
-    netSalary: grossIncome.minus(totalDeductions),
+    items,
+    ...slipTotals([...items, ...manualItems]),
     taxFields: {
       taxPeriod:     tax.taxPeriod,
       taxPtkpStatus: tax.taxPtkpStatus,
@@ -535,7 +544,11 @@ const recalculate = async (id, userId) => {
 
   const { items, grossIncome, totalDeductions, netSalary, taxFields } = await applyPayrollTax(
     buildItems(salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, existing.periodStart, existing.periodEnd, employment),
-    { employeeId: existing.employeeId, periodEnd: existing.periodEnd, salarySetting, employment, excludeId: id },
+    {
+      employeeId: existing.employeeId, periodEnd: existing.periodEnd, salarySetting, employment, excludeId: id,
+      // Item manual (PAY-038) tetap ada saat dihitung ulang dan ikut total & PPh 21
+      manualItems: (existing.items ?? []).filter((i) => !i.isAuto),
+    },
   );
 
   const commissionIds = commissions.map((c) => c.id);
@@ -565,6 +578,79 @@ const recalculate = async (id, userId) => {
   });
 
   return { ...updated, commissionBreakdown: buildCommissionBreakdown(commissions) };
+};
+
+// ── Item gaji manual (PAY-038) ────────────────────────────────────────────────
+// Nominal diketik manual; tiap perubahan menghitung ulang payroll (total & PPh 21).
+
+const MANUAL_ITEM_TYPES = {
+  thr:                 { type: "INCOME",    label: "THR" },
+  bonus_insentif:      { type: "INCOME",    label: "Bonus / Insentif" },
+  rapel:               { type: "INCOME",    label: "Rapel / Kekurangan Gaji" },
+  koreksi_lebih_bayar: { type: "DEDUCTION", label: "Koreksi Kelebihan Bayar" },
+  potongan_lain:       { type: "DEDUCTION", label: "Potongan Lainnya" },
+};
+
+const findDraftForManualItem = async (id) => {
+  const payroll = await repo.findById(id);
+  if (!payroll) throw new AppError("Payroll tidak ditemukan", StatusCodes.NOT_FOUND);
+  if (payroll.status !== "DRAFT") {
+    throw new AppError("Item manual hanya bisa diubah saat payroll Draft. Kembalikan ke Draft terlebih dahulu.", StatusCodes.UNPROCESSABLE_ENTITY);
+  }
+  return payroll;
+};
+
+const findManualItem = (payroll, itemId) => {
+  const item = payroll.items.find((i) => i.id === itemId);
+  if (!item) throw new AppError("Item tidak ditemukan di payroll ini", StatusCodes.NOT_FOUND);
+  if (item.isAuto) throw new AppError("Item otomatis tidak bisa diubah manual — ubah data sumbernya lalu hitung ulang", StatusCodes.UNPROCESSABLE_ENTITY);
+  return item;
+};
+
+/** Jalankan perubahan item lalu hitung ulang; bila hitung ulang gagal, perubahan item dibatalkan */
+const withRecalculate = async (id, userId, change, undo) => {
+  const changed = await change();
+  try {
+    return await recalculate(id, userId);
+  } catch (err) {
+    await undo(changed);
+    throw err;
+  }
+};
+
+const addManualItem = async (id, { category, amount, notes }, userId) => {
+  await findDraftForManualItem(id);
+  const def = MANUAL_ITEM_TYPES[category];
+  if (!def) throw new AppError("Jenis item tidak valid", StatusCodes.BAD_REQUEST);
+  return withRecalculate(
+    id, userId,
+    () => repo.createItem({
+      payrollId: id, type: def.type, category, label: def.label,
+      amount: D(amount), isAuto: false, notes, createdBy: userId ?? null,
+    }),
+    (created) => repo.deleteItem(created.id),
+  );
+};
+
+const updateManualItem = async (id, itemId, { amount, notes }, userId) => {
+  const item = findManualItem(await findDraftForManualItem(id), itemId);
+  return withRecalculate(
+    id, userId,
+    () => repo.updateItem(itemId, { amount: D(amount), notes }),
+    () => repo.updateItem(itemId, { amount: item.amount, notes: item.notes }),
+  );
+};
+
+const deleteManualItem = async (id, itemId, userId) => {
+  const item = findManualItem(await findDraftForManualItem(id), itemId);
+  return withRecalculate(
+    id, userId,
+    () => repo.deleteItem(itemId),
+    () => repo.createItem({
+      id: item.id, payrollId: id, type: item.type, category: item.category, label: item.label,
+      amount: item.amount, isAuto: false, notes: item.notes, createdBy: item.createdBy ?? null, createdAt: item.createdAt,
+    }),
+  );
 };
 
 const submitForApproval = async (id, userId) => {
@@ -836,7 +922,7 @@ const INCOME_RECAP_COLUMNS = {
 
 const RECAP_AMOUNT_KEYS = [
   "gaji", "tunjangan", "transport", "makan", "komisi", "lembur", "bonus", "payoutCuti", "lainnya",
-  "totalIncome", "potonganAbsen",
+  "totalIncome", "potonganAbsen", "koreksi",
   "bpjsJht", "bpjsJp", "bpjsKesehatan",
   "bpjsJhtEmployer", "bpjsJpEmployer", "bpjsKesehatanEmployer", "bpjsJkkEmployer", "bpjsJkmEmployer",
   "taxGross", "pph21",
@@ -870,6 +956,7 @@ const toRecapRow = (p) => {
     if (TAX_ITEM_CATEGORIES.includes(item.category)) continue;
     if (item.type === "DEDUCTION") {
       if (item.category === "absen" || item.category === "terlambat") row.potonganAbsen += amount;
+      else if (item.category === "koreksi_lebih_bayar") row.koreksi += amount;
       else if (item.category === "bpjs_jht")       row.bpjsJht       += amount;
       else if (item.category === "bpjs_jp")        row.bpjsJp        += amount;
       else if (item.category === "bpjs_kesehatan") row.bpjsKesehatan += amount;
@@ -971,4 +1058,5 @@ const deletePayroll = async (id) => {
 module.exports = {
   getAll, getById, generate, previewPeriod, recalculate, submitForApproval, revertToDraft, approve,
   markAsPaid, retryAccurateSync, updateNotes, getMy, getBpjsReport, getIncomeRecap, bulkGenerate, deletePayroll,
+  addManualItem, updateManualItem, deleteManualItem, MANUAL_ITEM_TYPES,
 };

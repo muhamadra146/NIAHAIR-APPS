@@ -158,6 +158,7 @@ model User {
   reviewedSickLeaves  SickLeave[]                   @relation("SickLeaveReviewer")
   refreshTokens       RefreshToken[]
   notifications       Notification[]
+  payrollItems        PayrollItem[]                 @relation("PayrollItemCreator")
 
   @@index([userRoleId])
   @@index([employeeId])
@@ -3111,7 +3112,12 @@ model PayrollItem {
 
   notes String?
 
+  // Item manual (PAY-038): siapa yang menambahkan & kapan
+  createdBy String?
+  createdAt DateTime @default(now())
+
   payroll Payroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  creator User?   @relation("PayrollItemCreator", fields: [createdBy], references: [id])
 
   @@index([payrollId])
   @@map("payroll_items")

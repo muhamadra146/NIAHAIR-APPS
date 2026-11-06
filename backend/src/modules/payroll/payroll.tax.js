@@ -24,6 +24,10 @@ const PTKP_LABEL = {
 // Item yang bukan penghasilan bruto: hasil perhitungan pajak itu sendiri
 const TAX_ITEM_CATEGORIES = ["pph21", "pph21_refund"];
 
+// Potongan yang mengurangi bruto: alpha, terlambat, dan koreksi kelebihan bayar (PAY-038).
+// Potongan lain (BPJS karyawan, kasbon, potongan lainnya) tidak memengaruhi bruto.
+const GROSS_REDUCING_DEDUCTIONS = ["absen", "terlambat", "koreksi_lebih_bayar"];
+
 const num = (v) => Number(v ?? 0);
 
 /** Tanggal gajian = sehari setelah akhir periode → masa pajak "YYYY-MM" */
@@ -60,17 +64,18 @@ const pasal17 = (pkp, brackets) => {
 };
 
 /**
- * Bruto pajak satu slip (PAY-037):
- *   semua item penghasilan − potongan alpha − potongan terlambat
+ * Bruto pajak satu slip (PAY-037, PAY-038):
+ *   semua item penghasilan (termasuk THR, bonus, rapel manual)
+ *   − potongan alpha − potongan terlambat − koreksi kelebihan bayar
  *   + BPJS Kesehatan perusahaan + JKK + JKM
- * JHT & JP perusahaan, iuran BPJS karyawan, dan kasbon tidak memengaruhi bruto.
+ * JHT & JP perusahaan, iuran BPJS karyawan, kasbon, dan potongan lainnya tidak memengaruhi bruto.
  */
 const computeTaxGross = ({ items = [], employer }) => {
   let gross = 0;
   for (const i of items) {
     if (TAX_ITEM_CATEGORIES.includes(i.category)) continue;
     if (i.type === "DEDUCTION") {
-      if (i.category === "absen" || i.category === "terlambat") gross -= num(i.amount);
+      if (GROSS_REDUCING_DEDUCTIONS.includes(i.category)) gross -= num(i.amount);
     } else {
       gross += num(i.amount);
     }
@@ -180,6 +185,7 @@ module.exports = {
   TER_CATEGORY,
   PTKP_LABEL,
   TAX_ITEM_CATEGORIES,
+  GROSS_REDUCING_DEDUCTIONS,
   taxPeriodOf,
   isTaxable,
   rateFor,

@@ -18,6 +18,7 @@ import {
   useRecalculatePayroll, useSubmitPayroll, useApprovePayroll, useMarkPayrollAsPaid,
   useDeletePayroll, useBulkGeneratePayroll, usePayrollPeriodPreview,
   useRevertPayrollToDraft, useRetryPayrollSync,
+  useAddPayrollItem, useUpdatePayrollItem, useDeletePayrollItem,
 } from "../hooks";
 import { payrollMonthLabel, payrollRangeLabel, payrollDayLabel, parsePayDay, payrollListMonth } from "../period";
 import { toast } from "@/lib/toast";
@@ -26,6 +27,7 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Payroll, PayrollStatus, PayrollItem, GeneratePayrollInput, BulkGenerateResult, PayrollPeriodPreview } from "../types";
 import { PTKP_SHORT, fmtTaxPeriod } from "../types";
+import { ManualItemDialog } from "../components/ManualItemDialog";
 import { WIB_TZ, toWibDateStr } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -418,7 +420,13 @@ function BulkGenerateDialog({ open, onClose, onGenerated }: {
 
 // ── Item breakdown table ──────────────────────────────────────────────────────
 
-function ItemTable({ items, type }: { items: PayrollItem[]; type: "INCOME" | "DEDUCTION" }) {
+function ItemTable({ items, type, editable = false, onEdit, onDelete }: {
+  items: PayrollItem[]; type: "INCOME" | "DEDUCTION";
+  /** Item manual (PAY-038) bisa diubah/dihapus saat Draft */
+  editable?: boolean;
+  onEdit?:   (item: PayrollItem) => void;
+  onDelete?: (item: PayrollItem) => void;
+}) {
   const rows = items.filter((i) => i.type === type);
   if (rows.length === 0) return <p className="text-xs text-slate-400 py-2">Tidak ada item</p>;
 
@@ -428,14 +436,34 @@ function ItemTable({ items, type }: { items: PayrollItem[]; type: "INCOME" | "DE
         {rows.map((item) => (
           <tr key={item.id}>
             <td className="py-2.5 pr-4">
-              <p className="font-medium text-slate-800">{item.label}</p>
+              <p className="font-medium text-slate-800">
+                {item.label}
+                {!item.isAuto && (
+                  <span className="ml-2 rounded-md bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">Manual</span>
+                )}
+              </p>
               {item.quantity != null && item.rate != null && (
                 <p className="text-xs text-slate-400">
                   {item.quantity} × {fmtRp(item.rate)}
                 </p>
               )}
+              {!item.isAuto && (
+                <>
+                  {item.notes && <p className="text-xs text-slate-500">{item.notes}</p>}
+                  <p className="text-[11px] text-slate-400">
+                    Ditambahkan {item.creator?.employee?.name ?? item.creator?.email ?? "—"}
+                    {item.createdAt && ` · ${fmtDate(item.createdAt)}`}
+                  </p>
+                  {editable && (
+                    <div className="mt-1 flex gap-3 text-xs">
+                      <button type="button" className="text-primary hover:underline" onClick={() => onEdit?.(item)}>Ubah</button>
+                      <button type="button" className="text-red-500 hover:underline" onClick={() => onDelete?.(item)}>Hapus</button>
+                    </div>
+                  )}
+                </>
+              )}
             </td>
-            <td className="py-2.5 text-right tabular-nums font-semibold text-slate-800">{fmtRp(item.amount)}</td>
+            <td className="py-2.5 text-right tabular-nums font-semibold text-slate-800 align-top">{fmtRp(item.amount)}</td>
           </tr>
         ))}
       </tbody>
@@ -454,7 +482,13 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
   const revertMut  = useRevertPayrollToDraft(payroll.id);
   const retryMut   = useRetryPayrollSync(payroll.id);
   const deleteMut  = useDeletePayroll();
+  const addItemMut    = useAddPayrollItem(payroll.id);
+  const updateItemMut = useUpdatePayrollItem(payroll.id);
+  const deleteItemMut = useDeletePayrollItem(payroll.id);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Item manual (PAY-038): undefined = dialog tertutup, null = tambah baru
+  const [itemDialog, setItemDialog]     = useState<PayrollItem | null | undefined>(undefined);
+  const [deletingItem, setDeletingItem] = useState<PayrollItem | null>(null);
   // Konfirmasi tindakan yang tidak bisa dibatalkan
   const [confirm, setConfirm] = useState<"approve" | "paid" | null>(null);
 
@@ -462,7 +496,8 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
   const canApprove = user ? CAN_APPROVE.includes(user.roleCode) : false;
   const canSubmit  = user ? CAN_SUBMIT.includes(user.roleCode) : false;
   const isActing = recalcMut.isPending || submitMut.isPending || approveMut.isPending || paidMut.isPending
-    || deleteMut.isPending || revertMut.isPending;
+    || deleteMut.isPending || revertMut.isPending || addItemMut.isPending || updateItemMut.isPending || deleteItemMut.isPending;
+  const canEditItems = payroll.status === "DRAFT" && canSubmit;
   const isNegativeNet = Number(payroll.netSalary) < 0;
   // PPh 21 (PAY-037): slip kena pajak tapi status PTKP karyawan kosong → belum bisa disetujui
   const missingPtkp   = !!payroll.taxPeriod && !payroll.taxPtkpStatus;
@@ -495,6 +530,11 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
               <Button size="sm" variant="outline" className="rounded-lg" onClick={() => handle(recalcMut.mutateAsync, "Payroll dihitung ulang")} disabled={isActing}>
                 <RefreshCw className="h-3 w-3 mr-1" /> Hitung Ulang
               </Button>
+              {canEditItems && (
+                <Button size="sm" variant="outline" className="rounded-lg" onClick={() => setItemDialog(null)} disabled={isActing}>
+                  <Plus className="h-3 w-3 mr-1" /> Tambah Item
+                </Button>
+              )}
               <Button size="sm" className="rounded-lg" onClick={() => handle(submitMut.mutateAsync, "Dikirim untuk approval")} disabled={isActing}>
                 <Send className="h-3 w-3 mr-1" /> Submit Approval
               </Button>
@@ -556,7 +596,7 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
         <Card className="rounded-2xl border-slate-100/80 bg-white shadow-sm">
           <CardContent className="p-4">
             <h4 className="text-sm font-semibold mb-3 text-emerald-700">Pendapatan</h4>
-            <ItemTable items={payroll.items} type="INCOME" />
+            <ItemTable items={payroll.items} type="INCOME" editable={canEditItems} onEdit={setItemDialog} onDelete={setDeletingItem} />
             <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between font-semibold text-sm">
               <span className="text-slate-600">Total</span>
               <span className="tabular-nums text-emerald-600">{fmtRp(payroll.grossIncome)}</span>
@@ -567,7 +607,7 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
         <Card className="rounded-2xl border-slate-100/80 bg-white shadow-sm">
           <CardContent className="p-4">
             <h4 className="text-sm font-semibold mb-3 text-red-600">Potongan</h4>
-            <ItemTable items={payroll.items} type="DEDUCTION" />
+            <ItemTable items={payroll.items} type="DEDUCTION" editable={canEditItems} onEdit={setItemDialog} onDelete={setDeletingItem} />
             <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between font-semibold text-sm">
               <span className="text-slate-600">Total</span>
               <span className="tabular-nums text-red-500">{fmtRp(payroll.totalDeductions)}</span>
@@ -713,6 +753,42 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
           </CardContent>
         </Card>
       )}
+
+      {/* Item gaji manual (PAY-038) */}
+      {itemDialog !== undefined && (
+        <ManualItemDialog
+          key={itemDialog?.id ?? "new"}
+          open
+          item={itemDialog}
+          isPending={addItemMut.isPending || updateItemMut.isPending}
+          onClose={() => setItemDialog(undefined)}
+          onSubmit={(input) => itemDialog
+            ? handle(() => updateItemMut.mutateAsync({ itemId: itemDialog.id, input }), "Item diperbarui, payroll dihitung ulang")
+            : handle(() => addItemMut.mutateAsync(input), "Item ditambahkan, payroll dihitung ulang")}
+        />
+      )}
+      <Dialog open={!!deletingItem} onOpenChange={(v) => { if (!v) setDeletingItem(null); }}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-xl sm:rounded-lg">
+          <DialogHeader>
+            <DialogTitle>Hapus Item Manual</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-600">
+            Hapus <strong>{deletingItem?.label}</strong> {deletingItem && fmtRp(deletingItem.amount)}
+            {deletingItem?.notes ? ` (${deletingItem.notes})` : ""}? Payroll akan dihitung ulang.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setDeletingItem(null)} disabled={deleteItemMut.isPending}>Batal</Button>
+            <Button variant="destructive" size="sm" disabled={deleteItemMut.isPending}
+              onClick={async () => {
+                if (!deletingItem) return;
+                const ok = await handle(() => deleteItemMut.mutateAsync(deletingItem.id), "Item dihapus, payroll dihitung ulang");
+                if (ok) setDeletingItem(null);
+              }}>
+              {deleteItemMut.isPending ? "Menghapus…" : "Hapus"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Konfirmasi Setujui / Tandai Dibayar (tidak bisa dibatalkan) */}
       <Dialog open={!!confirm} onOpenChange={(v) => { if (!v) setConfirm(null); }}>

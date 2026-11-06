@@ -470,9 +470,14 @@ export type PayrollGlCategory =
   | "tunjangan_transport"
   | "tunjangan_lain"
   | "bpjs_perusahaan"
+  | "beban_thr"
+  | "beban_bonus"
+  | "beban_rapel"
   | "hutang_bpjs"
   | "hutang_pph21"
   | "kasbon"
+  | "koreksi_gaji"
+  | "potongan_lain"
   | "kas_bank";
 
 export interface PayrollGlAccount {

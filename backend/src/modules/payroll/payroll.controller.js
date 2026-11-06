@@ -110,6 +110,28 @@ const getIncomeRecapController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Item gaji manual (PAY-038) — respons = payroll terbaru setelah dihitung ulang
+const addManualItemController = async (req, res, next) => {
+  try {
+    const result = await svc.addManualItem(req.params.id, req.body, req.user.id);
+    return created(res, result, "Manual item added");
+  } catch (err) { next(err); }
+};
+
+const updateManualItemController = async (req, res, next) => {
+  try {
+    const result = await svc.updateManualItem(req.params.id, req.params.itemId, req.body, req.user.id);
+    return success(res, result, "Manual item updated");
+  } catch (err) { next(err); }
+};
+
+const deleteManualItemController = async (req, res, next) => {
+  try {
+    const result = await svc.deleteManualItem(req.params.id, req.params.itemId, req.user.id);
+    return success(res, result, "Manual item deleted");
+  } catch (err) { next(err); }
+};
+
 const getPph21MonthlyController = async (req, res, next) => {
   try {
     const result = await pph21Svc.getMonthlyReport(req.query);
@@ -135,4 +157,5 @@ module.exports = {
   getAllController, getByIdController, generateController, bulkGenerateController, previewPeriodController,
   recalculateController, submitController, revertToDraftController, approveController, markAsPaidController,
   retrySyncController, updateNotesController, getMyController, getBpjsReportController, getIncomeRecapController, getPph21MonthlyController, getPph21AnnualController, deleteController,
+  addManualItemController, updateManualItemController, deleteManualItemController,
 };

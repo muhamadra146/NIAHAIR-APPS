@@ -29,6 +29,10 @@ const INCOME_ITEM_TO_GL = {
   bonus_omset:        "tunjangan_lain",
   // Lebih potong PPh 21 dikembalikan ke karyawan → mengurangi Utang PPh 21 (PAY-037)
   pph21_refund:       "hutang_pph21",
+  // Item manual (PAY-038)
+  thr:                "beban_thr",
+  bonus_insentif:     "beban_bonus",
+  rapel:              "beban_rapel",
 };
 
 // Potongan → akun yang DIKREDIT
@@ -44,6 +48,9 @@ const DEDUCTION_ITEM_TO_GL = {
   bpjs_kesehatan: "hutang_bpjs",
   kasbon:         "kasbon",
   pph21:          "hutang_pph21",
+  // Item manual (PAY-038)
+  koreksi_lebih_bayar: "koreksi_gaji",
+  potongan_lain:       "potongan_lain",
 };
 
 const DEBIT_LABEL = {
@@ -53,6 +60,9 @@ const DEBIT_LABEL = {
   tunjangan_lain:      "Beban Tunjangan Lainnya (tunjangan, komisi, lembur, bonus, dll.)",
   bpjs_perusahaan:     "Beban BPJS Perusahaan",
   hutang_pph21:        "Pengembalian Lebih Potong PPh 21",
+  beban_thr:           "Beban THR",
+  beban_bonus:         "Beban Bonus / Insentif",
+  beban_rapel:         "Beban Rapel / Kekurangan Gaji",
 };
 
 const CREDIT_LABEL = {
@@ -60,11 +70,13 @@ const CREDIT_LABEL = {
   hutang_bpjs:  "Hutang BPJS (bagian karyawan + perusahaan)",
   hutang_pph21: "Utang PPh 21 (dipotong dari gaji)",
   kasbon:       "Potongan Kasbon (Piutang Karyawan)",
+  koreksi_gaji: "Koreksi Kelebihan Bayar Gaji",
+  potongan_lain: "Potongan Lain Karyawan",
   kas_bank:     "Kas/Bank — gaji bersih dibayar",
 };
 
-const DEBIT_ORDER  = ["gaji", "tunjangan_makan", "tunjangan_transport", "tunjangan_lain", "bpjs_perusahaan", "hutang_pph21"];
-const CREDIT_ORDER = ["gaji", "hutang_bpjs", "hutang_pph21", "kasbon"];
+const DEBIT_ORDER  = ["gaji", "tunjangan_makan", "tunjangan_transport", "tunjangan_lain", "beban_thr", "beban_bonus", "beban_rapel", "bpjs_perusahaan", "hutang_pph21"];
+const CREDIT_ORDER = ["gaji", "hutang_bpjs", "hutang_pph21", "kasbon", "koreksi_gaji", "potongan_lain"];
 
 // Hitung dalam sen (integer) agar tidak ada galat floating point
 const toCents = (v) => Math.round(Number(v ?? 0) * 100);

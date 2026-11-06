@@ -1,7 +1,13 @@
 const prisma = require("../../config/prisma");
 const { wibDayStart, wibDayEnd } = require("../../utils/date");
 
-const ITEM_INCLUDE = { items: { orderBy: [{ type: "asc" }, { category: "asc" }] } };
+const ITEM_INCLUDE = {
+  items: {
+    orderBy: [{ type: "asc" }, { isAuto: "desc" }, { category: "asc" }],
+    // Item manual (PAY-038): nama penambah
+    include: { creator: { select: { id: true, email: true, employee: { select: { name: true } } } } },
+  },
+};
 
 const PAYROLL_INCLUDE = {
   employee: {
@@ -254,6 +260,11 @@ const findIncomeRecapData = ({ branchId, periodStart, periodEnd }) =>
     orderBy: [{ employee: { name: "asc" } }, { periodStart: "asc" }],
   });
 
+// ── Item gaji manual (PAY-038) ────────────────────────────────────────
+const createItem = (data, db = prisma) => db.payrollItem.create({ data });
+const updateItem = (id, data, db = prisma) => db.payrollItem.update({ where: { id }, data });
+const deleteItem = (id, db = prisma) => db.payrollItem.delete({ where: { id } });
+
 // ── PPh 21 (PAY-037) ──────────────────────────────────────────────────
 
 // Tarif tahun pajak: baris dengan tahun terbesar ≤ tahun masa pajak
@@ -367,5 +378,6 @@ module.exports = {
   findPreviousPayroll, findEmployeePayDay, findScheduleDates,
   create, update, replaceAutoItems, getGenerationData,
   findByEmployee, countByEmployee, findBpjsData, findIncomeRecapData, findTaxSetting, findTaxYearPayrolls, findPph21ReportData, findPayrollsByPayDate, remove,
+  createItem, updateItem, deleteItem,
   findEmployeesForBulkGenerate, findPayrollSyncJobs,
 };

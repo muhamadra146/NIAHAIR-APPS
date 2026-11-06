@@ -4403,7 +4403,8 @@ Terkait PPh 21:
 - Employee: ptkpStatus (TK0–TK3, K0–K3; kosong = belum diisi), taxEmploymentType (PERMANENT / NON_PERMANENT).
 - EmployeeSalarySettings: bpjsJkkEmployerPercent, bpjsJkmEmployerPercent (default 0).
 - TaxSetting (`tax_settings`): satu baris per tahun pajak — PTKP, biaya jabatan, tabel Pasal 17 & TER A/B/C (JSON). Dipakai baris dengan tahun terbesar ≤ tahun masa pajak. Seed tahun 2024 (PP 58/2023).
-- PayrollGlAccount: kategori `hutang_pph21` (Utang PPh 21).
+- PayrollGlAccount: kategori `hutang_pph21` (Utang PPh 21); item manual (PAY-038): `beban_thr`, `beban_bonus`, `beban_rapel`, `koreksi_gaji`, `potongan_lain`.
+- PayrollItem: item manual `isAuto = false` dengan `createdBy` (user) & `createdAt`; kategori `thr`, `bonus_insentif`, `rapel`, `koreksi_lebih_bayar`, `potongan_lain` (PAY-038).
 
 ---
 

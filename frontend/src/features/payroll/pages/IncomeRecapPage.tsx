@@ -32,7 +32,7 @@ const INCOME_COLS: { key: AmountKey; label: string }[] = [
   { key: "lembur",     label: "Lembur & Libur" },
   { key: "bonus",      label: "Bonus Omset" },
   { key: "payoutCuti", label: "Payout Cuti" },
-  { key: "lainnya",    label: "Lainnya" },
+  { key: "lainnya",    label: "Lainnya (THR, Bonus, Rapel)" },
 ];
 
 const EMPLOYEE_BPJS_COLS: { key: AmountKey; label: string }[] = [
@@ -55,7 +55,7 @@ const TAX_COLS: { key: AmountKey; label: string }[] = [
   { key: "pph21",    label: "PPh 21" },
 ];
 
-const TOTAL_COLS = 3 + INCOME_COLS.length + 2 + EMPLOYEE_BPJS_COLS.length + EMPLOYER_BPJS_COLS.length + TAX_COLS.length + 1;
+const TOTAL_COLS = 3 + INCOME_COLS.length + 3 + EMPLOYEE_BPJS_COLS.length + EMPLOYER_BPJS_COLS.length + TAX_COLS.length + 1;
 
 // Export .xlsx (bukan CSV) agar kolom tetap terpisah di Excel ber-setelan Indonesia
 function exportIncomeRecap(data: IncomeRecapResult, fileLabel: string) {
@@ -63,6 +63,7 @@ function exportIncomeRecap(data: IncomeRecapResult, fileLabel: string) {
     ...INCOME_COLS,
     { key: "totalIncome" as AmountKey,   label: "Total Penghasilan" },
     { key: "potonganAbsen" as AmountKey, label: "Potongan Absen & Terlambat" },
+    { key: "koreksi" as AmountKey,       label: "Koreksi Kelebihan Bayar" },
     ...EMPLOYEE_BPJS_COLS.map((c) => ({ ...c, label: `${c.label} Karyawan` })),
     ...EMPLOYER_BPJS_COLS.map((c) => ({ ...c, label: `${c.label} Perusahaan` })),
     ...TAX_COLS,
@@ -236,6 +237,7 @@ export function IncomeRecapPage() {
                   <th colSpan={INCOME_COLS.length} className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider text-emerald-600 border-b border-emerald-100 bg-emerald-50/50">Penghasilan</th>
                   <th rowSpan={2} className={`${thCls} text-emerald-700`}>Total Penghasilan</th>
                   <th rowSpan={2} className={thCls}>Pot. Absen</th>
+                  <th rowSpan={2} className={thCls}>Koreksi</th>
                   <th colSpan={EMPLOYEE_BPJS_COLS.length} className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider text-blue-600 border-b border-blue-100 bg-blue-50/50">BPJS Karyawan</th>
                   <th colSpan={EMPLOYER_BPJS_COLS.length} className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider text-amber-600 border-b border-amber-100 bg-amber-50/50">BPJS Perusahaan</th>
                   <th colSpan={TAX_COLS.length} className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider text-rose-600 border-b border-rose-100 bg-rose-50/50">PPh 21</th>
@@ -275,6 +277,7 @@ export function IncomeRecapPage() {
                         {INCOME_COLS.map((c) => <td key={c.key} className={tdCls}>{fmtRp(row[c.key])}</td>)}
                         <td className={`${tdCls} font-semibold text-emerald-700`}>{fmtRp(row.totalIncome)}</td>
                         <td className={tdCls}>{fmtRp(row.potonganAbsen)}</td>
+                        <td className={tdCls}>{fmtRp(row.koreksi)}</td>
                         {EMPLOYEE_BPJS_COLS.map((c) => <td key={c.key} className={`${tdCls} text-blue-700`}>{fmtRp(row[c.key])}</td>)}
                         {EMPLOYER_BPJS_COLS.map((c) => <td key={c.key} className={`${tdCls} text-amber-600`}>{fmtRp(row[c.key])}</td>)}
                         {TAX_COLS.map((c) => <td key={c.key} className={`${tdCls} text-rose-700`}>{fmtRp(row[c.key])}</td>)}
@@ -288,6 +291,7 @@ export function IncomeRecapPage() {
                       {INCOME_COLS.map((c) => <td key={c.key} className={tdCls}>{fmtRp(data.totals[c.key])}</td>)}
                       <td className={`${tdCls} text-emerald-700`}>{fmtRp(data.totals.totalIncome)}</td>
                       <td className={tdCls}>{fmtRp(data.totals.potonganAbsen)}</td>
+                      <td className={tdCls}>{fmtRp(data.totals.koreksi)}</td>
                       {EMPLOYEE_BPJS_COLS.map((c) => <td key={c.key} className={`${tdCls} text-blue-700`}>{fmtRp(data.totals[c.key])}</td>)}
                       {EMPLOYER_BPJS_COLS.map((c) => <td key={c.key} className={`${tdCls} text-amber-600`}>{fmtRp(data.totals[c.key])}</td>)}
                       {TAX_COLS.map((c) => <td key={c.key} className={`${tdCls} text-rose-700`}>{fmtRp(data.totals[c.key])}</td>)}

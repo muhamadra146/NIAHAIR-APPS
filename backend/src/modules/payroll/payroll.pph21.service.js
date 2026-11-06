@@ -3,7 +3,7 @@ const AppError = require("../../common/errors/AppError");
 const repo = require("./payroll.repository");
 const { computeEmployerBpjs } = require("./payroll.calc");
 const {
-  PPH21_START_DATE, PTKP_LABEL, TAX_ITEM_CATEGORIES,
+  PPH21_START_DATE, PTKP_LABEL, TAX_ITEM_CATEGORIES, GROSS_REDUCING_DEDUCTIONS,
   computeTaxGross, computeTerTax, computeAnnualTax, employeePensionContribution,
 } = require("./payroll.tax");
 
@@ -143,9 +143,12 @@ const getMonthlyReport = async ({ taxPeriod, branchId }) => {
 
 // Kategori item penghasilan → baris A1
 const A1_LINE = {
-  gaji:        "salary",
-  bonus_omset: "bonus",
-  payout_cuti: "bonus",
+  gaji:           "salary",
+  rapel:          "salary",   // kekurangan gaji (PAY-038)
+  bonus_omset:    "bonus",
+  payout_cuti:    "bonus",
+  thr:            "bonus",    // baris 7: tantiem, bonus, gratifikasi, THR
+  bonus_insentif: "bonus",
 };
 
 /** Rincian penghasilan bruto A1 dari item slip (alpha/terlambat mengurangi gaji; premi = BPJS perusahaan yang masuk bruto) */
@@ -157,7 +160,7 @@ const a1Lines = (slips) => {
       if (TAX_ITEM_CATEGORIES.includes(i.category)) continue;
       const amount = num(i.amount);
       if (i.type === "DEDUCTION") {
-        if (i.category === "absen" || i.category === "terlambat") { lines.salary -= amount; netIncome -= amount; }
+        if (GROSS_REDUCING_DEDUCTIONS.includes(i.category)) { lines.salary -= amount; netIncome -= amount; }
         continue;
       }
       lines[A1_LINE[i.category] ?? "otherAllowance"] += amount;
