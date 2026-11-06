@@ -7,7 +7,8 @@ const { generateSchema, bulkGenerateSchema, updateNotesSchema, validateBody } = 
 const {
   getAllController, getByIdController, generateController, bulkGenerateController, previewPeriodController,
   recalculateController, submitController, revertToDraftController, approveController, markAsPaidController, retrySyncController,
-  updateNotesController, getMyController, getBpjsReportController, getIncomeRecapController, deleteController,
+  updateNotesController, getMyController, getBpjsReportController, getIncomeRecapController,
+  getPph21MonthlyController, getPph21AnnualController, deleteController,
 } = require("./payroll.controller");
 
 const router = Router();
@@ -20,6 +21,8 @@ const APPROVERS = [ROLES.SUPER_ADMIN, ROLES.OWNER];
 router.get("/my",          authenticate, getMyController);
 router.get("/bpjs-report", authenticate, authorize(...ALL_ADMIN), getBpjsReportController);
 router.get("/income-recap", authenticate, authorize(...ALL_ADMIN), getIncomeRecapController);
+router.get("/pph21-report/monthly", authenticate, authorize(...ALL_ADMIN), getPph21MonthlyController);
+router.get("/pph21-report/annual",  authenticate, authorize(...ALL_ADMIN), getPph21AnnualController);
 router.get("/period-preview", authenticate, authorize(...ALL_ADMIN), previewPeriodController);
 
 router.get("/",    authenticate, authorize(...ALL_ADMIN), getAllController);

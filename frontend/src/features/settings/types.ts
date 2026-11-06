@@ -431,6 +431,38 @@ export interface UpdateOmsetBonusTierInput {
   sortOrder?:    number;
 }
 
+// ── Tarif PPh 21 per tahun pajak (PAY-037) ─────────────────────────────
+/** Satu baris tarif: batas atas bruto/PKP (null = di atas batas terakhir) & tarif % */
+export interface TaxBracket {
+  upTo: number | null;
+  rate: number;
+}
+
+export interface TaxSettingInput {
+  year:                   number;
+  ptkpSelf:               number;
+  ptkpMarried:            number;
+  ptkpDependent:          number;
+  maxDependents:          number;
+  positionCostPercent:    number;
+  positionCostMonthlyMax: number;
+  pasal17Brackets:        TaxBracket[];
+  terA:                   TaxBracket[];
+  terB:                   TaxBracket[];
+  terC:                   TaxBracket[];
+}
+
+/** Dari API: kolom Decimal dikirim sebagai string */
+export interface TaxSetting extends Omit<TaxSettingInput, "ptkpSelf" | "ptkpMarried" | "ptkpDependent" | "positionCostPercent" | "positionCostMonthlyMax"> {
+  id:                     string;
+  ptkpSelf:               string | number;
+  ptkpMarried:            string | number;
+  ptkpDependent:          string | number;
+  positionCostPercent:    string | number;
+  positionCostMonthlyMax: string | number;
+  updatedAt:              string;
+}
+
 // ── Payroll GL Account Mapping ─────────────────────────────────────────
 export type PayrollGlCategory =
   | "gaji"

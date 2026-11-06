@@ -169,6 +169,66 @@ export interface BpjsReportParams {
   yearMonth:  string;
 }
 
+// ── Laporan PPh 21 / bahan e-Bupot Coretax (PAY-037) ──────────────────
+export interface Pph21Employee {
+  id:           string;
+  name:         string;
+  employeeCode: string | null;
+  nikKtp:       string | null;
+  position:     string | null;
+}
+
+export interface Pph21MonthlyRow {
+  employee:        Pph21Employee;
+  ptkpStatus:      string | null;
+  ptkpLabel:       string | null;
+  employmentType:  "PERMANENT" | "NON_PERMANENT";
+  taxObjectCode:   string;
+  /** BPMP = bulanan pegawai tetap, BP21 = tidak tetap, A1 = masa terakhir (lihat laporan tahunan) */
+  document:        "BPMP" | "BP21" | "A1";
+  method:          "TER" | "ANNUAL";
+  terRate:         number | null;
+  gross:           number;
+  pph21:           number;
+  withholdingDate: string;
+  slipCount:       number;
+  statuses:        PayrollStatus[];
+  missingPtkp:     boolean;
+}
+
+export interface Pph21MonthlyResult {
+  /** SIMULATION = masa sebelum PPh 21 berlaku (uji coba), dihitung tanpa disimpan */
+  mode:      "ACTUAL" | "SIMULATION";
+  taxPeriod: string;
+  data:      Pph21MonthlyRow[];
+  totals:    { gross: number; pph21: number };
+}
+
+export interface Pph21AnnualRow {
+  employee:       Pph21Employee;
+  ptkpStatus:     string;
+  ptkpLabel:      string | null;
+  taxObjectCode:  string;
+  periodFrom:     string;
+  periodTo:       string;
+  lines:          { salary: number; otherAllowance: number; insurancePremium: number; bonus: number };
+  gross:          number;
+  positionCost:   number;
+  pension:        number;
+  neto:           number;
+  ptkp:           number;
+  pkp:            number;
+  annualTax:      number;
+  withheldBefore: number;
+  finalPeriodTax: number;
+}
+
+export interface Pph21AnnualResult {
+  year:   number;
+  data:   Pph21AnnualRow[];
+  totals: { gross: number; annualTax: number };
+}
+
 // Rekap Penghasilan (bahan PPh 21) — satu baris per karyawan
 export interface IncomeRecapAmounts {
   gaji:                  number;

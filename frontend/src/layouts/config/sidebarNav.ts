@@ -203,6 +203,14 @@ export const sidebarNav: NavItem[] = [
     group: "Keuangan",
   },
 
+  {
+    label: "Laporan PPh 21",
+    href:  "/payroll/pph21",
+    icon:  FileText,
+    roles: [...ADMIN_ROLES, "FINANCE"],
+    group: "Keuangan",
+  },
+
   // ── Data ──────────────────────────────────────────────────────────────────
   {
     label:         "Pelanggan",

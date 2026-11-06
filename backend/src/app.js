@@ -69,6 +69,7 @@ const productionRouter              = require("./modules/production/production.r
 const purchaseReturnRouter          = require("./modules/purchaseReturn/purchaseReturn.route");
 const dashboardRouter               = require("./modules/dashboard/dashboard.route");
 const payrollGlAccountRouter        = require("./modules/payrollGlAccount/payrollGlAccount.route");
+const taxSettingRouter              = require("./modules/taxSetting/taxSetting.route");
 const stockOpnameRouter             = require("./modules/stockOpname/stockOpname.route");
 const omsetBonusTierRouter           = require("./modules/omsetBonusTier/omsetBonusTier.route");
 const omsetBonusTierStandaloneRouter = omsetBonusTierRouter.standaloneRouter;
@@ -164,6 +165,7 @@ v1.use("/salary-settings",                      salaryRouter);
 v1.use("/loans",                                loanRouter);
 v1.use("/payroll",                              payrollRouter);
 v1.use("/payroll-gl-accounts",                  payrollGlAccountRouter);
+v1.use("/tax-settings",                         taxSettingRouter);
 v1.use("/holidays",                             holidayRouter);
 v1.use("/reports",                              reportRouter);
 v1.use("/consultation-notes",                   consultationRouter);

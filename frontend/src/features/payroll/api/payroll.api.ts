@@ -1,6 +1,6 @@
 import { api } from "@/lib/axios";
 import type { ApiResponse, PaginatedResponse } from "@/types/api";
-import type { Payroll, GeneratePayrollInput, PayrollListParams, BpjsReportResult, BpjsReportParams, IncomeRecapResult, IncomeRecapParams, BulkGenerateInput, BulkGenerateResult, PayrollPeriodPreview, PayrollPeriodPreviewParams } from "../types";
+import type { Payroll, GeneratePayrollInput, PayrollListParams, BpjsReportResult, BpjsReportParams, IncomeRecapResult, IncomeRecapParams, Pph21MonthlyResult, Pph21AnnualResult, BulkGenerateInput, BulkGenerateResult, PayrollPeriodPreview, PayrollPeriodPreviewParams } from "../types";
 
 export const deletePayroll = async (id: string): Promise<void> => {
   await api.delete(`/payroll/${id}`);
@@ -68,6 +68,16 @@ export const fetchBpjsReport = async (params: BpjsReportParams): Promise<BpjsRep
 
 export const fetchIncomeRecap = async (params: IncomeRecapParams): Promise<IncomeRecapResult> => {
   const { data } = await api.get<ApiResponse<IncomeRecapResult>>("/payroll/income-recap", { params });
+  return data.data;
+};
+
+export const fetchPph21Monthly = async (params: { taxPeriod: string; branchId?: string }): Promise<Pph21MonthlyResult> => {
+  const { data } = await api.get<ApiResponse<Pph21MonthlyResult>>("/payroll/pph21-report/monthly", { params });
+  return data.data;
+};
+
+export const fetchPph21Annual = async (params: { year: string; branchId?: string }): Promise<Pph21AnnualResult> => {
+  const { data } = await api.get<ApiResponse<Pph21AnnualResult>>("/payroll/pph21-report/annual", { params });
   return data.data;
 };
 

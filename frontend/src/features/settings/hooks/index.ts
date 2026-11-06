@@ -29,6 +29,7 @@ import {
 } from "../api/membership.api";
 import { fetchHolidays, createHoliday, updateHoliday, deleteHoliday } from "../api/holiday.api";
 import { fetchPayrollGlAccounts, savePayrollGlAccounts } from "../api/payrollGlAccount.api";
+import { fetchTaxSettings, createTaxSetting, updateTaxSetting } from "../api/taxSetting.api";
 import {
   fetchOmsetBonusTiers, createOmsetBonusTier, updateOmsetBonusTier, deleteOmsetBonusTier,
 } from "../api/omsetBonusTier.api";
@@ -50,6 +51,7 @@ import type {
   CreateMembershipInput, UpdateMembershipInput, MembershipListParams,
   CreateHolidayInput, UpdateHolidayInput,
   SavePayrollGlAccountsInput,
+  TaxSettingInput,
   CreateOmsetBonusTierInput, UpdateOmsetBonusTierInput,
 } from "../types";
 
@@ -664,6 +666,23 @@ export const usePayrollGlAccounts = () =>
     queryFn:  fetchPayrollGlAccounts,
     staleTime: 5 * 60 * 1000,
   });
+
+// ── Tarif PPh 21 (PAY-037) ─────────────────────────────────────────────
+export const useTaxSettings = () =>
+  useQuery({ queryKey: ["tax-settings"], queryFn: fetchTaxSettings });
+
+export const useSaveTaxSetting = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string | null; input: TaxSettingInput }) =>
+      id ? updateTaxSetting(id, input) : createTaxSetting(input),
+    onSuccess: (saved) => {
+      qc.invalidateQueries({ queryKey: ["tax-settings"] });
+      toast.success(`Tarif PPh 21 tahun ${saved.year} disimpan`);
+    },
+    onError: (err: Error) => toast.error(err.message ?? "Gagal menyimpan tarif PPh 21"),
+  });
+};
 
 export const useSavePayrollGlAccounts = () => {
   const qc = useQueryClient();

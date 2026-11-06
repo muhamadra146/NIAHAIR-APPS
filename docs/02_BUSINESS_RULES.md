@@ -5688,7 +5688,13 @@ Dasar: PP 58/2023, PMK 168/2023, tarif Pasal 17 UU HPP.
 
 **Jurnal Penggajian (PAY-025):** Kredit Utang PPh 21 (akun dipilih di Akun Gaji); Kas = gaji bersih.
 
-**Pengaturan:** tabel TER, tarif Pasal 17, PTKP, dan batas biaya jabatan disimpan per tahun pajak di database (bukan di kode).
+**Pengaturan:** tabel TER, tarif Pasal 17, PTKP, dan batas biaya jabatan disimpan per tahun pajak di database (bukan di kode). Diubah di Pengaturan → Tarif PPh 21 oleh Super Admin & Owner; Finance hanya melihat (sama dengan Akun Gaji). Payroll memakai tahun terbesar ≤ tahun masa pajak. Tabel harus urut (batas atas naik, tarif tidak turun, baris terakhir tanpa batas). Perubahan hanya berlaku untuk payroll yang dibuat/dihitung ulang sesudahnya.
+
+**Laporan PPh 21** (Keuangan → Laporan PPh 21, SA/Owner/Finance), bahan e-Bupot Coretax dari slip disetujui/dibayar:
+- Bulanan per masa pajak: BPMP (pegawai tetap, kode objek 21-100-01) dan BP21 (tidak tetap, 21-100-03). Slip masa terakhir dilaporkan lewat A1.
+- Tahunan: A1 untuk karyawan dengan slip masa terakhir — rincian gaji, tunjangan lainnya, premi BPJS perusahaan, bonus, biaya jabatan, iuran JHT/JP, neto, PTKP, PKP, PPh setahun, PPh dipotong sebelumnya, PPh masa terakhir.
+- Masa sebelum Januari 2027: mode uji coba (keputusan owner 2026-11-06) — PPh dihitung TER dari slip dengan tanggal gajian di bulan itu (semua status) memakai status PTKP saat ini; tidak disimpan dan tidak memotong gaji. Lembar uji coba berisi kolom hitungan manual untuk dibandingkan.
+- Export CSV; pelaporan tetap manual di Coretax.
 
 Insentif PPh 21 DTP 2027 ditangani setelah PMK terbit.
 

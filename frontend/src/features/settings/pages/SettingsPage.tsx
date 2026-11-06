@@ -36,6 +36,7 @@ import { ShiftTable }         from "../components/shift/ShiftTable";
 import { ShiftForm }          from "../components/shift/ShiftForm";
 import { AccuratePanel }           from "../accurate/AccuratePanel";
 import { PayrollGlAccountTab }     from "../components/payrollGlAccount/PayrollGlAccountTab";
+import { TaxSettingTab }           from "../components/taxSetting/TaxSettingTab";
 import { LeaveSettingsTab }        from "../components/leave/LeaveSettingsTab";
 import { MembershipTab }           from "../components/membership/MembershipTab";
 import { AttendanceSettingsTab }   from "../components/attendance/AttendanceSettingsTab";
@@ -1086,6 +1087,7 @@ const TABS = [
   { value: "salary",          label: "Gaji Karyawan" },
   { value: "bonus-omset",     label: "Bonus Omset" },
   { value: "payroll-gl",      label: "Akun Gaji" },
+  { value: "tax-pph21",       label: "Tarif PPh 21" },
   { value: "accurate",        label: "Accurate" },
 ] as const;
 
@@ -1138,6 +1140,7 @@ export function SettingsPage() {
             <TabsContent value="salary"          className="mt-0 p-6"><SalaryTab /></TabsContent>
             <TabsContent value="bonus-omset"     className="mt-0 p-6"><OmsetBonusTierTab /></TabsContent>
             <TabsContent value="payroll-gl"      className="mt-0 p-6"><PayrollGlAccountTab /></TabsContent>
+            <TabsContent value="tax-pph21"       className="mt-0 p-6"><TaxSettingTab /></TabsContent>
             <TabsContent value="accurate"        className="mt-0 p-6"><AccuratePanel /></TabsContent>
           </div>
         </div>

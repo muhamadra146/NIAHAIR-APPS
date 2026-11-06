@@ -1,5 +1,6 @@
 const { success, created } = require("../../common/responses/apiResponse");
 const svc = require("./payroll.service");
+const pph21Svc = require("./payroll.pph21.service");
 
 const getAllController = async (req, res, next) => {
   try {
@@ -109,6 +110,20 @@ const getIncomeRecapController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const getPph21MonthlyController = async (req, res, next) => {
+  try {
+    const result = await pph21Svc.getMonthlyReport(req.query);
+    return success(res, result, "PPh 21 monthly report fetched");
+  } catch (err) { next(err); }
+};
+
+const getPph21AnnualController = async (req, res, next) => {
+  try {
+    const result = await pph21Svc.getAnnualReport(req.query);
+    return success(res, result, "PPh 21 annual report fetched");
+  } catch (err) { next(err); }
+};
+
 const deleteController = async (req, res, next) => {
   try {
     const result = await svc.deletePayroll(req.params.id);
@@ -119,5 +134,5 @@ const deleteController = async (req, res, next) => {
 module.exports = {
   getAllController, getByIdController, generateController, bulkGenerateController, previewPeriodController,
   recalculateController, submitController, revertToDraftController, approveController, markAsPaidController,
-  retrySyncController, updateNotesController, getMyController, getBpjsReportController, getIncomeRecapController, deleteController,
+  retrySyncController, updateNotesController, getMyController, getBpjsReportController, getIncomeRecapController, getPph21MonthlyController, getPph21AnnualController, deleteController,
 };

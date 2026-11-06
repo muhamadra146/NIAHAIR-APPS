@@ -152,10 +152,12 @@ Catatan: contoh video mengurangkan BPJS Kesehatan karyawan (hasil 11.703.000 / D
 | 2 | `payroll.tax.js` (fungsi murni) + item `pph21` / `pph21_refund` saat generate/hitung ulang; masa terakhir; blokir approve tanpa PTKP | ✅ selesai 2026-11-06 |
 | 3 | Detail payroll (info pajak + peringatan PTKP), slip & Slip Saya (baris PPh 21), Rekap Penghasilan (JKK, JKM, Bruto Pajak, PPh 21), Laporan BPJS (JKK, JKM) | ✅ selesai 2026-11-06 |
 | 4 | Jurnal Accurate: kredit Utang PPh 21; lebih potong mendebit Utang PPh 21; JKK/JKM masuk BPJS perusahaan | ✅ selesai 2026-11-06 |
-| 5 | Laporan PPh 21 khusus per masa (format e-Bupot) & rekap tahunan A1 — sementara pakai Rekap Penghasilan mode Bulanan/Tahunan | |
-| 6 | Unit test ✅ (contoh Dani, TER A/B/C, resign, lebih potong, masa sama, tidak tetap); uji paralel Nov–Des 2026 dengan hitungan manual | sebagian |
-| 7 | Insentif DTP 2027 — setelah PMK terbit | |
-| 8 | Halaman pengaturan tarif PPh 21 (ubah TER/PTKP lewat aplikasi) — sekarang tarif tersimpan di database tapi belum ada layar untuk mengubahnya | |
+| 5 | Laporan PPh 21: bulanan BPMP/BP21 & tahunan A1, export CSV (kolom mengikuti template impor Coretax) | ✅ selesai 2026-11-06 |
+| 6 | Unit test ✅ (contoh Dani, TER A/B/C, resign, lebih potong, masa sama, tidak tetap). Uji paralel: Laporan PPh 21 masa Nov/Des 2026 = mode uji coba + Lembar Uji Coba untuk hitungan manual | alat siap; menunggu data PTKP & hitungan konsultan |
+| 7 | Insentif DTP 2027 — diabaikan dulu (keputusan owner 2026-11-06) | ditunda |
+| 8 | Pengaturan → Tarif PPh 21: ubah PTKP, biaya jabatan, Pasal 17, TER A/B/C; tambah tahun pajak baru | ✅ selesai 2026-11-06 |
+
+**Catatan template Coretax:** nama kolom export mengikuti field template impor bukti potong Coretax (TaxPeriodMonth, CounterpartTin, StatusTaxExemption, TaxObjectCode, Gross, Rate, IDPlaceOfBusinessActivity, WithholdingDate, …). Template Coretax bisa berubah — cocokkan dengan template terbaru sebelum unggah.
 
 ---
 

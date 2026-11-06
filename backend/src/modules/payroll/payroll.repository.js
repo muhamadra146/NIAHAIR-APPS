@@ -275,6 +275,49 @@ const findTaxYearPayrolls = (employeeId, year, excludeId = null) =>
     orderBy: { periodStart: "asc" },
   });
 
+// Laporan PPh 21 / e-Bupot (PAY-037) — data karyawan untuk bukti potong
+const PPH21_REPORT_INCLUDE = {
+  employee: {
+    select: {
+      id: true, name: true, employeeCode: true, nikKtp: true, ptkpStatus: true, taxEmploymentType: true,
+      role: { select: { name: true } },
+      salarySettings: {
+        where:   { isActive: true },
+        orderBy: { effectiveDate: "desc" },
+        select: {
+          baseSalary: true, bpjsJhtEmployerPercent: true, bpjsJpEmployerPercent: true,
+          bpjsKesehatanEmployerPercent: true, bpjsJkkEmployerPercent: true, bpjsJkmEmployerPercent: true,
+        },
+        take: 1,
+      },
+    },
+  },
+  items: { select: { type: true, category: true, amount: true, quantity: true } },
+};
+
+// Slip disetujui/dibayar dengan masa pajak tertentu ("YYYY-MM") atau satu tahun ("YYYY-")
+const findPph21ReportData = ({ taxPeriodPrefix, branchId }) =>
+  prisma.payroll.findMany({
+    where: {
+      ...(branchId ? { branchId } : {}),
+      taxPeriod: { startsWith: taxPeriodPrefix },
+      status: { in: ["APPROVED", "PAID"] },
+    },
+    include: PPH21_REPORT_INCLUDE,
+    orderBy: [{ employee: { name: "asc" } }, { periodStart: "asc" }],
+  });
+
+// Simulasi uji coba (slip sebelum PPh 21 berlaku): slip dengan tanggal gajian dalam rentang, semua status
+const findPayrollsByPayDate = ({ periodEndFrom, periodEndTo, branchId }) =>
+  prisma.payroll.findMany({
+    where: {
+      ...(branchId ? { branchId } : {}),
+      periodEnd: { gte: periodEndFrom, lte: periodEndTo },
+    },
+    include: PPH21_REPORT_INCLUDE,
+    orderBy: [{ employee: { name: "asc" } }, { periodStart: "asc" }],
+  });
+
 const remove = (id) =>
   prisma.$transaction([
     prisma.payrollItem.deleteMany({ where: { payrollId: id } }),
@@ -323,6 +366,6 @@ module.exports = {
   findAll, count, findById, findByEmployeeAndPeriod, findOverlapping,
   findPreviousPayroll, findEmployeePayDay, findScheduleDates,
   create, update, replaceAutoItems, getGenerationData,
-  findByEmployee, countByEmployee, findBpjsData, findIncomeRecapData, findTaxSetting, findTaxYearPayrolls, remove,
+  findByEmployee, countByEmployee, findBpjsData, findIncomeRecapData, findTaxSetting, findTaxYearPayrolls, findPph21ReportData, findPayrollsByPayDate, remove,
   findEmployeesForBulkGenerate, findPayrollSyncJobs,
 };

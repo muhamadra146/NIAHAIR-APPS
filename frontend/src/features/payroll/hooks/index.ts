@@ -3,7 +3,7 @@ import {
   fetchPayrolls, fetchPayroll,
   generatePayroll, recalculatePayroll,
   submitPayroll, approvePayroll, markPayrollAsPaid, revertPayrollToDraft, retryPayrollSync,
-  fetchMyPayrolls, fetchBpjsReport, fetchIncomeRecap, deletePayroll, bulkGeneratePayroll, previewPayrollPeriod,
+  fetchMyPayrolls, fetchBpjsReport, fetchIncomeRecap, fetchPph21Monthly, fetchPph21Annual, deletePayroll, bulkGeneratePayroll, previewPayrollPeriod,
 } from "../api/payroll.api";
 import type { PayrollListParams, GeneratePayrollInput, BpjsReportParams, IncomeRecapParams, BulkGenerateInput, PayrollPeriodPreviewParams } from "../types";
 
@@ -108,6 +108,20 @@ export const useIncomeRecap = (params: IncomeRecapParams) =>
     queryKey: ["incomeRecap", params],
     queryFn:  () => fetchIncomeRecap(params),
     enabled:  !!(params.yearMonth || params.year),
+  });
+
+export const usePph21Monthly = (params: { taxPeriod: string; branchId?: string }, enabled = true) =>
+  useQuery({
+    queryKey: ["pph21Monthly", params],
+    queryFn:  () => fetchPph21Monthly(params),
+    enabled:  enabled && !!params.taxPeriod,
+  });
+
+export const usePph21Annual = (params: { year: string; branchId?: string }, enabled = true) =>
+  useQuery({
+    queryKey: ["pph21Annual", params],
+    queryFn:  () => fetchPph21Annual(params),
+    enabled:  enabled && !!params.year,
   });
 
 export const useBulkGeneratePayroll = () => {
