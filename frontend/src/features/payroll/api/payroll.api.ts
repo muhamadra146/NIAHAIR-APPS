@@ -1,6 +1,6 @@
 import { api } from "@/lib/axios";
 import type { ApiResponse, PaginatedResponse } from "@/types/api";
-import type { Payroll, GeneratePayrollInput, PayrollListParams, BpjsReportResult, BpjsReportParams, BulkGenerateInput, BulkGenerateResult, PayrollPeriodPreview, PayrollPeriodPreviewParams } from "../types";
+import type { Payroll, GeneratePayrollInput, PayrollListParams, BpjsReportResult, BpjsReportParams, IncomeRecapResult, IncomeRecapParams, BulkGenerateInput, BulkGenerateResult, PayrollPeriodPreview, PayrollPeriodPreviewParams } from "../types";
 
 export const deletePayroll = async (id: string): Promise<void> => {
   await api.delete(`/payroll/${id}`);
@@ -63,6 +63,11 @@ export const fetchMyPayrolls = async (params: { page?: number; limit?: number; y
 
 export const fetchBpjsReport = async (params: BpjsReportParams): Promise<BpjsReportResult> => {
   const { data } = await api.get<ApiResponse<BpjsReportResult>>("/payroll/bpjs-report", { params });
+  return data.data;
+};
+
+export const fetchIncomeRecap = async (params: IncomeRecapParams): Promise<IncomeRecapResult> => {
+  const { data } = await api.get<ApiResponse<IncomeRecapResult>>("/payroll/income-recap", { params });
   return data.data;
 };
 

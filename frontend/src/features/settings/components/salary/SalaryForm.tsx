@@ -27,7 +27,9 @@ const schema = z.object({
   bpjsJpEmployerPercent:         z.number().min(0).max(100).optional().default(2),
   bpjsKesehatanEmployeePercent:  z.number().min(0).max(100).optional().default(1),
   bpjsKesehatanEmployerPercent:  z.number().min(0).max(100).optional().default(4),
-  effectiveDate:                 z.string().min(1, "Tanggal berlaku wajib diisi"),
+  bpjsJkkEmployerPercent:        z.number().min(0).max(100).optional().default(0),
+  bpjsJkmEmployerPercent:        z.number().min(0).max(100).optional().default(0),
+  effectiveDate:                z.string().min(1, "Tanggal berlaku wajib diisi"),
   notes:                         z.string().optional(),
 });
 
@@ -81,7 +83,9 @@ export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }:
       bpjsJpEmployerPercent:         2,
       bpjsKesehatanEmployeePercent:  1,
       bpjsKesehatanEmployerPercent:  4,
-      effectiveDate:                 toWibDateStr(),
+      bpjsJkkEmployerPercent:        0,
+      bpjsJkmEmployerPercent:        0,
+      effectiveDate:                toWibDateStr(),
       notes:                         "",
     },
   });
@@ -106,7 +110,9 @@ export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }:
         bpjsJpEmployerPercent:         Number(editing.bpjsJpEmployerPercent ?? 2),
         bpjsKesehatanEmployeePercent:  Number(editing.bpjsKesehatanEmployeePercent ?? 1),
         bpjsKesehatanEmployerPercent:  Number(editing.bpjsKesehatanEmployerPercent ?? 4),
-        effectiveDate:                 editing.effectiveDate.split("T")[0],
+        bpjsJkkEmployerPercent:        Number(editing.bpjsJkkEmployerPercent ?? 0),
+        bpjsJkmEmployerPercent:        Number(editing.bpjsJkmEmployerPercent ?? 0),
+        effectiveDate:                editing.effectiveDate.split("T")[0],
         notes:                         editing.notes ?? "",
       });
     }
@@ -198,6 +204,23 @@ export function SalaryForm({ employee, editing, isPending, onSubmit, onCancel }:
             <p className="mt-0.5 text-xs text-muted-foreground">Tanggungan perusahaan (default 4%)</p>
           </div>
         </div>
+        {/* JKK & JKM — dibayar perusahaan (PAY-037) */}
+        <p className="mt-3 mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">BPJS JKK &amp; JKM Perusahaan (%)</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label className="text-xs">JKK Perusahaan (%)</Label>
+            <Input type="number" min={0} max={100} step={0.01}
+              {...register("bpjsJkkEmployerPercent", { valueAsNumber: true })} className="mt-1" />
+            <p className="mt-0.5 text-xs text-muted-foreground">Sesuai tingkat risiko (0,24%–1,74%)</p>
+          </div>
+          <div>
+            <Label className="text-xs">JKM Perusahaan (%)</Label>
+            <Input type="number" min={0} max={100} step={0.01}
+              {...register("bpjsJkmEmployerPercent", { valueAsNumber: true })} className="mt-1" />
+            <p className="mt-0.5 text-xs text-muted-foreground">Umumnya 0,30%</p>
+          </div>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">Dasar = gaji pokok. Ikut dihitung sebagai penghasilan bruto PPh 21.</p>
       </div>
 
       {/* Tanggal berlaku + catatan */}

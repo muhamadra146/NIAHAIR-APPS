@@ -3,9 +3,9 @@ import {
   fetchPayrolls, fetchPayroll,
   generatePayroll, recalculatePayroll,
   submitPayroll, approvePayroll, markPayrollAsPaid, revertPayrollToDraft, retryPayrollSync,
-  fetchMyPayrolls, fetchBpjsReport, deletePayroll, bulkGeneratePayroll, previewPayrollPeriod,
+  fetchMyPayrolls, fetchBpjsReport, fetchIncomeRecap, deletePayroll, bulkGeneratePayroll, previewPayrollPeriod,
 } from "../api/payroll.api";
-import type { PayrollListParams, GeneratePayrollInput, BpjsReportParams, BulkGenerateInput, PayrollPeriodPreviewParams } from "../types";
+import type { PayrollListParams, GeneratePayrollInput, BpjsReportParams, IncomeRecapParams, BulkGenerateInput, PayrollPeriodPreviewParams } from "../types";
 
 const QK = "payrolls";
 
@@ -101,6 +101,13 @@ export const useBpjsReport = (params: BpjsReportParams) =>
     queryKey: ["bpjsReport", params],
     queryFn:  () => fetchBpjsReport(params),
     enabled:  !!params.yearMonth,
+  });
+
+export const useIncomeRecap = (params: IncomeRecapParams) =>
+  useQuery({
+    queryKey: ["incomeRecap", params],
+    queryFn:  () => fetchIncomeRecap(params),
+    enabled:  !!(params.yearMonth || params.year),
   });
 
 export const useBulkGeneratePayroll = () => {

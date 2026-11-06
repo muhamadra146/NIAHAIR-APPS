@@ -22,6 +22,7 @@ const correctionRepo = require('../correction/correction.repository');
 const divisionRepo   = require('../division/division.repository');
 const quotaSvc       = require('../leaveQuota/leaveQuota.service');
 const { assertNoOverlappingRequest } = require('./leave.overlap');
+const { wibDateStr } = require('../../utils/date');
 
 const services = {
   leave:      [require('./leave.service'), leaveRepo],
@@ -79,44 +80,47 @@ describe.each(Object.keys(services))('G3-07 %s getById', (name) => {
 
 describe('G3-12 pengajuan tumpang tindih', () => {
   const d = (s) => new Date(`${s}T00:00:00Z`);
+  // Tanggal relatif hari ini (WIB) agar tidak kena aturan tanggal mundur seiring waktu:
+  // F(n) = hari ini + 10 + n hari, "YYYY-MM-DD"
+  const F = (n) => wibDateStr(new Date(Date.now() + (10 + n) * 24 * 60 * 60 * 1000));
 
   test('tidak ada tabrakan → lolos', async () => {
-    await expect(assertNoOverlappingRequest('e1', d('2026-11-02'), d('2026-11-03'))).resolves.toBeUndefined();
-    expect(leaveRepo.findOverlapping).toHaveBeenCalledWith('e1', d('2026-11-02'), d('2026-11-03'));
+    await expect(assertNoOverlappingRequest('e1', d(F(2)), d(F(3)))).resolves.toBeUndefined();
+    expect(leaveRepo.findOverlapping).toHaveBeenCalledWith('e1', d(F(2)), d(F(3)));
   });
 
   test('bertabrakan dengan cuti yang disetujui → 409', async () => {
-    leaveRepo.findOverlapping.mockResolvedValue({ startDate: d('2026-11-01'), endDate: d('2026-11-05'), status: 'APPROVED' });
-    await expect(assertNoOverlappingRequest('e1', d('2026-11-03'), d('2026-11-03')))
+    leaveRepo.findOverlapping.mockResolvedValue({ startDate: d(F(1)), endDate: d(F(5)), status: 'APPROVED' });
+    await expect(assertNoOverlappingRequest('e1', d(F(3)), d(F(3))))
       .rejects.toMatchObject({ statusCode: 409, message: expect.stringContaining('cuti') });
   });
 
   test('bertabrakan dengan izin menunggu → 409', async () => {
-    permissionRepo.findOverlapping.mockResolvedValue({ date: d('2026-11-03'), status: 'PENDING' });
-    await expect(assertNoOverlappingRequest('e1', d('2026-11-03'), d('2026-11-03')))
+    permissionRepo.findOverlapping.mockResolvedValue({ date: d(F(3)), status: 'PENDING' });
+    await expect(assertNoOverlappingRequest('e1', d(F(3)), d(F(3))))
       .rejects.toMatchObject({ statusCode: 409, message: expect.stringContaining('izin') });
   });
 
   test('izin pada hari cuti yang disetujui ditolak dan tidak dibuat', async () => {
     prisma.employee.findUnique.mockResolvedValue({ homeBranchId: 'b1' });
-    leaveRepo.findOverlapping.mockResolvedValue({ startDate: d('2026-11-03'), endDate: d('2026-11-03'), status: 'APPROVED' });
-    await expect(services.permission[0].create('e1', null, { date: '2026-11-03', reason: 'urusan' }))
+    leaveRepo.findOverlapping.mockResolvedValue({ startDate: d(F(3)), endDate: d(F(3)), status: 'APPROVED' });
+    await expect(services.permission[0].create('e1', null, { date: F(3), reason: 'urusan' }))
       .rejects.toMatchObject({ statusCode: 409 });
     expect(permissionRepo.create).not.toHaveBeenCalled();
   });
 
   test('sakit yang beririsan dengan sakit lain ditolak', async () => {
     sickRepo.countNoLetterInYear.mockResolvedValue(0);
-    sickRepo.findOverlapping.mockResolvedValue({ startDate: d('2026-11-03'), endDate: d('2026-11-04'), status: 'PENDING' });
-    await expect(services.sickLeave[0].create('e1', 'b1', { startDate: '2026-11-04', endDate: '2026-11-05' }))
+    sickRepo.findOverlapping.mockResolvedValue({ startDate: d(F(3)), endDate: d(F(4)), status: 'PENDING' });
+    await expect(services.sickLeave[0].create('e1', 'b1', { startDate: F(4), endDate: F(5) }))
       .rejects.toMatchObject({ statusCode: 409 });
     expect(sickRepo.create).not.toHaveBeenCalled();
   });
 
   test('cuti yang beririsan ditolak', async () => {
     prisma.leaveType.findUnique.mockResolvedValue({ quotaType: 'EVENT_BASED' });
-    sickRepo.findOverlapping.mockResolvedValue({ startDate: d('2026-11-03'), endDate: d('2026-11-03'), status: 'APPROVED' });
-    await expect(services.leave[0].createLeave('e1', { startDate: '2026-11-02', endDate: '2026-11-04', leaveTypeId: 'lt1' }))
+    sickRepo.findOverlapping.mockResolvedValue({ startDate: d(F(3)), endDate: d(F(3)), status: 'APPROVED' });
+    await expect(services.leave[0].createLeave('e1', { startDate: F(2), endDate: F(4), leaveTypeId: 'lt1' }))
       .rejects.toMatchObject({ statusCode: 409 });
     expect(leaveRepo.create).not.toHaveBeenCalled();
     expect(quotaSvc.getBalance).not.toHaveBeenCalled();

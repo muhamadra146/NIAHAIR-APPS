@@ -143,6 +143,8 @@ export interface SalarySetting {
   bpjsJpEmployerPercent:           number;
   bpjsKesehatanEmployeePercent:    number;
   bpjsKesehatanEmployerPercent:    number;
+  bpjsJkkEmployerPercent?:         number;
+  bpjsJkmEmployerPercent?:         number;
   effectiveDate:                   string;
   endDate:                         string | null;
   isActive:                        boolean;
@@ -171,6 +173,8 @@ export interface CreateSalaryInput {
   bpjsJpEmployerPercent?:          number;
   bpjsKesehatanEmployeePercent?:   number;
   bpjsKesehatanEmployerPercent?:   number;
+  bpjsJkkEmployerPercent?:         number;
+  bpjsJkmEmployerPercent?:         number;
   effectiveDate:                   string;
   endDate?:                        string;
   isActive?:                       boolean;
@@ -435,6 +439,7 @@ export type PayrollGlCategory =
   | "tunjangan_lain"
   | "bpjs_perusahaan"
   | "hutang_bpjs"
+  | "hutang_pph21"
   | "kasbon"
   | "kas_bank";
 

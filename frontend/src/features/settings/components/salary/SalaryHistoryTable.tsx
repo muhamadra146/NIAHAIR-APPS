@@ -68,6 +68,8 @@ export function SalaryHistoryTable({ settings, onEdit }: Props) {
             <Row label="BPJS JP perusahaan"       value={`${Number(s.bpjsJpEmployerPercent ?? 0)}%`} />
             <Row label="BPJS Kesehatan karyawan"  value={`${s.bpjsKesehatanEmployeePercent ?? 1}%`} />
             <Row label="BPJS Kesehatan perusahaan" value={`${s.bpjsKesehatanEmployerPercent ?? 4}%`} />
+            <Row label="BPJS JKK perusahaan"       value={`${Number(s.bpjsJkkEmployerPercent ?? 0)}%`} />
+            <Row label="BPJS JKM perusahaan"       value={`${Number(s.bpjsJkmEmployerPercent ?? 0)}%`} />
           </div>
 
           {s.notes && (

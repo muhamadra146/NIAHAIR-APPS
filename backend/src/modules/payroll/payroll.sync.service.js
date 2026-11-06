@@ -10,7 +10,7 @@ const { computeEmployerBpjs }                                           = requir
 
 const ACCURATE_JOURNAL_SAVE = "/journal-voucher/save.do";
 
-// ── Payroll item category → GL mapping category (Settings → Akun Gaji, 8 kategori) ──
+// ── Payroll item category → GL mapping category (Settings → Akun Gaji) ──
 //
 // SETIAP kategori item payroll wajib punya pasangan di sini. Kategori yang tidak dikenal
 // menggagalkan sinkronisasi (tidak diam-diam dilewati / dibuang ke Kas).
@@ -27,12 +27,15 @@ const INCOME_ITEM_TO_GL = {
   service_charge_hs:  "tunjangan_lain",
   payout_cuti:        "tunjangan_lain",
   bonus_omset:        "tunjangan_lain",
+  // Lebih potong PPh 21 dikembalikan ke karyawan → mengurangi Utang PPh 21 (PAY-037)
+  pph21_refund:       "hutang_pph21",
 };
 
 // Potongan → akun yang DIKREDIT
 //   absen / terlambat : uang yang tidak jadi dibayar → mengurangi Beban Gaji (kredit akun gaji)
 //   BPJS karyawan     : ditahan perusahaan untuk disetor ke BPJS → Hutang BPJS
 //   kasbon            : pelunasan piutang karyawan → Piutang Kasbon Karyawan
+//   PPh 21            : dipotong untuk disetor ke negara → Utang PPh 21 (PAY-037)
 const DEDUCTION_ITEM_TO_GL = {
   absen:          "gaji",
   terlambat:      "gaji",
@@ -40,6 +43,7 @@ const DEDUCTION_ITEM_TO_GL = {
   bpjs_jp:        "hutang_bpjs",
   bpjs_kesehatan: "hutang_bpjs",
   kasbon:         "kasbon",
+  pph21:          "hutang_pph21",
 };
 
 const DEBIT_LABEL = {
@@ -48,17 +52,19 @@ const DEBIT_LABEL = {
   tunjangan_transport: "Beban Tunjangan Transport",
   tunjangan_lain:      "Beban Tunjangan Lainnya (tunjangan, komisi, lembur, bonus, dll.)",
   bpjs_perusahaan:     "Beban BPJS Perusahaan",
+  hutang_pph21:        "Pengembalian Lebih Potong PPh 21",
 };
 
 const CREDIT_LABEL = {
-  gaji:        "Potongan Alpha / Terlambat (pengurang beban gaji)",
-  hutang_bpjs: "Hutang BPJS (bagian karyawan + perusahaan)",
-  kasbon:      "Potongan Kasbon (Piutang Karyawan)",
-  kas_bank:    "Kas/Bank — gaji bersih dibayar",
+  gaji:         "Potongan Alpha / Terlambat (pengurang beban gaji)",
+  hutang_bpjs:  "Hutang BPJS (bagian karyawan + perusahaan)",
+  hutang_pph21: "Utang PPh 21 (dipotong dari gaji)",
+  kasbon:       "Potongan Kasbon (Piutang Karyawan)",
+  kas_bank:     "Kas/Bank — gaji bersih dibayar",
 };
 
-const DEBIT_ORDER  = ["gaji", "tunjangan_makan", "tunjangan_transport", "tunjangan_lain", "bpjs_perusahaan"];
-const CREDIT_ORDER = ["gaji", "hutang_bpjs", "kasbon"];
+const DEBIT_ORDER  = ["gaji", "tunjangan_makan", "tunjangan_transport", "tunjangan_lain", "bpjs_perusahaan", "hutang_pph21"];
+const CREDIT_ORDER = ["gaji", "hutang_bpjs", "hutang_pph21", "kasbon"];
 
 // Hitung dalam sen (integer) agar tidak ada galat floating point
 const toCents = (v) => Math.round(Number(v ?? 0) * 100);
@@ -81,7 +87,9 @@ const toAccurateDate = (ymd) => {
  *   DEBIT  Beban Tunjangan Lainnya          = tunjangan + komisi + lembur + kerja hari libur + bonus omset + payout cuti
  *   DEBIT  Beban BPJS Perusahaan            = BPJS bagian perusahaan (dari gaji pokok penuh, sama dengan Laporan BPJS)
  *   KREDIT Beban Gaji Pokok                 = potongan alpha + terlambat (gaji yang tidak jadi dibayar)
- *   KREDIT Hutang BPJS                      = BPJS bagian karyawan (potongan slip) + BPJS bagian perusahaan
+ *   DEBIT  Utang PPh 21                     = pengembalian lebih potong PPh 21 (masa terakhir, PAY-037)
+ *   KREDIT Hutang BPJS                      = BPJS bagian karyawan (potongan slip) + BPJS bagian perusahaan (termasuk JKK & JKM)
+ *   KREDIT Utang PPh 21                     = potongan PPh 21
  *   KREDIT Piutang Kasbon Karyawan          = potongan kasbon
  *   KREDIT Kas/Bank                         = gaji bersih yang dibayar
  *

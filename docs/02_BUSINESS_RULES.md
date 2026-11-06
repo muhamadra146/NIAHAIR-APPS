@@ -5640,6 +5640,60 @@ Deduction.
 
 ---
 
+# PAY-036
+## Rekap Penghasilan (bahan PPh 21)
+
+Keputusan user 2026-11-04: PPh 21 nanti dihitung penuh di aplikasi; tahap pertama hanya rekap.
+
+Laporan Keuangan → Rekap Penghasilan (SA, Owner, Finance).
+
+Sumber: slip gaji berstatus Disetujui / Dibayar. Slip masuk ke bulan sesuai tanggal mulai periodenya (sama dengan Laporan BPJS).
+
+Mode Bulanan (satu bulan) dan Tahunan (Januari–Desember). Satu baris per karyawan; slip-slip dalam periode dijumlahkan.
+
+Kolom: NIK, Gaji Pokok, Tunjangan, Transport, Uang Makan, Komisi, Lembur & Kerja Hari Libur, Bonus Omset, Payout Cuti, Lainnya (item manual), Total Penghasilan, Potongan Alpha & Terlambat, BPJS Karyawan (JHT, JP, Kesehatan), BPJS Perusahaan (JHT, JP, Kesehatan — dari gaji pokok penuh, sama dengan Laporan BPJS), Gaji Bersih.
+
+Kasbon tidak direkap (bukan penghasilan).
+
+Rekap tidak menentukan komponen mana yang kena PPh 21 dan tidak menghitung pajak. Aturan perhitungan PPh 21 belum diputuskan — lihat `docs/23_PPH21_PLANNING.md`.
+
+Export CSV untuk Finance / konsultan pajak.
+
+---
+
+# PAY-037
+## PPh 21 (Pajak Penghasilan Karyawan)
+
+Disetujui owner 2026-11-06. Detail rumus, contoh uji, dan tabel TER: `docs/23_PPH21_PLANNING.md` Bagian 3, 4, 6.
+
+Dasar: PP 58/2023, PMK 168/2023, tarif Pasal 17 UU HPP.
+
+**Ruang lingkup.** Slip dengan tanggal gajian ≥ 1 Januari 2027. Skema **gross**: PPh 21 dipotong dari gaji karyawan (item potongan `pph21`).
+
+**Data karyawan.** Status PTKP (TK/0–TK/3, K/0–K/3, keadaan per 1 Januari) dan jenis pegawai (Tetap / Tidak Tetap). Karyawan kontrak bulanan = Tetap. Tidak ada karyawan dibayar harian di luar payroll (keputusan owner 2026-11-06). Payroll karyawan tanpa status PTKP tidak bisa disetujui.
+
+**Masa pajak** = bulan tanggal gajian slip (sehari setelah akhir periode).
+
+**Bruto slip** = semua item penghasilan − potongan alpha − potongan terlambat + BPJS Kesehatan perusahaan + JKK + JKM. JHT & JP perusahaan tidak menambah bruto; iuran BPJS karyawan dan kasbon tidak mengurangi bruto.
+
+**JKK & JKM** dibayar perusahaan; persen diisi di Setting Gaji (dasar = gaji pokok penuh, PAY-001).
+
+**Pegawai tetap, masa biasa:** PPh = bruto × TER bulanan (kategori A: TK/0, TK/1, K/0 · B: TK/2, TK/3, K/1, K/2 · C: K/3).
+
+**Pegawai tetap, masa terakhir** (Desember atau slip terakhir karyawan resign): bruto setahun − biaya jabatan (5%, maks Rp500.000 × bulan bekerja, maks Rp6.000.000) − iuran JHT & JP karyawan = neto; − PTKP = PKP (bulat ke bawah ribuan); × tarif Pasal 17; − PPh yang sudah dipotong tahun itu. Iuran BPJS Kesehatan karyawan tidak dikurangkan. Masuk tengah tahun tidak disetahunkan. Lebih potong dikembalikan di slip masa terakhir.
+
+**Pegawai tidak tetap** (dibayar lewat payroll bulanan): bruto × TER bulanan, tanpa hitung ulang masa terakhir.
+
+**Pembulatan:** PPh per slip dibulatkan ke bawah ke rupiah.
+
+**Jurnal Penggajian (PAY-025):** Kredit Utang PPh 21 (akun dipilih di Akun Gaji); Kas = gaji bersih.
+
+**Pengaturan:** tabel TER, tarif Pasal 17, PTKP, dan batas biaya jabatan disimpan per tahun pajak di database (bukan di kode).
+
+Insentif PPh 21 DTP 2027 ditangani setelah PMK terbit.
+
+---
+
 # COM-001
 ## Commission Integrity
 

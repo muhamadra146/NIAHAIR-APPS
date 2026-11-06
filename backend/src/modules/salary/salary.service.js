@@ -52,7 +52,9 @@ const createSetting = async (body) => {
     bpjsJpEmployerPercent:       body.bpjsJpEmployerPercent       ?? 2,
     bpjsKesehatanEmployeePercent: body.bpjsKesehatanEmployeePercent ?? 1,
     bpjsKesehatanEmployerPercent: body.bpjsKesehatanEmployerPercent ?? 4,
-    effectiveDate:               new Date(body.effectiveDate),
+    bpjsJkkEmployerPercent:      body.bpjsJkkEmployerPercent      ?? 0,
+    bpjsJkmEmployerPercent:      body.bpjsJkmEmployerPercent      ?? 0,
+    effectiveDate:              new Date(body.effectiveDate),
     endDate:                     body.endDate ? new Date(body.endDate) : null,
     isActive:                    body.isActive ?? true,
     notes:                       body.notes ?? null,
@@ -87,6 +89,7 @@ const updateSetting = async (id, body) => {
     "bpjsJhtPercent", "bpjsJhtEmployerPercent",
     "bpjsJpPercent",  "bpjsJpEmployerPercent",
     "bpjsKesehatanEmployeePercent", "bpjsKesehatanEmployerPercent",
+    "bpjsJkkEmployerPercent", "bpjsJkmEmployerPercent",
     "notes",
   ];
   fields.forEach((f) => { if (body[f] !== undefined) data[f] = body[f]; });

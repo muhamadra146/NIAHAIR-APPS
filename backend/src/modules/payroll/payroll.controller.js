@@ -102,6 +102,13 @@ const getBpjsReportController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const getIncomeRecapController = async (req, res, next) => {
+  try {
+    const result = await svc.getIncomeRecap(req.query);
+    return success(res, result, "Income recap fetched");
+  } catch (err) { next(err); }
+};
+
 const deleteController = async (req, res, next) => {
   try {
     const result = await svc.deletePayroll(req.params.id);
@@ -112,5 +119,5 @@ const deleteController = async (req, res, next) => {
 module.exports = {
   getAllController, getByIdController, generateController, bulkGenerateController, previewPeriodController,
   recalculateController, submitController, revertToDraftController, approveController, markAsPaidController,
-  retrySyncController, updateNotesController, getMyController, getBpjsReportController, deleteController,
+  retrySyncController, updateNotesController, getMyController, getBpjsReportController, getIncomeRecapController, deleteController,
 };

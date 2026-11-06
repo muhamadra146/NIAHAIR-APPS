@@ -25,6 +25,7 @@ import { filterInputCls } from "@/lib/ui-utils";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Payroll, PayrollStatus, PayrollItem, GeneratePayrollInput, BulkGenerateResult, PayrollPeriodPreview } from "../types";
+import { PTKP_SHORT, fmtTaxPeriod } from "../types";
 import { WIB_TZ, toWibDateStr } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -463,6 +464,8 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
   const isActing = recalcMut.isPending || submitMut.isPending || approveMut.isPending || paidMut.isPending
     || deleteMut.isPending || revertMut.isPending;
   const isNegativeNet = Number(payroll.netSalary) < 0;
+  // PPh 21 (PAY-037): slip kena pajak tapi status PTKP karyawan kosong → belum bisa disetujui
+  const missingPtkp   = !!payroll.taxPeriod && !payroll.taxPtkpStatus;
   const sync = payroll.accurateSync;
 
   const handle = async (action: () => Promise<unknown>, msg: string) => {
@@ -516,8 +519,10 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
               size="sm"
               className="rounded-lg"
               onClick={() => setConfirm("approve")}
-              disabled={isActing || isNegativeNet}
-              title={isNegativeNet ? "Gaji bersih minus — klik Kembalikan ke Draft lalu Hitung Ulang" : undefined}
+              disabled={isActing || isNegativeNet || missingPtkp}
+              title={isNegativeNet
+                ? "Gaji bersih minus — klik Kembalikan ke Draft lalu Hitung Ulang"
+                : missingPtkp ? "Status PTKP karyawan belum diisi — PPh 21 belum dihitung" : undefined}
             >
               <CheckCircle2 className="h-3 w-3 mr-1" /> Setujui
             </Button>
@@ -578,6 +583,30 @@ function PayrollDetail({ payroll, onBack }: { payroll: Payroll; onBack: () => vo
             ? " Periksa absen dan potongan karyawan ini, klik Kembalikan ke Draft lalu Hitung Ulang."
             : " Periksa absen dan potongan karyawan ini, lalu klik Hitung Ulang."}
           {" "}Payroll ini belum bisa disetujui.
+        </div>
+      )}
+
+      {missingPtkp && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">Status PTKP karyawan belum diisi.</span> PPh 21 masa {fmtTaxPeriod(payroll.taxPeriod!)} belum dihitung.
+          {" "}Lengkapi Status PTKP di data karyawan, lalu
+          {payroll.status === "PENDING_APPROVAL" ? " Kembalikan ke Draft dan Hitung Ulang." : " Hitung Ulang."}
+          {" "}Payroll ini belum bisa disetujui.
+        </div>
+      )}
+
+      {/* PPh 21 (PAY-037) */}
+      {payroll.taxPeriod && payroll.taxPtkpStatus && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 flex flex-wrap gap-x-6 gap-y-1">
+          <span>Masa pajak: <strong className="text-slate-800">{fmtTaxPeriod(payroll.taxPeriod)}</strong></span>
+          <span>Status PTKP: <strong className="text-slate-800">{PTKP_SHORT[payroll.taxPtkpStatus] ?? payroll.taxPtkpStatus}</strong></span>
+          <span>Bruto pajak: <strong className="text-slate-800 tabular-nums">{fmtRp(Number(payroll.taxGross ?? 0))}</strong></span>
+          <span>
+            Metode: <strong className="text-slate-800">
+              {payroll.taxMethod === "ANNUAL" ? "Hitung ulang tahunan" : `TER ${String(Number(payroll.taxTerRate ?? 0)).replace(".", ",")}%`}
+            </strong>
+          </span>
+          <span>PPh 21: <strong className="text-slate-800 tabular-nums">{fmtRp(Number(payroll.pph21 ?? 0))}</strong></span>
         </div>
       )}
 

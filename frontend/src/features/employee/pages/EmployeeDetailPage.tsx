@@ -35,6 +35,7 @@ import { SalarySettingForm } from "../components/SalarySettingForm";
 import { OmsetBonusTierTab } from "../../settings/components/omsetBonusTier/OmsetBonusTierTab";
 import type { UpdateEmployeeFormValues, SalarySettingFormValues } from "../schemas/employee.schema";
 import type { SalarySetting } from "../types";
+import { PTKP_LABEL, TAX_EMPLOYMENT_LABEL } from "../types";
 import { branchesChanged, canEditBranchAccess, toUpdateEmployeeInput, uploadMsg } from "../employeeInput";
 
 // Edit profil karyawan — sama dengan backend employee.route EMPLOYEE_WRITE_ROLES
@@ -179,7 +180,9 @@ export function EmployeeDetailPage() {
         bpjsJpEmployerPercent:        values.bpjsJpEmployerPercent,
         bpjsKesehatanEmployeePercent: values.bpjsKesehatanEmployeePercent,
         bpjsKesehatanEmployerPercent: values.bpjsKesehatanEmployerPercent,
-        effectiveDate:                values.effectiveDate,
+        bpjsJkkEmployerPercent:       values.bpjsJkkEmployerPercent,
+        bpjsJkmEmployerPercent:       values.bpjsJkmEmployerPercent,
+        effectiveDate:               values.effectiveDate,
         endDate:                      values.endDate || undefined,
         isActive:                     values.isActive,
         notes:                        values.notes || undefined,
@@ -349,6 +352,18 @@ export function EmployeeDetailPage() {
             {/* Identity */}
             <InfoSection title="Identitas" icon={<CreditCard className="h-4 w-4" />}>
               <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="NIK KTP"       value={employee.nikKtp} />
+              <InfoRow
+                icon={<FileText className="h-3.5 w-3.5" />}
+                label="Status PTKP"
+                value={employee.ptkpStatus
+                  ? PTKP_LABEL[employee.ptkpStatus]
+                  : <span className="text-sm text-amber-600">Belum diisi — PPh 21 tidak bisa dihitung</span>}
+              />
+              <InfoRow
+                icon={<FileText className="h-3.5 w-3.5" />}
+                label="Jenis Pegawai"
+                value={TAX_EMPLOYMENT_LABEL[employee.taxEmploymentType ?? "PERMANENT"]}
+              />
               <InfoRow icon={<Calendar className="h-3.5 w-3.5" />}   label="Tanggal Lahir" value={employee.birthDate ? formatDate(employee.birthDate) : null} />
               <InfoRow
                 icon={<FileText className="h-3.5 w-3.5" />}

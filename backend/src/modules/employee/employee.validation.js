@@ -1,4 +1,4 @@
-const { object, string, pipe, email, optional, nullable, boolean, minLength, maxLength, array, number, integer, minValue, maxValue, trim, toLowerCase, toUpperCase, check, regex, transform } = require("valibot");
+const { object, string, pipe, email, optional, nullable, boolean, minLength, maxLength, array, number, integer, minValue, maxValue, trim, toLowerCase, toUpperCase, check, regex, transform, picklist } = require("valibot");
 const { wibDateStr } = require("../../utils/date");
 const { PHONE_REGEX, PHONE_MESSAGE, cleanPhone, isRealDate } = require("../customer/customer.fields");
 
@@ -72,6 +72,13 @@ const PAY_DAY = optional(nullable(pipe(
   maxValue(31, "Tanggal gajian harus antara 1 dan 31"),
 )));
 
+// PPh 21 (PAY-037): status PTKP per 1 Januari; null = belum diisi (payroll tidak bisa disetujui)
+const PTKP_STATUS = optional(nullable(picklist(
+  ["TK0", "TK1", "TK2", "TK3", "K0", "K1", "K2", "K3"],
+  "Status PTKP tidak valid",
+)));
+const TAX_EMPLOYMENT_TYPE = optional(picklist(["PERMANENT", "NON_PERMANENT"], "Jenis pegawai tidak valid"));
+
 const COMMON = {
   employeeCode:      EMPLOYEE_CODE,
   phone:             PHONE,
@@ -87,6 +94,8 @@ const COMMON = {
   payDay:            PAY_DAY,
   divisionId:        optional(nullable(string())),
   isDivisionManager: optional(boolean()),
+  ptkpStatus:        PTKP_STATUS,
+  taxEmploymentType: TAX_EMPLOYMENT_TYPE,
 };
 
 const createEmployeeSchema = object({

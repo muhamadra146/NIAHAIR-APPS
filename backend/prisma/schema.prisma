@@ -286,6 +286,10 @@ model Employee {
   divisionId        String?
   isDivisionManager Boolean @default(false)
 
+  // PPh 21 (PAY-037): status PTKP per 1 Januari & jenis pegawai menurut pajak
+  ptkpStatus        PtkpStatus?
+  taxEmploymentType TaxEmploymentType @default(PERMANENT)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2850,6 +2854,9 @@ model EmployeeSalarySettings {
   lateDeductionBracket3        Decimal @default(75000) @db.Decimal(18, 2)
   bpjsKesehatanEmployeePercent Decimal @default(1) @db.Decimal(5, 2)
   bpjsKesehatanEmployerPercent Decimal @default(4) @db.Decimal(5, 2)
+  // JKK & JKM dibayar perusahaan (PAY-037) — persen diisi Finance; dasar = gaji pokok penuh
+  bpjsJkkEmployerPercent       Decimal @default(0) @db.Decimal(5, 2)
+  bpjsJkmEmployerPercent       Decimal @default(0) @db.Decimal(5, 2)
 
   effectiveDate DateTime
   endDate       DateTime?
@@ -3010,6 +3017,14 @@ model Payroll {
   accurateJournalNumber String?
   lastSyncAt            DateTime?
 
+  // PPh 21 (PAY-037) — terisi untuk slip dengan tanggal gajian ≥ 2027-01-01
+  taxPeriod     String?            // masa pajak "YYYY-MM" = bulan tanggal gajian
+  taxPtkpStatus PtkpStatus?        // status PTKP saat dihitung
+  taxGross      Decimal?           @db.Decimal(18, 2) // bruto pajak slip
+  taxMethod     Pph21Method?
+  taxTerRate    Decimal?           @db.Decimal(5, 2)  // tarif TER (%) bila metode TER
+  pph21         Decimal            @default(0) @db.Decimal(18, 2)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -3024,7 +3039,59 @@ model Payroll {
   @@index([employeeId])
   @@index([branchId])
   @@index([status])
+  @@index([employeeId, taxPeriod])
   @@map("payrolls")
+}
+
+// =====================================================
+// PPh 21 (PAY-037)
+// =====================================================
+
+enum PtkpStatus {
+  TK0
+  TK1
+  TK2
+  TK3
+  K0
+  K1
+  K2
+  K3
+}
+
+enum TaxEmploymentType {
+  PERMANENT
+  NON_PERMANENT
+}
+
+enum Pph21Method {
+  TER    // masa biasa: bruto × TER bulanan
+  ANNUAL // masa terakhir: hitung ulang setahun (Pasal 17)
+}
+
+// Tarif & PTKP per tahun pajak — dipakai baris dengan tahun terbesar ≤ tahun masa pajak.
+// Tabel bracket: [{ "upTo": 5400000, "rate": 0 }, ..., { "upTo": null, "rate": 34 }] (rate dalam %)
+model TaxSetting {
+  id String @id @default(uuid())
+
+  year Int @unique
+
+  ptkpSelf      Decimal @db.Decimal(18, 2)
+  ptkpMarried   Decimal @db.Decimal(18, 2)
+  ptkpDependent Decimal @db.Decimal(18, 2)
+  maxDependents Int     @default(3)
+
+  positionCostPercent    Decimal @db.Decimal(5, 2)  // biaya jabatan (%)
+  positionCostMonthlyMax Decimal @db.Decimal(18, 2) // maks per bulan bekerja
+
+  pasal17Brackets Json
+  terA            Json
+  terB            Json
+  terC            Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tax_settings")
 }
 
 model PayrollItem {

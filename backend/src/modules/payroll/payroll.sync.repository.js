@@ -27,6 +27,8 @@ const findPayrollForSync = (id) =>
               bpjsJhtEmployerPercent:       true,
               bpjsJpEmployerPercent:        true,
               bpjsKesehatanEmployerPercent: true,
+              bpjsJkkEmployerPercent:       true,
+              bpjsJkmEmployerPercent:       true,
             },
           },
         },

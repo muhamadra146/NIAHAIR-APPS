@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { toWibDateStr } from "@/lib/utils";
 import { PHONE_REGEX, PHONE_MESSAGE, cleanPhone, isRealDate } from "@/features/customer/schemas/customer.schema";
+import { PTKP_STATUSES, TAX_EMPLOYMENT_TYPES } from "../types";
 
 /** Tanggal opsional: harus tanggal yang benar-benar ada (2026-02-31 ditolak) */
 const optionalDate = (label: string, notFuture = false) =>
@@ -43,6 +44,9 @@ export const createEmployeeSchema = z.object({
   branchIds:         z.array(z.string()).default([]),
   divisionId:        z.string().optional().or(z.literal("")),
   isDivisionManager: z.boolean().default(false),
+  // PPh 21 (PAY-037): "" = belum diisi
+  ptkpStatus:        z.enum(PTKP_STATUSES).optional().or(z.literal("")),
+  taxEmploymentType: z.enum(TAX_EMPLOYMENT_TYPES).default("PERMANENT"),
 });
 
 export const updateEmployeeSchema = createEmployeeSchema.partial().extend({
@@ -67,6 +71,8 @@ export const salarySettingSchema = z.object({
   bpjsJpEmployerPercent:         z.coerce.number().min(0).max(100).default(2),
   bpjsKesehatanEmployeePercent:  z.coerce.number().min(0).max(100).default(1),
   bpjsKesehatanEmployerPercent:  z.coerce.number().min(0).max(100).default(4),
+  bpjsJkkEmployerPercent:        z.coerce.number().min(0).max(100).default(0),
+  bpjsJkmEmployerPercent:        z.coerce.number().min(0).max(100).default(0),
   effectiveDate:                 z.string().min(1, "Tanggal berlaku wajib diisi"),
   endDate:                       z.string().optional().or(z.literal("")),
   isActive:                      z.boolean().default(true),

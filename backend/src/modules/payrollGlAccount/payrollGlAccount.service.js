@@ -15,13 +15,14 @@ const DEFAULT_MAPPINGS = [
   { category: "bpjs_perusahaan",    label: "Beban BPJS Perusahaan",      type: "DEBIT"  },
   // ── Credit (liability / asset reduction) ──────────────────────────
   { category: "hutang_bpjs",        label: "Hutang BPJS",                type: "CREDIT" },
+  { category: "hutang_pph21",       label: "Utang PPh 21",               type: "CREDIT" },
   { category: "kasbon",             label: "Piutang Kasbon Karyawan",    type: "CREDIT" },
   { category: "kas_bank",           label: "Kas/Bank Pembayaran Gaji",   type: "CREDIT" },
 ];
 
 /**
  * Return all mappings. If a category doesn't exist yet in the DB,
- * seed it first so the frontend always sees all 8 rows.
+ * seed it first so the frontend always sees every row.
  */
 const getPayrollGlAccounts = async () => {
   // Buat kategori yang belum ada saja. Dulu memakai upsert yang MENIMPA glAccountId → setiap kali

@@ -34,7 +34,7 @@ function exportBpjsToCsv(data: BpjsReportResult, yearMonth: string) {
   const fmtNum = (n: number) => String(Math.round(Number(n) * 100) / 100);
   const headers = [
     "Karyawan", "Jabatan", "Periode", "Status", "Gaji Pokok",
-    "JHT Kary", "JHT Per", "JP Kary", "JP Per", "Kes Kary", "Kes Per",
+    "JHT Kary", "JHT Per", "JP Kary", "JP Per", "Kes Kary", "Kes Per", "JKK Per", "JKM Per",
     "Total Karyawan", "Total Perusahaan",
   ];
 
@@ -50,6 +50,8 @@ function exportBpjsToCsv(data: BpjsReportResult, yearMonth: string) {
     fmtNum(row.bpjsJpEmployer),
     fmtNum(row.bpjsKesehatan),
     fmtNum(row.bpjsKesehatanEmployer),
+    fmtNum(row.bpjsJkkEmployer),
+    fmtNum(row.bpjsJkmEmployer),
     fmtNum(row.totalEmployee),
     fmtNum(row.totalEmployer),
   ]);
@@ -65,6 +67,8 @@ function exportBpjsToCsv(data: BpjsReportResult, yearMonth: string) {
     fmtNum(t.bpjsJpEmployer),
     fmtNum(t.bpjsKesehatan),
     fmtNum(t.bpjsKesehatanEmployer),
+    fmtNum(t.bpjsJkkEmployer),
+    fmtNum(t.bpjsJkmEmployer),
     fmtNum(t.totalEmployee),
     fmtNum(t.totalEmployer),
   ]);
@@ -159,7 +163,7 @@ export function BpjsReportPage() {
               {
                 label: "Grand Total Iuran",
                 value: fmtRp(data.totals.totalBpjs),
-                desc:  "JHT + JP + Kesehatan",
+                desc:  "JHT + JP + Kesehatan + JKK + JKM",
                 dot:   "bg-emerald-400",
                 valueCls: "text-emerald-700",
               },
@@ -201,7 +205,7 @@ export function BpjsReportPage() {
         {/* Table */}
         <div className="rounded-xl border border-slate-200 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[1080px]">
+            <table className="w-full text-sm min-w-[1240px]">
               <thead>
                 {/* Section labels row */}
                 <tr className="border-b border-slate-200 bg-slate-50">
@@ -218,6 +222,8 @@ export function BpjsReportPage() {
                   <th colSpan={2} className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider text-blue-600 border-b border-blue-100 bg-blue-50/50">JHT</th>
                   <th colSpan={2} className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider text-violet-600 border-b border-violet-100 bg-violet-50/50">JP</th>
                   <th colSpan={2} className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider text-teal-600 border-b border-teal-100 bg-teal-50/50">Kesehatan</th>
+                  <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider text-amber-600" rowSpan={2}>JKK Per.</th>
+                  <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider text-amber-600" rowSpan={2}>JKM Per.</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-blue-600" rowSpan={2}>Total Kar.</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-amber-600" rowSpan={2}>Total Per.</th>
                 </tr>
@@ -234,11 +240,11 @@ export function BpjsReportPage() {
               <tbody className="divide-y divide-slate-100">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={12} className="py-12 text-center text-sm text-muted-foreground">Memuat data...</td>
+                    <td colSpan={14} className="py-12 text-center text-sm text-muted-foreground">Memuat data...</td>
                   </tr>
                 ) : !data || data.data.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="py-12 text-center text-sm text-muted-foreground">
+                    <td colSpan={14} className="py-12 text-center text-sm text-muted-foreground">
                       Tidak ada data BPJS untuk periode ini
                     </td>
                   </tr>
@@ -268,6 +274,8 @@ export function BpjsReportPage() {
                           <td className="px-3 py-3 text-center tabular-nums text-amber-600">{fmtRp(row.bpjsJpEmployer)}</td>
                           <td className="px-3 py-3 text-center tabular-nums text-teal-700">{fmtRp(row.bpjsKesehatan)}</td>
                           <td className="px-3 py-3 text-center tabular-nums text-amber-600">{fmtRp(row.bpjsKesehatanEmployer)}</td>
+                          <td className="px-3 py-3 text-center tabular-nums text-amber-600">{fmtRp(row.bpjsJkkEmployer)}</td>
+                          <td className="px-3 py-3 text-center tabular-nums text-amber-600">{fmtRp(row.bpjsJkmEmployer)}</td>
                           <td className="px-4 py-3 text-right tabular-nums font-semibold text-blue-700">{fmtRp(row.totalEmployee)}</td>
                           <td className="px-4 py-3 text-right tabular-nums font-semibold text-amber-700">{fmtRp(row.totalEmployer)}</td>
                         </tr>
@@ -288,6 +296,8 @@ export function BpjsReportPage() {
                       <td className="px-3 py-3 text-center tabular-nums text-amber-600">{fmtRp(data.totals.bpjsJpEmployer)}</td>
                       <td className="px-3 py-3 text-center tabular-nums text-teal-700">{fmtRp(data.totals.bpjsKesehatan)}</td>
                       <td className="px-3 py-3 text-center tabular-nums text-amber-600">{fmtRp(data.totals.bpjsKesehatanEmployer)}</td>
+                      <td className="px-3 py-3 text-center tabular-nums text-amber-600">{fmtRp(data.totals.bpjsJkkEmployer)}</td>
+                      <td className="px-3 py-3 text-center tabular-nums text-amber-600">{fmtRp(data.totals.bpjsJkmEmployer)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-blue-700">{fmtRp(data.totals.totalEmployee)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-amber-700">{fmtRp(data.totals.totalEmployer)}</td>
                     </tr>

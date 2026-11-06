@@ -24,6 +24,8 @@ export function toCreateEmployeeInput(v: CreateEmployeeFormValues, canSetDivisio
     if (val) input[f] = val;
   }
   if (v.homeBranchId) input.homeBranchId = v.homeBranchId;
+  if (v.ptkpStatus) input.ptkpStatus = v.ptkpStatus;
+  if (v.taxEmploymentType) input.taxEmploymentType = v.taxEmploymentType;
   if (canSetDivision) {
     input.divisionId        = v.divisionId || null;
     input.isDivisionManager = !!v.divisionId && !!v.isDivisionManager;
@@ -51,6 +53,13 @@ export function toUpdateEmployeeInput(
     const val = (v[f] ?? "").trim();
     const cur = DATE_FIELDS.has(f) ? (current[f] ? String(current[f]).split("T")[0] : "") : (current[f] ?? "");
     if (val !== cur) input[f] = val || null;
+  }
+  // PPh 21 (PAY-037): "" = kosongkan status PTKP
+  if (v.ptkpStatus !== undefined && (v.ptkpStatus || null) !== (current.ptkpStatus ?? null)) {
+    input.ptkpStatus = v.ptkpStatus || null;
+  }
+  if (v.taxEmploymentType && v.taxEmploymentType !== current.taxEmploymentType) {
+    input.taxEmploymentType = v.taxEmploymentType;
   }
   if (canSetDivision) {
     input.divisionId        = v.divisionId || null;

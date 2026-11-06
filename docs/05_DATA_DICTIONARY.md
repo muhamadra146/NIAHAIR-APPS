@@ -4390,9 +4390,20 @@ totalSalary
 
 status
 
+PPh 21 (PAY-037): taxPeriod (masa pajak "YYYY-MM" = bulan tanggal gajian), taxPtkpStatus, taxGross (bruto pajak), taxMethod (TER / ANNUAL), taxTerRate, pph21 (minus = lebih potong dikembalikan).
+
 Business Rules
 
 Payroll bersifat Immutable setelah disetujui.
+
+Slip kena PPh 21 tanpa status PTKP tidak bisa disetujui.
+
+Terkait PPh 21:
+
+- Employee: ptkpStatus (TK0–TK3, K0–K3; kosong = belum diisi), taxEmploymentType (PERMANENT / NON_PERMANENT).
+- EmployeeSalarySettings: bpjsJkkEmployerPercent, bpjsJkmEmployerPercent (default 0).
+- TaxSetting (`tax_settings`): satu baris per tahun pajak — PTKP, biaya jabatan, tabel Pasal 17 & TER A/B/C (JSON). Dipakai baris dengan tahun terbesar ≤ tahun masa pajak. Seed tahun 2024 (PP 58/2023).
+- PayrollGlAccount: kategori `hutang_pph21` (Utang PPh 21).
 
 ---
 

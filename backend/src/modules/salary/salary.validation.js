@@ -30,6 +30,8 @@ const bpjsFields = {
   bpjsJpEmployerPercent:         optional(percent),
   bpjsKesehatanEmployeePercent:  optional(percent),
   bpjsKesehatanEmployerPercent:  optional(percent),
+  bpjsJkkEmployerPercent:        optional(percent),
+  bpjsJkmEmployerPercent:        optional(percent),
 };
 
 const createSalarySchema = object({

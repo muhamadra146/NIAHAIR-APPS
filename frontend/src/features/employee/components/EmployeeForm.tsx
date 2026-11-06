@@ -18,6 +18,7 @@ import { canEditBranchAccess, fileTooLarge, MAX_FILE_MB } from "../employeeInput
 import { createEmployeeSchema, updateEmployeeSchema } from "../schemas/employee.schema";
 import type { CreateEmployeeFormValues, UpdateEmployeeFormValues, UpdateEmployeeFormInput } from "../schemas/employee.schema";
 import type { Employee } from "../types";
+import { PTKP_STATUSES, PTKP_LABEL, TAX_EMPLOYMENT_TYPES, TAX_EMPLOYMENT_LABEL } from "../types";
 
 // ── Create ────────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ export function EmployeeCreateForm({ open, onOpenChange, onSubmit, isPending, er
       nikKtp: "", resignDate: "",
       commissionEnabled: false, payDay: null, homeBranchId: "", branchIds: [],
       divisionId: "", isDivisionManager: false,
+      ptkpStatus: "", taxEmploymentType: "PERMANENT",
     },
   });
 
@@ -309,6 +311,28 @@ function EmployeeFormFields({
         <Input {...register("nikKtp")} placeholder="16 digit NIK" inputMode="numeric" maxLength={16} />
       </Field>
 
+      {/* Status PTKP (PPh 21, PAY-037) */}
+      <Field label="Status PTKP" error={errs.ptkpStatus?.message}>
+        <select
+          {...register("ptkpStatus")}
+          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="">— Belum diisi —</option>
+          {PTKP_STATUSES.map((s) => <option key={s} value={s}>{PTKP_LABEL[s]}</option>)}
+        </select>
+        <p className="text-xs text-muted-foreground">Keadaan per 1 Januari. Wajib untuk PPh 21.</p>
+      </Field>
+
+      {/* Jenis Pegawai (PPh 21) */}
+      <Field label="Jenis Pegawai (Pajak)" error={errs.taxEmploymentType?.message}>
+        <select
+          {...register("taxEmploymentType")}
+          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {TAX_EMPLOYMENT_TYPES.map((t) => <option key={t} value={t}>{TAX_EMPLOYMENT_LABEL[t]}</option>)}
+        </select>
+      </Field>
+
       {/* Tanggal Resign */}
       <Field label="Tanggal Resign" error={errs.resignDate?.message}>
         <Input {...register("resignDate")} type="date" />
@@ -544,5 +568,7 @@ function employeeToForm(e: Employee): UpdateEmployeeFormValues {
     branchIds:         e.employeeBranches?.map((eb) => eb.branch.id) ?? [],
     divisionId:        e.divisionId ?? "",
     isDivisionManager: e.isDivisionManager ?? false,
+    ptkpStatus:        e.ptkpStatus ?? "",
+    taxEmploymentType: e.taxEmploymentType ?? "PERMANENT",
   };
 }

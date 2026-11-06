@@ -195,6 +195,14 @@ export const sidebarNav: NavItem[] = [
     group: "Keuangan",
   },
 
+  {
+    label: "Rekap Penghasilan",
+    href:  "/payroll/income-recap",
+    icon:  FileText,
+    roles: [...ADMIN_ROLES, "FINANCE"],
+    group: "Keuangan",
+  },
+
   // ── Data ──────────────────────────────────────────────────────────────────
   {
     label:         "Pelanggan",

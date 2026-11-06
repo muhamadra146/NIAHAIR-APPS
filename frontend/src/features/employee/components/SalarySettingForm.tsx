@@ -28,6 +28,7 @@ const EMPTY_DEFAULTS: SalarySettingFormValues = {
   bpjsJhtPercent: 2, bpjsJhtEmployerPercent: 3.7,
   bpjsJpPercent: 1,  bpjsJpEmployerPercent: 2,
   bpjsKesehatanEmployeePercent: 1, bpjsKesehatanEmployerPercent: 4,
+  bpjsJkkEmployerPercent: 0, bpjsJkmEmployerPercent: 0,
   effectiveDate: "", endDate: "", isActive: true, notes: "",
 };
 
@@ -50,7 +51,9 @@ function settingToForm(s: SalarySetting): SalarySettingFormValues {
     bpjsJpEmployerPercent:        Number(s.bpjsJpEmployerPercent ?? 2),
     bpjsKesehatanEmployeePercent: Number(s.bpjsKesehatanEmployeePercent ?? 1),
     bpjsKesehatanEmployerPercent: Number(s.bpjsKesehatanEmployerPercent ?? 4),
-    effectiveDate:                s.effectiveDate.split("T")[0],
+    bpjsJkkEmployerPercent:       Number(s.bpjsJkkEmployerPercent ?? 0),
+    bpjsJkmEmployerPercent:       Number(s.bpjsJkmEmployerPercent ?? 0),
+    effectiveDate:               s.effectiveDate.split("T")[0],
     endDate:                      s.endDate ? s.endDate.split("T")[0] : "",
     isActive:                     s.isActive,
     notes:                        s.notes ?? "",
@@ -167,6 +170,21 @@ export function SalarySettingForm({ open, onOpenChange, onSubmit, isPending, err
                 <p className="text-xs text-muted-foreground">Tanggungan perusahaan (def. 4%)</p>
               </Field>
             </div>
+          </Section>
+
+          {/* JKK & JKM — dibayar perusahaan (PAY-037) */}
+          <Section title="BPJS JKK & JKM Perusahaan (%)">
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="JKK Perusahaan %" error={errors.bpjsJkkEmployerPercent?.message}>
+                <Input {...register("bpjsJkkEmployerPercent")} type="number" min="0" max="100" step="0.01" />
+                <p className="text-xs text-muted-foreground">Sesuai tingkat risiko (0,24%–1,74%)</p>
+              </Field>
+              <Field label="JKM Perusahaan %" error={errors.bpjsJkmEmployerPercent?.message}>
+                <Input {...register("bpjsJkmEmployerPercent")} type="number" min="0" max="100" step="0.01" />
+                <p className="text-xs text-muted-foreground">Umumnya 0,30%</p>
+              </Field>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">Dasar = gaji pokok. Ikut dihitung sebagai penghasilan bruto PPh 21.</p>
           </Section>
 
           {/* Catatan + aktif */}

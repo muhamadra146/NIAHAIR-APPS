@@ -169,10 +169,10 @@ const getGenerationData = async (employeeId, branchId, periodStart, periodEnd, p
 
   const branchOmset = Number(branchOmsetAggregate._sum?.grandTotal ?? 0);
 
-  // Tanggal masuk / resign untuk gaji proporsional (PAY-001)
+  // Tanggal masuk / resign untuk gaji proporsional (PAY-001); status PTKP & jenis pegawai untuk PPh 21 (PAY-037)
   const employment = await prisma.employee.findUnique({
     where:  { id: employeeId },
-    select: { hireDate: true, resignDate: true },
+    select: { hireDate: true, resignDate: true, ptkpStatus: true, taxEmploymentType: true },
   });
 
   return { salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, employment };
@@ -208,6 +208,8 @@ const findBpjsData = ({ branchId, periodStart, periodEnd }) =>
               bpjsJhtEmployerPercent:       true,
               bpjsJpEmployerPercent:        true,
               bpjsKesehatanEmployerPercent: true,
+              bpjsJkkEmployerPercent:       true,
+              bpjsJkmEmployerPercent:       true,
             },
             take: 1,
           },
@@ -216,6 +218,61 @@ const findBpjsData = ({ branchId, periodStart, periodEnd }) =>
       items: true,
     },
     orderBy: { employee: { name: "asc" } },
+  });
+
+// Rekap Penghasilan (bahan PPh 21) — slip disetujui/dibayar dalam rentang, dengan setting BPJS
+// perusahaan yang sama dengan Laporan BPJS
+const findIncomeRecapData = ({ branchId, periodStart, periodEnd }) =>
+  prisma.payroll.findMany({
+    where: {
+      ...(branchId ? { branchId } : {}),
+      periodStart: { gte: periodStart, lte: periodEnd },
+      status: { in: ["APPROVED", "PAID"] },
+    },
+    include: {
+      employee: {
+        select: {
+          id: true, name: true, employeeCode: true, nikKtp: true,
+          role: { select: { name: true } },
+          salarySettings: {
+            where:   { isActive: true },
+            orderBy: { effectiveDate: "desc" },
+            select: {
+              baseSalary:                   true,
+              bpjsJhtEmployerPercent:       true,
+              bpjsJpEmployerPercent:        true,
+              bpjsKesehatanEmployerPercent: true,
+              bpjsJkkEmployerPercent:       true,
+              bpjsJkmEmployerPercent:       true,
+            },
+            take: 1,
+          },
+        },
+      },
+      items: true,
+    },
+    orderBy: [{ employee: { name: "asc" } }, { periodStart: "asc" }],
+  });
+
+// ── PPh 21 (PAY-037) ──────────────────────────────────────────────────
+
+// Tarif tahun pajak: baris dengan tahun terbesar ≤ tahun masa pajak
+const findTaxSetting = (year) =>
+  prisma.taxSetting.findFirst({ where: { year: { lte: year } }, orderBy: { year: "desc" } });
+
+// Slip lain karyawan di tahun pajak yang sama (bahan TER masa sama & hitung ulang tahunan)
+const findTaxYearPayrolls = (employeeId, year, excludeId = null) =>
+  prisma.payroll.findMany({
+    where: {
+      employeeId,
+      taxPeriod: { startsWith: `${year}-` },
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+    select: {
+      id: true, taxPeriod: true, taxGross: true, pph21: true,
+      items: { where: { category: { in: ["bpjs_jht", "bpjs_jp"] } }, select: { type: true, category: true, amount: true } },
+    },
+    orderBy: { periodStart: "asc" },
   });
 
 const remove = (id) =>
@@ -266,6 +323,6 @@ module.exports = {
   findAll, count, findById, findByEmployeeAndPeriod, findOverlapping,
   findPreviousPayroll, findEmployeePayDay, findScheduleDates,
   create, update, replaceAutoItems, getGenerationData,
-  findByEmployee, countByEmployee, findBpjsData, remove,
+  findByEmployee, countByEmployee, findBpjsData, findIncomeRecapData, findTaxSetting, findTaxYearPayrolls, remove,
   findEmployeesForBulkGenerate, findPayrollSyncJobs,
 };

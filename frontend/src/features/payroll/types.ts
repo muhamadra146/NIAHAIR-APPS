@@ -14,6 +14,17 @@ export interface PayrollItem {
   notes:     string | null;
 }
 
+/** Status PTKP singkat (TK/0 …) untuk tampilan PPh 21 */
+export const PTKP_SHORT: Record<string, string> = {
+  TK0: "TK/0", TK1: "TK/1", TK2: "TK/2", TK3: "TK/3", K0: "K/0", K1: "K/1", K2: "K/2", K3: "K/3",
+};
+
+/** Masa pajak "2027-01" → "Januari 2027" */
+export const fmtTaxPeriod = (taxPeriod: string) => {
+  const [y, m] = taxPeriod.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: "UTC" });
+};
+
 export interface PayrollAccurateSync {
   status:       "SYNCED" | "PENDING" | "FAILED";
   /** Alasan gagal terakhir (FAILED, atau PENDING yang akan dicoba ulang otomatis) */
@@ -48,6 +59,13 @@ export interface Payroll {
   lastSyncAt:            string | null;
   /** Status jurnal Accurate (hanya payroll PAID) dari antrian sync */
   accurateSync?:         PayrollAccurateSync | null;
+  // PPh 21 (PAY-037) — taxPeriod null = slip di luar ruang lingkup (tanggal gajian < 2027-01-01)
+  taxPeriod?:     string | null;
+  taxPtkpStatus?: string | null;
+  taxGross?:      number | string | null;
+  taxMethod?:     "TER" | "ANNUAL" | null;
+  taxTerRate?:    number | string | null;
+  pph21?:         number | string;
   createdAt:      string;
   updatedAt:      string;
   employee: {
@@ -118,6 +136,8 @@ export interface BpjsReportRow {
   bpjsJpEmployer:        number;
   bpjsKesehatan:         number;
   bpjsKesehatanEmployer: number;
+  bpjsJkkEmployer:       number;
+  bpjsJkmEmployer:       number;
   totalEmployee:         number;
   totalEmployer:         number;
   totalBpjs:             number;
@@ -131,6 +151,8 @@ export interface BpjsReportTotals {
   bpjsJpEmployer:        number;
   bpjsKesehatan:         number;
   bpjsKesehatanEmployer: number;
+  bpjsJkkEmployer:       number;
+  bpjsJkmEmployer:       number;
   totalEmployee:         number;
   totalEmployer:         number;
   totalBpjs:             number;
@@ -145,6 +167,58 @@ export interface BpjsReportResult {
 export interface BpjsReportParams {
   branchId?:  string;
   yearMonth:  string;
+}
+
+// Rekap Penghasilan (bahan PPh 21) — satu baris per karyawan
+export interface IncomeRecapAmounts {
+  gaji:                  number;
+  tunjangan:             number;
+  transport:             number;
+  makan:                 number;
+  komisi:                number;
+  lembur:                number;
+  bonus:                 number;
+  payoutCuti:            number;
+  lainnya:               number;
+  totalIncome:           number;
+  potonganAbsen:         number;
+  bpjsJht:               number;
+  bpjsJp:                number;
+  bpjsKesehatan:         number;
+  bpjsJhtEmployer:       number;
+  bpjsJpEmployer:        number;
+  bpjsKesehatanEmployer: number;
+  bpjsJkkEmployer:       number;
+  bpjsJkmEmployer:       number;
+  /** Bruto pajak & PPh 21 tersimpan di slip (PAY-037); 0 untuk slip di luar ruang lingkup */
+  taxGross:              number;
+  pph21:                 number;
+  netSalary:             number;
+}
+
+export interface IncomeRecapRow extends IncomeRecapAmounts {
+  employee: {
+    id:           string;
+    name:         string;
+    employeeCode: string | null;
+    nikKtp:       string | null;
+    role:         { name: string };
+  };
+  slipCount:   number;
+  periodStart: string;
+  periodEnd:   string;
+}
+
+export interface IncomeRecapResult {
+  data:   IncomeRecapRow[];
+  totals: IncomeRecapAmounts;
+  period: { mode: "MONTH" | "YEAR"; yearMonth: string | null; year: number | null; periodStart: string; periodEnd: string };
+}
+
+export interface IncomeRecapParams {
+  branchId?:  string;
+  yearMonth?: string;
+  year?:      string;
 }
 
 export interface BulkGenerateInput {

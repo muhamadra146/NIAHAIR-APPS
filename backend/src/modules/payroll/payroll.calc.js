@@ -192,6 +192,7 @@ const isOutsideEmployment = ({ periodStart, periodEnd, hireDate = null, resignDa
  *   · slip tidak proporsional → item gaji = gaji pokok penuh saat slip dibuat (historis)
  *   · slip proporsional (item gaji punya quantity) → gaji pokok dari Setting Gaji aktif
  * Tiap komponen dibulatkan ke rupiah (sama dengan Laporan BPJS).
+ * JKK & JKM (PAY-037) dibayar perusahaan; persen default 0 sampai diisi di Setting Gaji.
  */
 const computeEmployerBpjs = ({ items = [], setting = null }) => {
   const gajiItem   = items.find((i) => i.type !== "DEDUCTION" && i.category === "gaji");
@@ -200,10 +201,13 @@ const computeEmployerBpjs = ({ items = [], setting = null }) => {
     ? Number(setting.baseSalary)
     : Number(gajiItem?.amount ?? setting?.baseSalary ?? 0);
 
-  const jht = Math.round(baseSalary * Number(setting?.bpjsJhtEmployerPercent       ?? 0) / 100);
-  const jp  = Math.round(baseSalary * Number(setting?.bpjsJpEmployerPercent        ?? 0) / 100);
-  const kes = Math.round(baseSalary * Number(setting?.bpjsKesehatanEmployerPercent ?? 0) / 100);
-  return { baseSalary, jht, jp, kes, total: jht + jp + kes };
+  const pct = (field) => Math.round(baseSalary * Number(setting?.[field] ?? 0) / 100);
+  const jht = pct("bpjsJhtEmployerPercent");
+  const jp  = pct("bpjsJpEmployerPercent");
+  const kes = pct("bpjsKesehatanEmployerPercent");
+  const jkk = pct("bpjsJkkEmployerPercent");
+  const jkm = pct("bpjsJkmEmployerPercent");
+  return { baseSalary, jht, jp, kes, jkk, jkm, total: jht + jp + kes + jkk + jkm };
 };
 
 /** Hari dalam periode yang belum punya jadwal (untuk peringatan sebelum generate) */

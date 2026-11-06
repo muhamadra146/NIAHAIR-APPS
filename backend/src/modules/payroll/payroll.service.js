@@ -6,6 +6,7 @@ const { resolveOrderBy } = require("../../utils/sort");
 const { wibDateStr, wibDayEnd } = require("../../utils/date");
 const { buildWorkPeriod, DEFAULT_PAY_DAY, isWorkPeriod } = require("../../utils/payPeriod");
 const { computeMealAllowance, computeTransportAllowance, computeProration, computeRangeProration, rangeProrationLabel, computeAlphaDays, countUnscheduledDays, isOutsideEmployment, computeEmployerBpjs, PRESENT_STATUSES } = require("./payroll.calc");
+const { computePayrollTax, isTaxable, taxPeriodOf, TAX_ITEM_CATEGORIES } = require("./payroll.tax");
 const repo            = require("./payroll.repository");
 const notification = require("../notification/notification.service");
 const { createSyncJob, retrySync } = require("../syncQueue/syncQueue.service");
@@ -239,6 +240,61 @@ const buildItems = (salarySetting, schedules, attendances, commissions, activeLo
   };
 };
 
+// ── PPh 21 (PAY-037) ──────────────────────────────────────────────────────────
+
+const NO_TAX_FIELDS = { taxPeriod: null, taxPtkpStatus: null, taxGross: null, taxMethod: null, taxTerRate: null, pph21: D(0) };
+
+/**
+ * Tambah item PPh 21 ke hasil buildItems lalu hitung ulang total slip.
+ * Slip dengan tanggal gajian < 2027-01-01 tidak dihitung; status PTKP kosong → masa pajak dicatat
+ * tanpa PPh (payroll tidak bisa disetujui sampai PTKP diisi dan dihitung ulang).
+ */
+const applyPayrollTax = async (built, { employeeId, periodEnd, salarySetting, employment, excludeId = null }) => {
+  const items = built.items.filter((i) => !TAX_ITEM_CATEGORIES.includes(i.category));
+  if (!isTaxable(periodEnd)) return { ...built, items, taxFields: NO_TAX_FIELDS };
+
+  const year       = Number(taxPeriodOf(periodEnd).slice(0, 4));
+  const [setting, priorSlips] = await Promise.all([
+    repo.findTaxSetting(year),
+    repo.findTaxYearPayrolls(employeeId, year, excludeId),
+  ]);
+  if (!setting) throw new AppError(`Tarif PPh 21 tahun ${year} belum diatur`, StatusCodes.UNPROCESSABLE_ENTITY);
+
+  const tax = computePayrollTax({
+    items,
+    employer:       computeEmployerBpjs({ items, setting: salarySetting }),
+    periodEnd,
+    ptkpStatus:     employment?.ptkpStatus ?? null,
+    employmentType: employment?.taxEmploymentType ?? "PERMANENT",
+    resignDate:     employment?.resignDate ?? null,
+    setting,
+    priorSlips,
+  });
+
+  if (tax.missingPtkp) {
+    return { ...built, items, taxFields: { ...NO_TAX_FIELDS, taxPeriod: tax.taxPeriod } };
+  }
+
+  if (tax.item) items.push({ ...tax.item, amount: D(tax.item.amount), quantity: null, rate: null, isAuto: true });
+
+  const grossIncome     = items.filter((i) => i.type === "INCOME")   .reduce((a, i) => a.plus(i.amount), D(0));
+  const totalDeductions = items.filter((i) => i.type === "DEDUCTION").reduce((a, i) => a.plus(i.amount), D(0));
+
+  return {
+    ...built,
+    items, grossIncome, totalDeductions,
+    netSalary: grossIncome.minus(totalDeductions),
+    taxFields: {
+      taxPeriod:     tax.taxPeriod,
+      taxPtkpStatus: tax.taxPtkpStatus,
+      taxGross:      D(tax.taxGross),
+      taxMethod:     tax.taxMethod,
+      taxTerRate:    tax.taxTerRate == null ? null : D(tax.taxTerRate),
+      pph21:         D(tax.pph21),
+    },
+  };
+};
+
 // ── Commission breakdown helper ───────────────────────────────────────────────
 const buildCommissionBreakdown = (commissions) =>
   commissions.map((c) => ({
@@ -418,8 +474,10 @@ const generate = async ({ employeeId, branchId, yearMonth, payDay, periodStart: 
   if (!salarySetting)
     throw new AppError("Pengaturan gaji aktif untuk karyawan ini belum ada. Atur di Settings → Gaji Karyawan.", StatusCodes.BAD_REQUEST);
 
-  const { items, grossIncome, totalDeductions, netSalary } =
-    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, periodStart, periodEnd, employment);
+  const { items, grossIncome, totalDeductions, netSalary, taxFields } = await applyPayrollTax(
+    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, periodStart, periodEnd, employment),
+    { employeeId, periodEnd, salarySetting, employment },
+  );
 
   const payroll = await prisma.$transaction(async (tx) => {
    const created = await tx.payroll.create({
@@ -431,6 +489,7 @@ const generate = async ({ employeeId, branchId, yearMonth, payDay, periodStart: 
       grossIncome,
       totalDeductions,
       netSalary,
+      ...taxFields,
       status:    "DRAFT",
       notes:     notes ?? null,
       createdBy: createdBy ?? null,
@@ -474,8 +533,10 @@ const recalculate = async (id, userId) => {
   if (!salarySetting)
     throw new AppError("Pengaturan gaji aktif untuk karyawan ini belum ada", StatusCodes.BAD_REQUEST);
 
-  const { items, grossIncome, totalDeductions, netSalary } =
-    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, existing.periodStart, existing.periodEnd, employment);
+  const { items, grossIncome, totalDeductions, netSalary, taxFields } = await applyPayrollTax(
+    buildItems(salarySetting, schedules, attendances, commissions, activeLoans, unusedLeavePayouts, approvedLatePermissions, holidays, omsetBonusTiers, branchOmset, existing.periodStart, existing.periodEnd, employment),
+    { employeeId: existing.employeeId, periodEnd: existing.periodEnd, salarySetting, employment, excludeId: id },
+  );
 
   const commissionIds = commissions.map((c) => c.id);
   // Item, komisi terhubung, dan total disimpan dalam satu transaksi agar selalu konsisten
@@ -497,6 +558,7 @@ const recalculate = async (id, userId) => {
       grossIncome,
       totalDeductions,
       netSalary,
+      ...taxFields,
       lastRecalculatedBy: userId ?? null,
       lastRecalculatedAt: new Date(),
     }, tx);
@@ -544,6 +606,13 @@ const approve = async (id, approvedBy) => {
   if (new Prisma.Decimal(existing.netSalary ?? 0).lt(0)) {
     throw new AppError(
       "Gaji bersih minus. Periksa absen dan potongan, lalu hitung ulang payroll sebelum disetujui.",
+      StatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
+  // PPh 21 (PAY-037): slip kena pajak wajib dihitung dengan status PTKP karyawan
+  if (existing.taxPeriod && !existing.taxPtkpStatus) {
+    throw new AppError(
+      "Status PTKP karyawan belum diisi, sehingga PPh 21 belum dihitung. Lengkapi status PTKP di data karyawan, kembalikan ke Draft, lalu hitung ulang payroll.",
       StatusCodes.UNPROCESSABLE_ENTITY,
     );
   }
@@ -705,9 +774,11 @@ const getBpjsReport = async ({ branchId, yearMonth }) => {
     const bpjsJhtEmployer       = employer.jht;
     const bpjsJpEmployer        = employer.jp;
     const bpjsKesehatanEmployer = employer.kes;
+    const bpjsJkkEmployer       = employer.jkk;
+    const bpjsJkmEmployer       = employer.jkm;
 
     const totalEmployee = bpjsJht + bpjsJp + bpjsKesehatan;
-    const totalEmployer = bpjsJhtEmployer + bpjsJpEmployer + bpjsKesehatanEmployer;
+    const totalEmployer = employer.total;
 
     const { salarySettings: _ss, ...employee } = p.employee;
 
@@ -720,6 +791,7 @@ const getBpjsReport = async ({ branchId, yearMonth }) => {
       bpjsJht,       bpjsJhtEmployer,
       bpjsJp,        bpjsJpEmployer,
       bpjsKesehatan, bpjsKesehatanEmployer,
+      bpjsJkkEmployer, bpjsJkmEmployer,
       totalEmployee,
       totalEmployer,
       totalBpjs: totalEmployee + totalEmployer,
@@ -735,12 +807,122 @@ const getBpjsReport = async ({ branchId, yearMonth }) => {
     bpjsJpEmployer:       sum("bpjsJpEmployer"),
     bpjsKesehatan:        sum("bpjsKesehatan"),
     bpjsKesehatanEmployer: sum("bpjsKesehatanEmployer"),
-    totalEmployee:        sum("totalEmployee"),
+    bpjsJkkEmployer:      sum("bpjsJkkEmployer"),
+    bpjsJkmEmployer:      sum("bpjsJkmEmployer"),
+    totalEmployee:       sum("totalEmployee"),
     totalEmployer:        sum("totalEmployer"),
     totalBpjs:            sum("totalBpjs"),
   };
 
   return { data: rows, totals, period: { yearMonth, periodStart, periodEnd } };
+};
+
+// ── Rekap Penghasilan (PAY-036) ──────────────────────────────────────────────
+// Komponen slip apa adanya + bruto pajak & PPh 21 yang tersimpan di slip (PAY-037).
+// Item PPh 21 / pengembalian lebih potong tidak dihitung sebagai penghasilan.
+
+// Kategori item INCOME → kolom rekap; kategori lain (mis. item manual) masuk "lainnya"
+const INCOME_RECAP_COLUMNS = {
+  gaji:        "gaji",
+  tunjangan:   "tunjangan",
+  transport:   "transport",
+  makan:       "makan",
+  komisi:      "komisi",
+  lembur:      "lembur",
+  libur_kerja: "lembur",
+  bonus_omset: "bonus",
+  payout_cuti: "payoutCuti",
+};
+
+const RECAP_AMOUNT_KEYS = [
+  "gaji", "tunjangan", "transport", "makan", "komisi", "lembur", "bonus", "payoutCuti", "lainnya",
+  "totalIncome", "potonganAbsen",
+  "bpjsJht", "bpjsJp", "bpjsKesehatan",
+  "bpjsJhtEmployer", "bpjsJpEmployer", "bpjsKesehatanEmployer", "bpjsJkkEmployer", "bpjsJkmEmployer",
+  "taxGross", "pph21",
+  "netSalary",
+];
+
+const roundRp = (n) => Math.round(n * 100) / 100;
+
+const buildRecapPeriod = ({ yearMonth, year }) => {
+  if (yearMonth) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth)) throw new AppError("Format bulan harus YYYY-MM", StatusCodes.BAD_REQUEST);
+    return { mode: "MONTH", ...buildPeriod(yearMonth) };
+  }
+  if (year) {
+    if (!/^\d{4}$/.test(String(year))) throw new AppError("Format tahun harus YYYY", StatusCodes.BAD_REQUEST);
+    const y = Number(year);
+    return {
+      mode:        "YEAR",
+      periodStart: toDateOnly(new Date(Date.UTC(y, 0, 1))),
+      periodEnd:   toDateOnly(new Date(Date.UTC(y, 11, 31))),
+    };
+  }
+  throw new AppError("Pilih bulan atau tahun", StatusCodes.BAD_REQUEST);
+};
+
+const toRecapRow = (p) => {
+  const row = Object.fromEntries(RECAP_AMOUNT_KEYS.map((k) => [k, 0]));
+
+  for (const item of p.items) {
+    const amount = Number(item.amount ?? 0);
+    if (TAX_ITEM_CATEGORIES.includes(item.category)) continue;
+    if (item.type === "DEDUCTION") {
+      if (item.category === "absen" || item.category === "terlambat") row.potonganAbsen += amount;
+      else if (item.category === "bpjs_jht")       row.bpjsJht       += amount;
+      else if (item.category === "bpjs_jp")        row.bpjsJp        += amount;
+      else if (item.category === "bpjs_kesehatan") row.bpjsKesehatan += amount;
+      continue;
+    }
+    row[INCOME_RECAP_COLUMNS[item.category] ?? "lainnya"] += amount;
+    row.totalIncome += amount;
+  }
+
+  // BPJS perusahaan dari gaji pokok PENUH (PAY-001) — helper yang sama dengan Laporan BPJS & jurnal
+  const employer = computeEmployerBpjs({ items: p.items, setting: p.employee.salarySettings?.[0] });
+  row.bpjsJhtEmployer       = employer.jht;
+  row.bpjsJpEmployer        = employer.jp;
+  row.bpjsKesehatanEmployer = employer.kes;
+  row.bpjsJkkEmployer       = employer.jkk;
+  row.bpjsJkmEmployer       = employer.jkm;
+  row.taxGross              = Number(p.taxGross ?? 0);
+  row.pph21                 = Number(p.pph21 ?? 0);
+  row.netSalary             = Number(p.netSalary ?? 0);
+
+  const { salarySettings: _ss, ...employee } = p.employee;
+  return { employee, slipCount: 1, periodStart: p.periodStart, periodEnd: p.periodEnd, ...row };
+};
+
+const getIncomeRecap = async ({ branchId, yearMonth, year }) => {
+  const { mode, periodStart, periodEnd } = buildRecapPeriod({ yearMonth, year });
+  const payrolls = await repo.findIncomeRecapData({ branchId, periodStart, periodEnd });
+
+  // Satu baris per karyawan: slip-slip dalam periode dijumlahkan (mode tahun, atau payroll rentang)
+  const byEmployee = new Map();
+  for (const p of payrolls) {
+    const row = toRecapRow(p);
+    const acc = byEmployee.get(row.employee.id);
+    if (!acc) { byEmployee.set(row.employee.id, row); continue; }
+    for (const k of RECAP_AMOUNT_KEYS) acc[k] += row[k];
+    acc.slipCount += 1;
+    if (row.periodStart < acc.periodStart) acc.periodStart = row.periodStart;
+    if (row.periodEnd   > acc.periodEnd)   acc.periodEnd   = row.periodEnd;
+  }
+
+  const rows = [...byEmployee.values()].map((r) => {
+    for (const k of RECAP_AMOUNT_KEYS) r[k] = roundRp(r[k]);
+    return r;
+  });
+  const totals = Object.fromEntries(
+    RECAP_AMOUNT_KEYS.map((k) => [k, roundRp(rows.reduce((s, r) => s + r[k], 0))]),
+  );
+
+  return {
+    data: rows,
+    totals,
+    period: { mode, yearMonth: yearMonth ?? null, year: year ? Number(year) : null, periodStart, periodEnd },
+  };
 };
 
 // ── Bulk generate ─────────────────────────────────────────────────────────────
@@ -788,5 +970,5 @@ const deletePayroll = async (id) => {
 
 module.exports = {
   getAll, getById, generate, previewPeriod, recalculate, submitForApproval, revertToDraft, approve,
-  markAsPaid, retryAccurateSync, updateNotes, getMy, getBpjsReport, bulkGenerate, deletePayroll,
+  markAsPaid, retryAccurateSync, updateNotes, getMy, getBpjsReport, getIncomeRecap, bulkGenerate, deletePayroll,
 };

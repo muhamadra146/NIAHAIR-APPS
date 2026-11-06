@@ -16,7 +16,8 @@ test('GET hanya membuat kategori yang belum ada, tidak pernah menimpa pemetaan',
   await svc.getPayrollGlAccounts();
   expect(repo.seedMissing).toHaveBeenCalledTimes(1);
   expect(repo.upsertMany).not.toHaveBeenCalled();
-  expect(repo.seedMissing.mock.calls[0][0]).toHaveLength(8);
+  // 8 kategori awal + Utang PPh 21 (PAY-037)
+  expect(repo.seedMissing.mock.calls[0][0]).toHaveLength(9);
 });
 
 test.each([

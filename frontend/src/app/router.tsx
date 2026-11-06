@@ -38,6 +38,7 @@ import { ConsultationListPage }       from "@/features/consultation/pages/Consul
 import { ConsultationFormPage }       from "@/features/consultation/pages/ConsultationFormPage";
 import { MyPayslipPage }             from "@/features/payroll/pages/MyPayslipPage";
 import { BpjsReportPage }           from "@/features/payroll/pages/BpjsReportPage";
+import { IncomeRecapPage }          from "@/features/payroll/pages/IncomeRecapPage";
 import { PengajuanPage }             from "@/features/attendance/pages/PengajuanPage";
 import { ComplaintPage }             from "@/features/complaint/pages/ComplaintPage";
 import { GenerateKomisiPage }           from "@/features/invoice/pages/GenerateKomisiPage";
@@ -221,6 +222,7 @@ export const router = createBrowserRouter([
             children: [
               { path: "/payroll",      element: <PayrollPage /> },
               { path: "/payroll/bpjs", element: <BpjsReportPage /> },
+              { path: "/payroll/income-recap", element: <IncomeRecapPage /> },
             ],
           },
 

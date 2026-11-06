@@ -7,7 +7,7 @@ const { generateSchema, bulkGenerateSchema, updateNotesSchema, validateBody } = 
 const {
   getAllController, getByIdController, generateController, bulkGenerateController, previewPeriodController,
   recalculateController, submitController, revertToDraftController, approveController, markAsPaidController, retrySyncController,
-  updateNotesController, getMyController, getBpjsReportController, deleteController,
+  updateNotesController, getMyController, getBpjsReportController, getIncomeRecapController, deleteController,
 } = require("./payroll.controller");
 
 const router = Router();
@@ -19,6 +19,7 @@ const APPROVERS = [ROLES.SUPER_ADMIN, ROLES.OWNER];
 // Employee self-service — must be BEFORE /:id
 router.get("/my",          authenticate, getMyController);
 router.get("/bpjs-report", authenticate, authorize(...ALL_ADMIN), getBpjsReportController);
+router.get("/income-recap", authenticate, authorize(...ALL_ADMIN), getIncomeRecapController);
 router.get("/period-preview", authenticate, authorize(...ALL_ADMIN), previewPeriodController);
 
 router.get("/",    authenticate, authorize(...ALL_ADMIN), getAllController);
