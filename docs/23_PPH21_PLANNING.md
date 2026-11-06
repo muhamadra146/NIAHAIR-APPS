@@ -244,3 +244,31 @@ Batas = "lebih dari batas bawah s.d. batas atas". Dua salah ketik di materi vide
 | 30.100.000 – 32.600.000 | 12% | 965.000.000 – 1.419.000.000 | 33% |
 | 32.600.000 – 35.400.000 | 13% | di atas 1.419.000.000 | 34% |
 | 35.400.000 – 38.900.000 | 14% | | |
+
+---
+
+## 7. Lima Contoh Kasus Satu Tahun (masa Januari–Desember 2027)
+
+Diuji otomatis di `backend/src/modules/payroll/payroll.tax.cases.test.js` dan dibuat sebagai data contoh di aplikasi (karyawan "CONTOH PPH21 - …", slip disetujui, tidak dibayar). Semua contoh memakai iuran karyawan JHT 2% dan JP 1% dari gaji pokok, dengan tanggal gajian tanggal 1 (masa = bulan setelah bulan kerja).
+
+| # | Kasus | Masa Jan–Nov | Masa Desember | PPh setahun |
+|---|---|---|---|---|
+| 1 | **Rina** — TK/0, gaji 5 jt | TER A 0% = 0 | hitung ulang 60.000 | 60.000 |
+| 2 | **Budi** — K/1, gaji 10 jt + tunjangan 1,5 jt, perusahaan Kes 4% + JKK 0,24% + JKM 0,3% | bruto 11.954.000 × TER B 3% = 358.620 | 682.380 | 4.627.200 |
+| 3 | **Citra** — K/3, gaji 25 jt, naik 30 jt mulai masa Juli | Jan–Jun TER C 9% = 2.250.000; Jul–Nov 11% = 3.300.000 | 315.000 | 30.315.000 |
+| 4 | **Dedi** — TK/2, masuk 1 April 2027, gaji 9 jt (masa Mei–Des) | TER B 1% = 90.000 | lebih potong −468.000 (dikembalikan) | 162.000 |
+| 5 | **Eka** — TK/0 tidak tetap, gaji 7 jt | TER A 1,25% = 87.500 | TER 87.500 (tanpa hitung ulang) | 1.050.000 |
+
+Rincian hitung ulang tahunan:
+
+| | Rina | Budi | Citra | Dedi |
+|---|---|---|---|---|
+| Bruto setahun | 60.000.000 | 143.448.000 | 330.000.000 | 72.000.000 |
+| Biaya jabatan | 3.000.000 | 6.000.000 | 6.000.000 | 3.600.000 (maks 500.000 × 8) |
+| Iuran JHT + JP | 1.800.000 | 3.600.000 | 9.900.000 | 2.160.000 |
+| Neto | 55.200.000 | 133.848.000 | 314.100.000 | 66.240.000 |
+| PTKP | 54.000.000 (TK/0) | 63.000.000 (K/1) | 72.000.000 (K/3) | 63.000.000 (TK/2) |
+| PKP | 1.200.000 | 70.848.000 | 242.100.000 | 3.240.000 |
+| PPh setahun | 60.000 | 3.000.000 + 1.627.200 = 4.627.200 | 3.000.000 + 27.315.000 = 30.315.000 | 162.000 |
+| Sudah dipotong | 0 | 3.944.820 | 30.000.000 | 630.000 |
+| Masa Desember | 60.000 | 682.380 | 315.000 | −468.000 |
